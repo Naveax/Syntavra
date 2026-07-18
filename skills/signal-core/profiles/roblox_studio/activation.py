@@ -4,13 +4,35 @@ import base64
 import hashlib
 import hmac
 import json
+import os
+import secrets
 import sqlite3
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from .errors import ActivationError, ReplayDetected
+try:
+    from .errors import ActivationError, ReplayDetected
+except ImportError:  # Standalone compatibility for the legacy profile loader.
+    class ActivationError(RuntimeError):
+        pass
+
+    class ReplayDetected(ActivationError):
+        pass
+
+
+class RobloxProfileActivationError(ActivationError):
+    pass
+
+
+class ProfileLockedError(RobloxProfileActivationError):
+    pass
+
+
+class InvalidActivationEnvelope(RobloxProfileActivationError):
+    pass
 
 PROFILE_ID = "roblox_studio"
 PROFILE_VERSION = "0.0.1"
@@ -42,6 +64,8 @@ def sign_payload(payload: Mapping[str, Any], key: bytes) -> str:
 
 @dataclass(frozen=True, slots=True)
 class AuthorizedSession:
+    profile_id: str
+    profile_version: str
     session_id: str
     place_id: str
     project_id: str
@@ -58,14 +82,19 @@ class ReplayStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-
-    def consume(self, nonce: str, session_id: str, expires_at: int, now: int) -> None:
-        nonce_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
         connection = sqlite3.connect(self.path, timeout=15, isolation_level=None)
         try:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("PRAGMA busy_timeout=15000")
             connection.execute("CREATE TABLE IF NOT EXISTS nonces(hash TEXT PRIMARY KEY, session_id TEXT NOT NULL, expires_at INTEGER NOT NULL, consumed_at INTEGER NOT NULL)")
+        finally:
+            connection.close()
+
+    def consume(self, nonce: str, session_id: str, expires_at: int, now: int) -> None:
+        nonce_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
+        connection = sqlite3.connect(self.path, timeout=15, isolation_level=None)
+        try:
+            connection.execute("PRAGMA busy_timeout=15000")
             connection.execute("BEGIN IMMEDIATE")
             connection.execute("DELETE FROM nonces WHERE expires_at < ?", (now - 300,))
             try:
@@ -167,6 +196,8 @@ def verify_envelope(
         raise ActivationError("activation identity fields are incomplete")
     replay_store.consume(nonce, session_id, expires, current)
     return AuthorizedSession(
+        profile_id=PROFILE_ID,
+        profile_version=PROFILE_VERSION,
         session_id=session_id,
         place_id=str(payload["place_id"]),
         project_id=str(payload["project_id"]),
@@ -178,3 +209,127 @@ def verify_envelope(
         expires_at=expires,
         nonce=nonce,
     )
+
+
+# Legacy SignalCore 0.0.1 profile-loader compatibility. These wrappers preserve
+# the original fail-closed API while delegating cryptography and replay control
+# to the schema-v2 implementation above.
+def pairing_key_path(state_root: Path) -> Path:
+    return Path(state_root) / "profiles" / PROFILE_ID / "pairing.key"
+
+
+def create_pairing_key(state_root: Path) -> Path:
+    path = pairing_key_path(state_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        return path
+    key = secrets.token_bytes(48)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(descriptor, key)
+    finally:
+        os.close(descriptor)
+    if os.name != "nt":
+        path.chmod(0o600)
+    return path
+
+
+def load_pairing_key(state_root: Path) -> bytes:
+    path = pairing_key_path(state_root)
+    if not path.is_file():
+        raise ProfileLockedError("Roblox Studio pairing key is missing")
+    key = path.read_bytes()
+    if len(key) < 32:
+        raise ProfileLockedError("Roblox Studio pairing key is invalid")
+    return key
+
+
+def _process_name(process_id: int) -> str | None:
+    if process_id <= 0:
+        return None
+    if os.name == "nt":
+        try:
+            completed = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {process_id}", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=3, check=False,
+            )
+            first = completed.stdout.strip().splitlines()[0]
+            return first.split(",", 1)[0].strip('"') if first and "INFO:" not in first else None
+        except (OSError, IndexError, subprocess.SubprocessError):
+            return None
+    for candidate in (Path("/proc") / str(process_id) / "comm", Path("/proc") / str(process_id) / "cmdline"):
+        try:
+            value = candidate.read_text(encoding="utf-8", errors="replace").strip().split("\0", 1)[0]
+            if value:
+                return Path(value).name
+        except OSError:
+            continue
+    return None
+
+
+def mint_studio_envelope(
+    *, key: bytes, studio_session_id: str, place_id: str,
+    project_fingerprint: str, studio_pid: int, capabilities: Iterable[str],
+    ttl_seconds: int = 60, now: int | None = None,
+) -> dict[str, Any]:
+    return mint_envelope(
+        key=key,
+        session_id=studio_session_id,
+        place_id=place_id,
+        project_id=place_id,
+        project_fingerprint=project_fingerprint,
+        studio_process_id=studio_pid,
+        capabilities=capabilities,
+        transport_identity="legacy-studio-bridge",
+        now=now,
+        ttl_seconds=ttl_seconds,
+    )
+
+
+def verify_studio_envelope(
+    envelope: Mapping[str, Any] | None, *, state_root: Path,
+    allowed_capabilities: Iterable[str], accepted_process_names: Iterable[str],
+    maximum_ttl_seconds: int, clock_skew_seconds: int,
+    require_process_attestation: bool, now: int | None = None,
+) -> AuthorizedSession:
+    if not envelope:
+        raise ProfileLockedError("signed Roblox Studio activation envelope required")
+    try:
+        issued = int(envelope.get("issued_at", 0))
+        expires = int(envelope.get("expires_at", 0))
+        if expires - issued > int(maximum_ttl_seconds):
+            raise InvalidActivationEnvelope("activation TTL exceeds profile policy")
+        process_id = int(envelope.get("studio_process_id", envelope.get("studio_pid", 0)))
+        accepted = {str(value).casefold() for value in accepted_process_names}
+
+        def attestor(pid: int) -> bool:
+            if not require_process_attestation:
+                return True
+            name = _process_name(pid)
+            return bool(name and name.casefold() in accepted)
+
+        return verify_envelope(
+            envelope,
+            key=load_pairing_key(state_root),
+            replay_store=ReplayStore(Path(state_root) / "profiles" / PROFILE_ID / "nonces.db"),
+            allowed_capabilities=allowed_capabilities,
+            expected_transport_identity=str(envelope.get("transport_identity", "")),
+            expected_process_id=process_id,
+            expected_place_id=str(envelope.get("place_id", "")),
+            expected_project_id=str(envelope.get("project_id", envelope.get("place_id", ""))),
+            expected_project_fingerprint=str(envelope.get("project_fingerprint", "")),
+            process_attestor=attestor,
+            now=now,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+    except ReplayDetected:
+        raise
+    except InvalidActivationEnvelope:
+        raise
+    except ActivationError as exc:
+        message = str(exc)
+        if any(marker in message for marker in (
+            "required", "ordinary CLI", "process attestation", "transport identity",
+        )):
+            raise ProfileLockedError(message) from exc
+        raise InvalidActivationEnvelope(message) from exc
