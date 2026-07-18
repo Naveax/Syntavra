@@ -1,0 +1,13 @@
+# SignalCore
+
+SignalCore is a local-first, cross-platform Agent Skill for AI coding agents. It coordinates repository context, exact evidence, SQLite state, conservative posterior routing, provider/tool telemetry, retries, verification, token usage, latency, and cost.
+
+Canonical repository: https://github.com/Naveax/SignalCore
+Version: 0.0.1 pre-release
+Canonical skill: skills/signal-core/SKILL.md
+Compatibility: COMPATIBILITY.md
+Installer: tools/install.py
+
+Search terms: AI coding agent skill, Agent Skills, Codex skill, Claude Code skill, Gemini CLI skill, Google Antigravity skill, Windsurf skill, OpenCode skill, VS Code Copilot skill, Cursor rules, Cline rules, Continue rules, AGENTS.md, context engineering, token optimization, tool routing, evidence deduplication, coding agent memory, SQLite WAL, AI developer tools.
+
+Important: SignalCore does not claim market leadership from local forecasts or internal tests. Use paired external benchmarks for comparative claims.
