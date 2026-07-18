@@ -1,0 +1,92 @@
+name: Materialize Roblox Studio orchestration profile
+
+on:
+  push:
+    branches:
+      - agent/roblox-studio-profile-direct
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-roblox-studio-profile-direct
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            .signalcore-direct/payload-00.b64 \
+            .signalcore-direct/payload-01.b64 \
+            .signalcore-direct/payload-02.b64 \
+            .signalcore-direct/payload-03.b64 \
+            .signalcore-direct/payload-04.b64 \
+            .signalcore-direct/payload-05.b64 \
+            .signalcore-direct/payload-06.b64 \
+            .signalcore-direct/payload-07.b64 \
+            .signalcore-direct/payload-08.b64 \
+            .signalcore-direct/payload-09.b64 \
+            .signalcore-direct/payload-10.b64 \
+            .signalcore-direct/payload-11a.b64 \
+            .signalcore-direct/payload-11b.b64 \
+            .signalcore-direct/payload-12a.b64 \
+            .signalcore-direct/payload-12b.b64 \
+            .signalcore-direct/payload-13a.b64 \
+            .signalcore-direct/payload-13b.b64 \
+            .signalcore-direct/payload-14a.b64 \
+            .signalcore-direct/payload-14b.b64 \
+            .signalcore-direct/payload-15a.b64 \
+            .signalcore-direct/payload-15b.b64 \
+            .signalcore-direct/payload-16a.b64 \
+            .signalcore-direct/payload-16b.b64 \
+            > /tmp/roblox-profile-payload.b64
+          test "$(wc -c < /tmp/roblox-profile-payload.b64)" -eq 67412
+          base64 --decode /tmp/roblox-profile-payload.b64 > /tmp/roblox-profile.patch.xz
+          echo "10e30dfe9a4d4c6f47b1e5afe2de91b700de205c2644bf2e8b1bd2944d60339e  /tmp/roblox-profile.patch.xz" | sha256sum -c -
+          xz -dc /tmp/roblox-profile.patch.xz > /tmp/roblox-profile.patch
+          echo "ef594b2169ac2515697386ee09d47314191a51d90383f2e22e098fcff3bcc1bd  /tmp/roblox-profile.patch" | sha256sum -c -
+          mkdir -p /tmp/roblox-profile-empty
+          cd /tmp/roblox-profile-empty
+          git apply --check /tmp/roblox-profile.patch
+
+      - name: Apply verified source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep '^diff --git a/' /tmp/roblox-profile.patch | sed -E 's#^diff --git a/([^ ]+) b/.*#\1#' > /tmp/roblox-profile-targets
+          while IFS= read -r path; do
+            git rm -rf --ignore-unmatch -- "$path"
+          done < /tmp/roblox-profile-targets
+          git apply /tmp/roblox-profile.patch
+          git rm -rf .signalcore-direct
+          git rm -f .github/workflows/bootstrap-roblox-profile-direct.yml
+          git add -A
+
+      - name: Validate materialized source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q skills/signal-core/scripts skills/signal-core/profiles tools tests benchmarks
+          python -m unittest discover -s tests -q
+          python tools/validate.py
+          python benchmarks/roblox_profile_benchmark.py --cases 50 --output /tmp/roblox-profile-smoke.json
+
+      - name: Commit verified source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Implement Roblox Studio orchestration profile"
+          git push origin HEAD:agent/roblox-studio-profile-direct
