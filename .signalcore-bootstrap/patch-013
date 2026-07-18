@@ -1,0 +1,270 @@
+"),
++        telemetry_store=TelemetryStore(state / "roblox_studio" / "telemetry-v2.db"),
++        graph=default_capability_graph(),
++    )
++    return RobloxProfileRuntime(orchestrator, root, state, session)
+diff --git a/skills/signal-core/profiles/roblox_studio/schemas/engine.schema.json b/skills/signal-core/profiles/roblox_studio/schemas/engine.schema.json
+new file mode 100644
+index 0000000..b4ae9dd
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/schemas/engine.schema.json
+@@ -0,0 +1,18 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "signalcore.roblox.engine.v2",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["engineId", "engineType", "version", "provider", "endpoint", "capabilities", "riskClass", "sandboxSupport", "certificationStatus", "enabled"],
++  "properties": {
++    "engineId": {"type": "string", "minLength": 1},
++    "engineType": {"type": "string", "minLength": 1},
++    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"},
++    "provider": {"type": "string"}, "endpoint": {"type": "string"},
++    "capabilities": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
++    "riskClass": {"enum": ["R0", "R1", "R2", "R3", "R4", "R5"]},
++    "sandboxSupport": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
++    "certificationStatus": {"enum": ["UNTESTED", "EXPERIMENTAL", "BETA", "VERIFIED", "CERTIFIED", "REJECTED"]},
++    "enabled": {"type": "boolean"}
++  }
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/schemas/evidence.schema.json b/skills/signal-core/profiles/roblox_studio/schemas/evidence.schema.json
+new file mode 100644
+index 0000000..4959b31
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/schemas/evidence.schema.json
+@@ -0,0 +1,14 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "signalcore.roblox.evidence.v3",
++  "type": "object",
++  "required": ["evidence_id", "evidence_type", "source", "source_path", "source_hash", "dependency_hashes", "freshness_policy", "confidence", "security_class", "estimated_token_cost", "estimated_transfer_cost", "payload_reference", "summary_reference"],
++  "properties": {
++    "evidence_id": {"type": "string"}, "evidence_type": {"type": "string"},
++    "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
++    "dependency_hashes": {"type": "array", "items": {"type": "string"}},
++    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
++    "estimated_token_cost": {"type": "integer", "minimum": 0},
++    "estimated_transfer_cost": {"type": "integer", "minimum": 0}
++  }
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/schemas/model.schema.json b/skills/signal-core/profiles/roblox_studio/schemas/model.schema.json
+new file mode 100644
+index 0000000..115bd20
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/schemas/model.schema.json
+@@ -0,0 +1,12 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "signalcore.roblox.model.v2",
++  "type": "object",
++  "required": ["modelId", "provider", "contextLimit", "supportsVision", "supportsToolCalling", "supportsStructuredOutput", "supportsCode", "certifiedRoles", "enabled"],
++  "properties": {
++    "modelId": {"type": "string", "minLength": 1}, "provider": {"type": "string"},
++    "contextLimit": {"type": "integer", "minimum": 1}, "supportsVision": {"type": "boolean"},
++    "supportsToolCalling": {"type": "boolean"}, "supportsStructuredOutput": {"type": "boolean"},
++    "supportsCode": {"type": "boolean"}, "certifiedRoles": {"type": "object"}, "enabled": {"type": "boolean"}
++  }
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/schemas/task-state.schema.json b/skills/signal-core/profiles/roblox_studio/schemas/task-state.schema.json
+new file mode 100644
+index 0000000..5a99b70
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/schemas/task-state.schema.json
+@@ -0,0 +1,21 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "signalcore.roblox.task-state.v2",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["domain", "task_id", "session_id", "project_id", "user_objective", "task_classes", "operation_class", "execution_mode", "required_capabilities", "risk_level", "sandbox_level", "execution_allowed"],
++  "properties": {
++    "domain": {"const": "roblox_studio"},
++    "task_id": {"type": "string", "minLength": 8},
++    "session_id": {"type": "string", "minLength": 8},
++    "project_id": {"type": "string", "minLength": 8},
++    "user_objective": {"type": "string", "minLength": 1},
++    "task_classes": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
++    "operation_class": {"enum": ["read", "create", "modify", "delete", "test", "debug", "search"]},
++    "execution_mode": {"enum": ["DETERMINISTIC", "ORCHESTRATED"]},
++    "required_capabilities": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
++    "risk_level": {"enum": ["R0", "R1", "R2", "R3", "R4", "R5"]},
++    "sandbox_level": {"enum": ["NONE", "PREVIEW", "SHADOW_PROJECT", "DIGITAL_TWIN", "MIGRATION_LAB", "EXTERNAL_SANDBOX"]},
++    "execution_allowed": {"type": "boolean"}
++  }
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/schemas/telemetry.schema.json b/skills/signal-core/profiles/roblox_studio/schemas/telemetry.schema.json
+new file mode 100644
+index 0000000..7f3b0cd
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/schemas/telemetry.schema.json
+@@ -0,0 +1,12 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "signalcore.roblox.telemetry.v2",
++  "type": "object",
++  "required": ["task_id", "task_class", "risk_level", "workflow_nodes", "models_used", "engines_used", "cloud_requests", "local_requests", "verified", "final_status"],
++  "properties": {
++    "task_id": {"type": "string"}, "task_class": {"type": "string"},
++    "risk_level": {"enum": ["R0", "R1", "R2", "R3", "R4", "R5"]},
++    "cloud_requests": {"type": "integer", "minimum": 0}, "local_requests": {"type": "integer", "minimum": 0},
++    "verified": {"type": "boolean"}, "final_status": {"type": "string"}
++  }
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/schemas/workflow.schema.json b/skills/signal-core/profiles/roblox_studio/schemas/workflow.schema.json
+new file mode 100644
+index 0000000..5fe8411
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/schemas/workflow.schema.json
+@@ -0,0 +1,11 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "signalcore.roblox.workflow.v2",
++  "type": "object",
++  "required": ["workflow_id", "task_id", "nodes", "created_at", "schema_version"],
++  "properties": {
++    "workflow_id": {"type": "string"}, "task_id": {"type": "string"},
++    "nodes": {"type": "array", "items": {"type": "object", "required": ["node_id", "task_class", "required_capabilities", "selected_engine", "dependencies", "acceptance_tests", "risk_level", "sandbox_level", "retry_policy", "rollback_policy"]}},
++    "schema_version": {"type": "integer", "minimum": 1}
++  }
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/task_encoder.py b/skills/signal-core/profiles/roblox_studio/task_encoder.py
+new file mode 100644
+index 0000000..3a68c85
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/task_encoder.py
+@@ -0,0 +1,292 @@
++from __future__ import annotations
++
++import hashlib
++import re
++from dataclasses import replace
++from typing import Any, Iterable, Mapping
++
++from .capability_graph import default_capability_graph
++from .types import GateDecision, GateStatus, RiskLevel, RobloxTaskState, SandboxLevel
++
++
++TASK_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
++    ("datastore_migration", ("datastore migration", "data migration", "veri göç", "schema migration")),
++    ("digital_twin_execution", ("digital twin", "shadow project", "dijital ikiz")),
++    ("multi_device_validation", ("multi-device", "mobile tablet console", "çoklu cihaz", "device validation")),
++    ("release_validation", ("release validation", "release certify", "yayın doğrulama")),
++    ("cinematic_creation", ("cinematic", "cutscene", "sinematik")),
++    ("camera_direction", ("camera direction", "camera plan", "kamera yönet", "kamera plan", "camera")),
++    ("lighting_sequence", ("lighting sequence", "lighting plan", "ışık sekans", "aydınlatma plan", "lighting")),
++    ("vfx_sequence", ("vfx sequence", "visual effects sequence", "vfx plan", "efekt sekans", "vfx")),
++    ("audio_sequence", ("audio sequence", "sound sequence", "audio plan", "ses sekans", "audio")),
++    ("combat_choreography", ("combat choreography", "fight choreography", "dövüş koreografi")),
++    ("facial_animation", ("facial animation", "face animation", "yüz animasyon")),
++    ("creature_animation", ("creature animation", "quadruped", "yaratık animasyon")),
++    ("custom_rig_mapping", ("custom rig", "rig mapping", "özel rig")),
++    ("animation_retargeting", ("retarget", "retargeting", "animasyon aktar")),
++    ("animation_repair", ("repair animation", "fix animation", "animasyonu düzelt")),
++    ("animation_generation", ("generate animation", "create animation", "animasyon oluştur", "generate .*animation", "create .*animation")),
++    ("animation_specification", ("motion spec", "animation specification", "animasyon plan")),
++    ("blender_job", ("blender", ".blend", "fbx export")),
++    ("terrain_generation", ("terrain", "voxel terrain", "arazi")),
++    ("procedural_structure", ("procedural", "generate building", "prosedürel")),
++    ("world_building", ("world build", "map generation", "dünya kur", "harita oluştur")),
++    ("creator_store_search", ("creator store", "marketplace search", "asset search", "asset ara")),
++    ("asset_sanitization", ("sanitize asset", "malicious asset", "asset güvenlik", "sanitize .*asset", "asset .*sanit")),
++    ("asset_import", ("import asset", "asset içe aktar", "import .*asset")),
++    ("asset_adaptation", ("adapt asset", "asset uyarl")),
++    ("asset_selection", ("select asset", "choose asset", "asset seç")),
++    ("security_review", ("security", "exploit", "remote event", "güvenlik", "yetkilendirme")),
++    ("performance_review", ("performance", "fps", "memory leak", "performans", "lag")),
++    ("runtime_debugging", ("runtime error", "debug", "stack trace", "hata ayıkla", "çöküyor")),
++    ("script_refactor", ("refactor script", "luau refactor", "script refactor")),
++    ("script_patch", ("patch script", "fix script", "script düzelt", "luau patch", "patch .*script", "fix .*script")),
++    ("script_creation", ("create script", "new script", "script oluştur", "luau yaz")),
++    ("gameplay_system", ("gameplay system", "inventory", "combat system", "oyun sistemi")),
++    ("ui_validation", ("validate ui", "ui test", "arayüz doğrula")),
++    ("ui_modification", ("modify ui", "change ui", "ui değiştir", "arayüz düzenle")),
++    ("ui_creation", ("create ui", "new ui", "ui oluştur", "arayüz oluştur", "create .*ui")),
++    ("spatial_placement", ("place relative", "align", "move .* studs", "move this", "move that", "put it there", "yerleştir", "hizala", "oraya koy")),
++    ("instance_deletion", ("delete instance", "remove object", "sil")),
++    ("instance_modification", ("modify instance", "change property", "değiştir")),
++    ("instance_creation", ("create instance", "add part", "nesne oluştur")),
++    ("property_edit", ("set .* to", "material to", "property", "özellik")),
++    ("project_analysis", ("analyze project", "inspect project", "project analysis", "projeyi incele")),
++)
++
++CAPABILITIES_BY_TASK: dict[str, tuple[str, ...]] = {
++    "project_analysis": ("ROBLOX_PROJECT_READ",),
++    "property_edit": ("ROBLOX_PROJECT_WRITE",),
++    "instance_creation": ("ROBLOX_PROJECT_WRITE",),
++    "instance_modification": ("ROBLOX_PROJECT_WRITE",),
++    "instance_deletion": ("ROBLOX_PROJECT_WRITE",),
++    "script_creation": ("LUAU_CREATE",),
++    "script_patch": ("LUAU_PATCH",),
++    "script_refactor": ("LUAU_PATCH",),
++    "gameplay_system": ("LUAU_CREATE", "RUNTIME_PLAYTEST"),
++    "runtime_debugging": ("LUAU_READ", "RUNTIME_PLAYTEST"),
++    "security_review": ("LUAU_READ", "SECURITY_TEST_ENGINE"),
++    "performance_review": ("PERFORMANCE_TEST_ENGINE",),
++    "creator_store_search": ("CREATOR_STORE_SEARCH",),
++    "asset_selection": ("CREATOR_STORE_SEARCH",),
++    "asset_import": ("ASSET_IMPORT",),
++    "asset_sanitization": ("ASSET_SANITIZATION",),
++    "asset_adaptation": ("ASSET_IMPORT", "SPATIAL_SOLVER"),
++    "spatial_placement": ("SPATIAL_SOLVER", "ROBLOX_PROJECT_WRITE"),
++    "procedural_structure": ("PROCEDURAL_BUILDER",),
++    "terrain_generation": ("TERRAIN_ENGINE",),
++    "world_building": ("PROCEDURAL_BUILDER", "TERRAIN_ENGINE", "PERFORMANCE_TEST_ENGINE"),
++    "ui_creation": ("UI_ENGINE",),
++    "ui_modification": ("UI_ENGINE",),
++    "ui_validation": ("DEVICE_TEST_ENGINE", "VISUAL_REVIEW_ENGINE"),
++    "animation_specification": ("RIG_ANALYZER",),
++    "animation_generation": ("ANIMATION_ENGINE",),
++    "animation_retargeting": ("RETARGETING_ENGINE",),
++    "animation_repair": ("ANIMATION_ENGINE", "IK_ENGINE"),
++    "custom_rig_mapping": ("RIG_ANALYZER",),
++    "creature_animation": ("ANIMATION_ENGINE", "IK_ENGINE"),
++    "facial_animation": ("FACIAL_ENGINE",),
++    "combat_choreography": ("COMBAT_CHOREOGRAPHY_ENGINE",),
++    "cinematic_creation": ("CINEMATIC_ENGINE", "VISUAL_REVIEW_ENGINE"),
++    "camera_direction": ("CAMERA_ENGINE",),
++    "lighting_sequence": ("LIGHTING_ENGINE",),
++    "vfx_sequence": ("VFX_ENGINE",),
++    "audio_sequence": ("AUDIO_ENGINE",),
++    "blender_job": ("BLENDER_WORKER",),
++    "digital_twin_execution": ("DIGITAL_TWIN",),
++    "datastore_migration": ("DATASTORE_MIGRATION_LAB",),
++    "multi_device_validation": ("DEVICE_TEST_ENGINE",),
++    "release_validation": ("STATIC_VALIDATION", "RUNTIME_PLAYTEST", "SECURITY_TEST_ENGINE", "PERFORMANCE_TEST_ENGINE", "DEVICE_TEST_ENGINE"),
++}
++
++DETERMINISTIC_PATTERNS: tuple[re.Pattern[str], ...] = (
++    re.compile(r"\bmove\b.+?\b-?\d+(?:\.\d+)?\s+studs?\b", re.I),
++    re.compile(r"\brotate\b.+?\b-?\d+(?:\.\d+)?\s+degrees?\b", re.I),
++    re.compile(r"\bscale\b.+?\b(?:by\s+)?\d+(?:\.\d+)?\b", re.I),
++    re.compile(r"\bset\b.+?\b(?:material|transparency|color|anchored|can collide|name)\b.+?\bto\b", re.I),
++    re.compile(r"\b(?:refresh|rebuild)\b.+?\bindex\b", re.I),
++    re.compile(r"\brun\b.+?\b(?:static|collision) validation\b", re.I),
++    re.compile(r"\b(?:taşı|hareket ettir)\b.+?\b\d+(?:[.,]\d+)?\s+stud\b", re.I),
++    re.compile(r"\b(?:döndür)\b.+?\b\d+(?:[.,]\d+)?\s+derece\b", re.I),
++)
++
++AMBIGUOUS_REFERENCES = re.compile(r"\b(?:this|that|it|there|şu|bu|o|oraya|şuraya|bunu|onu)\b", re.I)
++TARGET_HINTS = re.compile(r"\b(?:selected|selection|workspace\.|replicatedstorage\.|serverstorage\.|startergui\.|script|part|model|gui|asset\s*id|instance\s*path|seçili)\b", re.I)
++NUMERIC = re.compile(r"-?\d+(?:[.,]\d+)?")
++
++
++def _task_classes(text: str) -> tuple[str, ...]:
++    normalized = " ".join(text.casefold().split())
++    found: list[str] = []
++    for task_class, terms in TASK_RULES:
++        for term in terms:
++            if re.search(term, normalized, re.I) if any(ch in term for ch in ".*?") else term in normalized:
++                found.append(task_class)
++                break
++    return tuple(dict.fromkeys(found or ("project_analysis",)))
++
++
++def _operation(task_classes: Iterable[str], text: str) -> str:
++    values = set(task_classes)
++    normalized = text.casefold()
++    if values & {"creator_store_search", "project_analysis"}:
++        return "search" if "search" in normalized or "ara" in normalized else "read"
++    if values & {"runtime_debugging", "security_review", "performance_review", "ui_validation", "multi_device_validation", "release_validation"}:
++        return "debug" if "debug" in normalized or "hata" in normalized el
