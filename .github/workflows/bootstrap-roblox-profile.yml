@@ -1,83 +1,13 @@
-name: Bootstrap Roblox Studio orchestration profile
+name: Disabled legacy Roblox profile bootstrap
 
 on:
-  push:
-    branches:
-      - agent/roblox-studio-orchestration-profile
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: bootstrap-roblox-studio-profile
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  unpack:
-    if: github.actor != 'github-actions[bot]'
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Reconstruct and verify patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          : > /tmp/roblox-profile.patch
-          cat .signalcore-bootstrap/patch-000 .signalcore-bootstrap/patch-001 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-002a.b64 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-002b.b64 >> /tmp/roblox-profile.patch
-          for index in $(seq -w 3 14); do
-            cat ".signalcore-bootstrap/patch-${index}" >> /tmp/roblox-profile.patch
-          done
-          base64 --decode .signalcore-bootstrap/patch-015a.b64 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-015b.b64 >> /tmp/roblox-profile.patch
-          awk '
-            BEGIN { fix = 0 }
-            /^\+diff --git / { fix = 1 }
-            {
-              if (fix) sub(/^\+/, "")
-              print
-            }
-          ' .signalcore-bootstrap/patch-016 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-017a.b64 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-017b.b64 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-018a.b64 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-018b1.b64 >> /tmp/roblox-profile.patch
-          base64 --decode .signalcore-bootstrap/patch-018b2.b64 >> /tmp/roblox-profile.patch
-          cat .signalcore-bootstrap/patch-019 >> /tmp/roblox-profile.patch
-          echo "ef594b2169ac2515697386ee09d47314191a51d90383f2e22e098fcff3bcc1bd  /tmp/roblox-profile.patch" | sha256sum -c -
-          git apply --check /tmp/roblox-profile.patch
-
-      - name: Apply verified source tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep '^diff --git a/' /tmp/roblox-profile.patch | sed -E 's#^diff --git a/([^ ]+) b/.*#\1#' > /tmp/roblox-targets
-          while IFS= read -r path; do
-            git rm -rf --ignore-unmatch -- "$path"
-          done < /tmp/roblox-targets
-          git apply --index /tmp/roblox-profile.patch
-          git rm -rf .signalcore-bootstrap
-          git rm -f .github/workflows/bootstrap-roblox-profile.yml
-
-      - name: Validate generated tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m compileall -q skills/signal-core/scripts skills/signal-core/profiles tools tests benchmarks
-          python -m unittest discover -s tests -q
-          python tools/validate.py
-          python benchmarks/roblox_profile_benchmark.py --cases 50 --output /tmp/roblox-profile-smoke.json
-
-      - name: Commit source tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Implement Roblox Studio orchestration profile"
-          git push
+      - run: echo "Legacy bootstrap disabled; clean direct branch is used."
