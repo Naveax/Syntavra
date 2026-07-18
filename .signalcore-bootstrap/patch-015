@@ -1,0 +1,358 @@
+sandbox_level: SandboxLevel
++    tool_ids: tuple[str, ...]
++    reasons: tuple[str, ...]
++
++
++@dataclass(frozen=True)
++class RepairCapsule:
++    task_goal: str
++    failed_acceptance_test: str
++    failure_class: str
++    new_error: Mapping[str, Any]
++    relevant_patch: Mapping[str, Any]
++    relevant_code_range: Mapping[str, Any]
++    changed_evidence: tuple[str, ...]
++    unchanged_evidence_references: tuple[str, ...]
++    repair_constraints: tuple[str, ...]
++    previous_attempts: int
++
++
++@dataclass(frozen=True)
++class TelemetryRecord:
++    task_id: str
++    task_class: str
++    risk_level: RiskLevel
++    workflow_nodes: int
++    models_used: tuple[str, ...]
++    engines_used: tuple[str, ...]
++    cloud_requests: int
++    local_requests: int
++    cloud_input_tokens: int
++    cloud_output_tokens: int
++    local_tokens: int
++    gpu_time_ms: int
++    playtest_time_ms: int
++    blender_time_ms: int
++    context_candidates: int
++    context_selected: int
++    cache_hit_rate: float
++    repair_count: int
++    rollback_count: int
++    wall_time_ms: int
++    verified: bool
++    final_status: FinalStatus
++
++
++@dataclass(frozen=True)
++class OrchestrationTrace:
++    trace_id: str
++    task_state: Mapping[str, Any]
++    capability_resolution: Mapping[str, Any]
++    engine_selection: Mapping[str, Any]
++    model_selection: Mapping[str, Any]
++    evidence_selection: tuple[str, ...]
++    context_capsule_hash: str
++    tool_schemas: tuple[str, ...]
++    workflow_hash: str
++    budgets: Mapping[str, Any]
++    tests: tuple[str, ...]
++    repairs: tuple[str, ...]
++    commits: tuple[str, ...]
++    rollbacks: tuple[str, ...]
++    versions: Mapping[str, str]
+diff --git a/skills/signal-core/profiles/roblox_studio/validators.py b/skills/signal-core/profiles/roblox_studio/validators.py
+new file mode 100644
+index 0000000..6fc1976
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/validators.py
+@@ -0,0 +1,96 @@
++from __future__ import annotations
++
++import hashlib
++import json
++from dataclasses import dataclass
++from typing import Any, Mapping
++
++from .errors import ValidationFailedError
++from .governance import PrivacyFirewall
++from .types import EngineSpec, ModelSpec
++
++
++@dataclass(frozen=True)
++class ValidatedEngineResult:
++    engine_id: str
++    engine_version: str
++    capability: str
++    status: str
++    artifact_hash: str
++    evidence_references: tuple[str, ...]
++    validator_results: Mapping[str, bool]
++    payload: Mapping[str, Any]
++
++
++class ModelResponseValidator:
++    REQUIRED_KEYS = frozenset({"understanding", "executionPlan", "toolCalls", "acceptanceTests", "riskFlags", "requiresApproval"})
++
++    @classmethod
++    def validate(cls, model: ModelSpec, response: Mapping[str, Any]) -> Mapping[str, Any]:
++        if response.get("timedOut") is True:
++            raise ValidationFailedError(f"model {model.model_id} timed out")
++        if not model.supports_structured_output:
++            raise ValidationFailedError(f"model {model.model_id} is not certified for structured output")
++        missing = cls.REQUIRED_KEYS - set(response)
++        if missing:
++            raise ValidationFailedError("model response missing: " + ", ".join(sorted(missing)))
++        if not isinstance(response.get("executionPlan"), list) or not isinstance(response.get("toolCalls"), list):
++            raise ValidationFailedError("model response plan/toolCalls must be lists")
++        if not isinstance(response.get("requiresApproval"), bool):
++            raise ValidationFailedError("requiresApproval must be boolean")
++        # Round-trip proves JSON serializability and rejects opaque Python objects.
++        try:
++            json.loads(json.dumps(response, ensure_ascii=False, sort_keys=True))
++        except (TypeError, ValueError) as exc:
++            raise ValidationFailedError("model response is not JSON serializable") from exc
++        return response
++
++
++class EngineResponseValidator:
++    @staticmethod
++    def validate(
++        engine: EngineSpec,
++        capability: str,
++        response: Mapping[str, Any],
++        *,
++        firewall: PrivacyFirewall | None = None,
++    ) -> ValidatedEngineResult:
++        if response.get("timedOut") is True:
++            raise ValidationFailedError(f"engine {engine.engine_id} timed out")
++        if capability not in engine.capabilities:
++            raise ValidationFailedError(f"engine {engine.engine_id} did not declare {capability}")
++        if str(response.get("engineId", "")) != engine.engine_id:
++            raise ValidationFailedError("engine response identity mismatch")
++        if str(response.get("engineVersion", "")) != engine.version:
++            raise ValidationFailedError("engine response version mismatch")
++        if str(response.get("capability", "")) != capability:
++            raise ValidationFailedError("engine response capability mismatch")
++        status = str(response.get("status", ""))
++        if status not in {"SUCCEEDED", "FAILED", "BLOCKED"}:
++            raise ValidationFailedError("invalid engine response status")
++        payload = response.get("payload", {})
++        if not isinstance(payload, Mapping):
++            raise ValidationFailedError("engine payload must be an object")
++        canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
++        if firewall is not None:
++            firewall.sanitize(canonical, trust_level="GENERATED_ARTIFACT", for_cloud=False)
++        supplied_hash = str(response.get("artifactHash", ""))
++        calculated_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
++        if supplied_hash and supplied_hash != calculated_hash:
++            raise ValidationFailedError("engine artifact hash mismatch")
++        validators = response.get("validatorResults", {})
++        if not isinstance(validators, Mapping) or any(not isinstance(value, bool) for value in validators.values()):
++            raise ValidationFailedError("validatorResults must map names to booleans")
++        evidence = response.get("evidenceReferences", ())
++        if not isinstance(evidence, (list, tuple)):
++            raise ValidationFailedError("evidenceReferences must be a list")
++        return ValidatedEngineResult(
++            engine.engine_id,
++            engine.version,
++            capability,
++            status,
++            calculated_hash,
++            tuple(map(str, evidence)),
++            {str(key): bool(value) for key, value in validators.items()},
++            dict(payload),
++        )
+diff --git a/skills/signal-core/profiles/roblox_studio/workflow.py b/skills/signal-core/profiles/roblox_studio/workflow.py
+new file mode 100644
+index 0000000..48eccc6
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/workflow.py
+@@ -0,0 +1,301 @@
++from __future__ import annotations
++
++import hashlib
++import json
++import time
++from dataclasses import asdict
++from pathlib import Path
++from typing import Iterable, Mapping, Sequence
++
++from .errors import CheckpointInvalidError, ValidationFailedError
++from .types import (
++    ContextCapsule, RepairCapsule, RiskLevel, RobloxTaskState, RoutePlan,
++    SandboxLevel, WorkflowCheckpoint, WorkflowDAG, WorkflowNode,
++)
++
++
++WORKFLOW_TEMPLATES: dict[str, tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...]] = {
++    "script_patch": (
++        ("resolve_script", ("LUAU_READ",), ()),
++        ("prepare_patch", ("LUAU_PATCH",), ("resolve_script",)),
++        ("validate_static", ("STATIC_VALIDATION",), ("prepare_patch",)),
++        ("validate_runtime", ("RUNTIME_PLAYTEST",), ("validate_static",)),
++        ("preview_commit", ("ROBLOX_PROJECT_WRITE",), ("validate_runtime",)),
++    ),
++    "asset_import": (
++        ("search_asset", ("CREATOR_STORE_SEARCH",), ()),
++        ("sanitize_asset", ("ASSET_SANITIZATION",), ("search_asset",)),
++        ("preview_asset", ("ASSET_IMPORT",), ("sanitize_asset",)),
++        ("validate_asset", ("ASSET_IMPORT",), ("preview_asset",)),
++        ("approve_asset", ("ROBLOX_PROJECT_WRITE",), ("validate_asset",)),
++    ),
++    "cinematic_creation": (
++        ("resolve_characters", ("ROBLOX_PROJECT_READ",), ()),
++        ("inspect_rigs", ("RIG_ANALYZER",), ("resolve_characters",)),
++        ("motion_spec", ("ANIMATION_ENGINE",), ("inspect_rigs",)),
++        ("validate_contacts", ("IK_ENGINE",), ("motion_spec",)),
++        ("camera_plan", ("CAMERA_ENGINE",), ("resolve_characters",)),
++        ("lighting_plan", ("LIGHTING_ENGINE",), ("resolve_characters",)),
++        ("vfx_plan", ("VFX_ENGINE",), ("resolve_characters",)),
++        ("audio_plan", ("AUDIO_ENGINE",), ("resolve_characters",)),
++        ("render_preview", ("CINEMATIC_ENGINE",), ("validate_contacts", "camera_plan", "lighting_plan", "vfx_plan", "audio_plan")),
++        ("visual_review", ("VISUAL_REVIEW_ENGINE",), ("render_preview",)),
++        ("human_approval", ("ROBLOX_PROJECT_WRITE",), ("visual_review",)),
++    ),
++    "datastore_migration": (
++        ("inspect_schema", ("ROBLOX_PROJECT_READ",), ()),
++        ("create_digital_twin", ("DIGITAL_TWIN",), ("inspect_schema",)),
++        ("migration_plan", ("DATASTORE_MIGRATION_LAB",), ("create_digital_twin",)),
++        ("run_migration", ("DATASTORE_MIGRATION_LAB",), ("migration_plan",)),
++        ("rollback_test", ("DATASTORE_MIGRATION_LAB",), ("run_migration",)),
++        ("human_approval", ("ROBLOX_PROJECT_WRITE",), ("rollback_test",)),
++    ),
++    "blender_job": (
++        ("prepare_blender_spec", ("ROBLOX_PROJECT_READ",), ()),
++        ("run_blender", ("BLENDER_WORKER",), ("prepare_blender_spec",)),
++        ("validate_import", ("BLENDER_WORKER", "RIG_ANALYZER"), ("run_blender",)),
++        ("preview_import", ("ASSET_IMPORT",), ("validate_import",)),
++        ("human_approval", ("ROBLOX_PROJECT_WRITE",), ("preview_import",)),
++    ),
++}
++
++
++class WorkflowPlanner:
++    def __init__(self, schema_version: int = 2) -> None:
++        self.schema_version = schema_version
++
++    def plan(
++        self,
++        task: RobloxTaskState,
++        route: RoutePlan,
++        *,
++        validators_by_capability: Mapping[str, Sequence[str]] | None = None,
++    ) -> WorkflowDAG:
++        validators_by_capability = validators_by_capability or {}
++        primary = next((item for item in task.task_classes if item in WORKFLOW_TEMPLATES), task.task_classes[0])
++        template = WORKFLOW_TEMPLATES.get(primary)
++        if template is None:
++            template = tuple((f"step_{index+1}_{capability.casefold()}", (capability,), (() if index == 0 else (f"step_{index}_{task.required_capabilities[index-1].casefold()}",))) for index, capability in enumerate(task.required_capabilities))
++        nodes: list[WorkflowNode] = []
++        for index, (name, capabilities, dependencies) in enumerate(template):
++            engine = _engine_for_capabilities(capabilities, route.engine_ids)
++            acceptance = tuple(dict.fromkeys(
++                test for capability in capabilities for test in validators_by_capability.get(capability, ())
++            )) or (f"{name}_verified",)
++            risk = task.risk_level
++            sandbox = max((task.sandbox_level, route.sandbox_level), key=_sandbox_rank)
++            approval = name == "human_approval" or (index == len(template) - 1 and risk in {RiskLevel.R3, RiskLevel.R4, RiskLevel.R5})
++            nodes.append(WorkflowNode(
++                node_id=name,
++                task_class=primary,
++                required_capabilities=tuple(capabilities),
++                selected_engine=engine,
++                selected_model=route.model_id,
++                dependencies=tuple(dependencies),
++                inputs=("context_capsule",),
++                outputs=(f"artifact:{name}",),
++                acceptance_tests=acceptance,
++                risk_level=risk,
++                sandbox_level=sandbox,
++                token_budget={"input": 1200 if route.deterministic else 3000, "output": 0 if route.deterministic else 1800},
++                resource_budget={"wall_time_seconds": 300, "gpu_time_ms": 120_000},
++                retry_policy={"maximum_attempts": 1 if approval else 2, "same_failure_stop": 2},
++                rollback_policy={"required": risk in {RiskLevel.R3, RiskLevel.R4, RiskLevel.R5}, "checkpoint_before": True},
++                human_approval=approval,
++            ))
++        self._validate_dag(nodes)
++        digest = hashlib.sha256((task.task_id + "\0" + "\0".join(node.node_id for node in nodes)).encode()).hexdigest()[:24]
++        return WorkflowDAG(f"wf-{digest}", task.task_id, tuple(nodes), time.time(), self.schema_version)
++
++
++    @staticmethod
++    def _validate_dag(nodes: Sequence[WorkflowNode]) -> None:
++        ids = {node.node_id for node in nodes}
++        if len(ids) != len(nodes):
++            raise ValidationFailedError("duplicate workflow node")
++        for node in nodes:
++            unknown = set(node.dependencies) - ids
++            if unknown:
++                raise ValidationFailedError(f"unknown dependencies for {node.node_id}: {sorted(unknown)}")
++        visited: set[str] = set()
++        visiting: set[str] = set()
++        by_id = {node.node_id: node for node in nodes}
++
++        def visit(node_id: str) -> None:
++            if node_id in visited:
++                return
++            if node_id in visiting:
++                raise ValidationFailedError("workflow cycle detected")
++            visiting.add(node_id)
++            for dependency in by_id[node_id].dependencies:
++                visit(dependency)
++            visiting.remove(node_id)
++            visited.add(node_id)
++
++        for node_id in by_id:
++            visit(node_id)
++
++    @staticmethod
++    def ready_nodes(workflow: WorkflowDAG, completed: Iterable[str]) -> tuple[WorkflowNode, ...]:
++        completed_set = set(completed)
++        return tuple(node for node in workflow.nodes if node.node_id not in completed_set and set(node.dependencies).issubset(completed_set))
++
++
++class CheckpointManager:
++    def __init__(self, root: str | Path) -> None:
++        self.root = Path(root).expanduser().resolve(strict=False)
++        self.root.mkdir(parents=True, exist_ok=True)
++
++    def save(self, checkpoint: WorkflowCheckpoint) -> Path:
++        payload = asdict(checkpoint)
++        path = self.root / f"{checkpoint.workflow_id}.json"
++        temp = path.with_suffix(".tmp")
++        temp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
++        temp.replace(path)
++        return path
++
++    def load(self, workflow_id: str) -> WorkflowCheckpoint:
++        path = self.root / f"{workflow_id}.json"
++        value = json.loads(path.read_text(encoding="utf-8"))
++        return WorkflowCheckpoint(
++            workflow_id=value["workflow_id"],
++            completed_nodes=tuple(value["completed_nodes"]),
++            pending_nodes=tuple(value["pending_nodes"]),
++            failed_nodes=tuple(value["failed_nodes"]),
++            evidence_snapshot=tuple(value["evidence_snapshot"]),
++            engine_versions=dict(value["engine_versions"]),
++            model_versions=dict(value["model_versions"]),
++            project_snapshot_hash=value["project_snapshot_hash"],
++            budget_state=dict(value["budget_state"]),
++            created_artifacts=tuple(value["created_artifacts"]),
++            rollback_state=dict(value["rollback_state"]),
++            capability_graph_version=value["capability_graph_version"],
++            profile_schema_version=int(value["profile_schema_version"]),
++        )
++
++    @staticmethod
++    def validate_resume(
++        checkpoint: WorkflowCheckpoint,
++        *,
++        project_snapshot_hash: str,
++        engine_versions: Mapping[str, str],
++        model_versions: Mapping[str, str],
++        evidence_snapshot: Iterable[str],
++        capability_graph_version: str,
++        profile_schema_version: int,
++    ) -> None:
++        mismatches: list[str] = []
++        if checkpoint.project_snapsh
