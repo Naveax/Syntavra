@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "benchmark": "signalcore-context-os-extreme-agent-evidence-manual-sharded",
+  "scope": "hard deterministic evidence benchmark; six isolated 100-case processes; not a proprietary-system comparison",
+  "cases": 600,
+  "shards": 6,
+  "arms": [
+    {
+      "name": "v1",
+      "complete_task_rate": 0.0,
+      "mean_role_recall": 1.0,
+      "exact_preservation": 1.0,
+      "stale_selection_rate": 1.0,
+      "mean_context_tokens": 1037.38,
+      "mean_token_reduction_vs_full": 0.8724931198523266,
+      "latency_ms": {
+        "p50": 16.95878775080928,
+        "p95_conservative_max_shard": 23.273546999917016,
+        "mean": 17.282826163270027
+      }
+    },
+    {
+      "name": "v2",
+      "complete_task_rate": 1.0,
+      "mean_role_recall": 1.0,
+      "exact_preservation": 1.0,
+      "stale_selection_rate": 0.0,
+      "mean_context_tokens": 173.92,
+      "mean_token_reduction_vs_full": 0.9786230729382837,
+      "latency_ms": {
+        "p50": 83.00649024931772,
+        "p95_conservative_max_shard": 146.42702099990856,
+        "mean": 95.26295063165283
+      }
+    }
+  ],
+  "v2_vs_v1": {
+    "context_token_reduction": 0.8323468738552893,
+    "complete_task_rate_absolute_gain": 1.0
+  },
+  "all_shards_passed": true,
+  "passed": true,
+  "seeds": [
+    20260718,
+    20261727,
+    20262736,
+    20263745,
+    20264754,
+    20265763
+  ]
+}
