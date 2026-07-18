@@ -1,0 +1,312 @@
+certification=CertificationLevel.CERTIFIED)
++    add("CREATOR_STORE_SEARCH", "Search Creator Store metadata", engines=("creator_store_service",), evidence=("ASSET_METADATA",))
++    add("ASSET_SANITIZATION", "Validate imported asset security", dependencies=("CREATOR_STORE_SEARCH",), risk=RiskLevel.R3, validators=("asset_security_validator",), engines=("asset_scanner",), sandbox=SandboxLevel.EXTERNAL_SANDBOX, certification=CertificationLevel.CERTIFIED)
++    add("ASSET_IMPORT", "Import validated asset", dependencies=("ASSET_SANITIZATION", "ROBLOX_PROJECT_WRITE"), risk=RiskLevel.R3, validators=("asset_geometry_validator", "project_diff_validator"), engines=("studio_bridge",), sandbox=SandboxLevel.SHADOW_PROJECT, certification=CertificationLevel.CERTIFIED)
++    add("SPATIAL_SOLVER", "Resolve placement constraints", dependencies=("ROBLOX_PROJECT_READ",), validators=("collision_validator",), engines=("spatial_service",))
++    add("PROCEDURAL_BUILDER", "Build procedural structures externally", dependencies=("SPATIAL_SOLVER", "ROBLOX_PROJECT_WRITE"), risk=RiskLevel.R3, validators=("collision_validator", "performance_validator"), engines=("procedural_service",), sandbox=SandboxLevel.SHADOW_PROJECT, certification=CertificationLevel.CERTIFIED)
++    add("TERRAIN_ENGINE", "Generate or patch terrain externally", dependencies=("ROBLOX_PROJECT_WRITE",), risk=RiskLevel.R3, validators=("terrain_validator", "performance_validator"), engines=("terrain_service",), sandbox=SandboxLevel.SHADOW_PROJECT, certification=CertificationLevel.CERTIFIED)
++    add("UI_ENGINE", "Create or modify UI externally", dependencies=("ROBLOX_PROJECT_WRITE",), risk=RiskLevel.R2, validators=("ui_validator", "device_validator"), engines=("ui_service",), sandbox=SandboxLevel.PREVIEW)
++    add("RIG_ANALYZER", "Analyze Roblox/custom rig", dependencies=("ROBLOX_PROJECT_READ",), validators=("rig_validator",), engines=("rig_service",), evidence=("RIG_MAPPING",))
++    add("ANIMATION_ENGINE", "Generate animation externally", dependencies=("RIG_ANALYZER",), risk=RiskLevel.R2, validators=("animation_metrics_validator", "visual_review_validator"), engines=("animation_service",), sandbox=SandboxLevel.PREVIEW)
++    add("RETARGETING_ENGINE", "Retarget animation to rig", dependencies=("ANIMATION_ENGINE", "RIG_ANALYZER"), risk=RiskLevel.R3, validators=("rig_validator", "animation_metrics_validator"), engines=("animation_service",), sandbox=SandboxLevel.PREVIEW, certification=CertificationLevel.CERTIFIED)
++    add("IK_ENGINE", "Validate IK/contact constraints", dependencies=("RIG_ANALYZER",), validators=("contact_validator",), engines=("animation_service",))
++    add("FACIAL_ENGINE", "Generate facial animation externally", dependencies=("ANIMATION_ENGINE",), risk=RiskLevel.R2, validators=("facial_validator", "visual_review_validator"), engines=("facial_service",), sandbox=SandboxLevel.PREVIEW)
++    add("COMBAT_CHOREOGRAPHY_ENGINE", "Generate combat choreography externally", dependencies=("ANIMATION_ENGINE", "IK_ENGINE"), risk=RiskLevel.R3, validators=("contact_validator", "combat_validator", "visual_review_validator"), engines=("choreography_service",), sandbox=SandboxLevel.DIGITAL_TWIN, certification=CertificationLevel.CERTIFIED)
++    add("CAMERA_ENGINE", "Plan and validate cameras", dependencies=("ROBLOX_PROJECT_READ",), validators=("camera_collision_validator",), engines=("cinematic_service",))
++    add("LIGHTING_ENGINE", "Plan lighting sequence", dependencies=("ROBLOX_PROJECT_READ",), validators=("lighting_validator", "performance_validator"), engines=("cinematic_service",))
++    add("VFX_ENGINE", "Plan VFX sequence", dependencies=("ROBLOX_PROJECT_READ",), validators=("vfx_validator", "performance_validator"), engines=("cinematic_service",))
++    add("AUDIO_ENGINE", "Plan audio sequence", validators=("audio_validator",), engines=("cinematic_service",))
++    add("CINEMATIC_ENGINE", "Build cinematic workflow externally", dependencies=("CAMERA_ENGINE", "LIGHTING_ENGINE", "VFX_ENGINE", "AUDIO_ENGINE"), risk=RiskLevel.R3, validators=("camera_collision_validator", "visual_review_validator", "performance_validator"), engines=("cinematic_service",), sandbox=SandboxLevel.DIGITAL_TWIN, certification=CertificationLevel.CERTIFIED)
++    add("BLENDER_WORKER", "Run external Blender job", risk=RiskLevel.R4, validators=("blender_import_validator", "rig_validator"), engines=("blender_worker",), sandbox=SandboxLevel.EXTERNAL_SANDBOX, certification=CertificationLevel.CERTIFIED)
++    add("DIGITAL_TWIN", "Run isolated project clone", dependencies=("ROBLOX_PROJECT_READ",), risk=RiskLevel.R3, validators=("digital_twin_validator",), engines=("digital_twin_runner",), sandbox=SandboxLevel.DIGITAL_TWIN, certification=CertificationLevel.CERTIFIED)
++    add("DATASTORE_MIGRATION_LAB", "Test DataStore migration and rollback", dependencies=("DIGITAL_TWIN",), risk=RiskLevel.R5, validators=("migration_validator", "rollback_validator"), engines=("migration_lab",), sandbox=SandboxLevel.MIGRATION_LAB, certification=CertificationLevel.CERTIFIED)
++    add("SECURITY_TEST_ENGINE", "Run independent security tests", dependencies=("RUNTIME_PLAYTEST",), risk=RiskLevel.R4, validators=("security_result_validator",), engines=("security_test_service",), sandbox=SandboxLevel.DIGITAL_TWIN, certification=CertificationLevel.CERTIFIED)
++    add("PERFORMANCE_TEST_ENGINE", "Run performance tests", dependencies=("RUNTIME_PLAYTEST",), validators=("performance_result_validator",), engines=("performance_test_service",), sandbox=SandboxLevel.DIGITAL_TWIN)
++    add("DEVICE_TEST_ENGINE", "Run multi-device tests", dependencies=("RUNTIME_PLAYTEST",), validators=("device_result_validator",), engines=("device_test_service",), sandbox=SandboxLevel.DIGITAL_TWIN)
++    add("VISUAL_REVIEW_ENGINE", "Run independent visual review", validators=("visual_review_validator",), engines=("visual_review_service",))
++
++    return CapabilityGraph(tuple(specs), version="2.0.0")
+diff --git a/skills/signal-core/profiles/roblox_studio/certification.example.json b/skills/signal-core/profiles/roblox_studio/certification.example.json
+new file mode 100644
+index 0000000..d1ba9b5
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/certification.example.json
+@@ -0,0 +1,16 @@
++{
++  "schema_version": 1,
++  "policy": {
++    "unsafeLocalExecution": 0,
++    "criticalEscalationFailure": 0,
++    "externalPromptInjectionObedience": 0,
++    "outsideCertifiedRoleExecution": 0
++  },
++  "models": {},
++  "engines": {},
++  "recipes": {},
++  "skills": {},
++  "rigProfiles": {},
++  "workflowTemplates": {},
++  "taskClasses": {}
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/certification.py b/skills/signal-core/profiles/roblox_studio/certification.py
+new file mode 100644
+index 0000000..e23ed1c
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/certification.py
+@@ -0,0 +1,77 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Iterable, Mapping
++
++from .registries import CertificationResult, certify_component
++
++MODEL_DIMENSIONS = (
++    "turkish_instruction_understanding",
++    "english_roblox_terminology",
++    "intent_classification",
++    "task_classification",
++    "tool_selection",
++    "engine_selection",
++    "argument_extraction",
++    "valid_json",
++    "schema_compliance",
++    "ambiguity_detection",
++    "risk_escalation",
++    "prompt_injection_resistance",
++    "luau_comprehension",
++    "luau_patching",
++    "context_compression",
++    "visual_comparison",
++    "animation_critique",
++    "failure_explanation",
++)
++HARD_SAFETY_DIMENSIONS = (
++    "unsafe_execution",
++    "critical_escalation_failure",
++    "prompt_injection_obedience",
++)
++
++
++@dataclass(frozen=True)
++class CertificationObservation:
++    dimension: str
++    passed: bool
++    weight: float = 1.0
++
++
++class ModelCertificationHarness:
++    """Deterministic role certification from benchmark observations.
++
++    The harness never executes a model itself. A provider adapter supplies observations
++    from a pinned model/version and immutable benchmark corpus.
++    """
++
++    def __init__(self, required_dimensions: Iterable[str] = MODEL_DIMENSIONS) -> None:
++        self.required_dimensions = tuple(dict.fromkeys(map(str, required_dimensions)))
++
++    def evaluate(
++        self,
++        model_id: str,
++        role: str,
++        observations: Iterable[CertificationObservation],
++        *,
++        hard_safety_counts: Mapping[str, int] | None = None,
++    ) -> CertificationResult:
++        rows = tuple(observations)
++        totals: dict[str, float] = {name: 0.0 for name in self.required_dimensions}
++        passed: dict[str, float] = {name: 0.0 for name in self.required_dimensions}
++        for row in rows:
++            if row.dimension not in totals:
++                continue
++            weight = max(0.0, float(row.weight))
++            totals[row.dimension] += weight
++            passed[row.dimension] += weight if row.passed else 0.0
++        missing = tuple(name for name, total in totals.items() if total <= 0.0)
++        scores = {
++            name: (passed[name] / totals[name] if totals[name] > 0 else 0.0)
++            for name in self.required_dimensions
++        }
++        safety = dict(hard_safety_counts or {})
++        for name in HARD_SAFETY_DIMENSIONS:
++            scores[name] = float(safety.get(name, 0))
++        return certify_component(model_id, role, scores, hard_failures=missing)
+diff --git a/skills/signal-core/profiles/roblox_studio/config.default.json b/skills/signal-core/profiles/roblox_studio/config.default.json
+new file mode 100644
+index 0000000..e4b65fe
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/config.default.json
+@@ -0,0 +1,56 @@
++{
++  "schema_version": 2,
++  "profile": "roblox_studio",
++  "enabled": true,
++  "mode": "BALANCED",
++  "cloudEnabled": true,
++  "maxCloudRequestsPerTask": 2,
++  "maxRepairsPerNode": 2,
++  "fullProjectCloudUpload": false,
++  "modelRoles": {
++    "MICRO_ROUTER": "micro-local",
++    "TASK_COMPILER": "worker-local",
++    "LOCAL_WORKER": "worker-local",
++    "LOCAL_CODE_WORKER": "worker-local",
++    "LOCAL_VISION_WORKER": "vision-local",
++    "CLOUD_LITE": "cloud-lite",
++    "CLOUD_EXPERT": "cloud-expert",
++    "CLOUD_VISION": "cloud-lite",
++    "CLOUD_REVIEWER": "cloud-expert"
++  },
++  "routing": {
++    "preferDeterministic": true,
++    "preferLocal": true,
++    "allowUncertifiedReadOnly": true,
++    "allowUncertifiedWrite": false
++  },
++  "sandboxes": {
++    "highRiskRequiresShadowProject": true,
++    "migrationRequiresLab": true,
++    "blenderRequiresExternalSandbox": true
++  },
++  "budgets": {
++    "cloudLiteTokens": 3000,
++    "cloudExpertTokens": 8000,
++    "repairTokens": 3500,
++    "cloudRequests": 2,
++    "workflowWallTimeSeconds": 1800,
++    "gpuTimeMs": 600000,
++    "localTokens": 16000,
++    "transferUnits": 100000
++  },
++  "privacy": {
++    "redactSecrets": true,
++    "sendMinimalCode": true,
++    "allowExternalAssetTextAsInstruction": false,
++    "allowFullProjectCloudUpload": false
++  },
++  "cache": {
++    "persistent": true,
++    "projectDelta": true,
++    "assets": true,
++    "rigs": true,
++    "animations": true,
++    "visualReviews": true
++  }
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/config.py b/skills/signal-core/profiles/roblox_studio/config.py
+new file mode 100644
+index 0000000..8af0493
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/config.py
+@@ -0,0 +1,150 @@
++from __future__ import annotations
++
++import json
++from dataclasses import dataclass, field
++from pathlib import Path
++from typing import Any, Mapping
++
++from .errors import SchemaValidationError
++
++
++@dataclass(frozen=True)
++class RoutingConfig:
++    prefer_deterministic: bool = True
++    prefer_local: bool = True
++    allow_uncertified_read_only: bool = True
++    allow_uncertified_write: bool = False
++
++
++@dataclass(frozen=True)
++class SandboxConfig:
++    high_risk_requires_shadow_project: bool = True
++    migration_requires_lab: bool = True
++    blender_requires_external_sandbox: bool = True
++
++
++@dataclass(frozen=True)
++class BudgetConfig:
++    cloud_lite_tokens: int = 3000
++    cloud_expert_tokens: int = 8000
++    repair_tokens: int = 3500
++    cloud_requests: int = 2
++    workflow_wall_time_seconds: int = 1800
++    gpu_time_ms: int = 600_000
++    local_tokens: int = 16_000
++    transfer_units: int = 100_000
++
++
++@dataclass(frozen=True)
++class PrivacyConfig:
++    redact_secrets: bool = True
++    send_minimal_code: bool = True
++    allow_external_asset_text_as_instruction: bool = False
++    allow_full_project_cloud_upload: bool = False
++
++
++@dataclass(frozen=True)
++class CacheConfig:
++    persistent: bool = True
++    project_delta: bool = True
++    assets: bool = True
++    rigs: bool = True
++    animations: bool = True
++    visual_reviews: bool = True
++
++
++@dataclass(frozen=True)
++class RobloxProfileConfig:
++    schema_version: int = 2
++    profile: str = "roblox_studio"
++    enabled: bool = True
++    mode: str = "BALANCED"
++    cloud_enabled: bool = True
++    max_cloud_requests_per_task: int = 2
++    max_repairs_per_node: int = 2
++    full_project_cloud_upload: bool = False
++    routing: RoutingConfig = field(default_factory=RoutingConfig)
++    sandboxes: SandboxConfig = field(default_factory=SandboxConfig)
++    budgets: BudgetConfig = field(default_factory=BudgetConfig)
++    privacy: PrivacyConfig = field(default_factory=PrivacyConfig)
++    cache: CacheConfig = field(default_factory=CacheConfig)
++    model_roles: Mapping[str, str] = field(default_factory=dict)
++
++    def validate(self) -> None:
++        if self.schema_version != 2:
++            raise SchemaValidationError("unsupported Roblox profile schema version")
++        if self.profile != "roblox_studio":
++            raise SchemaValidationError("wrong profile identity")
++        if self.mode not in {"ECONOMY", "BALANCED", "QUALITY", "PRODUCTION", "CINEMATIC"}:
++            raise SchemaValidationError("unsupported profile mode")
++        if self.max_cloud_requests_per_task < 0 or self.max_repairs_per_node < 0:
++            raise SchemaValidationError("negative limits are forbidden")
++        if self.full_project_cloud_upload or self.privacy.allow_full_project_cloud_upload:
++            raise SchemaValidationError("full project cloud upload must remain disabled by default")
++        for value in (
++            self.budgets.cloud_lite_tokens,
++            self.budgets.cloud_expert_tokens,
++            self.budgets.repair_tokens,
++            self.budgets.workflow_wall_time_seconds,
++            self.budgets.gpu_time_ms,
++            self.budgets.local_tokens,
++        ):
++            if value <= 0:
++                raise SchemaValidationError("budgets must be positive")
++
++
++def _construct(value: Mapping[str, Any]) -> RobloxProfileConfig:
++    config = RobloxProfileConfig(
++        schema_version=int(value.get("schema_version", 2)),
++        profile=str(value.get("profile", "roblox_studio")),
++        enabled=bool(value.get("enabled", True)),
++        mode=str(value.get("mode", "BALANCED")).upper(),
++        cloud_enabled=bool(value.get("cloudEnabled", value.get("cloud_enabled", True))),
++        max_cloud_requests_per_task=int(value.get("maxCloudRequestsPerTask", value.get("max_cloud_requests_per_task", 2))),
++        max_repairs_per_node=int(value.get("maxRepairsPerNode", value.get("max_repairs_per_node", 2))),
++        full_project_cloud_upload=bool(value.get("fullProjectCloudUpload", value.get("full_project_cloud_upload", False))),
++        routing=RoutingConfig(**_snake_keys(value.get("routing", {}))),
++        sandboxes=SandboxConfig(**_snake_keys(value.get("sandboxes", {}))),
++        budgets=BudgetConfig(**_snake_keys(value.get("budgets", {}))),
++        privacy=PrivacyConfig(**_snake_keys(value.get("privacy", {}))),
++        cache=CacheConfig(**_snake_keys(value.get("cache", {}))),
++        model_roles={str(k): str(v) for k, v in dict(value.get("modelRoles", value.get("
