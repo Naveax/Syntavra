@@ -1,24 +1,133 @@
 # SignalCore 0.0.1
 
-**Cross-platform Agent Skill for AI coding agents: Codex, Claude Code, Gemini CLI, Google Antigravity, Windsurf, OpenCode, VS Code/GitHub Copilot, Cursor, Cline, Continue, Junie, AGENTS.md-compatible tools, and universal Markdown/Python bridges.**
+**Cross-platform Context Intelligence and runtime-optimization layer for AI coding agents.**
 
-SignalCore is an unreleased, local-first coding-agent control layer. It coordinates repository context, exact evidence, persistent state, conservative posterior routing, provider/tool telemetry, retries, verification, token usage, latency, and monetary cost under a success-first policy.
+SignalCore targets OpenAI Codex, Claude Code, Gemini CLI, Google Antigravity, Windsurf, OpenCode, VS Code/GitHub Copilot, Cursor, Cline, Continue, Junie, Agent Skills-compatible hosts, and universal Markdown/Python bridges.
 
-> SignalCore is designed to become a high-efficiency single skill, but it does **not** claim proven market leadership or Token Savior superiority until paired external-provider benchmarks pass.
+It is designed to reduce model-facing context and tool-output waste **without sacrificing exact evidence, verifier coverage, security boundaries, or repairability**.
+
+> **Proof policy:** SignalCore publishes raw internal results, test scope, seeds, latency, and limitations. It does not claim OpenAI, Anthropic, Token Savior, Aider, Context Mode, or market-wide superiority until identical-model public provider benchmarks and independent reproduction pass.
+
+## Measured internal results
+
+Benchmarked build: **Context Intelligence Extreme v2 + Runtime Optimizer v3**  
+Release identity: `SHA-256 141b6b34fabb25de2d1d308386a15a43e1fca1712c7e315e1101ff4bd5604d79`
+
+| Benchmark | Cases | Internal v1 baseline | Runtime v3 result | Difference |
+|---|---:|---:|---:|---:|
+| Hard exact/stale/adversarial evidence | 600 | 0% complete; 1,037 tokens | **100% complete; 174 tokens** | **83.23% less selected context** |
+| Exact-free semantic multi-hop | 120 | 11.67% complete; 1,586 tokens | **100% complete; 77 tokens** | **95.15% less selected context** |
+| Runtime tool-output compaction | 400 | Raw output | **86.02% mean estimated reduction** | **100% injected-marker preservation** |
+| Capsule-only controlled repairs | 4 | ~5,231 repository tokens | **~139 tokens; 4/4 verifier PASS** | **97.35% less context** |
+
+### Hard benchmark details
+
+- six isolated 100-case processes
+- exact-error preservation: **100%**
+- stale-selection rate: **100% → 0%**
+- mean selected context: **1,037.38 → 173.92 tokens**
+- Runtime v3 local p95: **146.43 ms**
+
+### Semantic benchmark details
+
+The semantic suite removes exact markers, file names, symbol names, role metadata, and direct error codes.
+
+- complete rate: **11.67% → 100%**
+- role recall: **71.25% → 100%**
+- mean selected context: **1,586.28 → 77 tokens**
+- Runtime v3 local p95: **86.25 ms**
+
+### Runtime-output details
+
+| Output family | Cases | Mean estimated reduction | Critical-marker preservation |
+|---|---:|---:|---:|
+| Pytest | 100 | **72.70%** | **100%** |
+| Git | 100 | **75.46%** | **100%** |
+| Logs | 100 | **96.58%** | **100%** |
+| JSON | 100 | **99.33%** | **100%** |
+| **Combined** | **400** | **86.02%** | **100%** |
+
+Combined local processing p95: **1.90 ms**.
+
+### Package gates
+
+- **1,200 / 1,200 tests PASS**
+- **19 / 19 release-validator gates PASS**
+- **103 manifest entries verified**
+- Python compilation: **PASS**
+- secret scan: **PASS**
+- locked Roblox Studio activation gate: **PASS**
+
+Read the complete methodology and limitations in [BENCHMARKS.md](BENCHMARKS.md).
+
+Raw artifacts:
+
+- [`hard-600.json`](benchmarks/results/runtime-v3/hard-600.json)
+- [`semantic-120.json`](benchmarks/results/runtime-v3/semantic-120.json)
+- [`runtime-output-400.json`](benchmarks/results/runtime-v3/runtime-output-400.json)
+- [`capsule-repair-4.json`](benchmarks/results/runtime-v3/capsule-repair-4.json)
+- [`release.json`](benchmarks/results/runtime-v3/release.json)
+
+> These are controlled internal engineering benchmarks against SignalCore's own v1 baseline. They are not SWE-bench, BEIR, API-billing guarantees, or independent competitor comparisons. The complete Runtime v3 source candidate may be ahead of the current `main` source tree until the full source merge tracked in [issue #1](https://github.com/Naveax/SignalCore/issues/1) is completed.
+
+## What makes SignalCore different
+
+SignalCore is not only a “respond more briefly” prompt.
+
+| Capability | Minimal prompt/rule | Single-purpose compactor | SignalCore target architecture |
+|---|---:|---:|---:|
+| Query-aware repository evidence | No | Limited | **Yes** |
+| Exact evidence preservation | No guarantee | Output-dependent | **Hash and recovery-handle based** |
+| Stale/current contradiction handling | No | No | **Yes** |
+| Semantic multi-hop evidence recovery | No | No | **Yes** |
+| Tool-output compaction | Limited | **Yes** | **Yes** |
+| Hard token and cost budgets | No | No | **Yes** |
+| Capability-aware model routing | No | No | **Yes** |
+| Project decision and rejected-approach memory | No | No | **Yes** |
+| Context firewall and untrusted-content quarantine | No | Limited | **Yes** |
+| Bounded subagent return capsules | No | No | **Yes** |
+| Validation-gated self-optimization | No | No | **Yes** |
+| Cross-platform delivery | Usually one host | Usually one hook | **22 platform records** |
+
+## Core architecture
+
+```text
+Task understanding
+→ deterministic query planning
+→ hierarchical document / section / symbol indexing
+→ corpus-aware strategy selection
+→ lexical + semantic retrieval
+→ Reciprocal Rank Fusion
+→ bounded late interaction
+→ evidence and dependency graph
+→ stale / contradiction / trust analysis
+→ role-specific evidence recovery
+→ exact-preserving compression
+→ constrained context budget allocation
+→ source fusion
+→ model-aware ordering
+→ sufficiency simulation
+→ content-addressed cache and memory
+→ runtime output compaction
+→ verifier and telemetry
+```
 
 ## Why SignalCore
 
 - **Success before savings:** correctness, exact evidence, and a runnable verifier outrank lower token count.
-- **Cross-platform:** one canonical skill, multiple native and rule-based delivery adapters.
+- **Measured context selection:** publishes raw benchmark artifacts instead of unsupported product percentages.
+- **Runtime output control:** compacts test, Git, JSON, and log output while retaining critical markers.
+- **Progressive disclosure:** complex workflows activate only when their expected value exceeds overhead.
+- **Cross-platform:** one canonical behavior layer with native and bridge-based delivery adapters.
 - **Local-first:** Python 3.11+ standard library and SQLite WAL; no hosted service required.
 - **Exact evidence:** content-addressed storage, hashes, bounded reads, and recovery handles.
-- **Measured economics:** normalized provider/tool telemetry instead of unsupported percentages.
-- **Progressive disclosure:** complex workflows activate only when their expected value exceeds their overhead.
-- **Non-destructive installation:** adapters preserve existing `AGENTS.md`, `CLAUDE.md`, and rule content.
+- **Project memory:** decisions, supersession, rejected approaches, and commit validity.
+- **Fail-closed domain profiles:** restricted profiles cannot be activated by ordinary prompts.
+- **Non-destructive installation:** adapters preserve existing instruction and rule content.
 
 ## Compatibility
 
-### Native Agent Skill
+### Native Agent Skill targets
 
 - OpenAI Codex
 - Claude Code
@@ -27,7 +136,7 @@ SignalCore is an unreleased, local-first coding-agent control layer. It coordina
 - Windsurf Cascade
 - OpenCode
 - VS Code / GitHub Copilot
-- Hosts implementing the Agent Skills standard through `.agents/skills/`
+- hosts implementing the Agent Skills standard through `.agents/skills/`
 
 ### Rule and instruction bridges
 
@@ -37,15 +146,21 @@ SignalCore is an unreleased, local-first coding-agent control layer. It coordina
 - JetBrains Junie and integrated agents
 - Roo Code, Aider, Zed, Kiro, Qwen Code, Kimi CLI, Goose, and other Markdown/AGENTS.md-capable agents through the universal bridge
 
-See [COMPATIBILITY.md](COMPATIBILITY.md) for exact support levels, paths, invocation syntax, and limitations.
+See [COMPATIBILITY.md](COMPATIBILITY.md) for exact support levels, installation paths, invocation syntax, and limitations.
 
 ## Locked Roblox Studio domain profile
 
-SignalCore includes a hidden `roblox_studio` profile foundation that cannot be
-activated from a normal CLI, IDE prompt, or Agent Skill invocation. It requires a
-short-lived signed envelope from an authorized Roblox Studio bridge, live Studio
-process attestation, project identity, an explicit capability subset, and a
-single-use nonce. See [ROBLOX_STUDIO_MODE.md](ROBLOX_STUDIO_MODE.md).
+SignalCore includes a hidden `roblox_studio` profile foundation that cannot be activated from a normal CLI, IDE prompt, or Agent Skill invocation.
+
+Activation requires:
+
+- a short-lived signed envelope from an authorized Roblox Studio bridge
+- live Studio process attestation
+- project identity
+- an explicit capability subset
+- a single-use nonce
+
+See [ROBLOX_STUDIO_MODE.md](ROBLOX_STUDIO_MODE.md).
 
 ## Install
 
@@ -63,7 +178,7 @@ python tools/install.py install \
   --scope project --project .
 ```
 
-### Install rule/instruction bridges
+### Install rule and instruction bridges
 
 ```bash
 python tools/install.py install \
@@ -71,10 +186,12 @@ python tools/install.py install \
   --scope project --project .
 ```
 
-### User-wide Codex/Claude/OpenCode/Windsurf install
+### User-wide installation
 
 ```bash
-python tools/install.py install --platforms codex,claude-code,opencode,windsurf --scope user
+python tools/install.py install \
+  --platforms codex,claude-code,opencode,windsurf \
+  --scope user
 ```
 
 ### Detect and inspect
@@ -89,14 +206,14 @@ python tools/install.py status --platforms all-verified --scope project
 ### Remove SignalCore-managed adapters
 
 ```bash
-python tools/install.py uninstall --platforms cursor,cline,continue,junie --scope project
+python tools/install.py uninstall \
+  --platforms cursor,cline,continue,junie \
+  --scope project
 ```
 
 ## Platform-specific distribution
 
 ### Claude Code marketplace
-
-Inside Claude Code:
 
 ```text
 /plugin marketplace add Naveax/SignalCore
@@ -116,35 +233,6 @@ Install to `.windsurf/skills/signal-core`, then invoke with `@signal-core` or le
 ### Cursor
 
 The installer creates `.cursor/rules/signal-core.mdc`. Cursor currently uses a rule bridge rather than SignalCore claiming native Agent Skill discovery.
-
-## Repository layout
-
-```text
-skills/signal-core/
-├── SKILL.md
-├── data/
-│   ├── lexicon.json
-│   └── platforms.json
-├── profiles/
-│   └── roblox_studio/
-│       ├── profile.json
-│       ├── activation.py
-│       └── README.md
-└── scripts/
-    ├── common.py
-    ├── evidence.py
-    ├── platforms.py
-    ├── posterior.py
-    ├── profile_loader.py
-    ├── routing.py
-    ├── store.py
-    ├── task_state.py
-    └── telemetry.py
-
-tools/
-├── install.py
-└── validate.py
-```
 
 ## Quick checks
 
@@ -166,22 +254,26 @@ SignalCore includes:
 - `.claude-plugin/marketplace.json` for Claude Code
 - `gemini-extension.json` for Gemini CLI
 - `.github/copilot-instructions.md` for VS Code/GitHub Copilot
-- explicit keywords for Agent Skills, Codex, Claude Code, Gemini CLI, Antigravity, Windsurf, OpenCode, Cursor, Cline, Continue, context engineering, token optimization, and coding-agent memory
+- explicit keywords covering Agent Skills, Codex, Claude Code, Gemini CLI, Antigravity, Windsurf, OpenCode, Cursor, Cline, Continue, context engineering, token optimization, evidence selection, model routing, runtime output compression, and coding-agent memory
 
 ## Design rules
 
 1. Correctness and verifier coverage outrank token reduction.
-2. Exact/security evidence is never silently summarized.
+2. Exact and security evidence is never silently summarized.
 3. Large evidence is stored by hash and retrieved through bounded handles.
 4. SQLite state uses WAL, migrations, bounded transactions, and no pickle/eval.
 5. Provider usage is normalized before efficiency comparisons.
-6. Platform adapters remain thin; the canonical behavior stays in one `SKILL.md`.
-7. Forecasts and internal tests are not market-dominance proof.
+6. Platform adapters remain thin; canonical behavior stays in one core.
+7. Internal benchmarks are published with scope and limitations.
+8. Forecasts and synthetic tests are not market-dominance proof.
+9. Third-party licenses and attribution may not be concealed.
 
 ## Status
 
 - Version: **0.0.1**
-- Stage: **pre-release / frontier core**
+- Stage: **pre-release / Context Intelligence Runtime candidate**
 - Runtime: Python 3.11+ standard library
 - External engines: optional; not vendored
+- Public provider superiority: **not yet established**
+- Independent reproduction: **pending**
 - Repository: `Naveax/SignalCore`
