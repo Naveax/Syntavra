@@ -27,7 +27,7 @@ def source_tree_hash() -> str:
     hasher=hashlib.sha256()
     paths=[]
     for base in (PROFILE_PARENT/"roblox_studio", ROOT/"tests"/"roblox_profile"):
-        paths.extend(path for path in base.rglob("*") if path.is_file() and "__pycache__" not in path.parts and path.name != "MANIFEST.sha256")
+        paths.extend(path for path in base.rglob("*") if path.is_file() and path.suffix in {".py", ".json"} and "__pycache__" not in path.parts and path.name != "MANIFEST.sha256")
     paths.append(Path(__file__))
     for path in sorted(paths):
         hasher.update(path.relative_to(ROOT).as_posix().encode()); hasher.update(b"\0"); hasher.update(path.read_bytes()); hasher.update(b"\0")
