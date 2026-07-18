@@ -1,0 +1,204 @@
+3801a335ef5fa4c24d7d2384c618dfefa27140e88b  skills/signal-core/profiles/roblox_studio/schemas/workflow.schema.json
++befd753974b599ec60132e95ae65d42c65c519ee6dce769d744e5dc008ec354d  skills/signal-core/profiles/roblox_studio/task_encoder.py
++fff500ebee8080282bd0578700348b63dd00c9fec707efbeac81091d429ff4b6  skills/signal-core/profiles/roblox_studio/types.py
++f33b6dcfb7885573533f9182292c34c5d5c682d3f8ccbd9d706766d20514e112  skills/signal-core/profiles/roblox_studio/validators.py
++b832dfe1aebe1a33c0e2133f2bfd5b3a520f458bb8424bb9f71da8d04bd7424b  skills/signal-core/profiles/roblox_studio/workflow.py
++cb7948572d40998a69b08eff4522cdefb2bb5958b606e3333a21ba0f33ee3b2f  skills/signal-core/scripts/common.py
++21c3ab843228c0b6eac01358a32a2f5feda9cd0f09a3fac29bc8c4da24532e45  skills/signal-core/scripts/evidence.py
++bd60ed41331f1597ec4c02d830523c00ff6b88466958248bb97cc1c5740659fc  skills/signal-core/scripts/platforms.py
++5b0453a69bc09b74385c9e7d6c9cc75201bafb23331bd5d4918bf356f8ae068a  skills/signal-core/scripts/posterior.py
++72366b5acc859f36dbd8c27e9ebb9b44d8bae6b3b2cf4949742fa04b058cdfc1  skills/signal-core/scripts/profile_loader.py
++7cd50d735286e2af5dc783ae3b19a03b5a9ef7e7cdf8ba1e1c92d962203e9cee  skills/signal-core/scripts/routing.py
++dcefea700184594c1cbc0e6d3bae0efcdbce8a13076ad19f71d90aa0758314e2  skills/signal-core/scripts/store.py
++12066649b22c6869c54bb7e3eba8895012190f5fae3b07f52cd86535baaaee66  skills/signal-core/scripts/task_state.py
++612ab3e23783a29deb1441082ab7df8e9ff8c38834a5ddf9b881f492fbdacb2c  skills/signal-core/scripts/telemetry.py
++3a359c5b019c958b92e1da6a7a4a0bcae4e98b89a3c077f8d4faa961c3dc189d  tests/test_platforms.py
++de64262c5abc456ac660bffbd1ee879ea654ce1bfc7b660ae8c11455709412da  tests/test_roblox_orchestration_profile.py
++a72bb6f1a97599d3a8a3bdca8dafeb918f654c330abaaa61f2d13060732a6c52  tests/test_roblox_profile_gate.py
++974ecd7e639acfe7651382405c5c691e6ba615b0f5d34190b5d000a08f4385c6  tools/install.py
++893275fb8f8f6d66e4d97347dbb840e8bd5a460fd47e57056728608d8df55086  tools/validate.py
+diff --git a/ROBLOX_STUDIO_MODE.md b/ROBLOX_STUDIO_MODE.md
+new file mode 100644
+index 0000000..f6491a4
+--- /dev/null
++++ b/ROBLOX_STUDIO_MODE.md
+@@ -0,0 +1,83 @@
++# SignalCore Roblox Studio Mode
++
++The Roblox Studio domain profile is **locked by default**. It is not a normal
++cross-platform Agent Skill entry point.
++
++## What can activate it
++
++Only an authorized external Roblox Studio bridge can activate the profile by
++presenting a short-lived signed session envelope containing:
++
++- Roblox Studio session ID
++- Place/project identity
++- project fingerprint
++- Roblox Studio process ID
++- explicit capability subset
++- issue and expiry timestamps
++- single-use nonce
++- HMAC-SHA256 signature
++
++## What cannot activate it
++
++- `--profile roblox_studio`
++- a Codex/Claude/Cursor/VS Code prompt
++- raw JSON without a valid signature
++- an expired or replayed envelope
++- a non-Roblox host or transport
++- a request for unapproved capabilities
++- a session without Roblox Studio process attestation
++
++## Pairing key
++
++The pairing secret is generated locally under SignalCore state and is never
++committed to the repository. The external bridge owns the pairing workflow.
++SignalCore exposes library functions but no CLI command that prints or accepts the
++secret.
++
++## Flow
++
++```text
++Roblox Studio
++    │
++    ▼
++Authorized Studio bridge
++    │ signed, short-lived, single-use envelope
++    ▼
++SignalCore profile loader
++    │ signature + process + project + capability + replay checks
++    ▼
++profiles/roblox_studio
++    │ TaskState → capability/model/engine/evidence/workflow policies
++    ▼
++External Roblox development engines
++```
++
++This is an activation and orchestration boundary, not a replacement for the Roblox
++Studio plugin, MCP, Luau compiler, Creator Store client, playtest environment,
++animation system, Blender worker, Digital Twin or migration lab.
++
++## Orchestration profile
++
++After authorization, `create_profile_runtime()` builds a fail-closed runtime with:
++
++- compound RobloxTaskState V2
++- 33-capability dependency graph
++- pinned engine and provider-independent model registries
++- measured role/capability certification
++- deterministic zero-model skip path
++- Evidence Ledger V3, project delta and artifact caches
++- multimodal evidence selection and Context Knapsack V2
++- workflow DAGs, checkpoints, repair and rollback policies
++- token/request/transfer/GPU/wall-time budgets
++- privacy firewall, strict response validators and cross-engine validation
++- telemetry, trace/replay and locked adaptive learning
++
++See `skills/signal-core/profiles/roblox_studio/ARCHITECTURE.md` and
++`BENCHMARK_RESULTS.md`.
++
++## Security limitation
++
++The profile gate prevents accidental and ordinary activation. It is not DRM and
++cannot protect against a local OS user who can read the pairing key or modify the
++source. Stronger local-adversary resistance belongs in the external bridge through
++OS keychain storage and native process attestation.
+diff --git a/benchmarks/results/roblox-profile/controlled-500.json b/benchmarks/results/roblox-profile/controlled-500.json
+new file mode 100644
+index 0000000..ba1fd8a
+--- /dev/null
++++ b/benchmarks/results/roblox-profile/controlled-500.json
+@@ -0,0 +1,224 @@
++{
++  "schema_version": 2,
++  "benchmark": "signalcore-roblox-profile-abcd-controlled",
++  "scope": "controlled orchestration benchmark; external engines and Gemini are simulated; engineering targets are not measured provider results",
++  "cases": 500,
++  "seed": 20260718,
++  "modes": {
++    "A_external_without_signalcore": {
++      "cases": 500,
++      "verified_success": 0.928,
++      "unsafe_execution": 0,
++      "cloud_requests": 500,
++      "local_requests": 0,
++      "engine_calls": 666,
++      "fresh_cloud_tokens": 1522183,
++      "average_selected_tokens": 3044.366,
++      "cache_hit_rate": 0.0,
++      "deterministic_rate": 0.0,
++      "p50_orchestration_ms": 0.004294000063964631,
++      "p95_orchestration_ms": 0.006209000048329472
++    },
++    "B_generic_signalcore": {
++      "cases": 500,
++      "verified_success": 0.962,
++      "unsafe_execution": 0,
++      "cloud_requests": 258,
++      "local_requests": 0,
++      "engine_calls": 666,
++      "fresh_cloud_tokens": 432777,
++      "average_selected_tokens": 1673.916,
++      "cache_hit_rate": 0.25,
++      "deterministic_rate": 0.0,
++      "p50_orchestration_ms": 0.0014080000028116046,
++      "p95_orchestration_ms": 0.001936999979079701
++    },
++    "C_roblox_basic": {
++      "cases": 500,
++      "verified_success": 1.0,
++      "unsafe_execution": 0,
++      "cloud_requests": 110,
++      "local_requests": 334,
++      "engine_calls": 1358,
++      "fresh_cloud_tokens": 15655,
++      "average_selected_tokens": 120.264,
++      "cache_hit_rate": 0.0,
++      "deterministic_rate": 0.112,
++      "p50_orchestration_ms": 6.4655434998712735,
++      "p95_orchestration_ms": 15.062514999954146
++    },
++    "D_roblox_full": {
++      "cases": 500,
++      "verified_success": 1.0,
++      "unsafe_execution": 0,
++      "cloud_requests": 110,
++      "local_requests": 334,
++      "engine_calls": 1358,
++      "fresh_cloud_tokens": 7548,
++      "average_selected_tokens": 60.832,
++      "cache_hit_rate": 0.964,
++      "deterministic_rate": 0.112,
++      "p50_orchestration_ms": 6.428174499887973,
++      "p95_orchestration_ms": 12.70488000000114
++    }
++  },
++  "routing_report": {
++    "accuracy": 1.0,
++    "confusion_matrix": {
++      "DETERMINISTIC": {
++        "DETERMINISTIC": 56,
++        "LOCAL": 0,
++        "CLOUD_LITE": 0,
++        "CLOUD_EXPERT": 0,
++        "BLOCKED": 0
++      },
++      "LOCAL": {
++        "DETERMINISTIC": 0,
++        "LOCAL": 334,
++        "CLOUD_LITE": 0,
++        "CLOUD_EXPERT": 0,
++        "BLOCKED": 0
++      },
++      "CLOUD_LITE": {
++        "DETERMINISTIC": 0,
++        "LOCAL": 0,
++        "CLOUD_LITE": 28,
++        "CLOUD_EXPERT": 0,
++        "BLOCKED": 0
++      },
++      "CLOUD_EXPERT": {
++        "DETER
