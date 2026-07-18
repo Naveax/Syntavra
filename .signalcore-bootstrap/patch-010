@@ -1,0 +1,417 @@
+EDACTED_SECRET]", value)
++            redactions += count
++        if for_cloud:
++            value, count = WINDOWS_PATH.subn("[REDACTED_LOCAL_PATH]", value)
++            redactions += count
++            value, count = PRIVATE_PATH.subn("[REDACTED_LOCAL_PATH]", value)
++            redactions += count
++        if trust_level not in self.TRUSTED_INSTRUCTION_CLASSES:
++            lines: list[str] = []
++            for line in value.splitlines():
++                if INJECTION.search(line):
++                    quarantined += 1
++                    lines.append("[QUARANTINED_EXTERNAL_DIRECTIVE] " + line)
++                else:
++                    lines.append(line)
++            value = "\n".join(lines)
++        if for_cloud and not self.config.send_minimal_code and self.config.allow_full_project_cloud_upload:
++            raise PolicyBlockedError("full project cloud upload is forbidden by profile policy")
++        return value, {"redactions": redactions, "quarantined_directives": quarantined, "trusted_instruction_source": trust_level in self.TRUSTED_INSTRUCTION_CLASSES}
++
++    def authorize_instruction(self, trust_level: str) -> None:
++        if trust_level not in self.TRUSTED_INSTRUCTION_CLASSES:
++            raise PolicyBlockedError(f"{trust_level} is data, not an instruction source")
++
++
++class TelemetryStore:
++    def __init__(self, path: str | Path) -> None:
++        self.path = Path(path).expanduser().resolve(strict=False)
++        self.path.parent.mkdir(parents=True, exist_ok=True)
++        with closing(self._connect()) as connection:
++            connection.executescript(
++                """
++                CREATE TABLE IF NOT EXISTS task_telemetry(
++                    task_id TEXT PRIMARY KEY,
++                    payload_json TEXT NOT NULL,
++                    created_at REAL NOT NULL
++                );
++                CREATE TABLE IF NOT EXISTS traces(
++                    trace_id TEXT PRIMARY KEY,
++                    payload_json TEXT NOT NULL,
++                    created_at REAL NOT NULL
++                );
++                """
++            )
++            connection.commit()
++
++    def _connect(self) -> sqlite3.Connection:
++        connection = sqlite3.connect(self.path, timeout=15)
++        connection.execute("PRAGMA journal_mode=WAL")
++        connection.execute("PRAGMA busy_timeout=15000")
++        return connection
++
++    def record(self, telemetry: TelemetryRecord) -> None:
++        payload = asdict(telemetry)
++        payload["risk_level"] = telemetry.risk_level.value
++        payload["final_status"] = telemetry.final_status.value
++        with closing(self._connect()) as connection:
++            connection.execute(
++                "INSERT OR REPLACE INTO task_telemetry VALUES(?,?,?)",
++                (telemetry.task_id, json.dumps(payload, sort_keys=True), time.time()),
++            )
++            connection.commit()
++
++    def record_trace(self, trace: OrchestrationTrace) -> None:
++        payload = asdict(trace)
++        with closing(self._connect()) as connection:
++            connection.execute(
++                "INSERT OR REPLACE INTO traces VALUES(?,?,?)",
++                (trace.trace_id, json.dumps(payload, sort_keys=True), time.time()),
++            )
++            connection.commit()
++
++    def read_trace(self, trace_id: str) -> OrchestrationTrace:
++        with closing(self._connect()) as connection:
++            row = connection.execute("SELECT payload_json FROM traces WHERE trace_id=?", (trace_id,)).fetchone()
++        if not row:
++            raise KeyError(trace_id)
++        value = json.loads(row[0])
++        return OrchestrationTrace(
++            trace_id=value["trace_id"],
++            task_state=value["task_state"],
++            capability_resolution=value["capability_resolution"],
++            engine_selection=value["engine_selection"],
++            model_selection=value["model_selection"],
++            evidence_selection=tuple(value["evidence_selection"]),
++            context_capsule_hash=value["context_capsule_hash"],
++            tool_schemas=tuple(value["tool_schemas"]),
++            workflow_hash=value["workflow_hash"],
++            budgets=value["budgets"],
++            tests=tuple(value["tests"]),
++            repairs=tuple(value["repairs"]),
++            commits=tuple(value["commits"]),
++            rollbacks=tuple(value["rollbacks"]),
++            versions=value["versions"],
++        )
++
++    @staticmethod
++    def validate_replay(trace: OrchestrationTrace, current_versions: Mapping[str, str]) -> None:
++        mismatches = [key for key, value in trace.versions.items() if current_versions.get(key) != value]
++        if mismatches:
++            raise PolicyBlockedError("replay version mismatch: " + ", ".join(mismatches))
++
++
++def make_trace(
++    *,
++    task_state: Mapping[str, Any],
++    capability_resolution: Mapping[str, Any],
++    engine_selection: Mapping[str, Any],
++    model_selection: Mapping[str, Any],
++    evidence_selection: Iterable[str],
++    context_capsule: Mapping[str, Any],
++    tool_schemas: Iterable[str],
++    workflow: Mapping[str, Any],
++    budgets: Mapping[str, Any],
++    tests: Iterable[str],
++    repairs: Iterable[str],
++    commits: Iterable[str],
++    rollbacks: Iterable[str],
++    versions: Mapping[str, str],
++) -> OrchestrationTrace:
++    context_hash = hashlib.sha256(json.dumps(context_capsule, sort_keys=True, default=str).encode()).hexdigest()
++    workflow_hash = hashlib.sha256(json.dumps(workflow, sort_keys=True, default=str).encode()).hexdigest()
++    trace_id = hashlib.sha256((str(task_state.get("task_id", "")) + context_hash + workflow_hash).encode()).hexdigest()[:24]
++    return OrchestrationTrace(
++        trace_id=trace_id,
++        task_state=dict(task_state),
++        capability_resolution=dict(capability_resolution),
++        engine_selection=dict(engine_selection),
++        model_selection=dict(model_selection),
++        evidence_selection=tuple(evidence_selection),
++        context_capsule_hash=context_hash,
++        tool_schemas=tuple(tool_schemas),
++        workflow_hash=workflow_hash,
++        budgets=dict(budgets),
++        tests=tuple(tests),
++        repairs=tuple(repairs),
++        commits=tuple(commits),
++        rollbacks=tuple(rollbacks),
++        versions=dict(versions),
++    )
++
++
++class AdaptivePolicyGate:
++    """Validation-only gate. It cannot mutate policy until telemetry is stable."""
++
++    def __init__(self, minimum_verified_tasks: int = 1000) -> None:
++        self.minimum_verified_tasks = minimum_verified_tasks
++
++    def allow_learning(self, *, verified_tasks: int, unsafe_executions: int, stale_evidence_executions: int, prompt_injection_executions: int) -> bool:
++        return (
++            verified_tasks >= self.minimum_verified_tasks
++            and unsafe_executions == 0
++            and stale_evidence_executions == 0
++            and prompt_injection_executions == 0
++        )
++
++    def immutable_invariants(self) -> tuple[str, ...]:
++        return (
++            "ambiguity_gate",
++            "risk_gate",
++            "certification_gate",
++            "sandbox_requirement",
++            "cross_engine_validation",
++            "privacy_firewall",
++            "human_approval",
++        )
+diff --git a/skills/signal-core/profiles/roblox_studio/models.example.json b/skills/signal-core/profiles/roblox_studio/models.example.json
+new file mode 100644
+index 0000000..211f9db
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/models.example.json
+@@ -0,0 +1,119 @@
++{
++  "schema_version": 2,
++  "models": [
++    {
++      "modelId": "micro-local",
++      "displayName": "User-selected micro router",
++      "provider": "llama.cpp",
++      "modelPath": "user-configured.gguf",
++      "contextLimit": 8192,
++      "supportsVision": false,
++      "supportsAudio": false,
++      "supportsVideo": false,
++      "supportsToolCalling": true,
++      "supportsStructuredOutput": true,
++      "supportsCode": false,
++      "quantization": "user-selected",
++      "benchmarkScores": {},
++      "certifiedRoles": {
++        "MICRO_ROUTER": "UNTESTED"
++      },
++      "latencyProfile": {},
++      "memoryProfile": {},
++      "costProfile": {},
++      "enabled": true
++    },
++    {
++      "modelId": "worker-local",
++      "displayName": "User-selected local worker",
++      "provider": "ollama",
++      "modelPath": "user-configured",
++      "contextLimit": 32768,
++      "supportsVision": false,
++      "supportsAudio": false,
++      "supportsVideo": false,
++      "supportsToolCalling": true,
++      "supportsStructuredOutput": true,
++      "supportsCode": true,
++      "quantization": "Q4/Q5/Q6/Q8/IQ/UD user-selected",
++      "benchmarkScores": {},
++      "certifiedRoles": {
++        "TASK_COMPILER": "UNTESTED",
++        "LOCAL_WORKER": "UNTESTED",
++        "LOCAL_CODE_WORKER": "UNTESTED"
++      },
++      "latencyProfile": {},
++      "memoryProfile": {},
++      "costProfile": {},
++      "enabled": true
++    },
++    {
++      "modelId": "vision-local",
++      "displayName": "User-selected local vision worker",
++      "provider": "lmstudio",
++      "modelPath": "user-configured",
++      "contextLimit": 32768,
++      "supportsVision": true,
++      "supportsAudio": false,
++      "supportsVideo": false,
++      "supportsToolCalling": true,
++      "supportsStructuredOutput": true,
++      "supportsCode": false,
++      "quantization": "user-selected",
++      "benchmarkScores": {},
++      "certifiedRoles": {
++        "LOCAL_VISION_WORKER": "UNTESTED"
++      },
++      "latencyProfile": {},
++      "memoryProfile": {},
++      "costProfile": {},
++      "enabled": true
++    },
++    {
++      "modelId": "cloud-lite",
++      "displayName": "User-selected Cloud Lite",
++      "provider": "gemini",
++      "modelPath": "provider-configured",
++      "contextLimit": 128000,
++      "supportsVision": true,
++      "supportsAudio": true,
++      "supportsVideo": true,
++      "supportsToolCalling": true,
++      "supportsStructuredOutput": true,
++      "supportsCode": true,
++      "quantization": "",
++      "benchmarkScores": {},
++      "certifiedRoles": {
++        "CLOUD_LITE": "UNTESTED",
++        "CLOUD_VISION": "UNTESTED"
++      },
++      "latencyProfile": {},
++      "memoryProfile": {},
++      "costProfile": {},
++      "enabled": true
++    },
++    {
++      "modelId": "cloud-expert",
++      "displayName": "User-selected Cloud Expert",
++      "provider": "openai-compatible",
++      "modelPath": "provider-configured",
++      "contextLimit": 256000,
++      "supportsVision": true,
++      "supportsAudio": true,
++      "supportsVideo": true,
++      "supportsToolCalling": true,
++      "supportsStructuredOutput": true,
++      "supportsCode": true,
++      "quantization": "",
++      "benchmarkScores": {},
++      "certifiedRoles": {
++        "CLOUD_EXPERT": "UNTESTED",
++        "CLOUD_REVIEWER": "UNTESTED"
++      },
++      "latencyProfile": {},
++      "memoryProfile": {},
++      "costProfile": {},
++      "enabled": true
++    }
++  ]
++}
+diff --git a/skills/signal-core/profiles/roblox_studio/orchestrator.py b/skills/signal-core/profiles/roblox_studio/orchestrator.py
+new file mode 100644
+index 0000000..1756657
+--- /dev/null
++++ b/skills/signal-core/profiles/roblox_studio/orchestrator.py
+@@ -0,0 +1,212 @@
++from __future__ import annotations
++
++import time
++from dataclasses import asdict, dataclass
++from pathlib import Path
++from typing import Iterable, Mapping, Sequence
++
++from .capability_graph import CapabilityGraph, default_capability_graph
++from .config import RobloxProfileConfig
++from .evidence import ContextKnapsackV2, EvidenceLedger
++from .governance import BudgetGovernor, PrivacyFirewall, TelemetryStore, make_trace
++from .registries import CertificationMatrix, EngineRegistry, ModelRegistry
++from .routing import RoutingContext, route_task
++from .task_encoder import encode_task, understanding_gate, with_execution
++from .types import (
++    ContextCapsule, FinalStatus, GateDecision, OrchestrationTrace, RobloxTaskState,
++    RoutePlan, TelemetryRecord, WorkflowDAG,
++)
++from .workflow import WorkflowPlanner, compile_one_round_trip, required_cross_validators
++
++
++@dataclass(frozen=True)
++class OrchestrationResult:
++    task: RobloxTaskState
++    gate: GateDecision
++    route: RoutePlan | None
++    capsule: ContextCapsule | None
++    workflow: WorkflowDAG | None
++    compiler_contract: Mapping[str, object] | None
++    trace: OrchestrationTrace | None
++    telemetry: TelemetryRecord
++
++
++class RobloxOrchestrator:
++    def __init__(
++        self,
++        *,
++        config: RobloxProfileConfig,
++        engines: EngineRegistry,
++        models: ModelRegistry,
++        certification: CertificationMatrix,
++        evidence_ledger: EvidenceLedger,
++        telemetry_store: TelemetryStore,
++        graph: CapabilityGraph | None = None,
++    ) -> None:
++        self.config = config
++        self.engines = engines
++        self.models = models
++        self.certification = certification
++        self.ledger = evidence_ledger
++        self.telemetry_store = telemetry_store
++        self.graph = graph or default_capability_graph()
++        self.knapsack = ContextKnapsackV2()
++        self.planner = WorkflowPlanner(schema_version=config.schema_version)
++        self.firewall = PrivacyFirewall(config.privacy)
++
++    def compile(
++        self,
++        objective: str,
++        *,
++        session_id: str,
++        project_id: str,
++        selected_instances: Iterable[str] = (),
++        resolved_targets: Iterable[str] = (),
++        reference_instances: Iterable[str] = (),
++        constraints: Mapping[str, object] | None = None,
++        acceptance_criteria: Iterable[str] = (),
++        routing_context: RoutingContext | None = None,
++        project_summary: Mapping[str, object] | None = None,
++    ) -> OrchestrationResult:
++        started = time.perf_counter()
++        task = encode_task(
++            objective,
++            session_id=session_id,
++            project_id=project_id,
++            selected_instances=selected_instances,
++            resolved_targets=resolved_targets,
++            reference_instances=reference_instances,
++            constraints=constraints,
++            acceptance_criteria=acceptance_criteria,
++        )
++        budget = BudgetGovernor(self.config.budgets)
++        evidence_candidates = self.ledger.active(evidence_types=task.required_evidence)
++        resolution = self.graph.resolve(task.required_capabilities)
++        engines_available = True
++        model_certified = True
++        route: RoutePlan | None = None
++        selected_engines = ()
++        selected_model = None
++        route_error: Exception | None = None
++        try:
++            route, resolution, selected_engines, selected_model = route_task(
++                task,
++                graph=self.graph,
++                engines=self.engines,
++                models=self.models,
++                certification=self.certification,
++                config=self.config,
++                context=routing_context,
++                estimated_context_tokens=max(512, sum(item.estimated_token_cost for item in evidence_candidates)),
++            )
++        except Exception as exc:
++            route_error = exc
++            if exc.__class__.__name__.startswith("Engine"):
++                engines_available = False
++            else:
++                model_certified = False
++
++        evidence_available = set(task.required_evidence).issubset({item.evidence_type for item in evidence_candidates}) or task.execution_mode == "DETERMINISTIC"
++        gate = understanding_gate(
++            task,
++            capabilities_available=resolution.supported,
++            engines_available=engines_available,
++            evidence_available=evidence_available,
++            model_certified=model_certified,
++            sandbox_available=route is not None,
++            budget_available=True,
++        )
++        task = with_execution(task, gate.execution_allowed)
++        i
