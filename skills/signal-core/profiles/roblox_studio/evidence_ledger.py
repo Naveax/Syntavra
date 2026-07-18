@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import time
+from contextlib import closing
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
@@ -38,9 +39,10 @@ class EvidenceLedger:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("CREATE TABLE IF NOT EXISTS evidence(id TEXT PRIMARY KEY, project TEXT NOT NULL, branch TEXT NOT NULL, generation INTEGER NOT NULL, payload TEXT NOT NULL, previous_hash TEXT NOT NULL, record_hash TEXT NOT NULL)")
+            connection.commit()
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=15)
@@ -51,16 +53,17 @@ class EvidenceLedger:
 
     def append(self, record: EvidenceRecord) -> str:
         payload = json.dumps(asdict(record), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             previous = connection.execute("SELECT record_hash FROM evidence WHERE project=? AND branch=? ORDER BY generation DESC, rowid DESC LIMIT 1", (record.project_fingerprint, record.branch)).fetchone()
             previous_hash = previous[0] if previous else "0" * 64
             record_hash = self._hash(payload, previous_hash)
             connection.execute("INSERT INTO evidence VALUES(?,?,?,?,?,?,?)", (record.evidence_id, record.project_fingerprint, record.branch, record.generation, payload, previous_hash, record_hash))
+            connection.commit()
         return record_hash
 
     def retrieve(self, *, project_fingerprint: str, branch: str, now: int | None = None, limit: int = 64) -> tuple[EvidenceRecord, ...]:
         current = int(time.time()) if now is None else int(now)
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             rows = connection.execute("SELECT payload FROM evidence WHERE project=? AND branch=? ORDER BY generation DESC, rowid DESC LIMIT ?", (project_fingerprint, branch, limit)).fetchall()
         records = []
         for (payload,) in rows:
@@ -72,7 +75,7 @@ class EvidenceLedger:
         return tuple(records)
 
     def verify_chain(self, *, project_fingerprint: str, branch: str) -> bool:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             rows = connection.execute("SELECT payload,previous_hash,record_hash FROM evidence WHERE project=? AND branch=? ORDER BY generation, rowid", (project_fingerprint, branch)).fetchall()
         previous = "0" * 64
         for payload, previous_hash, record_hash in rows:
@@ -82,7 +85,7 @@ class EvidenceLedger:
         return True
 
     def exact_recover(self, evidence_id: str) -> str:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             row = connection.execute("SELECT payload FROM evidence WHERE id=?", (evidence_id,)).fetchone()
         if row is None:
             raise KeyError(evidence_id)
