@@ -1,0 +1,40 @@
+.json").read_text(encoding="utf-8"))
++    ids = [item["id"] for item in platforms["platforms"]]
++    checks.append(("platform_registry", len(ids) >= 20 and len(ids) == len(set(ids))))
++    checks.append(("native_core", {"codex", "claude-code", "gemini-cli", "antigravity", "antigravity-cli", "windsurf", "opencode", "vscode-copilot"}.issubset(ids)))
++    roblox = json.loads((ROBLOX / "profile.json").read_text(encoding="utf-8"))
++    activation = roblox.get("activation", {})
++    checks.append(("roblox_profile_hidden", roblox.get("discoverable") is False and roblox.get("direct_invocation") is False))
++    checks.append(("roblox_profile_studio_only", activation.get("mode") == "signed_studio_session" and activation.get("allow_cli") is False and activation.get("allow_ide") is False))
++    checks.append(("roblox_profile_fail_closed", activation.get("require_process_attestation") is True and activation.get("single_use_nonce") is True))
++    capabilities = json.loads((ROBLOX / "capabilities.json").read_text(encoding="utf-8"))["capabilities"]
++    checks.append(("roblox_capability_graph", len(capabilities) == 33 and all(item.get("compatibleEngines") for item in capabilities)))
++    engines = json.loads((ROBLOX / "engines.example.json").read_text(encoding="utf-8"))["engines"]
++    covered = {capability for engine in engines for capability in engine.get("capabilities", [])}
++    checks.append(("roblox_engine_coverage", covered == {item["capabilityId"] for item in capabilities} and all(engine.get("version") not in {"", "latest", "*"} for engine in engines)))
++    schemas = {path.name for path in (ROBLOX / "schemas").glob("*.json")}
++    checks.append(("roblox_schemas", schemas == {"task-state.schema.json", "engine.schema.json", "model.schema.json", "evidence.schema.json", "workflow.schema.json", "telemetry.schema.json"}))
++    checks.append(("pairing_key_not_vendored", not any(path.name == "pairing.key" for path in ROOT.rglob("*"))))
++    try:
++        for path in sorted((SKILL / "scripts").glob("*.py")):
++            py_compile.compile(str(path), doraise=True)
++        for path in sorted((SKILL / "profiles").rglob("*.py")):
++            py_compile.compile(str(path), doraise=True)
++        for path in sorted((ROOT / "benchmarks").glob("*.py")):
++            py_compile.compile(str(path), doraise=True)
++        for path in sorted((ROOT / "tests").glob("*.py")):
++            py_compile.compile(str(path), doraise=True)
++        py_compile.compile(str(ROOT / "tools" / "install.py"), doraise=True)
++        checks.append(("python_compile", True))
++    except Exception:
++        checks.append(("python_compile", False))
++    forbidden = re.compile(r"(?i)(?:api[_-]?key|access[_-]?token|password)\s*[:=]\s*[^\s]+")
++    scans = [path for path in ROOT.rglob("*") if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts and ".pytest_cache" not in path.parts and path.suffix != ".pyc"]
++    checks.append(("secret_scan", not any(forbidden.search(path.read_text(encoding="utf-8", errors="ignore")) for path in scans)))
++    result = {"ok": all(passed for _, passed in checks), "version": version, "checks": [{"name": name, "passed": passed} for name, passed in checks]}
++    print(json.dumps(result, ensure_ascii=False, indent=2))
++    return 0 if result["ok"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
