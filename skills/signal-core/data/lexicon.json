@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "categories": {
+    "repository": ["repository", "repo", "codebase", "symbol", "implementation", "source range", "dosya", "sembol", "uygulama", "implementasyon", "quelle", "implementierung", "repositorio", "implementacion", "depot", "implementation", "репозиторий", "реализация", "リポジトリ", "実装", "저장소", "구현"],
+    "graph": ["caller", "callers", "callee", "dependency", "dependents", "blast radius", "impact", "call graph", "cagiran", "cagiranlari", "bagimlilik", "etki", "aufrufer", "abhangigkeit", "impacto", "llamadores", "appelant", "dependance", "вызыва", "зависим", "呼び出", "依存", "호출", "의존"],
+    "bulk": ["large log", "huge json", "big output", "csv", "coverage report", "test output", "buyuk log", "buyuk json", "cikti", "grosser log", "ausgabe", "registro grande", "salida", "grand journal", "sortie", "большой лог", "вывод", "大きなログ", "出力", "큰 로그", "출력"],
+    "memory": ["resume", "continue session", "remember", "checkpoint", "rejected approach", "kaldigimiz yerden", "hatirla", "reddedilen yaklasim", "fortsetzen", "erinnern", "reanudar", "recordar", "reprendre", "memoire", "продолж", "помни", "続き", "覚え", "계속", "기억"],
+    "tooling": ["mcp", "tool schema", "tool catalog", "many tools", "schema overhead", "arac semasi", "cok arac", "werkzeug", "schema", "herramienta", "schema", "outil", "схема инструмента", "ツール", "도구"],
+    "benchmark": ["benchmark", "a/b", "baseline", "trial", "confidence interval", "karsilastirma", "deneme", "vergleich", "prueba", "comparaison", "тестирование", "ベンチマーク", "벤치마크"],
+    "security": ["security", "exact hash", "checksum", "byte exact", "secret", "permission", "guvenlik", "tam hash", "izin", "sicherheit", "seguridad", "securite", "безопасность", "セキュリティ", "보안"],
+    "verification": ["verify", "test command", "exit code", "narrow test", "dogrula", "test komutu", "cikis kodu", "prufen", "verificar", "verifier", "провер", "検証", "검증"],
+    "minimal": ["smallest patch", "minimal change", "no dependency", "en kucuk degisiklik", "yeni bagimlilik yok", "kleinste anderung", "cambio minimo", "modification minimale", "минималь", "最小", "최소"],
+    "debug": ["root cause", "first error", "failing test", "bug", "crash", "kok neden", "ilk hata", "hata ayikla", "ursache", "fehler", "causa raiz", "fallo", "cause racine", "erreur", "корневая причина", "ошибка", "根本原因", "エラー", "근본 원인", "오류"],
+    "long_session": ["context limit", "long session", "compaction", "repeated reread", "uzun oturum", "context siniri", "lange sitzung", "sesion larga", "longue session", "длинная сессия", "長いセッション", "긴 세션"]
+  },
+  "anti_trigger": ["translate hello", "weather today", "2+2", "write a poem", "birthday greeting", "short summary", "merhaba cevir", "bugun hava", "siir yaz", "dogum gunu mesaji", "ubersetze hallo", "wetter heute", "escribe un poema", "meteo aujourd'hui", "напиши стих", "天気", "시를 써"]
+}
