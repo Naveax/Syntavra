@@ -2,6 +2,7 @@
 
 ## 0.0.1 — Unreleased
 
+- Added a hidden, signed-session-only Roblox Studio profile activation gate.
 - Established SignalCore's first public pre-release version.
 - Added repository/session-aware task-state encoding.
 - Added multilingual routing and integrity tiers.
