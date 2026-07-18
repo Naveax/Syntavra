@@ -39,6 +39,14 @@ SignalCore is an unreleased, local-first coding-agent control layer. It coordina
 
 See [COMPATIBILITY.md](COMPATIBILITY.md) for exact support levels, paths, invocation syntax, and limitations.
 
+## Locked Roblox Studio domain profile
+
+SignalCore includes a hidden `roblox_studio` profile foundation that cannot be
+activated from a normal CLI, IDE prompt, or Agent Skill invocation. It requires a
+short-lived signed envelope from an authorized Roblox Studio bridge, live Studio
+process attestation, project identity, an explicit capability subset, and a
+single-use nonce. See [ROBLOX_STUDIO_MODE.md](ROBLOX_STUDIO_MODE.md).
+
 ## Install
 
 ### Install every verified native project target
@@ -117,11 +125,17 @@ skills/signal-core/
 ├── data/
 │   ├── lexicon.json
 │   └── platforms.json
+├── profiles/
+│   └── roblox_studio/
+│       ├── profile.json
+│       ├── activation.py
+│       └── README.md
 └── scripts/
     ├── common.py
     ├── evidence.py
     ├── platforms.py
     ├── posterior.py
+    ├── profile_loader.py
     ├── routing.py
     ├── store.py
     ├── task_state.py
@@ -137,7 +151,7 @@ tools/
 ```bash
 python tools/validate.py
 python -m unittest discover -s tests -q
-python -m compileall -q skills/signal-core/scripts tools
+python -m compileall -q skills/signal-core/scripts skills/signal-core/profiles tools
 python skills/signal-core/scripts/routing.py \
   "Find the exact root cause, callers, impact boundary, and narrow verifier"
 ```
