@@ -80,12 +80,10 @@ jobs:
           set -euo pipefail
           python tools/validate_roblox_profile.py
 
-      - name: Remove bootstrap and publish ordinary tree
+      - name: Publish ordinary source and traceable metadata
         shell: bash
         run: |
           set -euo pipefail
-          git rm -r .github/materialize
-          git rm .github/workflows/materialize-clean-sovereign-runtime.yml
           git add README.md docs/claims benchmarks/results/roblox-profile
           git commit -m "docs: publish traceable Roblox profile claims"
           git push origin HEAD:fix/sovereign-runtime-materialized
