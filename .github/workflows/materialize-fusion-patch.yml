@@ -1,0 +1,154 @@
+name: Materialize SignalCore Fusion Runtime Patch
+
+on:
+  pull_request:
+    branches:
+      - feat/5x-fusion-runtime
+    paths:
+      - ".fusion-patch/**"
+      - ".github/fusion-patch-trigger.txt"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-signalcore-fusion-runtime-patch
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONWARNINGS: "error::ResourceWarning"
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify reviewable source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find .fusion-patch -maxdepth 1 -name 'patch-*.diff' -type f | wc -l)" -eq 31
+          cat .fusion-patch/patch-*.diff > /tmp/fusion-source.patch
+          echo "fa363d609fad8880ee63c993be01a04097ddd9449e57b1018e7511ea253010a3  /tmp/fusion-source.patch" | sha256sum -c -
+          if grep -E 'payload-.*\.b64|\.signalcore-direct|\.materialize' /tmp/fusion-source.patch; then
+            echo "forbidden encoded source transport" >&2
+            exit 2
+          fi
+          git apply --check /tmp/fusion-source.patch
+
+      - name: Apply ordinary source and remove transfer infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply /tmp/fusion-source.patch
+          rm -rf .fusion-patch .fusion-materialize .fusion-transfer
+          rm -f .github/fusion-patch-trigger.txt .github/fusion-transfer-trigger.txt
+          rm -f .github/workflows/materialize-fusion-source.yml
+          rm -f .github/workflows/materialize-fusion-source-plaintext.yml
+          rm -f .github/workflows/materialize-fusion-patch.yml
+          git diff --check
+
+      - name: Validate source before identity commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
+          python -m unittest discover -s tests/runtime -q
+          python -m unittest discover -s tests/roblox_profile -q
+          python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+
+      - name: Commit immutable source snapshot
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Implement SignalCore 5X Fusion runtime control plane"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate evidence, claim ceilings, and manifests
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+          import io, json, os, platform, shutil, sys, time, unittest
+          from pathlib import Path
+          ROOT=Path.cwd(); sys.path.insert(0,str(ROOT))
+          from signalcore_runtime.benchmark_harness import TIER_CONFIGS, observed_difficulty, validate_config
+          from signalcore_runtime.claim_governance import decide_claim, write_claim
+          from signalcore_runtime.claims import ClaimReceipt, write_receipt
+          from signalcore_runtime.difficulty import evaluate_difficulty
+          from tools.verify_claims import source_tree_hash
+          source_sha=os.environ['SOURCE_SHA']; tree_hash=source_tree_hash()
+          result_dir=ROOT/'benchmarks'/'results'/'5x'; result_dir.mkdir(parents=True,exist_ok=True)
+          claim_dir=ROOT/'artifacts'/'claims'; claim_dir.mkdir(parents=True,exist_ok=True)
+          started=time.perf_counter(); suite=unittest.TestLoader().discover(str(ROOT/'tests'/'roblox_profile')); stream=io.StringIO(); result=unittest.TextTestRunner(stream=stream,verbosity=0).run(suite)
+          if not result.wasSuccessful(): raise SystemExit(stream.getvalue())
+          (ROOT/'benchmarks'/'results'/'roblox-profile'/'profile-tests.json').write_text(json.dumps({'duration_ms':(time.perf_counter()-started)*1000.0,'errors':len(result.errors),'failures':len(result.failures),'maturity':'INTERNALLY_VERIFIED','skipped':len(result.skipped),'source_commit':source_sha,'status':'PASS','tests_run':result.testsRun},sort_keys=True,separators=(',',':'))+'\n',encoding='utf-8')
+          registry_path=ROOT/'docs'/'claims'/'claims.json'; registry=json.loads(registry_path.read_text(encoding='utf-8')); registry['source_commit']=source_sha; registry['source_tree_hash']=tree_hash; registry_path.write_text(json.dumps(registry,sort_keys=True,separators=(',',':'))+'\n',encoding='utf-8')
+          environment={'schema_version':1,'source_commit':source_sha,'source_tree_hash':tree_hash,'python':platform.python_version(),'platform':platform.platform(),'codex_executable':shutil.which('codex'),'live_quota_interface':False,'raw_rollout_corpus':False,'paired_external_arms':[],'claim_ceiling':'5X_NOT_PROVEN'}
+          (result_dir/'environment.json').write_text(json.dumps(environment,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          blockers={'schema_version':1,'source_commit':source_sha,'claim':'5X_NOT_PROVEN','blockers':['no live provider quota telemetry','no identical-model paired plain-host repetitions','no strongest-rival paired repetitions','no raw long-session rollout corpus'],'local_engineering_gates':'validated separately'}
+          (result_dir/'blockers.json').write_text(json.dumps(blockers,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          (result_dir/'difficulty-configs.json').write_text(json.dumps({name:validate_config(config) for name,config in TIER_CONFIGS.items()},indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          config=TIER_CONFIGS['20X']; difficulty=evaluate_difficulty(observed_difficulty(config),configuration={'prompts_equal':True,'models_equal':True,'verifiers_equal':True,'repository_state_equal':True,'acceptance_equal':True,'meaningless_duplication_ratio':0.0})
+          decision=decide_claim(baseline_name='plain_host',baseline=[],signalcore=[],difficulty=difficulty,tier='20X')
+          write_claim(result_dir/'claim-not-proven.json',decision,metadata={'source_commit':source_sha,'source_tree_hash':tree_hash,'benchmark_config_hash':config.identity,'public_claim_allowed':False})
+          write_receipt(claim_dir/'5x-qualification.json',ClaimReceipt(schema_version=1,claim_id='signalcore.5x.qualification',requested_claim='5X_20X_QUALIFIED',decision='REFUSED',maximum_allowed_claim='Internal runtime, benchmark machinery, and integrity gates verified; 5X_NOT_PROVEN',source_commit=source_sha,suite='signalcore-fusion-runtime-local-engineering',artifact='benchmarks/results/5x/claim-not-proven.json',covered_distribution=('local deterministic runtime tests','simulated benchmark generation','claim-gate refusal path'),not_covered=('live provider quota','identical-model paired coding runs','strongest-rival comparison','independent reproduction'),adversarial_checks=('benchmark anti-gaming','tamper-evident receipt','required-verifier protection'),demotion_conditions=('source commit changes','artifact hash mismatch','validator failure','new live evidence contradicts receipt'),verifier='python tools/validate_release.py --profile 5x'))
+          PY
+          python benchmarks/roblox_profile_benchmark.py --cases 50 --mode simulated --source-commit "$SOURCE_SHA" --output benchmarks/results/roblox-profile/simulated-50.json
+          python tools/generate_manifests.py
+
+      - name: Run final release validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
+          python -m unittest discover -s tests/runtime -q
+          python -m unittest discover -s tests/roblox_profile -q
+          python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+          python tools/validate.py
+          python tools/validate_runtime.py
+          python tools/validate_roblox_profile.py
+          python tools/verify_claims.py
+          python tools/validate_release.py --profile runtime --smoke --output /tmp/runtime-release.json
+          python tools/validate_release.py --profile 5x --smoke --output /tmp/5x-smoke.json
+          python - <<'PY'
+          import json
+          report=json.load(open('/tmp/5x-smoke.json',encoding='utf-8'))
+          assert report['release_gate_pass'] is False
+          assert report['maximum_allowed_claim'] == '5X_NOT_PROVEN'
+          PY
+          set +e
+          python tools/validate_release.py --profile 5x --output /tmp/5x-strict.json
+          code=$?
+          set -e
+          test "$code" -eq 3
+          git diff --check
+
+      - name: Commit evidence-bound release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git commit -m "Bind Fusion runtime evidence and claim ceilings"
+
+      - name: Push ordinary source branch and remove temporary branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin HEAD:feat/5x-fusion-runtime
+          git push origin --delete "${{ github.event.pull_request.head.ref }}"
+          git push origin --delete transfer/5x-fusion-source || true
