@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["benchmark_version", "source_commit", "source_tree_hash", "mode", "engine_versions", "model_versions", "cases", "random_seed", "hardware", "operating_system", "python_version", "task_success", "validator_success", "unsafe_execution", "route_accuracy", "token_usage", "request_count", "transfer_bytes", "latency_p50", "latency_p95", "failure_categories", "limitations"]
+}

@@ -2,47 +2,43 @@
   "schema_version": 1,
   "profile_id": "roblox_studio",
   "profile_version": "0.0.1",
-  "display_name": "Roblox Studio Mode",
+  "display_name": "Roblox Studio Orchestration Profile",
   "enabled": true,
   "discoverable": false,
   "direct_invocation": false,
+  "maturity": "INTERNALLY_VERIFIED",
   "activation": {
     "mode": "signed_studio_session",
+    "envelope_schema_version": 2,
     "allowed_hosts": ["roblox_studio"],
     "allowed_transports": ["roblox_studio_bridge"],
     "allow_cli": false,
     "allow_ide": false,
     "require_process_attestation": true,
-    "accepted_process_names": [
-      "RobloxStudioBeta.exe",
-      "RobloxStudioBeta",
-      "RobloxStudio"
-    ],
+    "accepted_process_names": ["RobloxStudioBeta.exe", "RobloxStudioBeta", "RobloxStudio"],
     "require_project_identity": true,
+    "require_project_fingerprint": true,
     "single_use_nonce": true,
     "maximum_session_ttl_seconds": 120,
     "clock_skew_seconds": 5
   },
   "allowed_capabilities": [
-    "inspect_project",
-    "inspect_selection",
-    "read_script_ranges",
-    "prepare_tool_arguments",
-    "route_models",
-    "select_evidence",
-    "validate_orchestration",
-    "record_telemetry"
+    "inspect_project", "inspect_selection", "read_script_ranges", "prepare_tool_arguments",
+    "route_models", "select_evidence", "validate_orchestration", "record_telemetry",
+    "read_script", "write_script", "execute_luau", "start_playtest", "stop_playtest",
+    "read_client_logs", "read_server_logs", "capture_viewport", "creator_store_search",
+    "asset_analysis", "asset_import", "asset_sanitization", "datamodel_graph", "require_graph",
+    "remote_security_review", "performance_review", "ui_analysis", "ui_edit",
+    "animation_analysis", "animation_generation", "animation_retarget", "blender_job",
+    "device_simulation", "datastore_schema", "datastore_migration_plan",
+    "datastore_migration_execute", "project_delta", "context_selection", "model_routing",
+    "workflow_execution", "telemetry_replay"
   ],
   "forbidden_activation_sources": [
-    "cli",
-    "codex",
-    "claude_code",
-    "cursor",
-    "vscode",
-    "windsurf",
-    "opencode",
-    "gemini_cli",
-    "antigravity_ide"
+    "cli", "codex", "claude_code", "cursor", "vscode", "windsurf", "opencode",
+    "gemini_cli", "antigravity_ide"
   ],
-  "notes": "This profile is hidden and fail-closed. It can only be activated by a short-lived signed envelope from an authorized Roblox Studio bridge."
+  "simulated_adapter_enabled_in_ci": true,
+  "live_adapter_enabled_by_default": false,
+  "notes": "Hidden fail-closed control plane. Ordinary prompt, CLI, IDE and Agent Skill inputs cannot activate it."
 }

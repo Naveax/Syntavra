@@ -1,0 +1,54 @@
+name: Validate Roblox Studio profile
+
+on:
+  pull_request:
+    paths:
+      - "skills/signal-core/profiles/roblox_studio/**"
+      - "tests/roblox_profile/**"
+      - "benchmarks/roblox_profile_benchmark.py"
+      - "benchmarks/results/roblox-profile/**"
+      - "tools/validate_roblox_profile.py"
+      - "tools/verify_claims.py"
+      - "docs/claims/**"
+      - "README.md"
+      - ".github/workflows/validate-roblox-profile.yml"
+  push:
+    branches:
+      - main
+      - fix/sovereign-runtime-materialized
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Reject encoded source transport
+        shell: python
+        run: |
+          from pathlib import Path
+          root = Path('.')
+          forbidden = list(root.rglob('payload-*.b64')) + [path for path in root.rglob('.signalcore-direct')]
+          if forbidden:
+              raise SystemExit(f"forbidden encoded source transport: {forbidden}")
+      - name: Compile profile
+        run: python -m compileall -q skills/signal-core/profiles/roblox_studio
+      - name: Run profile tests
+        run: python -m unittest discover -s tests/roblox_profile -q
+      - name: Validate profile
+        run: python tools/validate_roblox_profile.py
+      - name: Run simulated benchmark smoke
+        run: python benchmarks/roblox_profile_benchmark.py --cases 50 --mode simulated --output roblox-profile-smoke.json
+      - name: Verify documented claims
+        run: python tools/verify_claims.py
