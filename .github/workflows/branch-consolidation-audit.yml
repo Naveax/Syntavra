@@ -1,0 +1,74 @@
+name: Branch consolidation immutable audit
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch every branch and tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote -v
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' --prune
+          git fsck --full
+
+      - name: Build verified bundle and inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%d-%H%M%S)"
+          out="branch-consolidation-audit-${stamp}"
+          mkdir -p "$out"
+          bundle="$out/SignalCore-Branch-Backup-${stamp}.bundle"
+          git bundle create "$bundle" --all
+          git bundle verify "$bundle" > "$out/bundle-verify.txt" 2>&1
+          git show-ref > "$out/show-ref.txt"
+          git branch -vv > "$out/branch-vv.txt"
+          git branch -r > "$out/branch-r.txt"
+          git log --all --decorate --oneline --graph -n 2000 > "$out/log-all-graph.txt"
+          git remote -v > "$out/remotes.txt"
+          printf 'branch\ttip_sha\tahead\tbehind\tfully_merged\tunique_commits\tclassification\tplanned_action\n' > "$out/branch-inventory.tsv"
+          printf '[\n' > "$out/branch-inventory.json"
+          first=1
+          while IFS= read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [ "$branch" = "HEAD" ] && continue
+            sha="$(git rev-parse "$ref")"
+            ahead="$(git rev-list --count refs/remotes/origin/main.."$ref")"
+            behind="$(git rev-list --count "$ref"..refs/remotes/origin/main)"
+            if git merge-base --is-ancestor "$ref" refs/remotes/origin/main; then merged=true; else merged=false; fi
+            if [ "$branch" = "main" ]; then class=PROTECTED_MAIN; action=KEEP
+            elif [ "$branch" = "fix/sovereign-runtime-materialized" ]; then class=ACTIVE_CONSOLIDATION_SOURCE; action=REVIEW_VALIDATE_MERGE
+            elif [ "$merged" = true ]; then class=MERGED_SAFE_TO_DELETE; action=DELETE_AFTER_BACKUP
+            else class=UNMERGED_RELEVANT; action=MANUAL_REVIEW_REQUIRED
+            fi
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$branch" "$sha" "$ahead" "$behind" "$merged" "$ahead" "$class" "$action" >> "$out/branch-inventory.tsv"
+            [ "$first" -eq 1 ] || printf ',\n' >> "$out/branch-inventory.json"
+            first=0
+            python - "$branch" "$sha" "$ahead" "$behind" "$merged" "$class" "$action" >> "$out/branch-inventory.json" <<'PY'
+import json, sys
+branch, sha, ahead, behind, merged, classification, action = sys.argv[1:]
+print(json.dumps({"remote_branch": branch, "tip_sha": sha, "upstream": None, "ahead_of_origin_main": int(ahead), "behind_origin_main": int(behind), "fully_merged": merged == "true", "unique_commits": int(ahead), "classification": classification, "planned_action": action}, sort_keys=True), end="")
+PY
+          done < <(git for-each-ref --format='%(refname)' refs/remotes/origin | sort)
+          printf '\n]\n' >> "$out/branch-inventory.json"
+
+      - name: Upload immutable audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalcore-branch-consolidation-audit-${{ github.run_id }}
+          path: branch-consolidation-audit-*/
+          if-no-files-found: error
+          retention-days: 90
