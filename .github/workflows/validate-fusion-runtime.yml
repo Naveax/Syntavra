@@ -2,22 +2,16 @@ name: Validate SignalCore Fusion Runtime
 
 on:
   pull_request:
-    paths:
-      - "signalcore_runtime/**"
-      - "tests/runtime/**"
-      - "benchmarks/**"
-      - "tools/**"
-      - "docs/**"
-      - "skills/signal-core/**"
-      - "README.md"
-      - "VERSION"
-      - ".github/workflows/validate-fusion-runtime.yml"
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONWARNINGS: "error::ResourceWarning"
 
 jobs:
   validate:
@@ -48,5 +42,5 @@ jobs:
         run: python tools/validate_roblox_profile.py
       - name: Verify Roblox claims
         run: python tools/verify_claims.py
-      - name: Validate release machinery
+      - name: Validate fail-closed 5X machinery
         run: python tools/validate_release.py --profile 5x --smoke --output fusion-release-smoke.json

@@ -1,6 +1,6 @@
 {
   "name": "signalcore",
-  "version": "0.0.1",
-  "description": "Cross-platform success-first context, evidence, state, telemetry, and token/cost routing for coding agents",
+  "version": "0.1.0",
+  "description": "Verified local-first runtime for coding-agent context, evidence, process and benchmark governance",
   "contextFileName": "GEMINI.md"
 }
