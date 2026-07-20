@@ -1,0 +1,70 @@
+        if name == "signalcore.output.search":
+            return {"hits": [asdict(hit) for hit in self.externalizer.search(
+                str(arguments["query"]), artifact_id=arguments.get("artifact_id"),
+                scope_key=arguments.get("scope_key"), limit=int(arguments.get("limit", 8)),
+            )]}
+        if name == "signalcore.output.reveal":
+            return asdict(self.externalizer.reveal(
+                arguments.get("artifact_id"), lens=str(arguments.get("lens", "salient")),
+                query=str(arguments.get("query", "")), budget_bytes=arguments.get("budget_bytes"),
+                continuation_token=arguments.get("continuation_token"),
+            ))
+        if name == "signalcore.output.verify":
+            return self.externalizer.verify(str(arguments["artifact_id"]))
+        if name == "signalcore.output.stats":
+            return self.externalizer.stats()
+        if name == "signalcore.usage.record":
+            entry = self.usage_ledger.record(
+                task_id=str(arguments["task_id"]), arm_id=str(arguments["arm_id"]),
+                repetition=int(arguments["repetition"]), cache_mode=str(arguments["cache_mode"]),
+                provider=str(arguments["provider"]), request_id=str(arguments["request_id"]),
+                provider_response=dict(arguments["provider_response"]), usage_payload=dict(arguments["usage"]),
+                quota_cost=float(arguments["quota_cost"]), hardware_hash=str(arguments["hardware_hash"]),
+            )
+            return asdict(entry)
+        if name == "signalcore.usage.verify":
+            return self.usage_ledger.verify(require_hmac=bool(arguments.get("require_hmac", False)))
+        if name == "signalcore.session.search":
+            return {"hits": self.session_retriever.serializable(self.session_retriever.search(
+                str(arguments["session_id"]), str(arguments["query"]), limit=int(arguments.get("limit", 12)),
+                include_superseded=bool(arguments.get("include_superseded", False)),
+            ))}
+        if name == "signalcore.session.semantic_context":
+            return asdict(self.session_retriever.context_pack(
+                str(arguments["session_id"]), str(arguments["query"]),
+                budget_bytes=int(arguments.get("budget_bytes", 8192)),
+                include_superseded=bool(arguments.get("include_superseded", False)),
+            ))
+        if name == "signalcore.session.open":
+            return asdict(self.sessions.create_session(session_id=arguments.get("session_id"), metadata=arguments.get("metadata") or {}))
+        if name == "signalcore.session.append":
+            return asdict(self.sessions.append(str(arguments["session_id"]), str(arguments["event_type"]), dict(arguments["payload"])))
+        if name == "signalcore.session.context":
+            return self.sessions.active_context(str(arguments["session_id"]), token_budget=int(arguments.get("token_budget", 32000)))
+        if name == "signalcore.session.compact":
+            summary_id = self.sessions.compact(
+                str(arguments["session_id"]), leaf_size=int(arguments.get("leaf_size", 32)),
+                fanout=int(arguments.get("fanout", 8)), force=bool(arguments.get("force", False)),
+            )
+            return {"summary_id": summary_id}
+        if name == "signalcore.session.expand":
+            return self.sessions.expand_summary(str(arguments["summary_id"]))
+        if name == "signalcore.session.verify":
+            return self.sessions.verify(str(arguments["session_id"]))
+        if name == "signalcore.session.checkpoint":
+            return asdict(self.sessions.checkpoint(str(arguments["session_id"]), metadata=dict(arguments.get("metadata") or {})))
+        if name == "signalcore.session.fork":
+            return asdict(self.sessions.fork(str(arguments["session_id"]), metadata=dict(arguments.get("metadata") or {})))
+        if name == "signalcore.session.merge":
+            return asdict(self.sessions.merge(tuple(arguments["session_ids"]), metadata=dict(arguments.get("metadata") or {})))
+        if name == "signalcore.output.govern":
+            return OutputGovernor(str(arguments.get("profile", "balanced"))).render(
+                dict(arguments["payload"]), contract=str(arguments.get("contract", "generic")),
+            )
+        if name == "signalcore.fabric.profile":
+            return self.fabric.profile(
+                str(arguments.get("task", "")), (row["name"] for row in self.tools()),
+                requested_profile=str(arguments.get("profile", "auto")),
+            )
+        if name == "signalcore.fabric.route":
+            return asdict(self.fabric.route(
