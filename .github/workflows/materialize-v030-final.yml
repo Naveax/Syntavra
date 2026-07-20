@@ -83,14 +83,17 @@ jobs:
         run: |
           set -euo pipefail
           git rm -r -f .signalcore-transfer-v030
+          rm -rf .signalcore-transfer-v030
           for path in \
             .github/workflows/export-v030-source.yml \
             .github/workflows/materialize-v030.yml \
             .github/workflows/materialize-v030-final.yml \
             .github/workflows/diagnose-v030-parts.yml \
-            .github/workflows/fix-v030-materializer-rm.yml; do
+            .github/workflows/fix-v030-materializer-rm.yml \
+            .github/workflows/inspect-v030-validation-failure.yml; do
             if test -e "$path"; then git rm -f "$path"; fi
           done
+          test ! -e .signalcore-transfer-v030
       - name: Validate complete v0.3.0 release
         shell: bash
         run: |
