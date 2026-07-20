@@ -1,0 +1,61 @@
+name: Cleanup non-main branches
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/cleanup-non-main-branches.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Delete every remote branch except main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/deleted-branches.txt
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads" --jq '.[].ref' | sort -u > /tmp/all-refs.txt
+          while IFS= read -r ref; do
+            test -n "$ref" || continue
+            if test "$ref" = "refs/heads/main"; then
+              continue
+            fi
+            branch="${ref#refs/heads/}"
+            encoded=$(python -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$branch")
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded}"
+            printf '%s\n' "$branch" >> /tmp/deleted-branches.txt
+          done < /tmp/all-refs.txt
+
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads" --jq '.[].ref' | sort -u > /tmp/remaining-refs.txt
+          test "$(wc -l < /tmp/remaining-refs.txt | tr -d ' ')" = "1"
+          grep -Fxq 'refs/heads/main' /tmp/remaining-refs.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          deleted = [line for line in Path('/tmp/deleted-branches.txt').read_text().splitlines() if line]
+          remaining = [line.removeprefix('refs/heads/') for line in Path('/tmp/remaining-refs.txt').read_text().splitlines() if line]
+          Path('BRANCH_CLEANUP_REPORT.json').write_text(
+              json.dumps({'status':'PASS','deleted':deleted,'remaining':remaining}, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - name: Commit cleanup report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add BRANCH_CLEANUP_REPORT.json
+          git commit -m 'Record single-branch cleanup result'
+          git push origin HEAD:main
