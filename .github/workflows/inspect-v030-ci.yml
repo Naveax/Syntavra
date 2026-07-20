@@ -1,0 +1,34 @@
+name: Inspect SignalCore v0.3 cross-platform failures
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download failing job logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api /repos/${{ github.repository }}/actions/jobs/88337316791/logs > ubuntu-cli.log
+          gh api /repos/${{ github.repository }}/actions/jobs/88337316816/logs > macos-runtime.log
+          tail -n 220 ubuntu-cli.log > ubuntu-cli-tail.log
+          tail -n 260 macos-runtime.log > macos-runtime-tail.log
+          grep -nEi 'error|failed|failure|traceback|assert|exception|keyerror|typeerror|permission|not found' ubuntu-cli.log > ubuntu-cli-errors.log || true
+          grep -nEi 'error|failed|failure|traceback|assert|exception|keyerror|typeerror|permission|not found' macos-runtime.log > macos-runtime-errors.log || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v030-cross-platform-diagnostic
+          path: |
+            ubuntu-cli-tail.log
+            ubuntu-cli-errors.log
+            macos-runtime-tail.log
+            macos-runtime-errors.log
+          retention-days: 1
