@@ -254,14 +254,17 @@ class LongSessionPlanner:
             reverse=True,
         )
         selected: list[PlannedSection] = []
-        used = 0
+        # Reserve list punctuation and per-item separators so the serialized
+        # envelope cannot drift above the advertised model-visible budget.
+        used = 2
         for item in (*mandatory, *optional):
             if any(existing.reference == item.reference for existing in selected):
                 continue
-            if used + item.estimated_tokens > policy.token_budget:
+            item_cost = item.estimated_tokens + 1
+            if used + item_cost > policy.token_budget:
                 continue
             selected.append(item)
-            used += item.estimated_tokens
+            used += item_cost
         selected.sort(key=lambda item: (
             0 if item.role == "summary" else 1,
             item.event_sequence or 0,
@@ -272,6 +275,24 @@ class LongSessionPlanner:
             0,
             math.ceil(len(canonical_json(payload)) / policy.chars_per_token),
         )
+        # Defensive exact-envelope correction. Normally the reserved separator
+        # budget is sufficient; this loop handles digit-width and Unicode edges.
+        while selected and visible_estimated_tokens > policy.token_budget:
+            removable = [
+                (index, item)
+                for index, item in enumerate(selected)
+                if not item.mandatory
+            ]
+            if not removable:
+                break
+            remove_index, _ = min(removable, key=lambda pair: (pair[1].score, pair[1].event_sequence or 0))
+            selected.pop(remove_index)
+            payload = [asdict(item) for item in selected]
+            visible_estimated_tokens = max(
+                0,
+                math.ceil(len(canonical_json(payload)) / policy.chars_per_token),
+            )
+        used = visible_estimated_tokens
         return {
             "session_id": session_id,
             "query": query,
