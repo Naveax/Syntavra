@@ -14,19 +14,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: agent/signalcore-v0.3.0-unified
-      - name: Record exact patch hashes
+      - name: Record exact patch hashes and bytes
         shell: bash
         run: |
           set -euo pipefail
           sha256sum .signalcore-transfer-v030/part-*.diff > actual-v030-parts.sha256
+          wc -c .signalcore-transfer-v030/part-*.diff > actual-v030-part-sizes.txt
           cat .signalcore-transfer-v030/part-*.diff > actual-v030.patch
           sha256sum actual-v030.patch > actual-v030-total.sha256
           wc -c actual-v030.patch > actual-v030-size.txt
+          cp -R .signalcore-transfer-v030 actual-v030-parts
       - uses: actions/upload-artifact@v4
         with:
-          name: actual-v030-hashes
+          name: actual-v030-bytes
           path: |
             actual-v030-parts.sha256
+            actual-v030-part-sizes.txt
             actual-v030-total.sha256
             actual-v030-size.txt
+            actual-v030-parts/
           retention-days: 1
