@@ -1,4 +1,4 @@
-name: Diagnose Strict Long Session Budget V4
+name: Finalize Relevance-First Long Session V4
 
 on:
   push:
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  diagnose:
+  finalize:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -28,30 +28,87 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Capture focused and benchmark diagnostics
+      - name: Apply relevance-first mandatory ordering
         shell: bash
         run: |
-          set +e
-          : > strict-budget-v4-diagnostic.txt
-          python -m compileall -q signalcore_runtime benchmarks tests >> strict-budget-v4-diagnostic.txt 2>&1
-          compile_status=$?
-          echo "COMPILE_STATUS=$compile_status" >> strict-budget-v4-diagnostic.txt
-          python -m unittest discover -s tests/runtime -p 'test_*v4.py' -v >> strict-budget-v4-diagnostic.txt 2>&1
-          test_status=$?
-          echo "TEST_STATUS=$test_status" >> strict-budget-v4-diagnostic.txt
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("signalcore_runtime/long_session_planner.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''        mandatory = sorted(
+              (item for item in candidates if item.mandatory),
+              key=lambda item: (item.event_sequence or 0),
+              reverse=True,
+          )
+          '''
+          new = '''        mandatory = sorted(
+              (item for item in candidates if item.mandatory),
+              key=lambda item: (
+                  item.score,
+                  item.temporal_status == "current",
+                  item.event_sequence or 0,
+              ),
+              reverse=True,
+          )
+          '''
+          if old not in text:
+              raise SystemExit("mandatory ordering source pattern not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+          PY
+          rm -f strict-budget-v4-diagnostic.txt ecosystem-v4-diagnostic.txt ecosystem-v4-benchmark-diagnostic.txt
+      - name: Validate focused behavior and strict benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q signalcore_runtime benchmarks tests
+          python -m unittest discover -s tests/runtime -p 'test_*v4.py' -q
           mkdir -p benchmarks/results/long-session-v4
           python benchmarks/long_session_v4_benchmark.py \
             --events 2048 \
             --token-budget 4096 \
-            --output benchmarks/results/long-session-v4/internal.json \
-            >> strict-budget-v4-diagnostic.txt 2>&1
-          bench_status=$?
-          echo "BENCH_STATUS=$bench_status" >> strict-budget-v4-diagnostic.txt
+            --output benchmarks/results/long-session-v4/internal.json
+      - name: Restore canonical package workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git show origin/main:.github/workflows/validate.yml > .github/workflows/validate.yml
+      - name: Regenerate manifest and run complete suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          root = Path(".")
+          generated = {"fusion-release-smoke.json", "release-smoke.json", "platform-registry.json", "native-dry-run.json"}
+          rows = []
+          for path in root.rglob("*"):
+              if not path.is_file():
+                  continue
+              relative = path.relative_to(root)
+              if any(part in {".git", ".signalcore", "__pycache__", ".pytest_cache"} for part in relative.parts):
+                  continue
+              if ((path.name == "MANIFEST.sha256" and path.parent == root) or path.name in generated or path.suffix == ".pyc"):
+                  continue
+              rows.append((relative.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+          rows.sort(key=lambda item: item[0])
+          Path("MANIFEST.sha256").write_text(
+              "".join(f"{digest}  {relative}\n" for relative, digest in rows),
+              encoding="utf-8", newline="\n",
+          )
+          PY
+          python tools/validate.py
+          python -m unittest discover -s tests -q
+      - name: Commit final clean tree
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add strict-budget-v4-diagnostic.txt
-          git commit -m "record strict long-session budget diagnostics"
+          git add -A
+          git commit -m "finalize relevance-first ecosystem long-session v4"
           git push origin HEAD:agent/ecosystem-long-session-v04
-          if [ "$compile_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$bench_status" -ne 0 ]; then
-            exit 1
-          fi
