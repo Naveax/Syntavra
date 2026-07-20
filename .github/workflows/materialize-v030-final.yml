@@ -78,7 +78,7 @@ jobs:
           set -euo pipefail
           git apply --check /tmp/signalcore-v030.patch
           git apply --index /tmp/signalcore-v030.patch
-      - name: Remove every temporary transport surface
+      - name: Remove every temporary transport surface for validation
         shell: bash
         run: |
           set -euo pipefail
@@ -118,14 +118,16 @@ jobs:
           from signalcore_runtime.cli import skill_root
           assert (skill_root() / 'SKILL.md').is_file()
           PY
-      - name: Commit ordinary source
+      - name: Commit ordinary non-workflow source
         shell: bash
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          git restore --staged .github/workflows
+          git restore .github/workflows
+          rm -rf build dist signalcore_runtime.egg-info release-smoke.json runtime-v03-internal.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
           git diff --cached --check
           git commit -m 'Implement SignalCore 0.3.0 unified runtime'
           git push origin HEAD:agent/signalcore-v0.3.0-unified
