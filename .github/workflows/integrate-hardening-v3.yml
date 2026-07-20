@@ -83,7 +83,41 @@ jobs:
           path: /tmp/provider-debug.json
           if-no-files-found: error
       - name: Provider ledger tamper gate
-        run: python tests/runtime/test_signalcore_hardening_v3.py SignalCoreHardeningV3Tests.test_usage_receipt_ledger_is_hmac_attested_and_tamper_evident -v
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import sqlite3
+          import tempfile
+          from pathlib import Path
+          from signalcore_runtime.usage_receipt_ledger import UsageReceiptLedger
+          with tempfile.TemporaryDirectory() as temp:
+              path = Path(temp) / 'usage.sqlite3'
+              ledger = UsageReceiptLedger(path, signing_key=b'test-key')
+              hardware = hashlib.sha256(b'hardware').hexdigest()
+              for index in range(1, 6):
+                  ledger.record(task_id=f'task-{index}', arm_id='signalcore', repetition=1, cache_mode='cold', provider='openai', request_id=f'request-{index}', provider_response={'id': f'response-{index}', 'usage': {'input_tokens': 100, 'output_tokens': 10}}, usage_payload={'input_tokens': 100, 'output_tokens': 10}, quota_cost=1.0, hardware_hash=hardware)
+              before = ledger.verify(require_hmac=True)
+              db = sqlite3.connect(path)
+              try:
+                  db.execute("UPDATE usage_receipt_ledger SET raw_usage_json='{}' WHERE sequence=3")
+                  db.commit()
+              finally:
+                  db.close()
+              after = ledger.verify(require_hmac=True)
+              Path('/tmp/ledger-debug.json').write_text(json.dumps({'before': before, 'after': after}, indent=2, sort_keys=True), encoding='utf-8')
+              assert before['ok'] is True
+              assert before['entries'] == 5
+              assert before['attestation'] == 'HMAC'
+              assert after['ok'] is False
+          PY
+      - name: Upload ledger diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-v3-ledger-debug
+          path: /tmp/ledger-debug.json
+          if-no-files-found: error
       - name: Semantic temporal truth gate
         run: python tests/runtime/test_signalcore_hardening_v3.py SignalCoreHardeningV3Tests.test_semantic_temporal_retrieval_prefers_current_decision -v
       - name: Mandatory host interception gate
