@@ -3,6 +3,8 @@ name: Temporary SignalCore v0.3 source export
 on:
   push:
     branches: [agent/signalcore-v0.3.0-unified]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
