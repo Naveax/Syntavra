@@ -89,7 +89,6 @@ jobs:
                 - name: Dry-run native adapters
                   run: python tools/install.py install --platforms all-native --scope project --project . --dry-run --output native-dry-run.json
           '''
-          # Remove the indentation introduced by the YAML block.
           lines = canonical.splitlines()
           restored = "\n".join(line[10:] if line.startswith("          ") else line for line in lines).lstrip() + "\n"
           Path('.github/workflows/validate.yml').write_text(restored, encoding='utf-8', newline='\n')
@@ -115,12 +114,12 @@ jobs:
           PY
           python tools/validate.py
           python -m unittest discover -s tests/runtime -p 'test_*.py' -q
-      - name: Commit final clean tree
+      - name: Commit generated manifest
         shell: bash
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add MANIFEST.sha256 .github/workflows/validate.yml
-          git commit -m "finalize clean manifest before branch consolidation"
+          git add MANIFEST.sha256
+          git commit -m "generate final manifest before branch consolidation"
           git push origin HEAD:agent/adaptive-context-v04
