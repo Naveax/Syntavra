@@ -1,0 +1,169 @@
+name: Retry Competitive Hook V4
+
+on:
+  push:
+    branches:
+      - agent/adaptive-context-v04
+    paths:
+      - .github/workflows/retry-competitive-hook-v4.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/adaptive-context-v04
+          fetch-depth: 0
+      - name: Wire fabric into host hooks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('signalcore_runtime/hooks.py')
+          text = path.read_text(encoding='utf-8')
+
+          import_anchor = 'from .compression import ContentRouter\n'
+          if 'from .competitive_fabric import CompetitiveContextFabric\n' not in text:
+              if import_anchor not in text:
+                  raise SystemExit('import anchor missing')
+              text = text.replace(
+                  import_anchor,
+                  'from .competitive_fabric import CompetitiveContextFabric\n' + import_anchor,
+                  1,
+              )
+
+          old_signature = '''        output_pipeline: HostOutputPipeline | None = None,
+          auto_externalize: bool = True,
+      ):'''.replace('          auto', '        auto').replace('      ):', '    ):')
+          new_signature = '''        output_pipeline: HostOutputPipeline | None = None,
+        auto_externalize: bool = True,
+        host: str = "generic-mcp",
+        fabric: CompetitiveContextFabric | None = None,
+    ):'''
+          if old_signature not in text:
+              raise SystemExit('signature anchor missing')
+          text = text.replace(old_signature, new_signature, 1)
+
+          old_init = '''        self.compressor = compressor
+        self.output_pipeline = output_pipeline
+        if self.output_pipeline is None and auto_externalize:
+            active_state = Path(state_root).resolve(strict=False) if state_root else self.project_root / '.signalcore' / 'runtime-v3'
+            project_id = stable_project_id(self.project_root)
+'''
+          new_init = '''        self.compressor = compressor
+        self.output_pipeline = output_pipeline
+        active_state = Path(state_root).resolve(strict=False) if state_root else self.project_root / '.signalcore' / 'runtime-v3'
+        self.fabric = fabric or CompetitiveContextFabric(
+            active_state / 'competitive-fabric.sqlite3', project=self.project_root, host=host
+        )
+        if self.output_pipeline is None and auto_externalize:
+            project_id = stable_project_id(self.project_root)
+'''
+          if old_init not in text:
+              raise SystemExit('initialization anchor missing')
+          text = text.replace(old_init, new_init, 1)
+
+          old_route = '''        executable = Path(command[0]).name.casefold() if command else ""
+        explicit_sandbox = bool(payload.get("sandbox")) or bool(payload.get("untrusted"))
+        risky = explicit_sandbox or any(marker.casefold() == executable for marker in NETWORK_MARKERS) and bool(payload.get("network_untrusted"))
+        if risky and command[: len(self.sandbox_prefix)] != self.sandbox_prefix:
+            replacement = {
+                "tool": tool,
+                "argv": [*self.sandbox_prefix, *command],
+                "cwd": str(cwd),
+                "reason": "route-untrusted-command-through-secure-sandbox",
+            }
+            return HookDecision(True, "replace", command, ("sandbox-required",), replacement)
+        long_running = executable in LONG_RUNNING_MARKERS or any(
+            marker in joined for marker in (" test", " build", " install", " benchmark", " lint", " check", " compile")
+        )
+        if long_running and command[: len(self.broker_prefix)] != self.broker_prefix:
+            replacement = {
+                "tool": tool,
+                "argv": [*self.broker_prefix, *command],
+                "cwd": str(cwd),
+                "reason": "route-long-command-through-zero-poll-broker",
+            }
+            return HookDecision(True, "replace", command, ("long-running-command",), replacement)
+        return HookDecision(True, "allow", command)
+'''
+          new_route = '''        explicit_sandbox = bool(payload.get("sandbox")) or bool(payload.get("untrusted"))
+        route = self.fabric.route(
+            raw_command,
+            network_untrusted=bool(payload.get("network_untrusted")) or explicit_sandbox,
+            repeated=bool(payload.get("repeated")),
+        )
+        if route.mode == "blocked":
+            return HookDecision(False, "blocked", command, route.reasons)
+        if explicit_sandbox and route.mode != "sandbox-replace" and command[: len(self.sandbox_prefix)] != self.sandbox_prefix:
+            replacement = {
+                "tool": tool,
+                "argv": [*self.sandbox_prefix, *command],
+                "cwd": str(cwd),
+                "reason": "competitive-fabric-explicit-sandbox",
+            }
+            return HookDecision(True, "replace", command, ("explicit-sandbox", *route.reasons), replacement)
+        if route.replacement_argv:
+            replacement = {
+                "tool": tool,
+                "argv": list(route.replacement_argv),
+                "cwd": str(cwd),
+                "reason": f"competitive-fabric:{route.mode}",
+                "family": route.family,
+                "repeat_key": route.repeat_key,
+                "recommended_tools": list(route.recommended_tools),
+            }
+            return HookDecision(True, "replace", command, route.reasons, replacement)
+        return HookDecision(True, "allow", command, route.reasons)
+'''
+          if old_route not in text:
+              raise SystemExit('routing anchor missing')
+          text = text.replace(old_route, new_route, 1)
+          path.write_text(text, encoding='utf-8')
+
+          for workflow in (
+              Path('.github/workflows/apply-competitive-hook-v4.yml'),
+              Path('.github/workflows/retry-competitive-hook-v4.yml'),
+          ):
+              workflow.unlink(missing_ok=True)
+          PY
+      - name: Regenerate manifest
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+
+          root = Path('.')
+          generated = {'fusion-release-smoke.json','release-smoke.json','platform-registry.json','native-dry-run.json'}
+          rows = []
+          for path in root.rglob('*'):
+              if not path.is_file():
+                  continue
+              relative = path.relative_to(root)
+              if any(part in {'.git','.signalcore','__pycache__','.pytest_cache'} for part in relative.parts):
+                  continue
+              if (path.name == 'MANIFEST.sha256' and path.parent == root) or path.name in generated or path.suffix == '.pyc':
+                  continue
+              rows.append((relative.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+          Path('MANIFEST.sha256').write_text(
+              ''.join(f'{digest}  {name}\n' for name, digest in sorted(rows)),
+              encoding='utf-8',
+          )
+          PY
+      - name: Validate hook integration
+        run: |
+          python -m py_compile signalcore_runtime/hooks.py tests/runtime/test_competitive_hook_v4.py
+          python -m unittest tests.runtime.test_competitive_hook_v4 -v
+          python -m unittest discover -s tests/runtime -p 'test_*.py' -v
+          python tools/validate.py
+      - name: Commit integration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "make competitive fabric the default hook router"
+          git push origin HEAD:agent/adaptive-context-v04
