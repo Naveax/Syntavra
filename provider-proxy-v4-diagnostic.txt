@@ -1,0 +1,18 @@
+test_health_endpoint_and_fixed_origin_reject_absolute_target (tests.runtime.test_provider_proxy_v4.ProviderProxyV4Tests.test_health_endpoint_and_fixed_origin_reject_absolute_target) ... ok
+test_proxy_injects_server_credential_and_replays_exact_response (tests.runtime.test_provider_proxy_v4.ProviderProxyV4Tests.test_proxy_injects_server_credential_and_replays_exact_response) ... FAIL
+test_remote_binding_requires_explicit_control_plane_protection (tests.runtime.test_provider_proxy_v4.ProviderProxyV4Tests.test_remote_binding_requires_explicit_control_plane_protection) ... ok
+test_streaming_is_passed_through_and_not_replayed (tests.runtime.test_provider_proxy_v4.ProviderProxyV4Tests.test_streaming_is_passed_through_and_not_replayed) ... ok
+
+======================================================================
+FAIL: test_proxy_injects_server_credential_and_replays_exact_response (tests.runtime.test_provider_proxy_v4.ProviderProxyV4Tests.test_proxy_injects_server_credential_and_replays_exact_response)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/runner/work/SignalCore/SignalCore/tests/runtime/test_provider_proxy_v4.py", line 138, in test_proxy_injects_server_credential_and_replays_exact_response
+    self.assertTrue(headers["X-SignalCore-Evidence"].startswith("sc://evidence/"))
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 4 tests in 3.076s
+
+FAILED (failures=1)
+EXIT_STATUS=1
