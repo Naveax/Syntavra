@@ -1,0 +1,90 @@
+    @staticmethod
+    def _policy(arguments: dict[str, Any]) -> SandboxPolicy:
+        return SandboxPolicy(
+            backend=str(arguments.get("backend", "auto")),
+            network=str(arguments.get("network", "none")),
+            strict=bool(arguments.get("strict", True)),
+            timeout_seconds=float(arguments.get("timeout", 1200)),
+        )
+
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        if name == "signalcore.status":
+            return asdict(inspect_runtime(
+                project_root=self.project,
+                skill_root=self.skill_root,
+                state_root=self.state_root,
+                codex_home=self.codex_home,
+                host=self.host,
+            ))
+        if name == "signalcore.host.detect":
+            return {"hosts": detect_hosts(self.project)}
+        if name == "signalcore.process.submit":
+            job = self.broker.submit(
+                tuple(arguments["argv"]),
+                cwd=self.project,
+                timeout=float(arguments.get("timeout", 1200)),
+                repository_tree=str(arguments.get("repository_tree", "unknown")),
+            )
+            return {"event": "JOB_ACCEPTED", "job": asdict(job), "model_polling_calls": 0}
+        if name == "signalcore.process.completions":
+            result = self.broker.drain_completions(after=int(arguments.get("after", 0)), limit=int(arguments.get("limit", 100)))
+            return {"cursor": result["cursor"], "events": [asdict(event) for event in result["events"]]}
+        if name == "signalcore.inspect.symbol":
+            return self._index().inspect_symbol(str(arguments["query"]), limit=int(arguments.get("limit", 20)))
+        if name == "signalcore.inspect.source":
+            return self.navigator.symbol_source(
+                self._index(), str(arguments["query"]), limit=int(arguments.get("limit", 8)),
+                context_lines=int(arguments.get("context_lines", 2)),
+            )
+        if name == "signalcore.inspect.range":
+            return self.navigator.read_range(
+                str(arguments["path"]), start_line=int(arguments.get("start_line", 1)),
+                end_line=arguments.get("end_line"), max_bytes=int(arguments.get("max_bytes", 64 * 1024)),
+            )
+        if name == "signalcore.inspect.impact":
+            return self._index().inspect_impact(str(arguments["query"]), max_depth=int(arguments.get("max_depth", 4)))
+        if name == "signalcore.inspect.paths":
+            return self._index().impacted_by_paths(tuple(arguments["paths"]), max_depth=int(arguments.get("max_depth", 4)))
+        if name == "signalcore.inspect.map":
+            return self._index().repository_map(
+                str(arguments["query"]), token_budget=int(arguments.get("token_budget", 2000)),
+                max_depth=int(arguments.get("max_depth", 4)),
+            )
+        if name == "signalcore.inspect.stats":
+            return self._index().stats()
+        if name == "signalcore.context.evaluate":
+            return asdict(evaluate(
+                int(arguments["used"]), int(arguments["window"]),
+                churn=float(arguments.get("churn", 0)), evidence_pressure=float(arguments.get("evidence_pressure", 0)),
+            ))
+        if name == "signalcore.compress":
+            return asdict(self.compressor.compress(
+                str(arguments["text"]), hint=str(arguments.get("hint", "")),
+                path=str(arguments.get("path", "")), budget_bytes=int(arguments.get("budget_bytes", 8192)),
+            ))
+        if name == "signalcore.expand":
+            data = self.compression_store.restore(str(arguments["compression_id"]), chunk=arguments.get("chunk"))
+            return {"bytes": len(data), "text": data.decode("utf-8", errors="replace")}
+        if name == "signalcore.compression.verify":
+            compression_id = str(arguments["compression_id"])
+            return {"compression_id": compression_id, "ok": self.compression_store.verify_roundtrip(compression_id)}
+        if name in {"signalcore.sandbox.plan", "signalcore.sandbox.execute"}:
+            policy = self._policy(arguments)
+            if name.endswith("plan"):
+                return asdict(self.sandbox.plan(tuple(arguments["argv"]), policy=policy))
+            return asdict(self.sandbox.execute(tuple(arguments["argv"]), policy=policy))
+        if name == "signalcore.sandbox.batch":
+            results = self.sandbox.execute_batch(
+                (tuple(command) for command in arguments["commands"]),
+                policy=self._policy(arguments),
+                stop_on_failure=bool(arguments.get("stop_on_failure", True)),
+            )
+            return {"results": [asdict(result) for result in results], "completed": len(results)}
+        if name == "signalcore.output.capture":
+            artifact = self.externalizer.externalize(ToolPayload(
+                command=str(arguments.get("command", "")), stdout=str(arguments.get("stdout", "")),
+                stderr=str(arguments.get("stderr", "")), tool_name=str(arguments.get("tool_name", "mcp")),
+                path=str(arguments.get("path", "")), scope_key=str(arguments.get("scope_key", "default")),
+                metadata=dict(arguments.get("metadata") or {}),
+            ))
+            return asdict(artifact)
