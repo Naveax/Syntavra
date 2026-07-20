@@ -1,0 +1,65 @@
+name: Diagnose SignalCore Hardening V3 Runtime
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONWARNINGS: error::ResourceWarning
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+jobs:
+  runtime-diagnostic:
+    if: github.head_ref == 'agent/adaptive-context-v04'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/adaptive-context-v04
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Apply integration patches
+        run: python tools/apply_hardening_v3.py
+      - name: Run runtime modules independently
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+          rows = []
+          for path in sorted(Path('tests/runtime').glob('test_*.py')):
+              if path.name == 'test_signalcore_hardening_v3.py':
+                  continue
+              completed = subprocess.run(
+                  [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests/runtime', '-p', path.name, '-q'],
+                  text=True, capture_output=True,
+              )
+              rows.append({
+                  'file': path.name,
+                  'returncode': completed.returncode,
+                  'stdout': completed.stdout[-12000:],
+                  'stderr': completed.stderr[-12000:],
+              })
+          failures = [row for row in rows if row['returncode'] != 0]
+          result = {'rows': rows, 'failures': failures}
+          Path('/tmp/runtime-module-diagnostic.json').write_text(
+              json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8'
+          )
+          assert not failures, [row['file'] for row in failures]
+          PY
+      - name: Upload runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-v3-runtime-module-diagnostic
+          path: /tmp/runtime-module-diagnostic.json
+          if-no-files-found: error
