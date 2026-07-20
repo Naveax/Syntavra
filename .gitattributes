@@ -12,4 +12,4 @@ VERSION text eol=lf
 *.toml text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
-benchmarks/results/real-tasks/**/evidence/*.txt -text
+benchmarks/results/real-tasks/** -text
