@@ -1,0 +1,66 @@
+name: Finalize SignalCore v0.3 status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/finalize-v030-status.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Update merged release status and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          readme = Path('README.md')
+          text = readme.read_text(encoding='utf-8')
+          old = '''- Version: **0.3.0 pre-release**
+- Unified implementation: **directly tested**
+- Cross-platform release validation: **required before merge**
+- External competitor superiority: **not proven**
+'''
+          new = '''- Version: **0.3.0**
+- Main integration: **MERGED**
+- Unified implementation: **directly tested**
+- Cross-platform release validation: **PASS** on Ubuntu, Windows and macOS with Python 3.11, 3.12 and 3.13
+- Public efficiency claim: **`5X_NOT_PROVEN`**
+'''
+          if old not in text:
+              raise SystemExit('stale README status block not found')
+          readme.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          digest = hashlib.sha256(readme.read_bytes()).hexdigest()
+          manifest = Path('MANIFEST.sha256')
+          lines = manifest.read_text(encoding='utf-8').splitlines()
+          found = False
+          for index, line in enumerate(lines):
+              if line.endswith('  README.md'):
+                  lines[index] = f'{digest}  README.md'
+                  found = True
+                  break
+          if not found:
+              raise SystemExit('README manifest entry not found')
+          manifest.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+          python tools/validate.py
+          python tools/validate_runtime.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md MANIFEST.sha256
+          git commit -m 'Finalize SignalCore 0.3 merged release status'
+          git push origin HEAD:main
