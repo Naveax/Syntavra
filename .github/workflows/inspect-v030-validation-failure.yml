@@ -17,12 +17,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api /repos/${{ github.repository }}/actions/jobs/88333863311/logs > v030-finalizer.log
+          gh api /repos/${{ github.repository }}/actions/jobs/88334834828/logs > v030-finalizer.log
           tail -n 180 v030-finalizer.log > v030-finalizer-tail.log
-          grep -nEi 'error|failed|failure|rejected|non-fast-forward|nothing to commit|permission|denied|remote|push' v030-finalizer.log > v030-finalizer-errors.log || true
+          grep -nEi 'error|failed|failure|rejected|non-fast-forward|nothing to commit|permission|denied|remote|push|pathspec|unstaged|staged' v030-finalizer.log > v030-finalizer-errors.log || true
       - uses: actions/upload-artifact@v4
         with:
-          name: v030-finalizer-commit-diagnostic
+          name: v030-finalizer-source-commit-diagnostic
           path: |
             v030-finalizer-tail.log
             v030-finalizer-errors.log
