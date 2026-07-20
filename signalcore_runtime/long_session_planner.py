@@ -245,7 +245,11 @@ class LongSessionPlanner:
 
         mandatory = sorted(
             (item for item in candidates if item.mandatory),
-            key=lambda item: (item.event_sequence or 0),
+            key=lambda item: (
+    item.score,
+    item.temporal_status == "current",
+    item.event_sequence or 0,
+),
             reverse=True,
         )
         optional = sorted(
