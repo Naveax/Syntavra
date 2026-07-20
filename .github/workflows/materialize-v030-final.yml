@@ -1,0 +1,128 @@
+name: Finalize SignalCore v0.3.0 ordinary source
+
+on:
+  push:
+    branches: [agent/signalcore-v0.3.0-unified]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONWARNINGS: "error::ResourceWarning"
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/signalcore-v0.3.0-unified
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Reconstruct and verify exact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import hashlib
+          from pathlib import Path
+
+          root = Path('.signalcore-transfer-v030')
+          original = {path.name: path.read_bytes() for path in root.glob('part-*.diff')}
+          required = {'part-000.diff','part-003.diff','part-008.diff','part-010.diff','part-014.diff','part-022.diff','part-024.diff','part-026.diff'}
+          missing = sorted(required - set(original))
+          if missing:
+              raise SystemExit(f'missing repair sources: {missing}')
+
+          (root / 'part-009.diff').write_bytes(original['part-008.diff'])
+          (root / 'part-023.diff').write_bytes(original['part-022.diff'][12000:24000])
+          (root / 'part-025.diff').write_bytes(original['part-024.diff'][12009:24009])
+          for number in ('000','003','014','022','026'):
+              (root / f'part-{number}.diff').write_bytes(original[f'part-{number}.diff'][:12000])
+          (root / 'part-010.diff').write_bytes(original['part-010.diff'] + b'\n')
+          part024 = original['part-022.diff'][24000:]
+          (root / 'part-024.diff').write_bytes(part024[:4690] + b'\\' + part024[4690:])
+
+          encoded = ''.join((root / f'repair-008-{index}.b64').read_text(encoding='utf-8').strip() for index in range(4))
+          part008 = base64.b64decode(encoded, validate=True)
+          if len(part008) != 12000 or hashlib.sha256(part008).hexdigest() != '8f2325500a3d8abea72f488edb31bab0c68a44a0eeb812fdccc8b530917ab54a':
+              raise SystemExit('part-008 repair verification failed')
+          (root / 'part-008.diff').write_bytes(part008)
+          for path in root.glob('repair-008-*.b64'):
+              path.unlink()
+
+          parts = sorted(root.glob('part-*.diff'))
+          expected_names = [f'part-{index:03d}.diff' for index in range(28)]
+          if [path.name for path in parts] != expected_names:
+              raise SystemExit('patch part inventory mismatch')
+          patch = b''.join(path.read_bytes() for path in parts)
+          if len(patch) != 324540:
+              raise SystemExit(f'patch size mismatch: {len(patch)}')
+          if hashlib.sha256(patch).hexdigest() != '0e8ee4cc75e05aaab4d8dfe5d391879a3a6a44b8f8f3cb01c7d9e9d1ecf87747':
+              raise SystemExit('total patch hash mismatch')
+          Path('/tmp/signalcore-v030.patch').write_bytes(patch)
+          PY
+      - name: Apply ordinary source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check /tmp/signalcore-v030.patch
+          git apply --index /tmp/signalcore-v030.patch
+      - name: Remove every temporary transport surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -r -f .signalcore-transfer-v030
+          for path in \
+            .github/workflows/export-v030-source.yml \
+            .github/workflows/materialize-v030.yml \
+            .github/workflows/materialize-v030-final.yml \
+            .github/workflows/diagnose-v030-parts.yml \
+            .github/workflows/fix-v030-materializer-rm.yml; do
+            if test -e "$path"; then git rm -f "$path"; fi
+          done
+      - name: Validate complete v0.3.0 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
+          python -m unittest discover -s tests/runtime -q
+          python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+          python -m unittest discover -s tests/roblox_profile -q
+          python tools/validate.py
+          python tools/validate_runtime.py
+          python tools/validate_roblox_profile.py
+          python tools/verify_claims.py
+          python tools/validate_release.py --profile 5x --smoke --output release-smoke.json
+          python benchmarks/runtime_v03_benchmark.py --output runtime-v03-internal.json
+          python -m pip wheel --no-build-isolation --no-deps . -w dist
+          python -m venv /tmp/signalcore-wheel
+          /tmp/signalcore-wheel/bin/python -m pip install --no-index dist/signalcore_runtime-0.3.0-py3-none-any.whl
+          cd /tmp
+          /tmp/signalcore-wheel/bin/signalcore --help >/dev/null
+          /tmp/signalcore-wheel/bin/python - <<'PY'
+          from signalcore_runtime.cli import skill_root
+          assert (skill_root() / 'SKILL.md').is_file()
+          PY
+      - name: Commit ordinary source
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Implement SignalCore 0.3.0 unified runtime'
+          git push origin HEAD:agent/signalcore-v0.3.0-unified
