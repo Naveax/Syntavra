@@ -3,6 +3,8 @@ name: Apply verified SignalCore 0.2.0 source
 on:
   push:
     branches: [feature/signalcore-v0.2-runtime]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +16,7 @@ env:
 
 jobs:
   apply:
-    if: ${{ !contains(github.event.head_commit.message, 'Implement SignalCore 0.2.0 runtime intelligence plane') }}
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, 'Implement SignalCore 0.2.0 runtime intelligence plane') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
