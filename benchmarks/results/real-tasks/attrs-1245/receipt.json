@@ -2,18 +2,11 @@
   "artifacts": {
     "evidence": [
       {
-        "bytes": 18751,
-        "handle": "sc://sha256/d3ee6fd933517d21e5832c7a46360c4d4c402568b979f1f2108cbe20ed71ef4d",
-        "path": "evidence/d3ee6fd933517d21e5832c7a46360c4d4c402568b979f1f2108cbe20ed71ef4d.txt",
-        "role": "baseline-tests",
-        "sha256": "d3ee6fd933517d21e5832c7a46360c4d4c402568b979f1f2108cbe20ed71ef4d"
-      },
-      {
-        "bytes": 100,
-        "handle": "sc://sha256/4c544be295b5bc75d7eaccdd88969e0755d0125a814a1ea66c3374df2a081dac",
-        "path": "evidence/4c544be295b5bc75d7eaccdd88969e0755d0125a814a1ea66c3374df2a081dac.txt",
-        "role": "patched-tests",
-        "sha256": "4c544be295b5bc75d7eaccdd88969e0755d0125a814a1ea66c3374df2a081dac"
+        "bytes": 566,
+        "handle": "sc://sha256/518bd5ecafd56d4a6fb93bf9a4816019667ef292051c397acae6afcca27d15f3",
+        "path": "evidence/518bd5ecafd56d4a6fb93bf9a4816019667ef292051c397acae6afcca27d15f3.txt",
+        "role": "test-transition",
+        "sha256": "518bd5ecafd56d4a6fb93bf9a4816019667ef292051c397acae6afcca27d15f3"
       },
       {
         "bytes": 2837,
@@ -104,7 +97,7 @@
   "result": {
     "baseline_commit": "d3d3c836295f288e50f806e196a5afad70c7095d",
     "baseline_tests": {
-      "evidence_handle": "sc://sha256/d3ee6fd933517d21e5832c7a46360c4d4c402568b979f1f2108cbe20ed71ef4d",
+      "evidence_handle": "sc://sha256/518bd5ecafd56d4a6fb93bf9a4816019667ef292051c397acae6afcca27d15f3",
       "failed": 12,
       "passed": 19,
       "total": 31
@@ -122,7 +115,7 @@
     },
     "patched_commit": "5fcf0b27b1a74f4d8addb261c9d99060dfee3b76",
     "patched_tests": {
-      "evidence_handle": "sc://sha256/4c544be295b5bc75d7eaccdd88969e0755d0125a814a1ea66c3374df2a081dac",
+      "evidence_handle": "sc://sha256/518bd5ecafd56d4a6fb93bf9a4816019667ef292051c397acae6afcca27d15f3",
       "failed": 0,
       "passed": 31,
       "total": 31
