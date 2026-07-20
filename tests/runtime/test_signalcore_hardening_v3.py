@@ -87,9 +87,12 @@ class SignalCoreHardeningV3Tests(unittest.TestCase):
             self.assertTrue(verified["ok"])
             self.assertEqual(verified["entries"], 5)
             self.assertEqual(verified["attestation"], "HMAC")
-            with sqlite3.connect(path) as db:
+            db = sqlite3.connect(path)
+            try:
                 db.execute("UPDATE usage_receipt_ledger SET raw_usage_json='{}' WHERE sequence=3")
                 db.commit()
+            finally:
+                db.close()
             self.assertFalse(ledger.verify(require_hmac=True)["ok"])
 
     def test_semantic_temporal_retrieval_prefers_current_decision(self):
