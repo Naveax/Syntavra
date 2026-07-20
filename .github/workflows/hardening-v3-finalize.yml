@@ -1,0 +1,151 @@
+name: Finalize SignalCore Hardening V3
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONWARNINGS: error::ResourceWarning
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/adaptive-context-v04'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/adaptive-context-v04
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Apply hardening and V2 compatibility patches
+        run: |
+          python tools/apply_hardening_v3.py
+          python tools/apply_hardening_v3_compat.py
+      - name: Compile source
+        run: python -m compileall -q signalcore_runtime tools tests benchmarks
+      - name: Run Hardening V3 unit suite
+        run: python -m unittest discover -s tests/runtime -p 'test_signalcore_hardening_v3.py' -q
+      - name: Run complete runtime suite
+        run: python -m unittest discover -s tests/runtime -q
+      - name: Run platform and Roblox profile gates
+        run: |
+          python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+          python -m unittest discover -s tests/roblox_profile -q
+      - name: Run Hardening V3 benchmark
+        run: |
+          mkdir -p benchmarks/results/hardening-v3
+          python benchmarks/hardening_v3_benchmark.py --output benchmarks/results/hardening-v3/internal.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('benchmarks/results/hardening-v3/internal.json').read_text())
+          assert result['claim'] == 'SUPERIORITY_NOT_PROVEN'
+          assert result['concurrency']['success_rate'] == 1.0
+          assert result['concurrency']['all_roundtrips'] is True
+          assert result['concurrency']['all_searches'] is True
+          assert result['provider_receipt_ledger']['ok'] is True
+          assert result['provider_receipt_ledger']['attestation'] == 'HMAC'
+          assert result['semantic_temporal_retrieval']['ok'] is True
+          assert result['security_scan']['injection_risk'] is True
+          assert result['security_scan']['redaction_pass'] is True
+          assert result['host_interception']['captures'] > 0
+          assert result['readiness_gate']['ten_of_ten'] is False
+          assert 'real-task-corpus' in result['readiness_gate']['failed']
+          assert 'competitor-arms' in result['readiness_gate']['failed']
+          PY
+      - name: Run MCP hardening smoke
+        run: |
+          python - <<'PY'
+          import tempfile
+          from pathlib import Path
+          from signalcore_runtime.mcp_server import MCPServer
+          with tempfile.TemporaryDirectory() as temp:
+              root = Path(temp)
+              skill = root / 'skill'
+              skill.mkdir()
+              (skill / 'SKILL.md').write_text('name: signal-core\n')
+              server = MCPServer(
+                  project=Path('.').resolve(),
+                  state_root=root / 'state',
+                  skill_root=skill,
+                  codex_home=root / '.codex',
+                  host='codex',
+              )
+              names = {tool['name'] for tool in server.tools()}
+              required = {
+                  'signalcore.output.capture',
+                  'signalcore.output.search',
+                  'signalcore.output.reveal',
+                  'signalcore.output.verify',
+                  'signalcore.usage.record',
+                  'signalcore.usage.verify',
+                  'signalcore.session.search',
+                  'signalcore.session.semantic_context',
+              }
+              assert required <= names
+              captured = server.call_tool('signalcore.output.capture', {
+                  'stdout': 'INFO x\n' * 2000,
+                  'command': 'service logs',
+                  'scope_key': 'smoke',
+              })
+              assert server.call_tool('signalcore.output.verify', {'artifact_id': captured['artifact_id']})['ok']
+          PY
+      - name: Remove one-shot integration machinery
+        run: |
+          rm .github/workflows/integrate-hardening-v3.yml
+          rm .github/workflows/hardening-v3-continuation.yml
+          rm .github/workflows/hardening-v3-runtime-diagnostic.yml
+          rm .github/workflows/hardening-v3-finalize.yml
+          rm tools/apply_hardening_v3.py
+          rm tools/apply_hardening_v3_compat.py
+      - name: Regenerate release manifest
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path('.')
+          generated = {
+              'fusion-release-smoke.json',
+              'release-smoke.json',
+              'platform-registry.json',
+              'native-dry-run.json',
+          }
+          rows = []
+          for path in root.rglob('*'):
+              if not path.is_file():
+                  continue
+              relative = path.relative_to(root)
+              if any(part in {'.git', '.signalcore', '__pycache__', '.pytest_cache'} for part in relative.parts):
+                  continue
+              if (path.name == 'MANIFEST.sha256' and path.parent == root) or path.name in generated or path.suffix == '.pyc':
+                  continue
+              rows.append((relative.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+          root.joinpath('MANIFEST.sha256').write_text(
+              ''.join(f'{digest}  {name}\n' for name, digest in sorted(rows)),
+              encoding='utf-8',
+          )
+          PY
+      - name: Run release validators
+        run: |
+          python tools/validate.py
+          python tools/validate_runtime.py
+          python tools/validate_roblox_profile.py
+          python tools/verify_claims.py
+          python tools/validate_release.py --profile 5x --smoke --output release-smoke.json
+      - name: Commit verified Hardening V3 integration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Integrate SignalCore hardening v3'
+          git push origin HEAD:agent/adaptive-context-v04
