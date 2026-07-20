@@ -9,7 +9,9 @@ from typing import Any, Mapping
 
 from .competitive_fabric import CompetitiveContextFabric
 from .evidence import EvidenceStore
+from .host_installation import HostInstallationManager
 from .provider_gateway import ProviderGateway, ProviderPlan
+from .provider_proxy import ProviderProxyRuntime, ProxyConfig
 from .usage_receipt_ledger import UsageReceiptLedger
 from .util import stable_project_id
 
@@ -38,6 +40,14 @@ def _state_root(args: argparse.Namespace) -> Path:
     if args.state_root:
         return Path(args.state_root).resolve(strict=False)
     return _project(args) / ".signalcore" / "runtime-v3"
+
+
+def _skill_root(args: argparse.Namespace) -> Path:
+    configured = getattr(args, "skill_root", None)
+    if configured:
+        return Path(configured).resolve(strict=True)
+    bundled = Path(__file__).resolve().parent.parent / "skills" / "signal-core"
+    return bundled.resolve(strict=True)
 
 
 def _read_text(path: str | None, *, fallback: str = "") -> str:
@@ -93,6 +103,15 @@ def _gateway(args: argparse.Namespace) -> ProviderGateway:
     return ProviderGateway(state / "provider-gateway.sqlite3", evidence=evidence, usage_ledger=usage)
 
 
+def _installer(args: argparse.Namespace) -> HostInstallationManager:
+    return HostInstallationManager(
+        _state_root(args) / "host-installations.sqlite3",
+        project=_project(args),
+        skill_root=_skill_root(args),
+        home=Path(args.home).resolve(strict=False) if getattr(args, "home", None) else None,
+    )
+
+
 def command_fabric(args: argparse.Namespace) -> int:
     fabric = _fabric(args)
     if args.fabric_action == "profile":
@@ -124,6 +143,16 @@ def command_fabric(args: argparse.Namespace) -> int:
             result = fabric.platforms.all_plans(project=_project(args), scope=args.scope)
         else:
             result = fabric.platforms.plan(args.host_name or args.host, project=_project(args), scope=args.scope)
+    elif args.fabric_action == "install":
+        result = _installer(args).apply(args.host_name, scope=args.scope, dry_run=args.dry_run)
+    elif args.fabric_action == "verify-install":
+        result = _installer(args).verify(args.host_name, scope=args.scope)
+        _write_json(args.output, result)
+        return 0 if result["ok"] else 3
+    elif args.fabric_action == "rollback-install":
+        result = _installer(args).rollback(args.transaction_id)
+    elif args.fabric_action == "installations":
+        result = _installer(args).transactions(host=args.host_name or "", limit=args.limit)
     elif args.fabric_action == "doctor":
         result = fabric.doctor()
     elif args.fabric_action == "insights":
@@ -178,6 +207,50 @@ def command_provider(args: argparse.Namespace) -> int:
         if result is None:
             _write_json(args.output, {"hit": False})
             return 4
+    elif args.provider_action == "proxy":
+        config = ProxyConfig(
+            provider=args.provider,
+            upstream_base=args.upstream,
+            listen_host=args.listen_host,
+            listen_port=args.listen_port,
+            credential_env=args.credential_env,
+            credential_header=args.credential_header,
+            credential_prefix=args.credential_prefix,
+            control_token_env=args.control_token_env,
+            allow_remote=args.allow_remote,
+            allow_insecure_upstream=args.allow_insecure_upstream,
+            cache_policy=args.cache_policy,
+            replay_ttl_seconds=args.replay_ttl_seconds,
+            prompt_cache_ttl_seconds=args.prompt_cache_ttl_seconds,
+            timeout_seconds=args.timeout_seconds,
+            max_request_bytes=args.max_request_bytes,
+            max_buffered_response_bytes=args.max_response_bytes,
+        )
+        config.validate()
+        if args.dry_run:
+            result = {"ok": True, "config": asdict(config)}
+        else:
+            if args.output:
+                raise ValueError("--output is supported only with --dry-run for a long-running proxy")
+            runtime = ProviderProxyRuntime(
+                config,
+                gateway=gateway,
+                insight_path=_state_root(args) / "provider-proxy-insights.sqlite3",
+            )
+            host, port = runtime.start()
+            _emit({
+                "event": "PROVIDER_PROXY_READY",
+                "provider": ProviderGateway.capabilities(args.provider)["provider"],
+                "listen": {"host": host, "port": port},
+                "upstream_origin_hash": runtime.status()["upstream_origin_hash"],
+                "cache_policy": args.cache_policy,
+            })
+            sys.stdout.flush()
+            try:
+                runtime.wait()
+            finally:
+                runtime.shutdown()
+            return 0
     elif args.provider_action == "stats":
         result = gateway.stats()
     elif args.provider_action == "verify":
@@ -197,7 +270,7 @@ def add_competitive_commands(
 ) -> None:
     fabric = subparsers.add_parser(
         "fabric",
-        help="Unified routing, compaction, cache, platform, and analytics control plane",
+        help="Unified routing, compaction, cache, platform, installation, and analytics control plane",
     )
     fs = fabric.add_subparsers(dest="fabric_action", required=True)
 
@@ -233,6 +306,34 @@ def add_competitive_commands(
     platform.add_argument("--scope", choices=("project", "user"), default="project")
     platform.add_argument("--output")
 
+    install = fs.add_parser("install", help="Atomically install SignalCore into a host")
+    install.add_argument("host_name")
+    install.add_argument("--scope", choices=("project", "user"), default="project")
+    install.add_argument("--skill-root")
+    install.add_argument("--home")
+    install.add_argument("--dry-run", action="store_true")
+    install.add_argument("--output")
+
+    verify_install = fs.add_parser("verify-install", help="Verify an installed host integration")
+    verify_install.add_argument("host_name")
+    verify_install.add_argument("--scope", choices=("project", "user"), default="project")
+    verify_install.add_argument("--skill-root")
+    verify_install.add_argument("--home")
+    verify_install.add_argument("--output")
+
+    rollback_install = fs.add_parser("rollback-install", help="Rollback one host installation transaction")
+    rollback_install.add_argument("transaction_id")
+    rollback_install.add_argument("--skill-root")
+    rollback_install.add_argument("--home")
+    rollback_install.add_argument("--output")
+
+    installations = fs.add_parser("installations", help="List auditable host installation transactions")
+    installations.add_argument("--host-name")
+    installations.add_argument("--limit", type=int, default=20)
+    installations.add_argument("--skill-root")
+    installations.add_argument("--home")
+    installations.add_argument("--output")
+
     doctor = fs.add_parser("doctor", help="Diagnose competitive runtime coverage")
     doctor.add_argument("--output")
 
@@ -244,7 +345,7 @@ def add_competitive_commands(
 
     provider = subparsers.add_parser(
         "provider",
-        help="Provider-neutral prompt-cache, exact capture, replay, and usage gateway",
+        help="Provider-neutral prompt-cache, exact capture, replay, proxy, and usage gateway",
     )
     ps = provider.add_subparsers(dest="provider_action", required=True)
 
@@ -278,6 +379,26 @@ def add_competitive_commands(
     replay_target.add_argument("--plan")
     replay_target.add_argument("--cache-key")
     replay.add_argument("--output")
+
+    proxy = ps.add_parser("proxy", help="Run a credential-isolated fixed-origin provider reverse proxy")
+    proxy.add_argument("--provider", required=True)
+    proxy.add_argument("--upstream", required=True)
+    proxy.add_argument("--listen-host", default="127.0.0.1")
+    proxy.add_argument("--listen-port", type=int, default=8787)
+    proxy.add_argument("--credential-env", default="")
+    proxy.add_argument("--credential-header", default="")
+    proxy.add_argument("--credential-prefix", default="")
+    proxy.add_argument("--control-token-env", default="SIGNALCORE_PROXY_CONTROL_TOKEN")
+    proxy.add_argument("--allow-remote", action="store_true")
+    proxy.add_argument("--allow-insecure-upstream", action="store_true")
+    proxy.add_argument("--cache-policy", choices=("off", "auto", "read", "read-write"), default="auto")
+    proxy.add_argument("--replay-ttl-seconds", type=int, default=900)
+    proxy.add_argument("--prompt-cache-ttl-seconds", type=int, default=300)
+    proxy.add_argument("--timeout-seconds", type=float, default=180)
+    proxy.add_argument("--max-request-bytes", type=int, default=16 * 1024 * 1024)
+    proxy.add_argument("--max-response-bytes", type=int, default=64 * 1024 * 1024)
+    proxy.add_argument("--dry-run", action="store_true")
+    proxy.add_argument("--output")
 
     stats = ps.add_parser("stats")
     stats.add_argument("--output")
