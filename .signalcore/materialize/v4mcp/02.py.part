@@ -1,0 +1,90 @@
+                {"session_id": {"type": "string"}, "metadata": {"type": "object"}}, ["session_id"],
+            ),
+            tool(
+                "signalcore.session.fork", "Fork a session from a verified checkpoint",
+                {"session_id": {"type": "string"}, "metadata": {"type": "object"}}, ["session_id"],
+            ),
+            tool(
+                "signalcore.session.merge", "Merge verified parent sessions",
+                {"session_ids": {"type": "array", "items": {"type": "string"}}, "metadata": {"type": "object"}}, ["session_ids"],
+            ),
+            tool(
+                "signalcore.output.capture", "Capture tool output through exact externalization",
+                {"stdout": {"type": "string"}, "stderr": {"type": "string"}, "command": {"type": "string"}, "tool_name": {"type": "string"}, "path": {"type": "string"}, "scope_key": {"type": "string"}},
+            ),
+            tool(
+                "signalcore.output.search", "Search exact externalized tool output",
+                {"query": {"type": "string"}, "artifact_id": {"type": "string"}, "scope_key": {"type": "string"}, "limit": {"type": "integer"}}, ["query"],
+            ),
+            tool(
+                "signalcore.output.reveal", "Progressively reveal selected externalized evidence",
+                {"artifact_id": {"type": "string"}, "lens": {"type": "string"}, "query": {"type": "string"}, "budget_bytes": {"type": "integer"}, "continuation_token": {"type": "string"}},
+            ),
+            tool(
+                "signalcore.output.verify", "Verify exact reconstruction and Merkle integrity",
+                {"artifact_id": {"type": "string"}}, ["artifact_id"],
+            ),
+            tool("signalcore.output.stats", "Inspect externalization statistics"),
+            tool(
+                "signalcore.usage.record", "Record an attested provider usage receipt",
+                {"task_id": {"type": "string"}, "arm_id": {"type": "string"}, "repetition": {"type": "integer"}, "cache_mode": {"type": "string"}, "provider": {"type": "string"}, "request_id": {"type": "string"}, "provider_response": {"type": "object"}, "usage": {"type": "object"}, "quota_cost": {"type": "number"}, "hardware_hash": {"type": "string"}},
+                ["task_id", "arm_id", "repetition", "cache_mode", "provider", "request_id", "provider_response", "usage", "quota_cost", "hardware_hash"],
+            ),
+            tool("signalcore.usage.verify", "Verify the provider usage hash chain and signatures", {"require_hmac": {"type": "boolean"}}),
+            tool(
+                "signalcore.session.search", "Semantic and temporal search over exact session events",
+                {"session_id": {"type": "string"}, "query": {"type": "string"}, "limit": {"type": "integer"}, "include_superseded": {"type": "boolean"}}, ["session_id", "query"],
+            ),
+            tool(
+                "signalcore.session.semantic_context", "Build query-conditioned long-session context",
+                {"session_id": {"type": "string"}, "query": {"type": "string"}, "budget_bytes": {"type": "integer"}, "include_superseded": {"type": "boolean"}}, ["session_id", "query"],
+            ),
+            tool(
+                "signalcore.output.govern", "Render a correctness-preserving bounded answer",
+                {"payload": {"type": "object"}, "profile": {"type": "string"}, "contract": {"type": "string"}}, ["payload"],
+            ),
+            tool(
+                "signalcore.fabric.profile", "Select a minimal task-conditioned MCP tool surface",
+                {"task": {"type": "string"}, "profile": {"type": "string"}},
+            ),
+            tool(
+                "signalcore.fabric.route", "Choose the safest exact-preserving execution route",
+                {"command": command_schema, "network_untrusted": {"type": "boolean"}, "repeated": {"type": "boolean"}}, ["command"],
+            ),
+            tool(
+                "signalcore.fabric.compact", "Compact common command output while retaining failures and security signals",
+                {"command": command_schema, "stdout": {"type": "string"}, "stderr": {"type": "string"}, "budget_bytes": {"type": "integer"}}, ["command", "stdout"],
+            ),
+            tool(
+                "signalcore.fabric.cache_align", "Build a stable provider-prefix cache fingerprint",
+                {"messages": {"type": "array", "items": {"type": "object"}}, "keep_tail": {"type": "integer"}}, ["messages"],
+            ),
+            tool(
+                "signalcore.fabric.platform_plan", "Generate installation and enforcement plans for one or every host",
+                {"host": {"type": "string"}, "scope": {"type": "string"}, "all": {"type": "boolean"}},
+            ),
+            tool("signalcore.fabric.doctor", "Diagnose competitive-fabric runtime coverage"),
+            tool(
+                "signalcore.fabric.insights", "Inspect local savings, reliability, cache, and routing analytics",
+                {"since_seconds": {"type": "number"}},
+            ),
+        ]
+
+    def exposed_tools(self) -> list[dict[str, Any]]:
+        catalog = self.tools()
+        requested = os.environ.get("SIGNALCORE_MCP_PROFILE", "optimized").strip().casefold() or "optimized"
+        task = os.environ.get("SIGNALCORE_SESSION_TASK", "")
+        plan = self.fabric.profile(task, (row["name"] for row in catalog), requested_profile=requested)
+        selected = set(plan["selected_tools"])
+        filtered = [row for row in catalog if row["name"] in selected]
+        return filtered or catalog
+
+    def _index(self) -> StructuralIndex:
+        index = StructuralIndex(
+            self.state_root / "structural.sqlite3",
+            repository_root=self.project,
+            repository_id=stable_project_id(self.project),
+        )
+        index.index()
+        return index
+
