@@ -4,119 +4,93 @@ import difflib
 import json
 import re
 import secrets
-import shlex
 import sqlite3
 import time
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping
 
+from .state import StateDB
 from .tool_externalization_analysis import ExternalizationAnalysisMixin
 from .tool_externalization_types import (
     EvidenceLike, ExternalizationPolicy, ExternalizedArtifact, RevealPage,
-    SearchPack, SegmentHit, ToolPayload, _ERROR, _INJECTION, _WORD,
-    _canonical, _merkle, _merkle_proof, _sha256, _verify_merkle_proof,
+    SegmentHit, ToolPayload, _INJECTION, _Segment, _canonical, _merkle,
+    _merkle_proof, _sha256, _verify_merkle_proof,
 )
 
 
 class ToolOutputExternalizer(ExternalizationAnalysisMixin):
-    """Lossless, searchable and progressively revealable tool-output virtualization."""
+    """Exact-first local tool-output virtualization with search, reveal and lineage."""
 
     schema_version = 2
+
     def __init__(self, path: Path, *, evidence: EvidenceLike, policy: ExternalizationPolicy | None = None):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.state = StateDB(path)
+        self.path = path
         self.evidence = evidence
         self.policy = policy or ExternalizationPolicy()
         self._fts5 = False
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path, timeout=30.0, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA foreign_keys=ON")
-        db.execute("PRAGMA busy_timeout=30000")
-        return db
-
     @contextmanager
     def _db(self):
-        db = self._connect()
-        try:
+        with self.state.read() as db:
             yield db
-        finally:
-            db.close()
 
     def _initialize(self) -> None:
-        with self._db() as db:
-            db.execute("PRAGMA journal_mode=WAL")
-            db.execute("PRAGMA synchronous=NORMAL")
+        with self.state.transaction(immediate=True) as db:
             db.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS ext_artifacts(
-                  artifact_id TEXT PRIMARY KEY, scope_key TEXT NOT NULL, stream_key TEXT NOT NULL,
-                  identity_key TEXT NOT NULL, content_hash TEXT NOT NULL, family TEXT NOT NULL,
-                  mode TEXT NOT NULL, preview TEXT NOT NULL, original_bytes INTEGER NOT NULL,
-                  visible_bytes INTEGER NOT NULL, exact_handle TEXT NOT NULL, segment_count INTEGER NOT NULL,
-                  merkle_root TEXT NOT NULL, policy_hash TEXT NOT NULL, quality_gate_passed INTEGER NOT NULL,
-                  baseline_artifact_id TEXT, injection_risk INTEGER NOT NULL, facets_json TEXT NOT NULL,
-                  metadata_json TEXT NOT NULL, created_at REAL NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS ext_artifacts_scope_stream_idx ON ext_artifacts(scope_key,stream_key,created_at DESC);
-                CREATE INDEX IF NOT EXISTS ext_artifacts_content_idx ON ext_artifacts(content_hash);
+                    artifact_id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,stream_key TEXT NOT NULL,identity_key TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,family TEXT NOT NULL,mode TEXT NOT NULL,preview TEXT NOT NULL,
+                    original_bytes INTEGER NOT NULL,visible_bytes INTEGER NOT NULL,exact_handle TEXT NOT NULL,
+                    segment_count INTEGER NOT NULL,merkle_root TEXT NOT NULL,policy_hash TEXT NOT NULL,
+                    quality_gate_passed INTEGER NOT NULL,baseline_artifact_id TEXT,injection_risk INTEGER NOT NULL,
+                    facets_json TEXT NOT NULL,metadata_json TEXT NOT NULL,created_at REAL NOT NULL);
+                CREATE INDEX IF NOT EXISTS ext_artifacts_scope_stream ON ext_artifacts(scope_key,stream_key,created_at DESC);
                 CREATE TABLE IF NOT EXISTS ext_segments(
-                  artifact_id TEXT NOT NULL, segment_index INTEGER NOT NULL, start_byte INTEGER NOT NULL,
-                  end_byte INTEGER NOT NULL, start_line INTEGER NOT NULL, end_line INTEGER NOT NULL,
-                  content_hash TEXT NOT NULL, exact_handle TEXT NOT NULL, kind TEXT NOT NULL,
-                  salience REAL NOT NULL, critical INTEGER NOT NULL, index_text TEXT NOT NULL,
-                  PRIMARY KEY(artifact_id,segment_index),
-                  FOREIGN KEY(artifact_id) REFERENCES ext_artifacts(artifact_id) ON DELETE CASCADE
-                );
+                    artifact_id TEXT NOT NULL,segment_index INTEGER NOT NULL,start_byte INTEGER NOT NULL,end_byte INTEGER NOT NULL,
+                    start_line INTEGER NOT NULL,end_line INTEGER NOT NULL,content_hash TEXT NOT NULL,exact_handle TEXT NOT NULL,
+                    kind TEXT NOT NULL,salience REAL NOT NULL,critical INTEGER NOT NULL,index_text TEXT NOT NULL,
+                    PRIMARY KEY(artifact_id,segment_index),FOREIGN KEY(artifact_id) REFERENCES ext_artifacts(artifact_id) ON DELETE CASCADE);
                 CREATE TABLE IF NOT EXISTS ext_seen(
-                  scope_key TEXT NOT NULL, identity_key TEXT NOT NULL, artifact_id TEXT NOT NULL,
-                  seen_count INTEGER NOT NULL, first_seen REAL NOT NULL, last_seen REAL NOT NULL,
-                  PRIMARY KEY(scope_key,identity_key)
-                );
+                    scope_key TEXT NOT NULL,identity_key TEXT NOT NULL,artifact_id TEXT NOT NULL,seen_count INTEGER NOT NULL,
+                    first_seen REAL NOT NULL,last_seen REAL NOT NULL,PRIMARY KEY(scope_key,identity_key));
                 CREATE TABLE IF NOT EXISTS ext_continuations(
-                  token_hash TEXT PRIMARY KEY, artifact_id TEXT NOT NULL, lens TEXT NOT NULL,
-                  query TEXT NOT NULL, segment_indexes_json TEXT NOT NULL, segment_position INTEGER NOT NULL,
-                  byte_offset INTEGER NOT NULL, expires_at REAL NOT NULL, consumed INTEGER NOT NULL DEFAULT 0,
-                  FOREIGN KEY(artifact_id) REFERENCES ext_artifacts(artifact_id) ON DELETE CASCADE
-                );
+                    token_hash TEXT PRIMARY KEY,artifact_id TEXT NOT NULL,lens TEXT NOT NULL,query TEXT NOT NULL,
+                    segment_indexes_json TEXT NOT NULL,segment_position INTEGER NOT NULL,byte_offset INTEGER NOT NULL,
+                    expires_at REAL NOT NULL,consumed INTEGER NOT NULL DEFAULT 0);
                 """
             )
             try:
-                db.execute(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS ext_search USING fts5("
-                    "artifact_id UNINDEXED,scope_key UNINDEXED,segment_index UNINDEXED,kind UNINDEXED,content,tokenize='unicode61')"
-                )
+                db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS ext_search USING fts5(artifact_id UNINDEXED,scope_key UNINDEXED,segment_index UNINDEXED,kind UNINDEXED,content,tokenize='unicode61')")
                 self._fts5 = True
             except sqlite3.DatabaseError:
                 self._fts5 = False
 
-    def _lookup_seen(self, scope_key: str, identity_key: str) -> sqlite3.Row | None:
+    def _lookup_seen(self, scope: str, identity: str) -> dict[str, Any] | None:
         with self._db() as db:
-            return db.execute(
-                "SELECT s.seen_count,a.* FROM ext_seen s JOIN ext_artifacts a ON a.artifact_id=s.artifact_id WHERE s.scope_key=? AND s.identity_key=?",
-                (scope_key, identity_key),
+            row = db.execute(
+                "SELECT a.*,s.seen_count FROM ext_seen s JOIN ext_artifacts a ON a.artifact_id=s.artifact_id WHERE s.scope_key=? AND s.identity_key=?",
+                (scope, identity),
             ).fetchone()
+        return dict(row) if row else None
 
-    def _touch_seen(self, scope_key: str, identity_key: str, artifact_id: str) -> int:
+    def _touch_seen(self, scope: str, identity: str, artifact_id: str) -> int:
         now = time.time()
-        with self._db() as db:
-            db.execute("BEGIN IMMEDIATE")
+        with self.state.transaction(immediate=True) as db:
             db.execute(
-                "INSERT INTO ext_seen(scope_key,identity_key,artifact_id,seen_count,first_seen,last_seen) VALUES(?,?,?,?,?,?) "
-                "ON CONFLICT(scope_key,identity_key) DO UPDATE SET artifact_id=excluded.artifact_id,seen_count=ext_seen.seen_count+1,last_seen=excluded.last_seen",
-                (scope_key, identity_key, artifact_id, 1, now, now),
+                "INSERT INTO ext_seen VALUES(?,?,?,?,?,?) ON CONFLICT(scope_key,identity_key) DO UPDATE SET "
+                "artifact_id=excluded.artifact_id,seen_count=ext_seen.seen_count+1,last_seen=excluded.last_seen",
+                (scope, identity, artifact_id, 1, now, now),
             )
-            count = int(db.execute("SELECT seen_count FROM ext_seen WHERE scope_key=? AND identity_key=?", (scope_key, identity_key)).fetchone()[0])
-            db.commit()
-            return count
+            return int(db.execute("SELECT seen_count FROM ext_seen WHERE scope_key=? AND identity_key=?", (scope, identity)).fetchone()[0])
 
-    def _latest(self, scope_key: str, stream_key: str) -> dict[str, Any] | None:
+    def _latest(self, scope: str, stream: str) -> dict[str, Any] | None:
         with self._db() as db:
-            row = db.execute("SELECT * FROM ext_artifacts WHERE scope_key=? AND stream_key=? ORDER BY created_at DESC LIMIT 1", (scope_key, stream_key)).fetchone()
+            row = db.execute("SELECT * FROM ext_artifacts WHERE scope_key=? AND stream_key=? ORDER BY created_at DESC LIMIT 1", (scope, stream)).fetchone()
         return dict(row) if row else None
 
     def _artifact_from_row(self, row: Mapping[str, Any], *, repeated: bool = False, seen_count: int = 1, preview_override: str | None = None, mode_override: str | None = None) -> ExternalizedArtifact:
@@ -194,7 +168,8 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
             mode = "passthrough-captured"
 
         critical_indexes = [segment.index for segment in segments if segment.critical]
-        quality_gate = all(self._excerpt(segments[index].index_text.strip()) in preview for index in critical_indexes[: self.policy.max_critical_segments])
+        expected_critical = [self._redact(self._excerpt(segments[index].index_text.strip())) for index in critical_indexes[: self.policy.max_critical_segments]]
+        quality_gate = all(item in preview for item in expected_critical)
         if len(critical_indexes) > self.policy.max_critical_segments:
             quality_gate = quality_gate and "Critical evidence:" in preview
 
@@ -292,6 +267,7 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
 
     @staticmethod
     def _tokens(text: str) -> set[str]:
+        from .tool_externalization_types import _WORD
         return {token.casefold() for token in _WORD.findall(text) if len(token) > 1}
 
     @staticmethod
@@ -491,70 +467,35 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
             "artifact_handle": value["exact_handle"],
         }
 
-    @staticmethod
-    def verify_segment_proof(leaf_hash: str, proof: Sequence[Mapping[str, str]], merkle_root: str) -> bool:
-        return _verify_merkle_proof(leaf_hash, proof, merkle_root)
-
-    def lineage(self, artifact_id: str, *, limit: int = 128) -> list[dict[str, Any]]:
-        output: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        current: str | None = artifact_id
-        while current and len(output) < max(1, limit):
-            if current in seen:
-                raise ValueError("artifact lineage cycle detected")
-            seen.add(current)
-            value = self.artifact(current)
-            output.append({
-                "artifact_id": current, "baseline_artifact_id": value["baseline_artifact_id"],
-                "content_hash": value["content_hash"], "mode": value["mode"],
-                "original_bytes": value["original_bytes"], "created_at": value["created_at"],
-            })
-            current = value["baseline_artifact_id"]
-        return output
-
-    def search_pack(
-        self, query: str, *, artifact_id: str | None = None, scope_key: str | None = None,
-        budget_bytes: int = 4096, limit: int = 32,
-    ) -> SearchPack:
-        if budget_bytes < 256:
-            raise ValueError("search pack budget too small")
+    def search_pack(self, query: str, *, scope_key: str | None = None, artifact_id: str | None = None, budget_bytes: int = 8192, limit: int = 32) -> dict[str, Any]:
         hits = self.search(query, artifact_id=artifact_id, scope_key=scope_key, limit=limit)
-        sections: list[str] = []
+        output: list[str] = []
+        handles: list[str] = []
         used = 0
-        selected: list[SegmentHit] = []
-        fingerprints: set[str] = set()
-        complete = True
+        seen: set[tuple[str, int]] = set()
         for hit in hits:
-            normalized = re.sub(r"\b(?:0x[0-9a-f]+|\d+(?:\.\d+)?)\b", "<n>", hit.text, flags=re.I)
-            fingerprint = _sha256(normalized.encode("utf-8"))
-            if fingerprint in fingerprints:
+            key = (hit.artifact_id, hit.segment_index)
+            if key in seen:
                 continue
-            fingerprints.add(fingerprint)
-            section = f"[artifact={hit.artifact_id} segment={hit.segment_index} lines={hit.start_line}-{hit.end_line} kind={hit.kind} score={hit.score:.2f}]\n{self._redact(hit.text)}"
+            seen.add(key)
+            section = f"[artifact={hit.artifact_id} segment={hit.segment_index} lines={hit.start_line}-{hit.end_line} kind={hit.kind} score={hit.score:.2f}]\n{hit.text}"
             encoded = section.encode("utf-8")
-            separator = b"\n---\n" if sections else b""
+            separator = b"\n---\n" if output else b""
             if used + len(separator) + len(encoded) > budget_bytes:
-                complete = False
+                remaining = budget_bytes - used - len(separator)
+                if remaining > 80:
+                    section = encoded[:remaining].decode("utf-8", errors="ignore")
+                    output.append(section); used += len(separator) + len(section.encode("utf-8")); handles.append(hit.segment_handle)
                 break
-            sections.append(section); selected.append(hit); used += len(separator) + len(encoded)
-        content = "\n---\n".join(sections)
-        return SearchPack(
-            query, content, len(content.encode("utf-8")), len(selected),
-            tuple(dict.fromkeys(hit.artifact_id for hit in selected)),
-            tuple(dict.fromkeys(hit.segment_handle for hit in selected)), complete,
-        )
+            output.append(section); handles.append(hit.segment_handle); used += len(separator) + len(encoded)
+        return {"query": query, "content": "\n---\n".join(output), "visible_bytes": used, "segment_handles": handles, "hit_count": len(output), "exact_artifact_handles": sorted({hit.artifact_handle for hit in hits})}
 
     def stats(self) -> dict[str, Any]:
         with self._db() as db:
-            row = db.execute("SELECT COUNT(*) artifacts,COALESCE(SUM(original_bytes),0) original,COALESCE(SUM(visible_bytes),0) visible,COALESCE(SUM(quality_gate_passed),0) quality,COALESCE(SUM(injection_risk),0) injections FROM ext_artifacts").fetchone()
-            repeats = int(db.execute("SELECT COALESCE(SUM(seen_count-1),0) FROM ext_seen").fetchone()[0])
-            segments = int(db.execute("SELECT COUNT(*) FROM ext_segments").fetchone()[0])
+            row = db.execute("SELECT COUNT(*) captures,COALESCE(SUM(original_bytes),0) original,COALESCE(SUM(visible_bytes),0) visible,COALESCE(SUM(quality_gate_passed),0) quality,COALESCE(SUM(injection_risk),0) injections FROM ext_artifacts").fetchone()
+            repeats = db.execute("SELECT COALESCE(SUM(seen_count-1),0) FROM ext_seen").fetchone()[0]
+            segments = db.execute("SELECT COUNT(*) FROM ext_segments").fetchone()[0]
+            delta = db.execute("SELECT COUNT(*) FROM ext_artifacts WHERE mode='delta-externalized'").fetchone()[0]
             families = {str(item[0]): int(item[1]) for item in db.execute("SELECT family,COUNT(*) FROM ext_artifacts GROUP BY family")}
-            delta = int(db.execute("SELECT COUNT(*) FROM ext_artifacts WHERE mode='delta-externalized'").fetchone()[0])
         original = int(row["original"]); visible = int(row["visible"])
-        return {
-            "artifacts": int(row["artifacts"]), "segments": segments, "original_bytes": original, "visible_bytes": visible,
-            "reduction_ratio": 1 - visible / max(1, original), "quality_passes": int(row["quality"]),
-            "repeat_reads_elided": repeats, "delta_artifacts": delta, "injection_risks": int(row["injections"]),
-            "families": families, "fts5_enabled": self._fts5,
-        }
+        return {"artifacts": int(row["captures"]), "segments": int(segments), "original_bytes": original, "visible_bytes": visible, "reduction_ratio": 1 - visible / max(1, original), "quality_passes": int(row["quality"]), "injection_risks": int(row["injections"]), "repeat_reads_elided": int(repeats), "delta_artifacts": int(delta), "families": families, "fts5_enabled": self._fts5}
