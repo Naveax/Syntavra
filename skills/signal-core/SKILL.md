@@ -1,12 +1,12 @@
 ---
 name: signal-core
-version: "0.2.0"
+version: "0.3.0"
 description: >
   Execute complex coding-agent work through SignalCore's local runtime:
-  transitive structural impact, durable zero-poll jobs, streaming exact evidence,
-  bounded tool output, dependency-aware context packing, scoped memory, summary
-  DAG continuity, verifier binding, observed benchmark governance and truthful
-  hook/MCP capability negotiation. Skip trivial tasks where runtime overhead is
+  multi-language structural impact, durable zero-poll jobs, secure sandboxing,
+  reversible content compression, native host enforcement, bounded tool output,
+  production session continuity, verifier binding, output governance and
+  fail-closed public SignalBench comparisons. Skip trivial tasks where runtime overhead is
   greater than the likely savings.
 compatibility: "Codex, Claude Code, Gemini CLI, Antigravity, Windsurf, OpenCode, VS Code Copilot, MCP clients, Agent Skills hosts, and rule/AGENTS.md bridges."
 metadata:
@@ -53,4 +53,4 @@ Configured 20X/30X/100X workload shape is not performance proof. A 5X receipt re
 
 ## Version
 
-Public pre-release version: **0.2.0**.
+Public pre-release version: **0.3.0**.

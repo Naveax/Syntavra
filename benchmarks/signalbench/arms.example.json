@@ -1,0 +1,27 @@
+{
+  "schema_version": 3,
+  "arms": [
+    {
+      "arm_id": "plain-host",
+      "category": "baseline",
+      "command": ["python", "adapters/plain.py", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "version": "pin-exact-version",
+      "model": "pin-identical-model",
+      "reasoning": "pin-identical-reasoning",
+      "context_window": 258400,
+      "environment": {},
+      "adapter": "external-json-v1"
+    },
+    {
+      "arm_id": "signalcore-v030",
+      "category": "candidate",
+      "command": ["python", "adapters/signalcore.py", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "version": "0.3.0",
+      "model": "pin-identical-model",
+      "reasoning": "pin-identical-reasoning",
+      "context_window": 258400,
+      "environment": {},
+      "adapter": "external-json-v1"
+    }
+  ]
+}

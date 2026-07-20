@@ -1,3 +1,3 @@
-"""SignalCore 0.2.0 local-first runtime control plane."""
+"""SignalCore 0.3.0 unified local-first runtime control plane."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

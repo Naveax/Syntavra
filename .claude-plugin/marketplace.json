@@ -1,15 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "signalcore",
-  "version": "0.2.0",
-  "description": "SignalCore structural intelligence, exact evidence, zero-poll execution and context governance runtime",
+  "version": "0.3.0",
+  "description": "SignalCore unified structural intelligence, secure execution, reversible context and long-session runtime",
   "owner": {
     "name": "Naveax"
   },
   "plugins": [
     {
       "name": "signal-core",
-      "description": "Transitive impact, scoped memory, streaming output, durable jobs and fail-closed efficiency claims",
+      "description": "Multi-language impact, native enforcement, secure sandbox, reversible compression, durable sessions and public paired benchmarking",
       "author": {
         "name": "Naveax"
       },

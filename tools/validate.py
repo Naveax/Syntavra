@@ -10,7 +10,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "skills" / "signal-core"
-EXPECTED_VERSION = "0.2.0"
+EXPECTED_VERSION = "0.3.0"
 
 REQUIRED = [
     ROOT / "README.md",
@@ -26,7 +26,13 @@ REQUIRED = [
     ROOT / "BENCHMARKS.md",
     ROOT / "docs" / "benchmark" / "PROTOCOL.md",
     ROOT / "docs" / "security" / "THREAT_MODEL.md",
-    ROOT / "benchmarks" / "runtime_v02_benchmark.py",
+    ROOT / "benchmarks" / "runtime_v03_benchmark.py",
+    ROOT / "benchmarks" / "signalbench" / "README.md",
+    ROOT / "benchmarks" / "signalbench" / "tasks.example.json",
+    ROOT / "benchmarks" / "signalbench" / "arms.example.json",
+    ROOT / "docs" / "architecture" / "UNIFIED_RUNTIME_V03.md",
+    ROOT / "docs" / "operations" / "INSTALLER_AND_SANDBOX.md",
+    ROOT / "docs" / "benchmark" / "SIGNALBENCH.md",
     SKILL / "SKILL.md",
     SKILL / "data" / "platforms.json",
     SKILL / "scripts" / "platforms.py",
@@ -37,6 +43,15 @@ REQUIRED = [
     ROOT / "signalcore_runtime" / "cli.py",
     ROOT / "signalcore_runtime" / "hooks.py",
     ROOT / "signalcore_runtime" / "mcp_server.py",
+    ROOT / "signalcore_runtime" / "structural_parsers.py",
+    ROOT / "signalcore_runtime" / "installer.py",
+    ROOT / "signalcore_runtime" / "sandbox.py",
+    ROOT / "signalcore_runtime" / "compression.py",
+    ROOT / "signalcore_runtime" / "session_runtime.py",
+    ROOT / "signalcore_runtime" / "output_governor.py",
+    ROOT / "signalcore_runtime" / "signalbench.py",
+    ROOT / "signalcore_runtime" / "bundled_skill" / "SKILL.md",
+    ROOT / "signalcore_runtime" / "bundled_skill" / "hosts.json",
     ROOT / "tools" / "validate_runtime.py",
     ROOT / "tools" / "validate_release.py",
 ]
@@ -157,6 +172,9 @@ def main() -> int:
         json.dumps(versions, sort_keys=True),
     ))
     checks.append(("skill_identity", "name: signal-core" in skill_text, "canonical skill name"))
+    bundled_skill = (ROOT / "signalcore_runtime" / "bundled_skill" / "SKILL.md").read_text(encoding="utf-8")
+    checks.append(("bundled_skill", 'version: "0.3.0"' in bundled_skill, "wheel-installable skill"))
+    checks.append(("build_backend", pyproject.get("build-system", {}).get("build-backend") == "setuptools.build_meta", "PEP 517 wheel"))
     checks.append((
         "compatibility_link",
         "../../COMPATIBILITY.md" in skill_text and "../../../COMPATIBILITY.md" not in skill_text,

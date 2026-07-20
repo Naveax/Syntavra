@@ -1,33 +1,24 @@
 from __future__ import annotations
 
-import ast
+import json
 import math
 import re
 import time
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
 from .state import StateDB
-from .util import sha256_file
+from .structural_parsers import ParseResult, ParserRegistry
+from .util import canonical_json, sha256_bytes, sha256_file
 
 
-SOURCE_SUFFIXES = {
-    ".py", ".js", ".jsx", ".ts", ".tsx", ".rs", ".go", ".java", ".cs",
-    ".c", ".h", ".cpp", ".hpp", ".rb", ".php", ".lua", ".luau",
-}
 IGNORE_PARTS = {
     ".git", ".signalcore", "node_modules", ".venv", "venv", "dist", "build",
-    "target", "__pycache__", ".mypy_cache", ".pytest_cache",
+    "target", "__pycache__", ".mypy_cache", ".pytest_cache", ".next", ".gradle",
+    "vendor", "coverage", ".idea", ".vscode",
 }
-GENERIC_DEF = re.compile(
-    r"(?m)^\s*(?:def|class|fn|function|func|interface|trait|struct|enum|local\s+function)\s+([A-Za-z_$][\w$]*)"
-)
-GENERIC_CALL = re.compile(r"\b([A-Za-z_$][\w$]*)\s*\(")
-GENERIC_IMPORT = re.compile(
-    r"(?m)^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+)|use\s+([\w:]+)|require\(['\"]([^'\"]+))"
-)
 TEST_HINT_RE = re.compile(r"(?i)(?:^|/)(?:test|tests|spec|specs)(?:/|_)|(?:_test|\.spec|\.test)\.")
 
 
@@ -39,6 +30,9 @@ class Symbol:
     kind: str
     line: int
     end_line: int
+    signature: str = ""
+    confidence: float = 1.0
+    parser: str = ""
 
 
 @dataclass(frozen=True)
@@ -49,107 +43,27 @@ class Edge:
     target: str
     line: int
     confidence: float
-
-
-class _PythonVisitor(ast.NodeVisitor):
-    def __init__(self) -> None:
-        self.symbols: list[Symbol] = []
-        self.edges: list[Edge] = []
-        self.path = ""
-        self.parents: list[str] = []
-        self.import_aliases: dict[str, str] = {}
-
-    def parse(self, path: str, text: str) -> tuple[list[Symbol], list[Edge]]:
-        self.path = path
-        tree = ast.parse(text, filename=path)
-        self.visit(tree)
-        return self.symbols, self.edges
-
-    def _current(self) -> str:
-        return ".".join(self.parents) if self.parents else "<module>"
-
-    def _add_symbol(self, node: ast.AST, name: str, kind: str) -> None:
-        qualified = ".".join((*self.parents, name)) if self.parents else name
-        self.symbols.append(
-            Symbol(
-                self.path,
-                name,
-                qualified,
-                kind,
-                int(getattr(node, "lineno", 1)),
-                int(getattr(node, "end_lineno", getattr(node, "lineno", 1))),
-            )
-        )
-
-    def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self._add_symbol(node, node.name, "class")
-        self.parents.append(node.name)
-        self.generic_visit(node)
-        self.parents.pop()
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self._add_symbol(node, node.name, "function")
-        self.parents.append(node.name)
-        self.generic_visit(node)
-        self.parents.pop()
-
-    visit_AsyncFunctionDef = visit_FunctionDef
-
-    def visit_Import(self, node: ast.Import) -> None:
-        for alias in node.names:
-            local = alias.asname or alias.name.split(".")[0]
-            self.import_aliases[local] = alias.name
-            self.edges.append(Edge(self.path, self._current(), "imports", alias.name, node.lineno, 1.0))
-
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        module = node.module or ""
-        if module:
-            self.edges.append(Edge(self.path, self._current(), "imports", module, node.lineno, 1.0))
-        for alias in node.names:
-            local = alias.asname or alias.name
-            self.import_aliases[local] = f"{module}.{alias.name}" if module else alias.name
-
-    @staticmethod
-    def _call_name(node: ast.AST) -> str | None:
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute):
-            parts: list[str] = [node.attr]
-            current = node.value
-            while isinstance(current, ast.Attribute):
-                parts.append(current.attr)
-                current = current.value
-            if isinstance(current, ast.Name):
-                parts.append(current.id)
-            return ".".join(reversed(parts))
-        return None
-
-    def visit_Call(self, node: ast.Call) -> None:
-        target = self._call_name(node.func)
-        if target:
-            head = target.split(".")[0]
-            if head in self.import_aliases:
-                target = self.import_aliases[head] + target[len(head):]
-            self.edges.append(Edge(self.path, self._current(), "calls", target, node.lineno, 0.98))
-            short = target.rsplit(".", 1)[-1]
-            if short != target:
-                self.edges.append(Edge(self.path, self._current(), "calls-short", short, node.lineno, 0.88))
-        self.generic_visit(node)
+    target_path: str = ""
+    metadata: dict[str, Any] | None = None
 
 
 class StructuralIndex:
-    """Incremental multi-language symbol and reverse-impact graph.
+    """Incremental multi-language semantic and lexical structural graph.
 
-    Python uses AST. Other languages use conservative lexical adapters. The
-    reverse traversal follows callers transitively and ranks affected symbols by
-    depth, confidence and personalized PageRank rather than returning only direct
-    textual matches.
+    v0.3 resolves optional LSP/compiler snapshots first, Python AST second, and
+    language-specific adapters for JS/TS, Rust, Go, Java, C/C++, C#, Ruby, PHP,
+    and Lua/Luau. Every indexed file is content-addressed; branch switches and
+    timestamp-only changes do not force a full rebuild.
     """
 
     def __init__(self, path: Path, *, repository_root: Path, repository_id: str):
         self.root = repository_root.resolve(strict=True)
         self.repository_id = repository_id
         self.state = StateDB(path)
+        self.parsers = ParserRegistry(self.root)
+        self._initialize()
+
+    def _initialize(self) -> None:
         with self.state.transaction(immediate=True) as db:
             db.executescript(
                 """
@@ -157,6 +71,9 @@ class StructuralIndex:
                     path TEXT PRIMARY KEY,
                     content_hash TEXT NOT NULL,
                     language TEXT NOT NULL,
+                    parser TEXT NOT NULL DEFAULT '',
+                    semantic INTEGER NOT NULL DEFAULT 0,
+                    diagnostics_json TEXT NOT NULL DEFAULT '[]',
                     indexed_at REAL NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS structural_symbols(
@@ -167,35 +84,67 @@ class StructuralIndex:
                     kind TEXT NOT NULL,
                     line INTEGER NOT NULL,
                     end_line INTEGER NOT NULL DEFAULT 0,
+                    signature TEXT NOT NULL DEFAULT '',
+                    confidence REAL NOT NULL DEFAULT 1.0,
+                    parser TEXT NOT NULL DEFAULT '',
                     UNIQUE(path,qualified_name,kind,line)
                 );
                 CREATE INDEX IF NOT EXISTS structural_symbol_name_idx
                     ON structural_symbols(name,qualified_name);
+                CREATE INDEX IF NOT EXISTS structural_symbol_path_idx
+                    ON structural_symbols(path,line);
                 CREATE TABLE IF NOT EXISTS structural_edges(
                     source_path TEXT NOT NULL,
                     source_symbol TEXT NOT NULL,
                     edge_type TEXT NOT NULL,
                     target TEXT NOT NULL,
+                    target_path TEXT NOT NULL DEFAULT '',
                     line INTEGER NOT NULL,
                     confidence REAL NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
                     UNIQUE(source_path,source_symbol,edge_type,target,line)
                 );
                 CREATE INDEX IF NOT EXISTS structural_edge_target_idx
                     ON structural_edges(target,edge_type);
                 CREATE INDEX IF NOT EXISTS structural_edge_source_idx
                     ON structural_edges(source_symbol,edge_type);
+                CREATE INDEX IF NOT EXISTS structural_edge_path_idx
+                    ON structural_edges(source_path,target_path);
                 """
             )
-            columns = {row[1] for row in db.execute("PRAGMA table_info(structural_symbols)")}
-            if "qualified_name" not in columns:
-                db.execute("ALTER TABLE structural_symbols ADD COLUMN qualified_name TEXT NOT NULL DEFAULT ''")
-            if "end_line" not in columns:
-                db.execute("ALTER TABLE structural_symbols ADD COLUMN end_line INTEGER NOT NULL DEFAULT 0")
+            migrations = {
+                "structural_files": {
+                    "parser": "TEXT NOT NULL DEFAULT ''",
+                    "semantic": "INTEGER NOT NULL DEFAULT 0",
+                    "diagnostics_json": "TEXT NOT NULL DEFAULT '[]'",
+                },
+                "structural_symbols": {
+                    "qualified_name": "TEXT NOT NULL DEFAULT ''",
+                    "end_line": "INTEGER NOT NULL DEFAULT 0",
+                    "signature": "TEXT NOT NULL DEFAULT ''",
+                    "confidence": "REAL NOT NULL DEFAULT 1.0",
+                    "parser": "TEXT NOT NULL DEFAULT ''",
+                },
+                "structural_edges": {
+                    "target_path": "TEXT NOT NULL DEFAULT ''",
+                    "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+                },
+            }
+            for table, columns in migrations.items():
+                current = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+                for name, declaration in columns.items():
+                    if name not in current:
+                        db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {declaration}")
+
+    @staticmethod
+    def _normalized(path: Path) -> str:
+        return path.as_posix()
 
     def _paths(self) -> list[Path]:
+        suffixes = self.parsers.suffixes
         output: list[Path] = []
         for path in self.root.rglob("*"):
-            if not path.is_file() or path.suffix.casefold() not in SOURCE_SUFFIXES:
+            if not path.is_file() or path.suffix.casefold() not in suffixes:
                 continue
             relative = path.relative_to(self.root)
             if any(part in IGNORE_PARTS for part in relative.parts):
@@ -203,95 +152,137 @@ class StructuralIndex:
             output.append(path)
         return sorted(output)
 
-    def index(self) -> dict[str, int]:
-        current = {str(path.relative_to(self.root)).replace("\\", "/"): path for path in self._paths()}
-        changed = 0
-        reused = 0
+    def index(self) -> dict[str, Any]:
+        current = {self._normalized(path.relative_to(self.root)): path for path in self._paths()}
         with self.state.read() as db:
             known = {row["path"]: row["content_hash"] for row in db.execute("SELECT path,content_hash FROM structural_files")}
+        changed = 0
+        reused = 0
+        failed = 0
+        semantic = 0
+        parser_counts: dict[str, int] = defaultdict(int)
         for relative, path in current.items():
             digest = sha256_file(path)
             if known.get(relative) == digest:
                 reused += 1
                 continue
-            self._index_file(relative, path, digest)
+            result = self._index_file(relative, path, digest)
+            parser_counts[result.parser] += 1
+            semantic += int(result.semantic)
+            failed += int(bool(result.diagnostics and not result.symbols))
             changed += 1
         removed = set(known) - set(current)
         if removed:
             with self.state.transaction(immediate=True) as db:
                 for relative in removed:
-                    db.execute("DELETE FROM structural_edges WHERE source_path=?", (relative,))
+                    db.execute("DELETE FROM structural_edges WHERE source_path=? OR target_path=?", (relative, relative))
                     db.execute("DELETE FROM structural_symbols WHERE path=?", (relative,))
                     db.execute("DELETE FROM structural_files WHERE path=?", (relative,))
-        return {"changed": changed, "reused": reused, "removed": len(removed), "total": len(current)}
+        self.resolve_edges()
+        return {
+            "changed": changed,
+            "reused": reused,
+            "removed": len(removed),
+            "total": len(current),
+            "semantic_files": semantic,
+            "failed_files": failed,
+            "parsers": dict(sorted(parser_counts.items())),
+            "capabilities": self.parsers.capabilities(),
+        }
 
-    @staticmethod
-    def _lexical_symbols_edges(relative: str, text: str) -> tuple[list[Symbol], list[Edge]]:
-        symbols: list[Symbol] = []
-        edges: list[Edge] = []
-        for match in GENERIC_DEF.finditer(text):
-            line = text.count("\n", 0, match.start()) + 1
-            name = match.group(1)
-            symbols.append(Symbol(relative, name, name, "symbol", line, line))
-        for match in GENERIC_CALL.finditer(text):
-            target = match.group(1)
-            if target in {"if", "for", "while", "switch", "return", "sizeof", "catch"}:
-                continue
-            line = text.count("\n", 0, match.start()) + 1
-            edges.append(Edge(relative, "<file>", "calls", target, line, 0.55))
-        for match in GENERIC_IMPORT.finditer(text):
-            target = next((group for group in match.groups() if group), None)
-            if target:
-                line = text.count("\n", 0, match.start()) + 1
-                edges.append(Edge(relative, "<file>", "imports", target, line, 0.72))
-        return symbols, edges
-
-    def _index_file(self, relative: str, path: Path, digest: str) -> None:
+    def _index_file(self, relative: str, path: Path, digest: str) -> ParseResult:
         text = path.read_text(encoding="utf-8", errors="replace")
-        language = path.suffix.casefold().lstrip(".")
-        symbols: list[Symbol] = []
-        edges: list[Edge] = []
-        if path.suffix.casefold() == ".py":
-            try:
-                symbols, edges = _PythonVisitor().parse(relative, text)
-            except SyntaxError:
-                symbols, edges = [], []
-        lexical_symbols, lexical_edges = self._lexical_symbols_edges(relative, text)
-        if not symbols:
-            symbols = lexical_symbols
-        # Keep lexical calls only when AST did not already produce the same line/target.
-        existing = {(edge.line, edge.target.rsplit(".", 1)[-1]) for edge in edges if edge.edge_type.startswith("calls")}
-        for edge in lexical_edges:
-            if edge.edge_type != "calls" or (edge.line, edge.target) not in existing:
-                edges.append(edge)
+        result = self.parsers.parse(relative, text)
         with self.state.transaction(immediate=True) as db:
             db.execute("DELETE FROM structural_edges WHERE source_path=?", (relative,))
             db.execute("DELETE FROM structural_symbols WHERE path=?", (relative,))
             db.executemany(
                 """
-                INSERT OR IGNORE INTO structural_symbols(path,name,qualified_name,kind,line,end_line)
-                VALUES(?,?,?,?,?,?)
+                INSERT OR IGNORE INTO structural_symbols(
+                    path,name,qualified_name,kind,line,end_line,signature,confidence,parser
+                ) VALUES(?,?,?,?,?,?,?,?,?)
                 """,
-                [(item.path, item.name, item.qualified_name, item.kind, item.line, item.end_line) for item in symbols],
+                [
+                    (
+                        relative,
+                        item.name,
+                        item.qualified_name,
+                        item.kind,
+                        item.line,
+                        item.end_line,
+                        item.signature,
+                        item.confidence,
+                        result.parser,
+                    )
+                    for item in result.symbols
+                ],
             )
             db.executemany(
                 """
-                INSERT OR IGNORE INTO structural_edges(source_path,source_symbol,edge_type,target,line,confidence)
-                VALUES(?,?,?,?,?,?)
+                INSERT OR IGNORE INTO structural_edges(
+                    source_path,source_symbol,edge_type,target,target_path,line,confidence,metadata_json
+                ) VALUES(?,?,?,?,?,?,?,?)
                 """,
-                [(item.source_path, item.source_symbol, item.edge_type, item.target, item.line, item.confidence) for item in edges],
+                [
+                    (
+                        relative,
+                        item.source_symbol,
+                        item.edge_type,
+                        item.target,
+                        item.target_path,
+                        item.line,
+                        item.confidence,
+                        json.dumps(item.metadata, ensure_ascii=False, sort_keys=True),
+                    )
+                    for item in result.edges
+                ],
             )
             db.execute(
                 """
-                INSERT INTO structural_files(path,content_hash,language,indexed_at)
-                VALUES(?,?,?,?)
+                INSERT INTO structural_files(path,content_hash,language,parser,semantic,diagnostics_json,indexed_at)
+                VALUES(?,?,?,?,?,?,?)
                 ON CONFLICT(path) DO UPDATE SET
                     content_hash=excluded.content_hash,
                     language=excluded.language,
+                    parser=excluded.parser,
+                    semantic=excluded.semantic,
+                    diagnostics_json=excluded.diagnostics_json,
                     indexed_at=excluded.indexed_at
                 """,
-                (relative, digest, language, time.time()),
+                (
+                    relative,
+                    digest,
+                    result.language,
+                    result.parser,
+                    int(result.semantic),
+                    json.dumps(result.diagnostics, ensure_ascii=False),
+                    time.time(),
+                ),
             )
+        return result
+
+    @staticmethod
+    def _short(value: str) -> str:
+        normalized = value.replace("::", ".").replace(":", ".")
+        return normalized.rsplit(".", 1)[-1]
+
+    def resolve_edges(self) -> int:
+        """Resolve target symbols to paths without inventing ambiguous identities."""
+        with self.state.transaction(immediate=True) as db:
+            symbols = [dict(row) for row in db.execute("SELECT path,name,qualified_name FROM structural_symbols")]
+            by_exact: dict[str, set[str]] = defaultdict(set)
+            by_short: dict[str, set[str]] = defaultdict(set)
+            for symbol in symbols:
+                by_exact[symbol["qualified_name"]].add(symbol["path"])
+                by_short[symbol["name"]].add(symbol["path"])
+            rows = [dict(row) for row in db.execute("SELECT rowid,target FROM structural_edges WHERE target_path='' OR target_path IS NULL")]
+            updates: list[tuple[str, int]] = []
+            for row in rows:
+                candidates = by_exact.get(row["target"], set()) or by_short.get(self._short(row["target"]), set())
+                if len(candidates) == 1:
+                    updates.append((next(iter(candidates)), int(row["rowid"])))
+            db.executemany("UPDATE structural_edges SET target_path=? WHERE rowid=?", updates)
+        return len(updates)
 
     def inspect_symbol(self, query: str, *, limit: int = 20) -> dict[str, Any]:
         with self.state.read() as db:
@@ -299,20 +290,17 @@ class StructuralIndex:
                 dict(row)
                 for row in db.execute(
                     """
-                    SELECT path,name,qualified_name,kind,line,end_line
+                    SELECT path,name,qualified_name,kind,line,end_line,signature,confidence,parser
                     FROM structural_symbols
-                    WHERE name LIKE ? OR qualified_name LIKE ?
-                    ORDER BY CASE WHEN name=? OR qualified_name=? THEN 0 ELSE 1 END,path,line
+                    WHERE name LIKE ? OR qualified_name LIKE ? OR signature LIKE ?
+                    ORDER BY CASE WHEN name=? OR qualified_name=? THEN 0 ELSE 1 END,
+                             confidence DESC,path,line
                     LIMIT ?
                     """,
-                    (f"%{query}%", f"%{query}%", query, query, limit),
+                    (f"%{query}%", f"%{query}%", f"%{query}%", query, query, max(1, limit)),
                 )
             ]
         return {"query": query, "symbols": rows}
-
-    @staticmethod
-    def _short(value: str) -> str:
-        return value.rsplit(".", 1)[-1]
 
     def _graph_snapshot(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         with self.state.read() as db:
@@ -320,7 +308,8 @@ class StructuralIndex:
             edges = [
                 dict(row)
                 for row in db.execute(
-                    "SELECT * FROM structural_edges WHERE edge_type IN ('calls','calls-short')"
+                    "SELECT * FROM structural_edges WHERE edge_type IN "
+                    "('calls','calls-short','imports','inherits','implements','overrides','reads','writes','instantiates','test-covers')"
                 )
             ]
         return symbols, edges
@@ -330,20 +319,21 @@ class StructuralIndex:
         reverse: dict[str, list[tuple[str, float]]],
         seeds: set[str],
         *,
-        iterations: int = 24,
-        damping: float = 0.82,
+        iterations: int = 32,
+        damping: float = 0.85,
     ) -> dict[str, float]:
         nodes = set(reverse) | {source for values in reverse.values() for source, _ in values} | seeds
         if not nodes:
             return {}
-        teleport = {node: (1.0 / len(seeds) if node in seeds else 0.0) for node in nodes}
+        actual_seeds = seeds & nodes or set(nodes)
+        teleport = {node: (1.0 / len(actual_seeds) if node in actual_seeds else 0.0) for node in nodes}
         rank = dict(teleport)
         for _ in range(iterations):
             updated = {node: (1.0 - damping) * teleport[node] for node in nodes}
             for target, callers in reverse.items():
-                total = sum(weight for _, weight in callers) or 1.0
+                total = sum(max(0.01, weight) for _, weight in callers) or 1.0
                 for caller, weight in callers:
-                    updated[caller] += damping * rank.get(target, 0.0) * weight / total
+                    updated[caller] += damping * rank.get(target, 0.0) * max(0.01, weight) / total
             rank = updated
         return rank
 
@@ -351,9 +341,9 @@ class StructuralIndex:
         max_depth = max(0, max_depth)
         symbols, edges = self._graph_snapshot()
         definitions = [
-            {key: row[key] for key in ("path", "name", "qualified_name", "kind", "line", "end_line")}
+            {key: row[key] for key in ("path", "name", "qualified_name", "kind", "line", "end_line", "signature", "confidence", "parser")}
             for row in symbols
-            if row["name"] == query or row["qualified_name"] == query
+            if row["name"] == query or row["qualified_name"] == query or self._short(row["qualified_name"]) == self._short(query)
         ]
         seed_names = {query, self._short(query)}
         seed_names.update(row["qualified_name"] for row in definitions)
@@ -365,12 +355,25 @@ class StructuralIndex:
         for row in symbols:
             symbol_paths[row["qualified_name"]].add(row["path"])
             symbol_paths[row["name"]].add(row["path"])
+        edge_weight = {
+            "calls": 1.0,
+            "calls-short": 0.86,
+            "imports": 0.62,
+            "inherits": 0.94,
+            "implements": 0.94,
+            "overrides": 0.96,
+            "instantiates": 0.88,
+            "reads": 0.46,
+            "writes": 0.58,
+            "test-covers": 1.0,
+        }
         for row in edges:
             target = row["target"]
             short_target = self._short(target)
             source = row["source_symbol"]
-            reverse[target].append((source, float(row["confidence"])))
-            reverse[short_target].append((source, float(row["confidence"])))
+            confidence = float(row["confidence"]) * edge_weight.get(row["edge_type"], 0.5)
+            reverse[target].append((source, confidence))
+            reverse[short_target].append((source, confidence))
             edge_rows_by_target[target].append(row)
             if short_target != target:
                 edge_rows_by_target[short_target].append(row)
@@ -391,6 +394,8 @@ class StructuralIndex:
                     continue
                 best_depth[caller] = next_depth
                 paths.add(row["source_path"])
+                if row.get("target_path"):
+                    paths.add(row["target_path"])
                 paths.update(symbol_paths.get(caller, set()))
                 traversed.append({**row, "depth": next_depth})
                 queue.append((caller, next_depth))
@@ -410,6 +415,7 @@ class StructuralIndex:
         ranked_symbols.sort(key=lambda row: (row["depth"], -row["rank"], row["symbol"]))
         affected = sorted(paths)
         tests = [path for path in affected if TEST_HINT_RE.search(path)]
+        confidence = 1.0 if definitions and all(float(row.get("confidence", 0)) >= 0.9 for row in definitions) else 0.75 if definitions else 0.4
         return {
             "query": query,
             "definitions": definitions,
@@ -421,9 +427,35 @@ class StructuralIndex:
             "ranked_symbols": ranked_symbols,
             "affected_paths": affected,
             "affected_tests": tests,
+            "required_verifiers": self.required_verifiers(affected),
             "max_depth": max_depth,
-            "recall_boundary": "static-call-graph",
+            "confidence": confidence,
+            "recall_boundary": "semantic-snapshot+python-ast+language-specific-static-graph",
         }
+
+    @staticmethod
+    def required_verifiers(paths: Iterable[str]) -> list[str]:
+        suffixes = {Path(path).suffix.casefold() for path in paths}
+        commands: list[str] = []
+        if ".py" in suffixes:
+            commands.append("python -m unittest discover -s tests -q")
+        if suffixes & {".js", ".jsx", ".ts", ".tsx"}:
+            commands.append("npm test -- --runInBand")
+        if ".rs" in suffixes:
+            commands.append("cargo test --all-targets")
+        if ".go" in suffixes:
+            commands.append("go test ./...")
+        if ".java" in suffixes:
+            commands.append("./gradlew test")
+        if ".cs" in suffixes:
+            commands.append("dotnet test")
+        if suffixes & {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp"}:
+            commands.append("ctest --test-dir build --output-on-failure")
+        if ".rb" in suffixes:
+            commands.append("bundle exec rake test")
+        if ".php" in suffixes:
+            commands.append("vendor/bin/phpunit")
+        return commands
 
     def impacted_by_paths(self, changed_paths: Iterable[str], *, max_depth: int = 3) -> dict[str, Any]:
         normalized = {str(Path(path)).replace("\\", "/") for path in changed_paths}
@@ -442,4 +474,74 @@ class StructuralIndex:
             "seed_symbols": sorted(set(symbols)),
             "affected_paths": paths,
             "affected_tests": [path for path in paths if TEST_HINT_RE.search(path)],
+            "required_verifiers": self.required_verifiers(paths),
+        }
+
+    def repository_map(self, query: str, *, token_budget: int = 2000, max_depth: int = 4) -> dict[str, Any]:
+        """Build a deterministic query-conditioned symbol map under a token budget."""
+        impact = self.inspect_impact(query, max_depth=max_depth)
+        with self.state.read() as db:
+            symbols = [dict(row) for row in db.execute("SELECT * FROM structural_symbols")]
+        rank_by_symbol = {row["symbol"]: float(row["rank"]) for row in impact["ranked_symbols"]}
+        seeds = {row["qualified_name"] for row in impact["definitions"]} | {row["name"] for row in impact["definitions"]}
+        candidates: list[tuple[float, dict[str, Any], int]] = []
+        query_lower = query.casefold()
+        for row in symbols:
+            text = f"{row['path']}:{row['line']} {row['kind']} {row['qualified_name']} {row['signature']}".strip()
+            estimated = max(1, math.ceil(len(text) / 4))
+            lexical = 1.0 if query_lower in row["qualified_name"].casefold() else 0.0
+            graph = rank_by_symbol.get(row["qualified_name"], rank_by_symbol.get(row["name"], 0.0))
+            affected = 0.4 if row["path"] in impact["affected_paths"] else 0.0
+            semantic = 0.2 if row["parser"].startswith(("semantic", "python-ast")) else 0.0
+            score = 5.0 * lexical + 3.0 * graph + affected + semantic + float(row["confidence"]) / max(1.0, math.log2(estimated + 2))
+            if row["qualified_name"] in seeds or row["name"] in seeds:
+                score += 10.0
+            candidates.append((score, row, estimated))
+        candidates.sort(key=lambda item: (-item[0], item[1]["path"], item[1]["line"]))
+        used = 0
+        selected: list[dict[str, Any]] = []
+        for score, row, estimated in candidates:
+            if used + estimated > token_budget:
+                continue
+            selected.append({
+                "path": row["path"],
+                "line": row["line"],
+                "end_line": row["end_line"],
+                "kind": row["kind"],
+                "symbol": row["qualified_name"],
+                "signature": row["signature"],
+                "score": score,
+                "estimated_tokens": estimated,
+                "parser": row["parser"],
+            })
+            used += estimated
+        payload = {
+            "query": query,
+            "budget": token_budget,
+            "used": used,
+            "selected": selected,
+            "affected_paths": impact["affected_paths"],
+            "affected_tests": impact["affected_tests"],
+            "required_verifiers": impact["required_verifiers"],
+        }
+        payload["map_hash"] = sha256_bytes(canonical_json(payload))
+        return payload
+
+    def stats(self) -> dict[str, Any]:
+        with self.state.read() as db:
+            files = int(db.execute("SELECT COUNT(*) FROM structural_files").fetchone()[0])
+            symbols = int(db.execute("SELECT COUNT(*) FROM structural_symbols").fetchone()[0])
+            edges = int(db.execute("SELECT COUNT(*) FROM structural_edges").fetchone()[0])
+            languages = {row["language"]: row["count"] for row in db.execute("SELECT language,COUNT(*) count FROM structural_files GROUP BY language")}
+            parsers = {row["parser"]: row["count"] for row in db.execute("SELECT parser,COUNT(*) count FROM structural_files GROUP BY parser")}
+            semantic = int(db.execute("SELECT COUNT(*) FROM structural_files WHERE semantic=1").fetchone()[0])
+        return {
+            "repository_id": self.repository_id,
+            "files": files,
+            "symbols": symbols,
+            "edges": edges,
+            "languages": languages,
+            "parsers": parsers,
+            "semantic_files": semantic,
+            "graph_hash": sha256_bytes(canonical_json({"files": files, "symbols": symbols, "edges": edges, "languages": languages, "parsers": parsers})),
         }

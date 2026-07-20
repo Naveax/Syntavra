@@ -1,0 +1,17 @@
+{
+  "schema_version": 3,
+  "tasks": [
+    {
+      "task_id": "example-structural-001",
+      "family": "structural-navigation",
+      "prompt": "Identify the implementation and transitive callers of target_symbol, then write the answer to the adapter result.",
+      "repository": "/absolute/path/to/frozen/repository",
+      "repository_tree": "replace-with-git-tree-sha",
+      "verifier": ["python", "verify_task.py"],
+      "timeout_seconds": 1200,
+      "permissions": ["read", "write", "execute"],
+      "expected_work": 1.0,
+      "metadata": {"frozen": true}
+    }
+  ]
+}

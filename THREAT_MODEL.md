@@ -46,3 +46,25 @@ SignalCore does not defend against a fully privileged local operating-system att
 Live provider behavior, native host hook semantics, Roblox Studio transport, Creator Store,
 Blender, device simulation and DataStore migration require separate live certification.
 Internal tests and implementation benchmarks cannot inherit independent or public maturity.
+
+## v0.3.0 unified runtime additions
+
+### Host configuration mutation
+
+The installer is backup-first, idempotent and scoped. It deep-merges managed keys, records original backups and supports dry-run and rollback. A host is never reported as enforced merely because an instruction file exists.
+
+### Sandbox boundaries
+
+Container and bubblewrap backends may provide network and filesystem isolation. The local-restricted backend does not claim those guarantees and strict network-disabled execution fails closed when an isolating backend is unavailable. All backends filter secrets, validate project-relative paths, bound execution time and control process trees.
+
+### Reversible content
+
+Visible compression may omit low-value data, but the original bytes and indexed chunks remain in the project-scoped evidence store. Handles are content-addressed and must not cross project identities. Secret values are removed from visible views without modifying exact stored evidence.
+
+### Session integrity
+
+Session events are hash chained. Summary nodes are derived views, not source truth. Corrupt or invalid objects are quarantined; checkpoints and exports include hashes. Background compaction may fail without blocking event ingestion.
+
+### Benchmark integrity
+
+Competitors execute as independent external adapters. SignalCore does not import their source. Claim-bearing results freeze execution identities and require equal verified work, actual quota data, no required-verifier skip and no security regression.

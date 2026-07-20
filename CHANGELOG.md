@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 — Unified pre-release
+
+- Added ten-language structural parser registry, semantic snapshot ingestion, transitive typed impact traversal and token-budgeted repository maps.
+- Added fifteen-host capability registry, idempotent backup-first installer, lifecycle hooks and one-command doctor/install/uninstall surfaces.
+- Added Docker, Podman, bubblewrap and degraded local-restricted sandbox backends with explicit policy guarantees.
+- Added reversible universal content routing with exact and chunk restoration receipts.
+- Added durable session runtime with hash-chain events, recursive summary DAG, checkpoints, fork/merge, export/import and background compaction.
+- Added compact/balanced/detailed/audit output contracts.
+- Added external-arm SignalBench protocol and strengthened superiority claims to require at least ten valid paired runs.
+- Fixed installer rollback across repeated installations and unsafe local RLIMIT_NPROC behavior.
+- Retained the public `5X_NOT_PROVEN` claim boundary.
+
 ## 0.2.0 — Pre-release
 
 - Rebuilt structural indexing with Python AST support, multi-language lexical fallback, qualified symbols, transitive reverse-call impact, graph ranking and affected-test discovery.

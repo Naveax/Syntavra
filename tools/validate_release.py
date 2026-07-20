@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from benchmarks.runtime_v02_benchmark import run as run_internal_benchmark
+from benchmarks.runtime_v03_benchmark import run as run_internal_benchmark
 from signalcore_runtime.benchmark_harness import TIER_CONFIGS, validate_config
 from signalcore_runtime.claim_governance import decide_claim
 from signalcore_runtime.difficulty import evaluate_configured
@@ -37,7 +37,7 @@ def main(argv=None):
         difficulty=configured,
         actual_quota_available=False,
     )
-    internal = run_internal_benchmark(output_lines=20_000 if args.smoke else 350_000)
+    internal = run_internal_benchmark(scale=1 if args.smoke else 4)
     result = {
         "ok": all(value["ok"] for key, value in tiers.items() if key != "1X")
               and claim.claim == "5X_NOT_PROVEN"
@@ -46,7 +46,7 @@ def main(argv=None):
         "difficulty_shapes": tiers,
         "claim_ceiling": asdict(claim),
         "internal_benchmark": internal,
-        "note": "Internal implementation deltas are verified. Live paired provider/quota 5X superiority remains unproven.",
+        "note": "Unified v0.3 components are verified. Live paired provider/quota 5X superiority remains unproven.",
     }
     if args.output:
         atomic_write_json(Path(args.output), result, mode=0o644)

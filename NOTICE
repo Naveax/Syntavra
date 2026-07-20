@@ -1,13 +1,5 @@
-SignalCore 0.2.0
+SignalCore 0.3.0
 
-Copyright (c) 2026 Naveax.
+Copyright (c) Naveax. Released under the MIT License.
 
-SignalCore source code is released under the MIT License in LICENSE.
-External providers, Roblox Studio, Roblox, Creator Store, Blender, Codex, Claude,
-Gemini, Cursor, Windsurf, Sourcegraph, Aider, Token Savior, Context Mode, Headroom,
-Volt and Caveman Code are referenced only for interoperability, benchmark protocol,
-or clean-room comparative research.
-
-No third-party competitor source is vendored. Competitor behavior may inform independent
-requirements, but SignalCore implementations, tests, fixtures and naming are written
-independently. Product and service names remain the property of their respective owners.
+SignalCore uses clean-room, independently implemented behavioral requirements when studying public competitor systems. No competitor source code is vendored or required at runtime. Optional external tools such as Docker, Podman and bubblewrap remain subject to their own licenses.

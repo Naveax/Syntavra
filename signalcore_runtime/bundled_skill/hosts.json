@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "runtime": "signalcore_runtime",
+  "install_command": "signalcore install --all",
+  "doctor_command": "signalcore doctor"
+}

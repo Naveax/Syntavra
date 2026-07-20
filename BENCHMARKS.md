@@ -1,24 +1,25 @@
 # SignalCore benchmarks
 
-## Runtime 0.2 internal benchmark
+## v0.3 internal component benchmark
 
 ```bash
-python benchmarks/runtime_v02_benchmark.py \
-  --output benchmarks/results/runtime-v02/internal.json
+python benchmarks/runtime_v03_benchmark.py \
+  --output benchmarks/results/runtime-v03/internal.json
 ```
 
-The committed run creates an 81-file call chain, a 350,000-line repeated test log, 256 immutable history events and a constrained context pack.
+It verifies multi-language parser fixtures, transitive structural impact, token-budgeted repository maps, reversible content restoration, session-DAG exact recovery, installer idempotency, sandbox-policy disclosure, output contracts and the SignalBench protocol.
 
-Measured internal deltas:
+This is not a competitor benchmark. It must retain `"claim": "5X_NOT_PROVEN"`.
 
-- affected-path recall: **2.47% direct-only → 100% transitive**;
-- peak Python allocation: **30,005,283 B full-read → 27,818 B bounded single-pass**;
-- visible output: **268 B**, with exact content-addressed evidence retained;
-- summary-DAG recovery: **256/256 events from one root**;
-- mandatory context roles: **satisfied**, with the raw log dropped.
+## SignalBench external-arm benchmark
 
-The timing values are not a fair speed comparison because only the 0.2.0 path persists exact evidence. The result is internal implementation evidence only and must retain `"claim": "5X_NOT_PROVEN"`.
+Use `benchmarks/signalbench/tasks.example.json` and `arms.example.json` as schemas. Pin real repository trees, product versions, model identity and verifiers before running:
 
-## Public paired benchmark
+```bash
+signalcore signalbench validate --tasks tasks.json --arms arms.json
+signalcore signalbench manifest --tasks tasks.json --arms arms.json --output manifest.json
+signalcore signalbench run --tasks tasks.json --arms arms.json --repetitions 10
+signalcore signalbench compare --results results.json --baseline plain --candidate signalcore-v030
+```
 
-Use `signalcore benchmark compare` with observed axes and real quota telemetry. See `docs/benchmark/PROTOCOL.md`. A configured 20X/30X/100X file cannot pass a public claim by itself.
+A public claim requires equal verified work, no verifier skip, no security regression, actual quota data, at least ten paired repetitions and the configured confidence-interval gate.

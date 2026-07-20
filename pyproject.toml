@@ -1,12 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "signalcore-runtime"
-version = "0.2.0"
-description = "Local-first runtime intelligence plane for AI coding agents"
+version = "0.3.0"
+description = "Unified structural, sandbox, reversible-context and long-session runtime for AI coding agents"
+readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+authors = [{name = "Naveax"}]
+keywords = ["ai-agent", "coding-agent", "context-engineering", "mcp", "sandbox", "structural-index", "reversible-compression"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
 
 [project.scripts]
 signalcore = "signalcore_runtime.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["signalcore_runtime*"]
+
+[tool.setuptools.package-data]
+signalcore_runtime = ["bundled_skill/*.md", "bundled_skill/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

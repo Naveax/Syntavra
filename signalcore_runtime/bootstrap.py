@@ -48,10 +48,24 @@ def runtime_health(
     checks: dict[str, bool] = {}
     reasons: list[str] = []
     package = Path(__file__).resolve().parent
+    required_modules = {
+        "process_broker": "process_broker.py",
+        "output_firewall": "output_firewall.py",
+        "context_governor": "context_governor.py",
+        "hook_engine": "hooks.py",
+        "mcp_server": "mcp_server.py",
+        "structural_intelligence": "structural_parsers.py",
+        "host_installer": "installer.py",
+        "secure_sandbox": "sandbox.py",
+        "reversible_compression": "compression.py",
+        "long_session_runtime": "session_runtime.py",
+        "output_governor": "output_governor.py",
+        "signalbench": "signalbench.py",
+    }
     checks["skill_installed"] = (skill_root / "SKILL.md").is_file()
-    checks["runtime_package"] = (package / "process_broker.py").is_file()
-    checks["hook_engine"] = (package / "hooks.py").is_file()
-    checks["mcp_server"] = (package / "mcp_server.py").is_file()
+    checks["runtime_package"] = (package / "__init__.py").is_file()
+    for name, filename in required_modules.items():
+        checks[name] = (package / filename).is_file()
     try:
         state = StateDB(state_root / "runtime.sqlite3")
         checks["state_store"] = state.integrity_check()
@@ -59,38 +73,26 @@ def runtime_health(
         checks["state_store"] = False
     try:
         evidence = EvidenceStore(state_root / "evidence", project_id=stable_project_id(project))
-        handle = evidence.put(b"signalcore-health", kind="health")
-        checks["evidence_store"] = evidence.get(handle) == b"signalcore-health"
+        handle = evidence.put(b"signalcore-health-v3", kind="health")
+        checks["evidence_store"] = evidence.get(handle) == b"signalcore-health-v3"
     except Exception:
         checks["evidence_store"] = False
-    checks["process_broker"] = checks["runtime_package"] and checks["state_store"] and checks["evidence_store"]
-    checks["output_firewall"] = (package / "output_firewall.py").is_file()
-    checks["context_governor"] = (package / "context_governor.py").is_file()
-    negotiation = negotiate(host, runtime_available=True)
+    negotiation = negotiate(host, runtime_available=checks["runtime_package"])
     checks["host_adapter"] = negotiation["mode"] != "UNSUPPORTED"
     rollouts = discover_rollouts(codex_home)
     checks["rollout_available"] = bool(rollouts) if require_rollout else True
     mandatory = (
-        "skill_installed",
-        "runtime_package",
-        "state_store",
-        "evidence_store",
-        "process_broker",
-        "output_firewall",
-        "context_governor",
-        "hook_engine",
-        "mcp_server",
-        "host_adapter",
-        "rollout_available",
+        "skill_installed", "runtime_package", "state_store", "evidence_store",
+        *required_modules.keys(), "host_adapter", "rollout_available",
     )
     for name in mandatory:
-        if not checks[name]:
+        if not checks.get(name, False):
             reasons.append(f"check-failed:{name}")
     if not checks["skill_installed"] and not checks["runtime_package"]:
         state_name = "NOT_INSTALLED"
     elif checks["skill_installed"] and not checks["runtime_package"]:
         state_name = "INSTRUCTION_ONLY"
-    elif all(checks[name] for name in mandatory):
+    elif all(checks.get(name, False) for name in mandatory):
         state_name = "RUNTIME_ACTIVE"
     elif checks["runtime_package"] and checks["state_store"]:
         state_name = "RUNTIME_DEGRADED"
@@ -102,10 +104,12 @@ def runtime_health(
         checks,
         tuple(reasons),
         {
+            "version": "0.3.0",
             "host": host,
             "host_negotiation": negotiation,
             "rollout_candidates": [str(path) for path in rollouts[:5]],
             "enforcement_boundary": negotiation["mode"],
+            "runtime_plane": "unified-v3",
         },
     )
 
@@ -120,7 +124,7 @@ def start_runtime(
     host: str = "codex",
 ) -> dict[str, Any]:
     project = project.resolve(strict=True)
-    state_root = state_root or project / ".signalcore" / "runtime-v2"
+    state_root = state_root or project / ".signalcore" / "runtime-v3"
     health = runtime_health(
         project=project,
         skill_root=skill_root,
@@ -131,7 +135,7 @@ def start_runtime(
     identity = git_identity(project)
     session_id = f"sc-{int(time.time())}-{os.getpid()}"
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "session_id": session_id,
         "task": task,
         "project": str(project),
