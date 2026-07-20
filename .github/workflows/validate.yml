@@ -28,37 +28,39 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Run focused tests and capture diagnostics
+      - name: Run focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q signalcore_runtime benchmarks tests
+          python -m unittest discover -s tests/runtime -p 'test_*v4.py' -q
+      - name: Run benchmark and capture diagnostics
         shell: bash
         run: |
           set +e
-          python -m compileall -q signalcore_runtime benchmarks tests > ecosystem-v4-diagnostic.txt 2>&1
+          mkdir -p benchmarks/results/long-session-v4
+          python benchmarks/long_session_v4_benchmark.py \
+            --events 2048 \
+            --token-budget 4096 \
+            --output benchmarks/results/long-session-v4/internal.json \
+            > ecosystem-v4-benchmark-diagnostic.txt 2>&1
           status=$?
-          if [ "$status" -eq 0 ]; then
-            python -m unittest discover -s tests/runtime -p 'test_*v4.py' -q >> ecosystem-v4-diagnostic.txt 2>&1
-            status=$?
-          fi
-          echo "EXIT_STATUS=$status" >> ecosystem-v4-diagnostic.txt
+          echo "EXIT_STATUS=$status" >> ecosystem-v4-benchmark-diagnostic.txt
           if [ "$status" -ne 0 ]; then
             git config user.name github-actions[bot]
             git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add ecosystem-v4-diagnostic.txt
-            git commit -m "record ecosystem v4 diagnostics"
+            git add ecosystem-v4-benchmark-diagnostic.txt
+            git commit -m "record ecosystem v4 benchmark diagnostics"
             git push origin HEAD:agent/ecosystem-long-session-v04
             exit "$status"
           fi
-          rm ecosystem-v4-diagnostic.txt
-      - name: Restore canonical workflow and run benchmark
+          rm ecosystem-v4-benchmark-diagnostic.txt
+      - name: Restore canonical workflow
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main
           git show origin/main:.github/workflows/validate.yml > .github/workflows/validate.yml
-          mkdir -p benchmarks/results/long-session-v4
-          python benchmarks/long_session_v4_benchmark.py \
-            --events 2048 \
-            --token-budget 4096 \
-            --output benchmarks/results/long-session-v4/internal.json
       - name: Regenerate exact package manifest and run full suite
         shell: bash
         run: |
