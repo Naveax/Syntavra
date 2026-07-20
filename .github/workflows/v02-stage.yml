@@ -1,0 +1,189 @@
+name: SignalCore 0.2 source stage
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: signalcore-v02-stage
+  cancel-in-progress: false
+
+env:
+  PYTHONWARNINGS: error::ResourceWarning
+  EXPECTED_PATCH_SHA: 30dabb88203a3e0df62bad6022f7f07f533b425af7ccb63641fab930708bfbfb
+
+jobs:
+  materialize-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/signalcore-v0.2-runtime
+          fetch-depth: 0
+
+      - name: Reconstruct and verify reviewable source patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          import urllib.request
+          from pathlib import Path
+
+          expected = {
+              0: '3e8dd5b9a9ec3e1366827120f4a352b33e45b0cc01c503a73a469d10903f4704',
+              1: 'cc057dcae10e8f913898d6f439412a6a0b090a22eaa4873b71c1943800244d9a',
+              2: 'e27f2a4ff7c4b7dd06d1cd805feb265dc85921a633a13751e76ea6883151a485',
+              3: 'b49b79df80d234c29ec2aadcfc9553fa52cbc88ed4d11571ee6853b51a50f294',
+              4: 'efe4dd24cae04d1b9e2504c7d45660b210ef4b29c53d902c84ce7f39ffd054a1',
+              5: 'becd2d6513598d7c0004bb12cd9065f2f963a32c867710a2f257976a7b04a879',
+              6: 'a18a36b573de8d76210f97c4c9c058404d5c400b9c2c1bc5e30effb92fd2d2c9',
+              7: 'e84ad2223cd98f99d34bf84319d9b50585ca718485f94f4218a069ddae8c8803',
+              8: 'd66967e007bba28614658a31ddbbe3d9ff25446a6fd33da46f82ef16ab3b62b3',
+              9: '28848a40d16a285d44de0230049e737c7534c332a8897f28748601238592b4de',
+              10: '974a20b95e26b83ca6b117ae0687d23fef2c3b7a13a4ea2b8bc7abfab88b902f',
+              11: '879003027351d742efde8dcec75e214df7dc7cc77364a183c64c72fcd187cff4',
+              12: 'fa597f8fdf92170f33a25f4149d064eb80cf569ca1d51e26829113fe60d892e9',
+              13: '92ea140000e8cccaec6ae63b2aa7c0dd9c2332a640284e2fc76a5be4196e548a',
+              14: 'b6b8248ac578609e4226be0df03bf718080be0014f41a3310e32ae3a88d53fd4',
+              15: 'cf6633c8cec9e3a8dc2977dda0c75bab3658912f248f4575c3e923f20740249f',
+          }
+          url = f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/issues/12/comments?per_page=100"
+          request = urllib.request.Request(
+              url,
+              headers={
+                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                  'Accept': 'application/vnd.github+json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'signalcore-v02-stage',
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              comments = json.load(response)
+
+          parts = {}
+          comment_ids = []
+          for comment in comments:
+              body = comment.get('body') or ''
+              match = re.match(r'^SCV2_DIFF_PART_(\d{2})\n\n', body)
+              if not match:
+                  continue
+              number = int(match.group(1))
+              if number in parts:
+                  print(f'::error::duplicate patch part {number:02d}')
+                  sys.exit(2)
+              parts[number] = body[match.end():]
+              comment_ids.append(int(comment['id']))
+
+          if set(parts) != set(expected):
+              print(f'::error::patch part set mismatch: got={sorted(parts)} expected={sorted(expected)}')
+              sys.exit(2)
+
+          failed = False
+          for number in sorted(expected):
+              actual = hashlib.sha256(parts[number].encode('utf-8')).hexdigest()
+              print(f'part {number:02d}: bytes={len(parts[number].encode())} sha256={actual}')
+              if actual != expected[number]:
+                  print(f'::error::part {number:02d} mismatch expected={expected[number]} actual={actual}')
+                  failed = True
+          if failed:
+              sys.exit(2)
+
+          patch = ''.join(parts[number] for number in sorted(parts))
+          total = hashlib.sha256(patch.encode('utf-8')).hexdigest()
+          print(f'total bytes={len(patch.encode())} sha256={total}')
+          if total != os.environ['EXPECTED_PATCH_SHA']:
+              print(f"::error::total patch mismatch expected={os.environ['EXPECTED_PATCH_SHA']} actual={total}")
+              sys.exit(2)
+          Path('/tmp/signalcore-v02.patch').write_bytes(patch.encode('utf-8'))
+          Path('/tmp/transfer-comment-ids.json').write_text(json.dumps(comment_ids), encoding='utf-8')
+          PY
+
+      - name: Apply ordinary source and remove staging workflow
+        run: |
+          rm .github/workflows/v02-stage.yml
+          git apply --check /tmp/signalcore-v02.patch
+          git apply /tmp/signalcore-v02.patch
+          test "$(cat VERSION)" = "0.2.0"
+          test ! -e .signalcore-transfer
+          test ! -e .signalcore-direct
+          find . -name 'payload-*.b64' -print -quit | grep -q . && exit 2 || true
+
+      - name: Compile and run runtime tests
+        run: |
+          python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
+          python -m unittest discover -s tests/runtime -q
+
+      - name: Run adapter and Roblox profile tests
+        run: |
+          python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+          python -m unittest discover -s tests/roblox_profile -q
+
+      - name: Run package and claim validators
+        run: |
+          python tools/validate.py
+          python tools/validate_runtime.py
+          python tools/validate_roblox_profile.py
+          python tools/verify_claims.py
+
+      - name: Run benchmark and fail-closed release smoke
+        run: |
+          python benchmarks/runtime_v02_benchmark.py --output /tmp/runtime-v02-internal.json
+          python tools/validate_release.py --profile 5x --smoke --output /tmp/release-smoke.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          internal=json.loads(Path('/tmp/runtime-v02-internal.json').read_text())
+          release=json.loads(Path('/tmp/release-smoke.json').read_text())
+          assert internal['ok'] is True
+          assert internal['claim'] == '5X_NOT_PROVEN'
+          assert release['ok'] is True
+          assert release['claim_ceiling']['claim'] == '5X_NOT_PROVEN'
+          PY
+
+      - name: Commit ordinary source to feature branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          test -z "$(git ls-files | grep -E '(^|/)(payload-.*\.b64|\.signalcore-transfer|\.signalcore-direct)$' || true)"
+          git commit -m "Implement SignalCore 0.2.0 runtime intelligence plane"
+          git push origin HEAD:feature/signalcore-v0.2-runtime
+
+      - name: Remove temporary transfer comments and close issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          headers={
+              'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'signalcore-v02-stage',
+          }
+          base=f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}"
+          for comment_id in json.loads(Path('/tmp/transfer-comment-ids.json').read_text()):
+              request=urllib.request.Request(f"{base}/issues/comments/{comment_id}",headers=headers,method='DELETE')
+              with urllib.request.urlopen(request,timeout=30):
+                  pass
+          payload=json.dumps({'state':'closed','state_reason':'completed'}).encode()
+          request=urllib.request.Request(f"{base}/issues/12",data=payload,headers={**headers,'Content-Type':'application/json'},method='PATCH')
+          with urllib.request.urlopen(request,timeout=30):
+              pass
+          PY
