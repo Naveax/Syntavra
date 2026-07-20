@@ -59,8 +59,11 @@ def normalize_event(event: dict[str, Any]) -> dict[str, int]:
         counts["command_calls"] = 1
     if any(token in text for token in ('compaction', 'compact_context', 'context_compacted')):
         counts["compactions"] = 1
-    counts["fresh_input_tokens"] = _first_number(event, ("input_tokens", "input_token_count", "prompt_tokens", "uncached_input_tokens"))
-    counts["cached_input_tokens"] = _first_number(event, ("cached_input_tokens", "cache_read_input_tokens", "cached_tokens"))
+    total_input = _first_number(event, ("input_tokens", "input_token_count", "prompt_tokens"))
+    explicit_fresh = _first_number(event, ("uncached_input_tokens", "fresh_input_tokens"))
+    cached = _first_number(event, ("cached_input_tokens", "cache_read_input_tokens", "cached_tokens"))
+    counts["cached_input_tokens"] = cached
+    counts["fresh_input_tokens"] = explicit_fresh if explicit_fresh else max(0, total_input - cached)
     counts["output_tokens"] = _first_number(event, ("output_tokens", "completion_tokens", "output_token_count"))
     counts["reasoning_tokens"] = _first_number(event, ("reasoning_tokens", "reasoning_token_count"))
     return counts
@@ -76,7 +79,13 @@ class RolloutTailer:
         identity = _file_identity(path)
         state = read_json(self.state_file, {}) or {}
         if state.get("file_identity") != identity or path.stat().st_size < int(state.get("offset", 0)):
-            state = {"file_identity": identity, "offset": 0, "partial_hex": "", "counters": {name: 0 for name in COUNTERS}, "seen": []}
+            state = {
+                "file_identity": identity,
+                "offset": 0,
+                "partial_hex": "",
+                "counters": {name: 0 for name in COUNTERS},
+                "seen": [],
+            }
         counters = {name: int((state.get("counters") or {}).get(name, 0)) for name in COUNTERS}
         seen_list = list(state.get("seen") or [])[-10000:]
         seen = set(seen_list)
@@ -109,16 +118,24 @@ class RolloutTailer:
             for key, value in normalize_event(event).items():
                 counters[key] += value
             processed += 1
-        persisted_offset = safe_offset
         result = {
             "file_identity": identity,
-            "offset": persisted_offset,
+            "offset": safe_offset,
             "partial_hex": trailing.hex(),
             "counters": counters,
             "seen": seen_list[-10000:],
         }
         atomic_write_json(self.state_file, result)
-        return {"processed_events": processed, "offset": persisted_offset, "partial_bytes": len(trailing), "counters": counters}
+        return {
+            "processed_events": processed,
+            "offset": safe_offset,
+            "partial_bytes": len(trailing),
+            "counters": counters,
+            "efficiency": {
+                "fresh_fraction": counters["fresh_input_tokens"] / max(1, counters["fresh_input_tokens"] + counters["cached_input_tokens"]),
+                "wait_calls_per_turn": counters["wait_calls"] / max(1, counters["model_turns"]),
+            },
+        }
 
 
 def discover_rollouts(codex_home: Path) -> list[Path]:

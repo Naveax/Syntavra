@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class StateDB:
@@ -23,6 +23,7 @@ class StateDB:
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA busy_timeout=30000")
+        connection.execute("PRAGMA synchronous=NORMAL")
         return connection
 
     @contextmanager
@@ -45,6 +46,10 @@ class StateDB:
             raise
         finally:
             connection.close()
+
+    @staticmethod
+    def _columns(db: sqlite3.Connection, table: str) -> set[str]:
+        return {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
 
     def _initialize(self) -> None:
         with self.transaction(immediate=True) as db:
@@ -70,9 +75,20 @@ class StateDB:
                     stdout_path TEXT NOT NULL DEFAULT '',
                     stderr_path TEXT NOT NULL DEFAULT '',
                     repository_tree TEXT NOT NULL DEFAULT 'unknown',
-                    environment_hash TEXT NOT NULL DEFAULT 'unknown'
+                    environment_hash TEXT NOT NULL DEFAULT 'unknown',
+                    project_id TEXT NOT NULL DEFAULT ''
                 );
                 CREATE INDEX IF NOT EXISTS jobs_state_idx ON jobs(state, created_at DESC);
+                CREATE TABLE IF NOT EXISTS completion_events(
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL UNIQUE,
+                    state TEXT NOT NULL,
+                    exit_code INTEGER,
+                    completed_at REAL NOT NULL,
+                    evidence_handle TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    FOREIGN KEY(job_id) REFERENCES jobs(job_id)
+                );
                 CREATE TABLE IF NOT EXISTS verifier_results(
                     cache_key TEXT PRIMARY KEY,
                     command_json TEXT NOT NULL,
@@ -88,6 +104,9 @@ class StateDB:
                 );
                 """
             )
+            columns = self._columns(db, "jobs")
+            if "project_id" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
             db.execute(
                 "INSERT INTO metadata(key,value) VALUES('schema_version',?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -130,7 +149,42 @@ class StateDB:
         with self.read() as db:
             return [dict(row) for row in db.execute(sql, params)]
 
+    def record_completion(self, payload: dict[str, Any]) -> int:
+        with self.transaction(immediate=True) as db:
+            db.execute(
+                """
+                INSERT INTO completion_events(job_id,state,exit_code,completed_at,evidence_handle,payload_json)
+                VALUES(?,?,?,?,?,?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    state=excluded.state,
+                    exit_code=excluded.exit_code,
+                    completed_at=excluded.completed_at,
+                    evidence_handle=excluded.evidence_handle,
+                    payload_json=excluded.payload_json
+                """,
+                (
+                    payload["job_id"],
+                    payload["state"],
+                    payload.get("exit_code"),
+                    payload["completed_at"],
+                    payload.get("evidence_handle", ""),
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                ),
+            )
+            row = db.execute("SELECT sequence FROM completion_events WHERE job_id=?", (payload["job_id"],)).fetchone()
+        return int(row[0])
+
+    def completions_after(self, sequence: int, *, limit: int = 100) -> list[dict[str, Any]]:
+        with self.read() as db:
+            rows = db.execute(
+                "SELECT * FROM completion_events WHERE sequence>? ORDER BY sequence LIMIT ?",
+                (max(0, sequence), max(1, limit)),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def append_completion(self, path: Path, payload: dict[str, Any]) -> None:
+        """Compatibility JSONL queue plus authoritative SQLite completion event."""
+        self.record_completion(payload)
         path.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n"
         with path.open("a", encoding="utf-8", newline="") as handle:

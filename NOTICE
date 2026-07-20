@@ -1,5 +1,13 @@
-SignalCore 0.0.1
+SignalCore 0.2.0
 
-This repository contains original SignalCore source and integration contracts. External providers, Roblox Studio, Roblox, Creator Store, Blender, Codex, Claude, Gemini, Cursor, Windsurf, Sourcegraph, Aider, Token Savior, and Context Mode are referenced only for interoperability, benchmark configuration names, or comparative research.
+Copyright (c) 2026 Naveax.
 
-No third-party source is vendored by the Roblox Studio profile materialization in this change. License selection for the repository remains governed by the repository owner and existing project policy.
+SignalCore source code is released under the MIT License in LICENSE.
+External providers, Roblox Studio, Roblox, Creator Store, Blender, Codex, Claude,
+Gemini, Cursor, Windsurf, Sourcegraph, Aider, Token Savior, Context Mode, Headroom,
+Volt and Caveman Code are referenced only for interoperability, benchmark protocol,
+or clean-room comparative research.
+
+No third-party competitor source is vendored. Competitor behavior may inform independent
+requirements, but SignalCore implementations, tests, fixtures and naming are written
+independently. Product and service names remain the property of their respective owners.

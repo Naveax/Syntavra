@@ -43,6 +43,9 @@ class JobRecord:
     summary: str = ""
     evidence_handle: str = ""
     error: str = ""
+    project_id: str = ""
+    repository_tree: str = "unknown"
+    environment_hash: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,18 @@ class ProcessResult:
     evidence_handle: str
     stdout_bytes: int
     stderr_bytes: int
+    scanned_lines: int = 0
+    dropped_lines: int = 0
+
+
+@dataclass(frozen=True)
+class CompletionEvent:
+    sequence: int
+    job_id: str
+    state: str
+    exit_code: int | None
+    completed_at: float
+    evidence_handle: str
 
 
 @dataclass(frozen=True)
@@ -64,6 +79,43 @@ class ContextDecision:
     level: int
     actions: tuple[str, ...]
     mandatory_split: bool
+    pressure_score: float = 0.0
+
+
+@dataclass(frozen=True)
+class ContextItem:
+    item_id: str
+    role: str
+    text: str
+    tokens: int
+    utility: float
+    confidence: float = 1.0
+    mandatory: bool = False
+    stable: bool = False
+    provenance: str = ""
+    dependencies: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ContextPack:
+    budget: int
+    used: int
+    selected_ids: tuple[str, ...]
+    dropped_ids: tuple[str, ...]
+    stable_prefix_hash: str
+    mandatory_satisfied: bool
+    utility: float
+    sections: tuple[tuple[str, str], ...]
+    reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class HookDecision:
+    allowed: bool
+    mode: str
+    command: tuple[str, ...]
+    reasons: tuple[str, ...] = ()
+    replacement: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +126,7 @@ class DifficultyResult:
     checks: dict[str, bool]
     qualified: bool
     integrity_errors: tuple[str, ...] = ()
+    observed: bool = False
 
 
 @dataclass(frozen=True)

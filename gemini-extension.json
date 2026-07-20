@@ -1,6 +1,6 @@
 {
   "name": "signalcore",
-  "version": "0.1.0",
-  "description": "Verified local-first runtime for coding-agent context, evidence, process and benchmark governance",
+  "version": "0.2.0",
+  "description": "SignalCore structural intelligence and verified local runtime for coding agents",
   "contextFileName": "GEMINI.md"
 }

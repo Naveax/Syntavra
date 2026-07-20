@@ -1,7 +1,7 @@
 [project]
 name = "signalcore-runtime"
-version = "0.1.0"
-description = "Local-first verified runtime control plane for AI coding agents"
+version = "0.2.0"
+description = "Local-first runtime intelligence plane for AI coding agents"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 

@@ -1,17 +1,25 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "signalcore",
-  "version": "0.1.0",
-  "description": "SignalCore verified runtime control plane for coding-agent context, evidence, telemetry and zero-poll execution",
-  "owner": {"name": "Naveax"},
-  "plugins": [{
-    "name": "signal-core",
-    "description": "Verified runtime, exact evidence, structural impact, bounded output and fail-closed efficiency claims",
-    "author": {"name": "Naveax"},
-    "category": "development",
-    "source": "./",
-    "strict": false,
-    "skills": ["./skills/signal-core"],
-    "homepage": "https://github.com/Naveax/SignalCore"
-  }]
+  "version": "0.2.0",
+  "description": "SignalCore structural intelligence, exact evidence, zero-poll execution and context governance runtime",
+  "owner": {
+    "name": "Naveax"
+  },
+  "plugins": [
+    {
+      "name": "signal-core",
+      "description": "Transitive impact, scoped memory, streaming output, durable jobs and fail-closed efficiency claims",
+      "author": {
+        "name": "Naveax"
+      },
+      "category": "development",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/signal-core"
+      ],
+      "homepage": "https://github.com/Naveax/SignalCore"
+    }
+  ]
 }

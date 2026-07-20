@@ -1,5 +1,6 @@
-# Migration Notes
+# Migration note
 
-The clean materialized profile replaces the documentation-only/payload branch. Existing version remains `0.0.1`.
-
-Task-state schema version 1 can be migrated to version 2 with `migrate_task_state`. Activation envelope schema version 1 is not accepted because security-sensitive unknown or omitted identity fields must fail closed.
+The clean Roblox profile replaced an earlier documentation-only and encoded-transfer attempt.
+The profile is now retained as ordinary reviewable source inside SignalCore 0.2.0, while its
+claim registry remains bound to the previously verified profile source-tree hash. Runtime 0.2
+changes do not silently upgrade simulated or planned Roblox capabilities to live maturity.

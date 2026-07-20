@@ -12,16 +12,24 @@ from .models import ClaimDecision, DifficultyResult
 from .util import atomic_write_json, canonical_json, sha256_bytes, sha256_file
 
 
-CLAIM_MAP = {"20X": "5X_20X_QUALIFIED", "30X": "5X_30X_ENDURANCE_QUALIFIED", "100X": "5X_100X_ABSOLUTE_QUALIFIED"}
+CLAIM_MAP = {
+    "20X": "5X_20X_QUALIFIED",
+    "30X": "5X_30X_ENDURANCE_QUALIFIED",
+    "100X": "5X_100X_ABSOLUTE_QUALIFIED",
+}
 
 
-def bootstrap_ci(values: list[float], *, iterations: int = 5000, confidence: float = 0.95, seed: int = 1337) -> tuple[float, float] | None:
+def bootstrap_ci(
+    values: list[float],
+    *,
+    iterations: int = 10000,
+    confidence: float = 0.95,
+    seed: int = 1337,
+) -> tuple[float, float] | None:
     if not values:
         return None
     rng = random.Random(seed)
-    medians = []
-    for _ in range(iterations):
-        medians.append(statistics.median(rng.choice(values) for _ in values))
+    medians = [statistics.median(rng.choice(values) for _ in values) for _ in range(iterations)]
     medians.sort()
     alpha = (1 - confidence) / 2
     low = medians[max(0, int(alpha * len(medians)))]
@@ -42,6 +50,7 @@ def decide_claim(
     recovery_failures: int = 0,
     integrity_violations: int = 0,
     actual_quota_available: bool = True,
+    minimum_pairs: int = 10,
 ) -> ClaimDecision:
     baseline = list(baseline_costs)
     signalcore = list(signalcore_costs)
@@ -50,12 +59,16 @@ def decide_claim(
         reasons.append("actual-quota-unavailable")
     if len(baseline) != len(signalcore) or not baseline:
         reasons.append("invalid-paired-sample-count")
-    ratios = [b / s for b, s in zip(baseline, signalcore) if b > 0 and s > 0]
+    if len(baseline) < minimum_pairs:
+        reasons.append(f"insufficient-valid-pairs:{len(baseline)}<{minimum_pairs}")
+    ratios = [base / signal for base, signal in zip(baseline, signalcore) if base > 0 and signal > 0]
     if len(ratios) != len(baseline):
         reasons.append("nonpositive-cost")
     median = statistics.median(ratios) if ratios else None
     geometric = math.exp(sum(math.log(value) for value in ratios) / len(ratios)) if ratios else None
     ci = bootstrap_ci(ratios) if ratios else None
+    if not difficulty.observed:
+        reasons.append("difficulty-not-observed")
     if not difficulty.qualified:
         reasons.append("difficulty-not-qualified")
     if median is None or median < 5.0:
@@ -78,15 +91,32 @@ def decide_claim(
         reasons.append("benchmark-integrity-violation")
     claim = CLAIM_MAP.get(tier, "5X_BASELINE_PROVEN") if not reasons else "5X_NOT_PROVEN"
     payload = {
-        "tier": tier, "difficulty": asdict(difficulty), "baseline": baseline, "signalcore": signalcore,
-        "ratios": ratios, "median": median, "geometric": geometric, "ci": ci, "reasons": sorted(set(reasons)),
+        "tier": tier,
+        "difficulty": asdict(difficulty),
+        "baseline": baseline,
+        "signalcore": signalcore,
+        "ratios": ratios,
+        "median": median,
+        "geometric": geometric,
+        "ci": ci,
+        "minimum_pairs": minimum_pairs,
+        "reasons": sorted(set(reasons)),
     }
-    return ClaimDecision(claim, "PASS" if claim != "5X_NOT_PROVEN" else "NOT_PROVEN", difficulty.score, median, geometric, ci, tuple(sorted(set(reasons))), "sha256:" + sha256_bytes(canonical_json(payload)))
+    return ClaimDecision(
+        claim,
+        "PASS" if claim != "5X_NOT_PROVEN" else "NOT_PROVEN",
+        difficulty.score,
+        median,
+        geometric,
+        ci,
+        tuple(sorted(set(reasons))),
+        "sha256:" + sha256_bytes(canonical_json(payload)),
+    )
 
 
 def write_claim(path: Path, decision: ClaimDecision, *, artifacts: dict[str, Path] | None = None) -> dict:
     value = asdict(decision)
-    value["schema_version"] = 1
+    value["schema_version"] = 2
     value["artifact_hashes"] = {name: sha256_file(file) for name, file in sorted((artifacts or {}).items())}
     value["receipt_hash"] = sha256_bytes(canonical_json(value))
     atomic_write_json(path, value, mode=0o644)

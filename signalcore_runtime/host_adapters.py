@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -18,10 +18,38 @@ class HostCapabilities:
 
 
 KNOWN_HOSTS: dict[str, HostCapabilities] = {
-    "codex": HostCapabilities("codex", supports_mcp=True, supports_session_events=True, supports_usage_telemetry=True, supports_background_jobs=True, supports_native_skill=True),
-    "claude-code": HostCapabilities("claude-code", supports_pre_tool_hook=True, supports_post_tool_hook=True, supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, supports_native_skill=True),
-    "gemini-cli": HostCapabilities("gemini-cli", supports_pre_tool_hook=True, supports_post_tool_hook=True, supports_mcp=True, supports_native_skill=True),
-    "opencode": HostCapabilities("opencode", supports_mcp=True, supports_proxy=True, supports_session_events=True, supports_background_jobs=True),
+    "codex": HostCapabilities(
+        "codex",
+        supports_mcp=True,
+        supports_session_events=True,
+        supports_usage_telemetry=True,
+        supports_background_jobs=True,
+        supports_native_skill=True,
+    ),
+    "claude-code": HostCapabilities(
+        "claude-code",
+        supports_pre_tool_hook=True,
+        supports_post_tool_hook=True,
+        supports_result_replacement=True,
+        supports_mcp=True,
+        supports_session_events=True,
+        supports_background_jobs=True,
+        supports_native_skill=True,
+    ),
+    "gemini-cli": HostCapabilities(
+        "gemini-cli",
+        supports_pre_tool_hook=True,
+        supports_post_tool_hook=True,
+        supports_mcp=True,
+        supports_native_skill=True,
+    ),
+    "opencode": HostCapabilities(
+        "opencode",
+        supports_mcp=True,
+        supports_proxy=True,
+        supports_session_events=True,
+        supports_background_jobs=True,
+    ),
     "generic-mcp": HostCapabilities("generic-mcp", supports_mcp=True),
 }
 
@@ -40,4 +68,8 @@ def negotiate(host: str, *, runtime_available: bool = True) -> dict:
         mode = "INSTRUCTION_ONLY"
     else:
         mode = "UNSUPPORTED"
-    return {"mode": mode, "capabilities": asdict(capabilities)}
+    return {
+        "mode": mode,
+        "enforced": mode in {"HOOK_ENFORCED", "MCP_CONTROLLED", "PROXY_CONTROLLED"},
+        "capabilities": asdict(capabilities),
+    }

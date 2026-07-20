@@ -1,3 +1,3 @@
-"""SignalCore 0.1.0 local-first Fusion Runtime."""
+"""SignalCore 0.2.0 local-first runtime control plane."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

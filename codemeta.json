@@ -2,11 +2,29 @@
   "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
   "@type": "SoftwareSourceCode",
   "name": "SignalCore",
-  "version": "0.1.0",
-  "description": "Local-first verified runtime control plane and Agent Skill for coding agents.",
+  "version": "0.2.0",
+  "description": "Local-first structural intelligence and runtime control plane for coding agents.",
   "codeRepository": "https://github.com/Naveax/SignalCore",
   "programmingLanguage": "Python",
   "runtimePlatform": "Python 3.11+",
-  "author": {"@type": "Person", "name": "Naveax"},
-  "keywords": ["agent-skills", "ai-coding-agent", "codex", "context-engineering", "token-optimization", "process-broker", "evidence", "sqlite", "benchmark-governance"]
+  "author": {
+    "@type": "Person",
+    "name": "Naveax"
+  },
+  "keywords": [
+    "agent-skills",
+    "ai-coding-agent",
+    "benchmark-governance",
+    "call-graph",
+    "codex",
+    "context-engineering",
+    "context-governor",
+    "evidence",
+    "mcp",
+    "output-firewall",
+    "persistent-memory",
+    "process-broker",
+    "sqlite",
+    "token-optimization"
+  ]
 }
