@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -155,7 +156,7 @@ class SandboxManager:
         guarantees = {
             "network_isolated": backend in {"docker", "podman", "bwrap"} and policy.network == "none",
             "filesystem_isolated": backend in {"docker", "podman", "bwrap"},
-            "resource_limited": backend in {"docker", "podman", "bwrap"} or os.name != "nt",
+            "resource_limited": backend in {"docker", "podman", "bwrap"} or (os.name != "nt" and sys.platform != "darwin"),
             "secret_filtered": True,
             "process_tree_controlled": True,
         }
@@ -232,9 +233,21 @@ class SandboxManager:
                     import resource
 
                     def limit_resources() -> None:
-                        resource.setrlimit(resource.RLIMIT_CPU, (max(1, int(policy.timeout_seconds)), max(1, int(policy.timeout_seconds) + 1)))
-                        bytes_limit = policy.memory_mb * 1024 * 1024
-                        resource.setrlimit(resource.RLIMIT_AS, (bytes_limit, bytes_limit))
+                        # Never allow a platform-specific rlimit failure to abort
+                        # process creation from preexec_fn. macOS rejects
+                        # RLIMIT_AS for common interpreter launches; Linux accepts
+                        # it. CPU limits remain best-effort on all POSIX hosts.
+                        cpu_limit = max(1, int(policy.timeout_seconds))
+                        try:
+                            resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit + 1))
+                        except (OSError, ValueError):
+                            pass
+                        if sys.platform != "darwin" and hasattr(resource, "RLIMIT_AS"):
+                            bytes_limit = policy.memory_mb * 1024 * 1024
+                            try:
+                                resource.setrlimit(resource.RLIMIT_AS, (bytes_limit, bytes_limit))
+                            except (OSError, ValueError):
+                                pass
                         # RLIMIT_NPROC is user-wide on common Unix systems and
                         # can make a child fail during interpreter startup when
                         # the runner already owns many processes. Process-tree
