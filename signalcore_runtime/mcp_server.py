@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, TextIO
 
+from .competitive_fabric import CompetitiveContextFabric, StructuralNavigator
 from .compression import ContentRouter, ReversibleContentStore
 from .context_governor import evaluate
 from .evidence import EvidenceStore
@@ -17,10 +19,10 @@ from .sandbox import SandboxManager, SandboxPolicy
 from .session_retrieval import SessionSemanticRetriever
 from .session_runtime import SessionRuntime
 from .status import inspect_runtime
+from .structural import StructuralIndex
 from .tool_externalization import ToolOutputExternalizer
 from .tool_externalization_types import ExternalizationPolicy, ToolPayload
 from .usage_receipt_ledger import UsageReceiptLedger
-from .structural import StructuralIndex
 from .util import stable_project_id
 
 
@@ -43,24 +45,39 @@ class MCPServer:
         self.sandbox = SandboxManager(state_root / "sandbox", project=self.project, evidence=self.evidence)
         self.sessions = SessionRuntime(state_root / "sessions.sqlite3", project_id=project_id)
         self.externalizer = ToolOutputExternalizer(
-            state_root / 'tool-externalization.sqlite3',
+            state_root / "tool-externalization.sqlite3",
             evidence=self.evidence,
-            policy=ExternalizationPolicy.for_profile('balanced'),
+            policy=ExternalizationPolicy.for_profile("balanced"),
         )
-        self.usage_ledger = UsageReceiptLedger(state_root / 'usage-receipts.sqlite3')
+        self.usage_ledger = UsageReceiptLedger(state_root / "usage-receipts.sqlite3")
         self.output_pipeline = HostOutputPipeline(
             self.externalizer, usage_ledger=self.usage_ledger, sessions=self.sessions
         )
         self.session_retriever = SessionSemanticRetriever(self.sessions)
+        self.fabric = CompetitiveContextFabric(
+            state_root / "competitive-fabric.sqlite3", project=self.project, host=self.host
+        )
+        self.navigator = StructuralNavigator(self.project)
 
     @staticmethod
     def tools() -> list[dict[str, Any]]:
-        def tool(name: str, description: str, properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict[str, Any]:
+        def tool(
+            name: str,
+            description: str,
+            properties: dict[str, Any] | None = None,
+            required: list[str] | None = None,
+        ) -> dict[str, Any]:
             schema: dict[str, Any] = {"type": "object", "properties": properties or {}}
             if required:
                 schema["required"] = required
             return {"name": name, "description": description, "inputSchema": schema}
 
+        command_schema = {
+            "oneOf": [
+                {"type": "string"},
+                {"type": "array", "items": {"type": "string"}},
+            ]
+        }
         return [
             tool("signalcore.status", "Inspect truthful runtime health"),
             tool("signalcore.host.detect", "Detect installed coding-agent hosts"),
@@ -73,13 +90,30 @@ class MCPServer:
                 {"after": {"type": "integer"}, "limit": {"type": "integer"}},
             ),
             tool(
+                "signalcore.inspect.symbol", "Find exact multi-language symbols",
+                {"query": {"type": "string"}, "limit": {"type": "integer"}}, ["query"],
+            ),
+            tool(
+                "signalcore.inspect.source", "Retrieve exact bounded source for matching symbols",
+                {"query": {"type": "string"}, "limit": {"type": "integer"}, "context_lines": {"type": "integer"}}, ["query"],
+            ),
+            tool(
+                "signalcore.inspect.range", "Read an exact bounded project file range",
+                {"path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}, "max_bytes": {"type": "integer"}}, ["path"],
+            ),
+            tool(
                 "signalcore.inspect.impact", "Inspect transitive multi-language impact",
                 {"query": {"type": "string"}, "max_depth": {"type": "integer"}}, ["query"],
+            ),
+            tool(
+                "signalcore.inspect.paths", "Inspect impact from changed paths",
+                {"paths": {"type": "array", "items": {"type": "string"}}, "max_depth": {"type": "integer"}}, ["paths"],
             ),
             tool(
                 "signalcore.inspect.map", "Build a query-conditioned repository map",
                 {"query": {"type": "string"}, "token_budget": {"type": "integer"}, "max_depth": {"type": "integer"}}, ["query"],
             ),
+            tool("signalcore.inspect.stats", "Inspect structural-index coverage and parser health"),
             tool(
                 "signalcore.context.evaluate", "Evaluate context pressure",
                 {"used": {"type": "integer"}, "window": {"type": "integer"}, "churn": {"type": "number"}, "evidence_pressure": {"type": "number"}}, ["used", "window"],
@@ -93,12 +127,20 @@ class MCPServer:
                 {"compression_id": {"type": "string"}, "chunk": {"type": "integer"}}, ["compression_id"],
             ),
             tool(
+                "signalcore.compression.verify", "Verify exact compression reconstruction",
+                {"compression_id": {"type": "string"}}, ["compression_id"],
+            ),
+            tool(
                 "signalcore.sandbox.plan", "Plan a fail-closed sandbox execution",
                 {"argv": {"type": "array", "items": {"type": "string"}}, "backend": {"type": "string"}, "network": {"type": "string"}, "strict": {"type": "boolean"}}, ["argv"],
             ),
             tool(
                 "signalcore.sandbox.execute", "Execute a command under sandbox policy",
                 {"argv": {"type": "array", "items": {"type": "string"}}, "backend": {"type": "string"}, "network": {"type": "string"}, "strict": {"type": "boolean"}, "timeout": {"type": "number"}}, ["argv"],
+            ),
+            tool(
+                "signalcore.sandbox.batch", "Execute multiple commands in one sandbox call",
+                {"commands": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}}, "backend": {"type": "string"}, "network": {"type": "string"}, "strict": {"type": "boolean"}, "timeout": {"type": "number"}, "stop_on_failure": {"type": "boolean"}}, ["commands"],
             ),
             tool(
                 "signalcore.session.open", "Open an immutable long-session runtime",
@@ -113,41 +155,99 @@ class MCPServer:
                 {"session_id": {"type": "string"}, "token_budget": {"type": "integer"}}, ["session_id"],
             ),
             tool(
-                'signalcore.output.capture', 'Capture tool output through exact externalization',
-                {'stdout': {'type': 'string'}, 'stderr': {'type': 'string'}, 'command': {'type': 'string'}, 'tool_name': {'type': 'string'}, 'path': {'type': 'string'}, 'scope_key': {'type': 'string'}},
+                "signalcore.session.compact", "Build or refresh the exact summary DAG",
+                {"session_id": {"type": "string"}, "leaf_size": {"type": "integer"}, "fanout": {"type": "integer"}, "force": {"type": "boolean"}}, ["session_id"],
             ),
             tool(
-                'signalcore.output.search', 'Search exact externalized tool output',
-                {'query': {'type': 'string'}, 'artifact_id': {'type': 'string'}, 'scope_key': {'type': 'string'}, 'limit': {'type': 'integer'}}, ['query'],
+                "signalcore.session.expand", "Expand a summary DAG node to exact events",
+                {"summary_id": {"type": "string"}}, ["summary_id"],
             ),
             tool(
-                'signalcore.output.reveal', 'Progressively reveal selected externalized evidence',
-                {'artifact_id': {'type': 'string'}, 'lens': {'type': 'string'}, 'query': {'type': 'string'}, 'budget_bytes': {'type': 'integer'}, 'continuation_token': {'type': 'string'}},
+                "signalcore.session.verify", "Verify immutable session hash lineage",
+                {"session_id": {"type": "string"}}, ["session_id"],
             ),
             tool(
-                'signalcore.output.verify', 'Verify exact reconstruction and Merkle integrity',
-                {'artifact_id': {'type': 'string'}}, ['artifact_id'],
-            ),
-            tool('signalcore.output.stats', 'Inspect externalization statistics'),
-            tool(
-                'signalcore.usage.record', 'Record an attested provider usage receipt',
-                {'task_id': {'type': 'string'}, 'arm_id': {'type': 'string'}, 'repetition': {'type': 'integer'}, 'cache_mode': {'type': 'string'}, 'provider': {'type': 'string'}, 'request_id': {'type': 'string'}, 'provider_response': {'type': 'object'}, 'usage': {'type': 'object'}, 'quota_cost': {'type': 'number'}, 'hardware_hash': {'type': 'string'}},
-                ['task_id', 'arm_id', 'repetition', 'cache_mode', 'provider', 'request_id', 'provider_response', 'usage', 'quota_cost', 'hardware_hash'],
-            ),
-            tool('signalcore.usage.verify', 'Verify the provider usage hash chain and signatures', {'require_hmac': {'type': 'boolean'}}),
-            tool(
-                'signalcore.session.search', 'Semantic and temporal search over exact session events',
-                {'session_id': {'type': 'string'}, 'query': {'type': 'string'}, 'limit': {'type': 'integer'}, 'include_superseded': {'type': 'boolean'}}, ['session_id', 'query'],
+                "signalcore.session.checkpoint", "Create an exact session checkpoint",
+                {"session_id": {"type": "string"}, "metadata": {"type": "object"}}, ["session_id"],
             ),
             tool(
-                'signalcore.session.semantic_context', 'Build query-conditioned long-session context',
-                {'session_id': {'type': 'string'}, 'query': {'type': 'string'}, 'budget_bytes': {'type': 'integer'}, 'include_superseded': {'type': 'boolean'}}, ['session_id', 'query'],
+                "signalcore.session.fork", "Fork a session from a verified checkpoint",
+                {"session_id": {"type": "string"}, "metadata": {"type": "object"}}, ["session_id"],
+            ),
+            tool(
+                "signalcore.session.merge", "Merge verified parent sessions",
+                {"session_ids": {"type": "array", "items": {"type": "string"}}, "metadata": {"type": "object"}}, ["session_ids"],
+            ),
+            tool(
+                "signalcore.output.capture", "Capture tool output through exact externalization",
+                {"stdout": {"type": "string"}, "stderr": {"type": "string"}, "command": {"type": "string"}, "tool_name": {"type": "string"}, "path": {"type": "string"}, "scope_key": {"type": "string"}},
+            ),
+            tool(
+                "signalcore.output.search", "Search exact externalized tool output",
+                {"query": {"type": "string"}, "artifact_id": {"type": "string"}, "scope_key": {"type": "string"}, "limit": {"type": "integer"}}, ["query"],
+            ),
+            tool(
+                "signalcore.output.reveal", "Progressively reveal selected externalized evidence",
+                {"artifact_id": {"type": "string"}, "lens": {"type": "string"}, "query": {"type": "string"}, "budget_bytes": {"type": "integer"}, "continuation_token": {"type": "string"}},
+            ),
+            tool(
+                "signalcore.output.verify", "Verify exact reconstruction and Merkle integrity",
+                {"artifact_id": {"type": "string"}}, ["artifact_id"],
+            ),
+            tool("signalcore.output.stats", "Inspect externalization statistics"),
+            tool(
+                "signalcore.usage.record", "Record an attested provider usage receipt",
+                {"task_id": {"type": "string"}, "arm_id": {"type": "string"}, "repetition": {"type": "integer"}, "cache_mode": {"type": "string"}, "provider": {"type": "string"}, "request_id": {"type": "string"}, "provider_response": {"type": "object"}, "usage": {"type": "object"}, "quota_cost": {"type": "number"}, "hardware_hash": {"type": "string"}},
+                ["task_id", "arm_id", "repetition", "cache_mode", "provider", "request_id", "provider_response", "usage", "quota_cost", "hardware_hash"],
+            ),
+            tool("signalcore.usage.verify", "Verify the provider usage hash chain and signatures", {"require_hmac": {"type": "boolean"}}),
+            tool(
+                "signalcore.session.search", "Semantic and temporal search over exact session events",
+                {"session_id": {"type": "string"}, "query": {"type": "string"}, "limit": {"type": "integer"}, "include_superseded": {"type": "boolean"}}, ["session_id", "query"],
+            ),
+            tool(
+                "signalcore.session.semantic_context", "Build query-conditioned long-session context",
+                {"session_id": {"type": "string"}, "query": {"type": "string"}, "budget_bytes": {"type": "integer"}, "include_superseded": {"type": "boolean"}}, ["session_id", "query"],
             ),
             tool(
                 "signalcore.output.govern", "Render a correctness-preserving bounded answer",
                 {"payload": {"type": "object"}, "profile": {"type": "string"}, "contract": {"type": "string"}}, ["payload"],
             ),
+            tool(
+                "signalcore.fabric.profile", "Select a minimal task-conditioned MCP tool surface",
+                {"task": {"type": "string"}, "profile": {"type": "string"}},
+            ),
+            tool(
+                "signalcore.fabric.route", "Choose the safest exact-preserving execution route",
+                {"command": command_schema, "network_untrusted": {"type": "boolean"}, "repeated": {"type": "boolean"}}, ["command"],
+            ),
+            tool(
+                "signalcore.fabric.compact", "Compact common command output while retaining failures and security signals",
+                {"command": command_schema, "stdout": {"type": "string"}, "stderr": {"type": "string"}, "budget_bytes": {"type": "integer"}}, ["command", "stdout"],
+            ),
+            tool(
+                "signalcore.fabric.cache_align", "Build a stable provider-prefix cache fingerprint",
+                {"messages": {"type": "array", "items": {"type": "object"}}, "keep_tail": {"type": "integer"}}, ["messages"],
+            ),
+            tool(
+                "signalcore.fabric.platform_plan", "Generate installation and enforcement plans for one or every host",
+                {"host": {"type": "string"}, "scope": {"type": "string"}, "all": {"type": "boolean"}},
+            ),
+            tool("signalcore.fabric.doctor", "Diagnose competitive-fabric runtime coverage"),
+            tool(
+                "signalcore.fabric.insights", "Inspect local savings, reliability, cache, and routing analytics",
+                {"since_seconds": {"type": "number"}},
+            ),
         ]
+
+    def exposed_tools(self) -> list[dict[str, Any]]:
+        catalog = self.tools()
+        requested = os.environ.get("SIGNALCORE_MCP_PROFILE", "optimized").strip().casefold() or "optimized"
+        task = os.environ.get("SIGNALCORE_SESSION_TASK", "")
+        plan = self.fabric.profile(task, (row["name"] for row in catalog), requested_profile=requested)
+        selected = set(plan["selected_tools"])
+        filtered = [row for row in catalog if row["name"] in selected]
+        return filtered or catalog
 
     def _index(self) -> StructuralIndex:
         index = StructuralIndex(
@@ -157,6 +257,15 @@ class MCPServer:
         )
         index.index()
         return index
+
+    @staticmethod
+    def _policy(arguments: dict[str, Any]) -> SandboxPolicy:
+        return SandboxPolicy(
+            backend=str(arguments.get("backend", "auto")),
+            network=str(arguments.get("network", "none")),
+            strict=bool(arguments.get("strict", True)),
+            timeout_seconds=float(arguments.get("timeout", 1200)),
+        )
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         if name == "signalcore.status":
@@ -180,14 +289,29 @@ class MCPServer:
         if name == "signalcore.process.completions":
             result = self.broker.drain_completions(after=int(arguments.get("after", 0)), limit=int(arguments.get("limit", 100)))
             return {"cursor": result["cursor"], "events": [asdict(event) for event in result["events"]]}
+        if name == "signalcore.inspect.symbol":
+            return self._index().inspect_symbol(str(arguments["query"]), limit=int(arguments.get("limit", 20)))
+        if name == "signalcore.inspect.source":
+            return self.navigator.symbol_source(
+                self._index(), str(arguments["query"]), limit=int(arguments.get("limit", 8)),
+                context_lines=int(arguments.get("context_lines", 2)),
+            )
+        if name == "signalcore.inspect.range":
+            return self.navigator.read_range(
+                str(arguments["path"]), start_line=int(arguments.get("start_line", 1)),
+                end_line=arguments.get("end_line"), max_bytes=int(arguments.get("max_bytes", 64 * 1024)),
+            )
         if name == "signalcore.inspect.impact":
             return self._index().inspect_impact(str(arguments["query"]), max_depth=int(arguments.get("max_depth", 4)))
+        if name == "signalcore.inspect.paths":
+            return self._index().impacted_by_paths(tuple(arguments["paths"]), max_depth=int(arguments.get("max_depth", 4)))
         if name == "signalcore.inspect.map":
             return self._index().repository_map(
-                str(arguments["query"]),
-                token_budget=int(arguments.get("token_budget", 2000)),
+                str(arguments["query"]), token_budget=int(arguments.get("token_budget", 2000)),
                 max_depth=int(arguments.get("max_depth", 4)),
             )
+        if name == "signalcore.inspect.stats":
+            return self._index().stats()
         if name == "signalcore.context.evaluate":
             return asdict(evaluate(
                 int(arguments["used"]), int(arguments["window"]),
@@ -195,68 +319,71 @@ class MCPServer:
             ))
         if name == "signalcore.compress":
             return asdict(self.compressor.compress(
-                str(arguments["text"]),
-                hint=str(arguments.get("hint", "")),
-                path=str(arguments.get("path", "")),
-                budget_bytes=int(arguments.get("budget_bytes", 8192)),
+                str(arguments["text"]), hint=str(arguments.get("hint", "")),
+                path=str(arguments.get("path", "")), budget_bytes=int(arguments.get("budget_bytes", 8192)),
             ))
         if name == "signalcore.expand":
             data = self.compression_store.restore(str(arguments["compression_id"]), chunk=arguments.get("chunk"))
             return {"bytes": len(data), "text": data.decode("utf-8", errors="replace")}
+        if name == "signalcore.compression.verify":
+            compression_id = str(arguments["compression_id"])
+            return {"compression_id": compression_id, "ok": self.compression_store.verify_roundtrip(compression_id)}
         if name in {"signalcore.sandbox.plan", "signalcore.sandbox.execute"}:
-            policy = SandboxPolicy(
-                backend=str(arguments.get("backend", "auto")),
-                network=str(arguments.get("network", "none")),
-                strict=bool(arguments.get("strict", True)),
-                timeout_seconds=float(arguments.get("timeout", 1200)),
-            )
+            policy = self._policy(arguments)
             if name.endswith("plan"):
                 return asdict(self.sandbox.plan(tuple(arguments["argv"]), policy=policy))
             return asdict(self.sandbox.execute(tuple(arguments["argv"]), policy=policy))
-        if name == 'signalcore.output.capture':
+        if name == "signalcore.sandbox.batch":
+            results = self.sandbox.execute_batch(
+                (tuple(command) for command in arguments["commands"]),
+                policy=self._policy(arguments),
+                stop_on_failure=bool(arguments.get("stop_on_failure", True)),
+            )
+            return {"results": [asdict(result) for result in results], "completed": len(results)}
+        if name == "signalcore.output.capture":
             artifact = self.externalizer.externalize(ToolPayload(
-                command=str(arguments.get('command', '')), stdout=str(arguments.get('stdout', '')),
-                stderr=str(arguments.get('stderr', '')), tool_name=str(arguments.get('tool_name', 'mcp')),
-                path=str(arguments.get('path', '')), scope_key=str(arguments.get('scope_key', 'default')),
-                metadata=dict(arguments.get('metadata') or {}),
+                command=str(arguments.get("command", "")), stdout=str(arguments.get("stdout", "")),
+                stderr=str(arguments.get("stderr", "")), tool_name=str(arguments.get("tool_name", "mcp")),
+                path=str(arguments.get("path", "")), scope_key=str(arguments.get("scope_key", "default")),
+                metadata=dict(arguments.get("metadata") or {}),
             ))
             return asdict(artifact)
-        if name == 'signalcore.output.search':
-            return {'hits': [asdict(hit) for hit in self.externalizer.search(
-                str(arguments['query']), artifact_id=arguments.get('artifact_id'),
-                scope_key=arguments.get('scope_key'), limit=int(arguments.get('limit', 8)),
+        if name == "signalcore.output.search":
+            return {"hits": [asdict(hit) for hit in self.externalizer.search(
+                str(arguments["query"]), artifact_id=arguments.get("artifact_id"),
+                scope_key=arguments.get("scope_key"), limit=int(arguments.get("limit", 8)),
             )]}
-        if name == 'signalcore.output.reveal':
+        if name == "signalcore.output.reveal":
             return asdict(self.externalizer.reveal(
-                arguments.get('artifact_id'), lens=str(arguments.get('lens', 'salient')),
-                query=str(arguments.get('query', '')), budget_bytes=arguments.get('budget_bytes'),
-                continuation_token=arguments.get('continuation_token'),
+                arguments.get("artifact_id"), lens=str(arguments.get("lens", "salient")),
+                query=str(arguments.get("query", "")), budget_bytes=arguments.get("budget_bytes"),
+                continuation_token=arguments.get("continuation_token"),
             ))
-        if name == 'signalcore.output.verify':
-            return self.externalizer.verify(str(arguments['artifact_id']))
-        if name == 'signalcore.output.stats':
+        if name == "signalcore.output.verify":
+            return self.externalizer.verify(str(arguments["artifact_id"]))
+        if name == "signalcore.output.stats":
             return self.externalizer.stats()
-        if name == 'signalcore.usage.record':
+        if name == "signalcore.usage.record":
             entry = self.usage_ledger.record(
-                task_id=str(arguments['task_id']), arm_id=str(arguments['arm_id']),
-                repetition=int(arguments['repetition']), cache_mode=str(arguments['cache_mode']),
-                provider=str(arguments['provider']), request_id=str(arguments['request_id']),
-                provider_response=dict(arguments['provider_response']), usage_payload=dict(arguments['usage']),
-                quota_cost=float(arguments['quota_cost']), hardware_hash=str(arguments['hardware_hash']),
+                task_id=str(arguments["task_id"]), arm_id=str(arguments["arm_id"]),
+                repetition=int(arguments["repetition"]), cache_mode=str(arguments["cache_mode"]),
+                provider=str(arguments["provider"]), request_id=str(arguments["request_id"]),
+                provider_response=dict(arguments["provider_response"]), usage_payload=dict(arguments["usage"]),
+                quota_cost=float(arguments["quota_cost"]), hardware_hash=str(arguments["hardware_hash"]),
             )
             return asdict(entry)
-        if name == 'signalcore.usage.verify':
-            return self.usage_ledger.verify(require_hmac=bool(arguments.get('require_hmac', False)))
-        if name == 'signalcore.session.search':
-            return {'hits': self.session_retriever.serializable(self.session_retriever.search(
-                str(arguments['session_id']), str(arguments['query']), limit=int(arguments.get('limit', 12)),
-                include_superseded=bool(arguments.get('include_superseded', False)),
+        if name == "signalcore.usage.verify":
+            return self.usage_ledger.verify(require_hmac=bool(arguments.get("require_hmac", False)))
+        if name == "signalcore.session.search":
+            return {"hits": self.session_retriever.serializable(self.session_retriever.search(
+                str(arguments["session_id"]), str(arguments["query"]), limit=int(arguments.get("limit", 12)),
+                include_superseded=bool(arguments.get("include_superseded", False)),
             ))}
-        if name == 'signalcore.session.semantic_context':
+        if name == "signalcore.session.semantic_context":
             return asdict(self.session_retriever.context_pack(
-                str(arguments['session_id']), str(arguments['query']),
-                budget_bytes=int(arguments.get('budget_bytes', 8192)),
-                include_superseded=bool(arguments.get('include_superseded', False)),
+                str(arguments["session_id"]), str(arguments["query"]),
+                budget_bytes=int(arguments.get("budget_bytes", 8192)),
+                include_superseded=bool(arguments.get("include_superseded", False)),
             ))
         if name == "signalcore.session.open":
             return asdict(self.sessions.create_session(session_id=arguments.get("session_id"), metadata=arguments.get("metadata") or {}))
@@ -264,10 +391,56 @@ class MCPServer:
             return asdict(self.sessions.append(str(arguments["session_id"]), str(arguments["event_type"]), dict(arguments["payload"])))
         if name == "signalcore.session.context":
             return self.sessions.active_context(str(arguments["session_id"]), token_budget=int(arguments.get("token_budget", 32000)))
+        if name == "signalcore.session.compact":
+            summary_id = self.sessions.compact(
+                str(arguments["session_id"]), leaf_size=int(arguments.get("leaf_size", 32)),
+                fanout=int(arguments.get("fanout", 8)), force=bool(arguments.get("force", False)),
+            )
+            return {"summary_id": summary_id}
+        if name == "signalcore.session.expand":
+            return self.sessions.expand_summary(str(arguments["summary_id"]))
+        if name == "signalcore.session.verify":
+            return self.sessions.verify(str(arguments["session_id"]))
+        if name == "signalcore.session.checkpoint":
+            return asdict(self.sessions.checkpoint(str(arguments["session_id"]), metadata=dict(arguments.get("metadata") or {})))
+        if name == "signalcore.session.fork":
+            return asdict(self.sessions.fork(str(arguments["session_id"]), metadata=dict(arguments.get("metadata") or {})))
+        if name == "signalcore.session.merge":
+            return asdict(self.sessions.merge(tuple(arguments["session_ids"]), metadata=dict(arguments.get("metadata") or {})))
         if name == "signalcore.output.govern":
             return OutputGovernor(str(arguments.get("profile", "balanced"))).render(
                 dict(arguments["payload"]), contract=str(arguments.get("contract", "generic")),
             )
+        if name == "signalcore.fabric.profile":
+            return self.fabric.profile(
+                str(arguments.get("task", "")), (row["name"] for row in self.tools()),
+                requested_profile=str(arguments.get("profile", "auto")),
+            )
+        if name == "signalcore.fabric.route":
+            return asdict(self.fabric.route(
+                arguments["command"], network_untrusted=bool(arguments.get("network_untrusted", False)),
+                repeated=bool(arguments.get("repeated", False)),
+            ))
+        if name == "signalcore.fabric.compact":
+            return asdict(self.fabric.compact(
+                arguments["command"], str(arguments.get("stdout", "")), str(arguments.get("stderr", "")),
+                budget_bytes=int(arguments.get("budget_bytes", 4096)),
+            ))
+        if name == "signalcore.fabric.cache_align":
+            return asdict(self.fabric.align_cache(
+                list(arguments["messages"]), keep_tail=int(arguments.get("keep_tail", 1)),
+            ))
+        if name == "signalcore.fabric.platform_plan":
+            if bool(arguments.get("all", False)):
+                return self.fabric.platforms.all_plans(project=self.project, scope=str(arguments.get("scope", "project")))
+            return self.fabric.platforms.plan(
+                str(arguments.get("host", self.host)), project=self.project,
+                scope=str(arguments.get("scope", "project")),
+            )
+        if name == "signalcore.fabric.doctor":
+            return self.fabric.doctor()
+        if name == "signalcore.fabric.insights":
+            return self.fabric.insights(since_seconds=arguments.get("since_seconds"))
         raise KeyError(name)
 
     def handle(self, message: dict[str, Any]) -> dict[str, Any] | None:
@@ -283,7 +456,7 @@ class MCPServer:
                     "serverInfo": {"name": "signalcore", "version": self.VERSION},
                 }
             elif method == "tools/list":
-                result = {"tools": self.tools()}
+                result = {"tools": self.exposed_tools()}
             elif method == "tools/call":
                 params = message.get("params") or {}
                 tool_name = str(params.get("name"))
