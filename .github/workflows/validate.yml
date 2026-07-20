@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/ecosystem-long-session-v04
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
