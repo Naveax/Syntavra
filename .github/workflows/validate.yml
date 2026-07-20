@@ -1,100 +1,34 @@
-name: Finalize Ecosystem Long Session V4
+name: Validate SignalCore Package
 
 on:
   push:
-    branches:
-      - agent/ecosystem-long-session-v04
+    branches: [main]
   pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: ecosystem-long-session-v4
-  cancel-in-progress: true
+  contents: read
 
 jobs:
-  finalize:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: agent/ecosystem-long-session-v04
-          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Run focused tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m compileall -q signalcore_runtime benchmarks tests
-          python -m unittest discover -s tests/runtime -p 'test_*v4.py' -q
-      - name: Run benchmark and capture diagnostics
-        shell: bash
-        run: |
-          set +e
-          mkdir -p benchmarks/results/long-session-v4
-          python benchmarks/long_session_v4_benchmark.py \
-            --events 2048 \
-            --token-budget 4096 \
-            --output benchmarks/results/long-session-v4/internal.json \
-            > ecosystem-v4-benchmark-diagnostic.txt 2>&1
-          status=$?
-          echo "EXIT_STATUS=$status" >> ecosystem-v4-benchmark-diagnostic.txt
-          if [ "$status" -ne 0 ]; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add ecosystem-v4-benchmark-diagnostic.txt
-            git commit -m "record ecosystem v4 benchmark diagnostics"
-            git push origin HEAD:agent/ecosystem-long-session-v04
-            exit "$status"
-          fi
-          rm ecosystem-v4-benchmark-diagnostic.txt
-      - name: Restore canonical workflow
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          git show origin/main:.github/workflows/validate.yml > .github/workflows/validate.yml
-      - name: Regenerate exact package manifest and run full suite
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import hashlib
-
-          root = Path(".")
-          generated = {"fusion-release-smoke.json", "release-smoke.json", "platform-registry.json", "native-dry-run.json"}
-          rows = []
-          for path in root.rglob("*"):
-              if not path.is_file():
-                  continue
-              relative = path.relative_to(root)
-              if any(part in {".git", ".signalcore", "__pycache__", ".pytest_cache"} for part in relative.parts):
-                  continue
-              if ((path.name == "MANIFEST.sha256" and path.parent == root) or path.name in generated or path.suffix == ".pyc"):
-                  continue
-              rows.append((relative.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
-          rows.sort(key=lambda item: item[0])
-          Path("MANIFEST.sha256").write_text(
-              "".join(f"{digest}  {relative}\n" for relative, digest in rows),
-              encoding="utf-8", newline="\n",
-          )
-          PY
-          python tools/validate.py
-          python -m unittest discover -s tests -q
-      - name: Commit final clean tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "finalize ecosystem and long-session v4"
-          git push origin HEAD:agent/ecosystem-long-session-v04
+          python-version: ${{ matrix.python-version }}
+      - name: Compile
+        run: python -m compileall -q signalcore_runtime skills/signal-core/scripts tools tests benchmarks
+      - name: Validate package
+        run: python tools/validate.py
+      - name: Run complete test discovery
+        run: python -m unittest discover -s tests -q
+      - name: Check platform registry
+        run: python tools/install.py list --output platform-registry.json
+      - name: Dry-run native adapters
+        run: python tools/install.py install --platforms all-native --scope project --project . --dry-run --output native-dry-run.json
