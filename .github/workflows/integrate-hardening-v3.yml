@@ -63,12 +63,7 @@ jobs:
           from dataclasses import asdict
           from pathlib import Path
           from signalcore_runtime.usage_receipt_ledger import normalize_provider_usage
-          usage = normalize_provider_usage('openai', {
-              'input_tokens': 1000,
-              'input_tokens_details': {'cached_tokens': 400},
-              'output_tokens': 80,
-              'output_tokens_details': {'reasoning_tokens': 20},
-          })
+          usage = normalize_provider_usage('openai', {'input_tokens': 1000, 'input_tokens_details': {'cached_tokens': 400}, 'output_tokens': 80, 'output_tokens_details': {'reasoning_tokens': 20}})
           Path('/tmp/provider-debug.json').write_text(json.dumps(asdict(usage), indent=2, sort_keys=True), encoding='utf-8')
           assert usage.fresh_input_tokens == 600
           assert usage.cached_input_tokens == 400
@@ -119,7 +114,42 @@ jobs:
           path: /tmp/ledger-debug.json
           if-no-files-found: error
       - name: Semantic temporal truth gate
-        run: python tests/runtime/test_signalcore_hardening_v3.py SignalCoreHardeningV3Tests.test_semantic_temporal_retrieval_prefers_current_decision -v
+        run: |
+          python - <<'PY'
+          import json
+          from dataclasses import asdict, dataclass
+          from pathlib import Path
+          from signalcore_runtime.session_retrieval import SessionSemanticRetriever
+          @dataclass
+          class Event:
+              sequence: int
+              event_type: str
+              payload: dict
+              created_at: float
+          class Session:
+              def __init__(self): self.rows = []
+              def append(self, event_type, payload): self.rows.append(Event(len(self.rows) + 1, event_type, payload, 1_700_000_000.0 + len(self.rows)))
+              def events(self, session_id, *, after=0, limit=1000): return [row for row in self.rows if row.sequence > after][:limit]
+          session = Session()
+          session.append('decision', {'decision_id': 'auth-policy-v1', 'subject': 'auth-refresh', 'decision': 'retry refresh token three times'})
+          session.append('error', {'subject': 'auth-refresh', 'error': 'credential rotation caused fatal refresh failure'})
+          session.append('decision', {'decision_id': 'auth-policy-v2', 'subject': 'auth-refresh', 'decision': 'refresh once then re-authenticate', 'supersedes': 'auth-policy-v1'})
+          retriever = SessionSemanticRetriever(session)
+          hits = retriever.search('s', 'authentication token renewal crash', limit=5)
+          all_hits = retriever.search('s', 'auth refresh', include_superseded=True, limit=10)
+          Path('/tmp/semantic-debug.json').write_text(json.dumps({'hits': [asdict(hit) for hit in hits], 'all_hits': [asdict(hit) for hit in all_hits]}, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
+          assert hits
+          assert hits[0].temporal_status == 'current'
+          assert hits[0].payload.get('decision_id') != 'auth-policy-v1'
+          assert any(hit.temporal_status == 'superseded' for hit in all_hits)
+          PY
+      - name: Upload semantic diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-v3-semantic-debug
+          path: /tmp/semantic-debug.json
+          if-no-files-found: error
       - name: Mandatory host interception gate
         run: python tests/runtime/test_signalcore_hardening_v3.py SignalCoreHardeningV3Tests.test_host_pipeline_externalizes_large_output_and_records_session -v
       - name: Concurrent externalization gate
