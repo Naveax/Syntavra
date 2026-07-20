@@ -1,0 +1,56 @@
+name: Clean adaptive context integration artifacts
+
+on:
+  push:
+    branches: [agent/adaptive-context-v04]
+
+permissions:
+  contents: write
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONWARNINGS: "error::ResourceWarning"
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/adaptive-context-v04
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Remove temporary artifacts
+        run: |
+          rm .github/workflows/adaptive-context-cleanup.yml
+          rm -f adaptive-context-output.json
+      - name: Regenerate manifest
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root=Path('.')
+          generated={'fusion-release-smoke.json','release-smoke.json','platform-registry.json','native-dry-run.json'}
+          rows=[]
+          for path in root.rglob('*'):
+              if not path.is_file(): continue
+              relative=path.relative_to(root)
+              if any(part in {'.git','.signalcore','__pycache__','.pytest_cache'} for part in relative.parts): continue
+              if (path.name == 'MANIFEST.sha256' and path.parent == root) or path.name in generated or path.suffix == '.pyc': continue
+              rows.append((relative.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+          root.joinpath('MANIFEST.sha256').write_text(''.join(f'{digest}  {name}\n' for name,digest in sorted(rows)), encoding='utf-8')
+          PY
+      - name: Revalidate integration
+        run: |
+          python -m compileall -q signalcore_runtime tools tests benchmarks
+          python -m unittest tests.runtime.test_adaptive_context_v04 -q
+          python tools/validate.py
+          python tools/validate_runtime.py
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Clean adaptive benchmark artifacts'
+          git push origin HEAD:agent/adaptive-context-v04
