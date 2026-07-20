@@ -1,0 +1,106 @@
+name: Integrate Tool-Output Externalization V2
+
+on:
+  push:
+    branches: [agent/adaptive-context-v04]
+
+permissions:
+  contents: write
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONWARNINGS: "error::ResourceWarning"
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/adaptive-context-v04
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Remove one-shot workflow before validation
+        run: rm .github/workflows/tool-externalization-v2-integration.yml
+      - name: Compile and run complete test suites
+        run: |
+          python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
+          python -m unittest discover -s tests/runtime -q
+          python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+          python -m unittest discover -s tests/roblox_profile -q
+      - name: Run Tool-Output Externalization V2 benchmark
+        run: |
+          mkdir -p benchmarks/results/tool-externalization
+          python benchmarks/tool_externalization_benchmark.py --output benchmarks/results/tool-externalization/v2-internal.json >/tmp/tool-externalization-v2.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('benchmarks/results/tool-externalization/v2-internal.json').read_text())
+          assert result['claim'] == 'SUPERIORITY_NOT_PROVEN'
+          assert len(result['profiles']) == 3
+          for profile in result['profiles']:
+              aggregate = profile['aggregate']
+              assert aggregate['all_quality'] is True
+              assert aggregate['all_roundtrips'] is True
+              assert aggregate['all_searches'] is True
+              assert aggregate['all_merkle_proofs'] is True
+              assert aggregate['dedup_mode'] == 'dedup-reference'
+              assert aggregate['delta_mode'] == 'delta-externalized'
+              assert aggregate['delta_baseline'] is True
+              assert aggregate['delta_needle_visible'] is True
+              assert aggregate['delta_lineage_depth'] >= 2
+              assert aggregate['reduction_ratio'] >= 0.99
+          PY
+      - name: CLI smoke
+        run: |
+          printf 'INFO ok\nFATAL auth failure at src/auth.py:9\n' >/tmp/ext.log
+          python tools/tool_externalization.py --project . --state-root /tmp/sc-ext capture --command 'service logs' --path service.log --scope-key smoke --input /tmp/ext.log >/tmp/capture.json
+          ARTIFACT=$(python -c "import json; print(json.load(open('/tmp/capture.json'))['artifact_id'])")
+          python tools/tool_externalization.py --project . --state-root /tmp/sc-ext search 'auth failure' --artifact-id "$ARTIFACT" --pack-budget 2048 >/tmp/search.json
+          python tools/tool_externalization.py --project . --state-root /tmp/sc-ext proof "$ARTIFACT" 0 >/tmp/proof.json
+          python tools/tool_externalization.py --project . --state-root /tmp/sc-ext verify "$ARTIFACT" >/tmp/verify.json
+          python - <<'PY'
+          import json
+          assert json.load(open('/tmp/search.json'))['hit_count'] > 0
+          assert json.load(open('/tmp/proof.json'))['verified'] is True
+          assert json.load(open('/tmp/verify.json'))['ok'] is True
+          PY
+      - name: Regenerate release manifest
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path('.')
+          generated = {'fusion-release-smoke.json','release-smoke.json','platform-registry.json','native-dry-run.json'}
+          rows = []
+          for path in root.rglob('*'):
+              if not path.is_file():
+                  continue
+              relative = path.relative_to(root)
+              if any(part in {'.git','.signalcore','__pycache__','.pytest_cache'} for part in relative.parts):
+                  continue
+              if (path.name == 'MANIFEST.sha256' and path.parent == root) or path.name in generated or path.suffix == '.pyc':
+                  continue
+              rows.append((relative.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+          root.joinpath('MANIFEST.sha256').write_text(''.join(f'{digest}  {name}\n' for name,digest in sorted(rows)), encoding='utf-8')
+          PY
+      - name: Run release validators
+        run: |
+          python tools/validate.py
+          python tools/validate_runtime.py
+          python tools/validate_roblox_profile.py
+          python tools/verify_claims.py
+          python tools/validate_release.py --profile 5x --smoke --output release-smoke.json
+      - name: Commit verified integration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Finalize Tool-Output Externalization V2 integration'
+          git push origin HEAD:agent/adaptive-context-v04
