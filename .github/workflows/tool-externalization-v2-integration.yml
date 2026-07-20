@@ -1,8 +1,8 @@
 name: Integrate Tool-Output Externalization V2
 
 on:
-  push:
-    branches: [agent/adaptive-context-v04]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -17,6 +17,7 @@ env:
 
 jobs:
   integrate:
+    if: github.head_ref == 'agent/adaptive-context-v04'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
