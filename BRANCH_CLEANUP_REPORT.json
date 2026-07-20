@@ -1,0 +1,19 @@
+{
+  "deleted": [
+    "agent/signalcore-v0.3.0-fixed",
+    "agent/signalcore-v0.3.0-fixed2",
+    "agent/signalcore-v0.3.0-fixed3",
+    "agent/signalcore-v0.3.0-unified",
+    "agent/signalcore-v0.3.0-unified-recovery",
+    "agent/signalcore-v0.3.0-unified-recovery2",
+    "agent/signalcore-v0.3.0-unified-recovery3",
+    "agent/signalcore-v0.3.0-unified-recovery4",
+    "agent/signalcore-v0.3.0-unified-recovery5",
+    "noop-ready-check",
+    "noop-ready-check-2"
+  ],
+  "remaining": [
+    "main"
+  ],
+  "status": "PASS"
+}
