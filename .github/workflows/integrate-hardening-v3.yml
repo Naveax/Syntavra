@@ -57,7 +57,31 @@ jobs:
           path: /tmp/security-debug.json
           if-no-files-found: error
       - name: Provider usage normalization gate
-        run: python tests/runtime/test_signalcore_hardening_v3.py SignalCoreHardeningV3Tests.test_provider_usage_normalization -v
+        run: |
+          python - <<'PY'
+          import json
+          from dataclasses import asdict
+          from pathlib import Path
+          from signalcore_runtime.usage_receipt_ledger import normalize_provider_usage
+          usage = normalize_provider_usage('openai', {
+              'input_tokens': 1000,
+              'input_tokens_details': {'cached_tokens': 400},
+              'output_tokens': 80,
+              'output_tokens_details': {'reasoning_tokens': 20},
+          })
+          Path('/tmp/provider-debug.json').write_text(json.dumps(asdict(usage), indent=2, sort_keys=True), encoding='utf-8')
+          assert usage.fresh_input_tokens == 600
+          assert usage.cached_input_tokens == 400
+          assert usage.output_tokens == 80
+          assert usage.reasoning_tokens == 20
+          PY
+      - name: Upload provider diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-v3-provider-debug
+          path: /tmp/provider-debug.json
+          if-no-files-found: error
       - name: Provider ledger tamper gate
         run: python tests/runtime/test_signalcore_hardening_v3.py SignalCoreHardeningV3Tests.test_usage_receipt_ledger_is_hmac_attested_and_tamper_evident -v
       - name: Semantic temporal truth gate
