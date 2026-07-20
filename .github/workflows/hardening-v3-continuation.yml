@@ -117,11 +117,12 @@ jobs:
           if-no-files-found: error
       - name: Hardening unit suite
         run: python -m unittest discover -s tests/runtime -p 'test_signalcore_hardening_v3.py' -q
-      - name: Complete runtime and profile tests
-        run: |
-          python -m unittest discover -s tests/runtime -q
-          python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
-          python -m unittest discover -s tests/roblox_profile -q
+      - name: Legacy runtime suite
+        run: python -m unittest discover -s tests/runtime -q
+      - name: Platform gates
+        run: python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+      - name: Roblox profile suite
+        run: python -m unittest discover -s tests/roblox_profile -q
       - name: Hardening benchmark
         run: |
           mkdir -p benchmarks/results/hardening-v3
