@@ -20,10 +20,13 @@ from .product_surface import (
     ToolRoutingEnforcer,
     write_receipt_schema,
 )
+from .proxy_product import ProxyProductRegistry
 from .public_proof import PublicProofGate
 from .release_identity import VERSION, identity, validate_repository_identity
+from .session_product import SessionContinuityController
 from .signalbench_v2 import CodingCorpusPlanner, PairedSchedule, SuperiorityGate, default_arms
 from .structural_v2 import GraphEdge, GraphNode, StructuralGraphV2
+from .util import stable_project_id
 from .zero_friction import ZeroFrictionManager
 
 
@@ -53,6 +56,14 @@ def _load_long_context_receipts(path: Path) -> list[LongContextReceipt]:
     return [LongContextReceipt.from_mapping(item) for item in rows if isinstance(item, dict)]
 
 
+def _session_controller(project: Path, state: Path) -> SessionContinuityController:
+    return SessionContinuityController(
+        state / "sessions.sqlite3",
+        project_id=stable_project_id(project),
+        analytics_path=state / "analytics" / "events.jsonl",
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="signalcore",
@@ -71,7 +82,7 @@ def _parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="show one health and usage snapshot")
     status.add_argument("--receipts")
 
-    run = sub.add_parser("run", help="plan an enforced agent operation")
+    run = sub.add_parser("run", help="execute an enforced product operation")
     run_sub = run.add_subparsers(dest="action", required=True)
     run_sub.add_parser("manifest")
     route = run_sub.add_parser("route")
@@ -82,6 +93,23 @@ def _parser() -> argparse.ArgumentParser:
     route.add_argument("--user-authorized", action="store_true")
     record = run_sub.add_parser("record")
     record.add_argument("event", help="JSON object or path to a JSON object")
+    proxy_plan = run_sub.add_parser("proxy-plan")
+    proxy_plan.add_argument("provider")
+    proxy_plan.add_argument("--upstream", default="")
+    session_open = run_sub.add_parser("session-open")
+    session_open.add_argument("--session-id")
+    session_open.add_argument("--metadata", default="{}")
+    session_append = run_sub.add_parser("session-append")
+    session_append.add_argument("session_id")
+    session_append.add_argument("event_type")
+    session_append.add_argument("payload")
+    session_compact = run_sub.add_parser("session-compact")
+    session_compact.add_argument("session_id")
+    session_compact.add_argument("--force", action="store_true")
+    session_continuity = run_sub.add_parser("session-continuity")
+    session_continuity.add_argument("session_id")
+    session_continuity.add_argument("--token-budget", type=int, default=32_000)
+    run_sub.add_parser("session-status")
 
     prove = sub.add_parser("prove", help="validate measured external evidence")
     prove_sub = prove.add_subparsers(dest="action", required=True)
@@ -135,13 +163,16 @@ def main(argv: list[str] | None = None) -> int:
             "doctor": manager.doctor(),
             "stats": manager.stats(),
             "readiness": ProductSurface.readiness(state, receipt_rows),
+            "proxy_presets": ProxyProductRegistry.validate(),
             "primary_workflow": ["setup", "status", "run", "prove"],
         }
         _emit(value)
         return 0 if value["doctor"]["ok"] else 2
     if args.command == "run":
         if args.action == "manifest":
-            _emit(ProductSurface.manifest())
+            value = ProductSurface.manifest()
+            value["proxy_presets"] = ProxyProductRegistry.validate()
+            _emit(value)
             return 0
         if args.action == "route":
             decision = ToolRoutingEnforcer.decide(
@@ -153,11 +184,37 @@ def main(argv: list[str] | None = None) -> int:
             )
             _emit(asdict(decision))
             return 0 if decision.allowed else 5
-        event = _load_json_argument(args.event)
-        if not isinstance(event, dict):
-            raise ValueError("analytics event must be a JSON object")
-        _emit(SessionAnalyticsStore(state / "analytics" / "events.jsonl").record(event))
-        return 0
+        if args.action == "record":
+            event = _load_json_argument(args.event)
+            if not isinstance(event, dict):
+                raise ValueError("analytics event must be a JSON object")
+            _emit(SessionAnalyticsStore(state / "analytics" / "events.jsonl").record(event))
+            return 0
+        if args.action == "proxy-plan":
+            value = ProxyProductRegistry.plan(args.provider, upstream=args.upstream)
+            _emit(value)
+            return 0 if value["ok"] else 3
+        controller = _session_controller(project, state)
+        if args.action == "session-open":
+            metadata = _load_json_argument(args.metadata)
+            if not isinstance(metadata, dict):
+                raise ValueError("session metadata must be a JSON object")
+            value = controller.open_or_resume(args.session_id, metadata=metadata)
+        elif args.action == "session-append":
+            payload = _load_json_argument(args.payload)
+            if not isinstance(payload, dict):
+                raise ValueError("session payload must be a JSON object")
+            value = controller.append(args.session_id, args.event_type, payload)
+        elif args.action == "session-compact":
+            value = controller.compact_once(args.session_id, force=args.force)
+        elif args.action == "session-continuity":
+            value = controller.continuity_receipt(args.session_id, token_budget=args.token_budget)
+        elif args.action == "session-status":
+            value = controller.status()
+        else:
+            raise RuntimeError(args.action)
+        _emit(value)
+        return 0 if value.get("ok", True) else 3
     if args.command == "prove":
         if args.action == "plan":
             _emit({
@@ -219,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
             "coverage": IntegrationMatrix.validate(),
             "integrations": IntegrationMatrix.records(args.family),
             "platform_adapters": PlatformAdapterRegistry.validate(),
+            "proxy_presets": ProxyProductRegistry.validate(),
         })
         return 0
     if args.command == "context-stress":
