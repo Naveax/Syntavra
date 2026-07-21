@@ -27,23 +27,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/typescript/package.json
       - name: Install build and runtime dependencies
         run: |
           python -m pip install --disable-pip-version-check build cyclonedx-bom
           python -m pip install --disable-pip-version-check -e .
-      - name: Verify locked pre-release identity
+      - name: Verify locked pre-release identity and product surface
+        shell: bash
         run: |
           python tools/v6_materialize.py
           python -m signalcore_runtime version
+          python -m signalcore_runtime --project . setup --mcp-profile minimal > setup-plan.json
+          python -m signalcore_runtime --project . run manifest > product-manifest.json
+          python -m signalcore_runtime --project . prove plan > proof-plan.json
       - name: Build Python wheel and source archive
         run: python -m build
-      - name: Build npm pre-release package
+      - name: Check and build npm pre-release package
         shell: bash
         run: |
           cd sdk/typescript
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run build
+          test -f dist/index.js
+          test -f dist/index.d.ts
+          test -f dist/receipts.js
+          test -f dist/receipts.d.ts
           npm pack --json > npm-pack.json
       - name: Generate CycloneDX Python SBOM
         run: cyclonedx-py environment --output-format JSON --output-file signalcore-python-sbom.json
+      - name: Generate npm CycloneDX SBOM
+        shell: bash
+        run: |
+          cd sdk/typescript
+          npm sbom --sbom-format cyclonedx > signalcore-typescript-sbom.json
       - name: Generate checksums
         shell: bash
         run: |
@@ -75,7 +93,11 @@ jobs:
             dist/
             sdk/typescript/*.tgz
             sdk/typescript/npm-pack.json
+            sdk/typescript/signalcore-typescript-sbom.json
             signalcore-python-sbom.json
+            setup-plan.json
+            product-manifest.json
+            proof-plan.json
             pre-release-checksums.json
           if-no-files-found: error
           retention-days: 30
