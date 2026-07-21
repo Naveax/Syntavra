@@ -41,14 +41,29 @@ from .identity import Authorizer, CapabilityTokenIssuer, Principal
 from .infinite_context import ActiveContextPlan, RecursiveExecutionEngine, RecursiveTask, UnboundedContextCoordinator
 from .integration_matrix import IntegrationMatrix, IntegrationSpec
 from .job_scheduler import DurableJobScheduler, JobSpec
+from .long_context_quality import LongContextQualityGate, LongContextReceipt
 from .long_session_planner import ContextPlanPolicy, LongSessionPlanner
 from .policy_rollout import PolicyRolloutManager, VerifiedPolicyObservation
 from .policy_tuner import AdaptivePolicyTuner, PolicyObservation, PolicyRecommendation
+from .product_surface import (
+    MCPProfile,
+    MeasuredBenchmarkGate,
+    PlatformAdapter,
+    PlatformAdapterRegistry,
+    ProductSurface,
+    ProviderUsageReceipt,
+    ReceiptValidator,
+    SessionAnalyticsStore,
+    ToolRouteDecision,
+    ToolRoutingEnforcer,
+)
+from .proxy_product import ProxyPreset, ProxyProductRegistry
 from .public_proof import BetaReceipt, PublicProofGate, WorkloadSpec
 from .release_identity import ReleaseIdentity, VersionLockError
 from .runtime_pipeline import CanonicalRequestEnvelope, UnifiedRuntimePipeline
 from .sdk import SDKInvocation, SignalCoreClient
 from .service_manager import ProviderProxyServiceManager, ServicePlan, ServiceSpec
+from .session_product import SessionContinuityController
 from .signalbench_v2 import CodingCorpusPlanner, PairedSchedule, SuperiorityGate
 from .structural_v2 import GraphEdge, GraphNode, StructuralGraphV2
 from .zero_friction import ZeroFrictionManager
@@ -59,10 +74,14 @@ __all__ = [
     "CanonicalRequestEnvelope", "CapabilityTokenIssuer", "CodingCorpusPlanner", "ConfigManager",
     "ConfigSnapshot", "ContextPlanPolicy", "DataRoutePolicy", "DataRouteResult", "DataRouter",
     "DurableJobScheduler", "EvidenceStore", "GraphEdge", "GraphNode", "IntegrationMatrix",
-    "IntegrationSpec", "JobSpec", "LongSessionPlanner", "PairedSchedule", "PolicyObservation",
-    "PolicyRecommendation", "PolicyRolloutManager", "Principal", "ProviderProxyServiceManager",
-    "PublicProofGate", "RecursiveExecutionEngine", "RecursiveTask", "ReleaseIdentity", "SDKInvocation",
-    "SecureArmRunner", "ServicePlan", "ServiceSpec", "SignalCoreClient", "StateBackupManager",
-    "StructuralGraphV2", "SuperiorityGate", "UnifiedRuntimePipeline", "UnboundedContextCoordinator",
-    "VerifiedPolicyObservation", "VersionLockError", "WorkloadSpec", "ZeroFrictionManager",
+    "IntegrationSpec", "JobSpec", "LongContextQualityGate", "LongContextReceipt", "LongSessionPlanner",
+    "MCPProfile", "MeasuredBenchmarkGate", "PairedSchedule", "PlatformAdapter",
+    "PlatformAdapterRegistry", "PolicyObservation", "PolicyRecommendation", "PolicyRolloutManager",
+    "Principal", "ProductSurface", "ProviderProxyServiceManager", "ProviderUsageReceipt", "ProxyPreset",
+    "ProxyProductRegistry", "PublicProofGate", "ReceiptValidator", "RecursiveExecutionEngine",
+    "RecursiveTask", "ReleaseIdentity", "SDKInvocation", "SecureArmRunner", "ServicePlan", "ServiceSpec",
+    "SessionAnalyticsStore", "SessionContinuityController", "SignalCoreClient", "StateBackupManager",
+    "StructuralGraphV2", "SuperiorityGate", "ToolRouteDecision", "ToolRoutingEnforcer",
+    "UnifiedRuntimePipeline", "UnboundedContextCoordinator", "VerifiedPolicyObservation",
+    "VersionLockError", "WorkloadSpec", "ZeroFrictionManager",
 ]
