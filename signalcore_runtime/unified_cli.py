@@ -21,6 +21,7 @@ from .util import stable_project_id
 
 
 CORE_COMMANDS = {"config", "backup", "maintenance", "pipeline", "plugins", "scheduler", "telemetry", "migrate"}
+EXTERNAL_PROOF_ACTIONS = {"suites", "external-suite"}
 
 
 def _jsonable(value: Any) -> Any:
@@ -190,7 +191,12 @@ def _core_main(argv: list[str]) -> int:
 def main(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     _, _, rest = _global(values)
-    command, _ = _find_command(rest)
+    command, command_index = _find_command(rest)
+    if command == "prove" and command_index >= 0 and len(rest) > command_index + 1:
+        action = rest[command_index + 1]
+        if action in EXTERNAL_PROOF_ACTIONS:
+            from .external_benchmark_cli import main as external_proof_main
+            return int(external_proof_main(values))
     if command in PRE_RELEASE_COMMANDS:
         return int(prerelease_main(values))
     if command in CORE_COMMANDS:
