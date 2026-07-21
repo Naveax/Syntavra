@@ -1,7 +1,7 @@
 {
   "name": "@signalcore/client",
   "version": "0.0.1",
-  "description": "Pre-release typed, credential-isolated client for SignalCore",
+  "description": "Pre-release typed, credential-isolated client and measured receipt helpers for SignalCore",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./receipts": {
+      "types": "./dist/receipts.d.ts",
+      "import": "./dist/receipts.js"
     }
   },
   "files": ["dist", "src", "README.md", "tsconfig.json"],
