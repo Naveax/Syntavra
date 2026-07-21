@@ -22,6 +22,9 @@ REQUIRED = [ROOT / "signalcore_runtime" / name for name in (
     "claim_governance.py", "host_adapters.py", "hooks.py", "mcp_server.py",
     "structural_parsers.py", "installer.py", "sandbox.py", "compression.py",
     "session_runtime.py", "output_governor.py", "signalbench.py",
+    "runtime_pipeline.py", "config_v6.py", "crypto.py", "backup.py",
+    "identity.py", "observability.py", "migrations.py", "plugin_sdk.py",
+    "job_scheduler.py", "policy_rollout.py", "streaming.py", "unified_cli.py",
 )]
 CONTROLS = {name: True for name in (
     "same_prompt", "same_model", "same_reasoning", "same_repository", "same_verifier",
@@ -32,7 +35,7 @@ CONTROLS = {name: True for name in (
 def main() -> int:
     checks = []
     checks.append(("required_runtime_files", all(path.is_file() for path in REQUIRED)))
-    checks.append(("version", (ROOT / "VERSION").read_text().strip() == "0.3.0"))
+    checks.append(("version", (ROOT / "VERSION").read_text().strip() == "0.6.0"))
     try:
         for path in sorted((ROOT / "signalcore_runtime").glob("*.py")):
             py_compile.compile(str(path), doraise=True)

@@ -84,7 +84,7 @@ class RuntimeV03UnifiedTests(unittest.TestCase):
             self.assertTrue(first["ok"] and second["ok"])
             value = json.loads(settings.read_text())
             self.assertTrue(value["existing"])
-            self.assertEqual(value["signalcore"]["version"], "0.3.0")
+            self.assertEqual(value["signalcore"]["version"], "0.6.0")
             self.assertEqual(len(value["hooks"]["PreToolUse"]), 1)
             doctor = installer.doctor()
             self.assertTrue(doctor["ok"])
@@ -205,7 +205,7 @@ class RuntimeV03UnifiedTests(unittest.TestCase):
         from signalcore_runtime import cli
         bundled = Path(cli.__file__).resolve().parent / "bundled_skill"
         self.assertTrue((bundled / "SKILL.md").is_file())
-        self.assertIn('version: "0.3.0"', (bundled / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertIn('version: "0.6.0"', (bundled / "SKILL.md").read_text(encoding="utf-8"))
 
     def test_host_detection_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

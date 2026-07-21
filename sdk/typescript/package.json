@@ -1,7 +1,7 @@
 {
   "name": "@signalcore/client",
-  "version": "0.3.0",
-  "description": "Dependency-free TypeScript client for the local SignalCore provider proxy",
+  "version": "0.6.0",
+  "description": "Typed, credential-isolated client for SignalCore Unified Production Core",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -12,8 +12,14 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "src", "README.md"],
+  "files": ["dist", "src", "README.md", "tsconfig.json"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test"
+  },
   "sideEffects": false,
   "engines": {"node": ">=18"},
+  "publishConfig": {"provenance": true, "access": "public"},
   "license": "MIT"
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — Unified Production Core
+
+- Encrypt exact evidence at rest with authenticated project-scoped keys and lifecycle controls.
+- Guarantee parseable typed data envelopes; byte truncation can no longer corrupt JSON.
+- Require control authentication on loopback and TLS for remote proxy bindings.
+- Commit and DLP-scan streams before delivery, preventing partial unverified responses.
+- Require immutable digest-pinned, non-root container sandbox execution.
+- Add canonical configuration, migrations, observability, backup, identity, retention,
+  durable scheduling, policy rollout, schema, retrieval and plugin production layers.
+- Consolidate the public CLI and harden the TypeScript SDK with TLS, timeout, retry and SSE parsing.
+
 ## 0.3.0 — Unified pre-release
 
 - Added ten-language structural parser registry, semantic snapshot ingestion, transitive typed impact traversal and token-budgeted repository maps.

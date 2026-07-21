@@ -104,7 +104,7 @@ def runtime_health(
         checks,
         tuple(reasons),
         {
-            "version": "0.3.0",
+            "version": "0.6.0",
             "host": host,
             "host_negotiation": negotiation,
             "rollout_candidates": [str(path) for path in rollouts[:5]],

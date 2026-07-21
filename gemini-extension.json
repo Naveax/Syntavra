@@ -1,6 +1,6 @@
 {
   "name": "signalcore",
-  "version": "0.3.0",
+  "version": "0.6.0",
   "description": "SignalCore unified runtime, sandbox, reversible compression and structural intelligence for coding agents",
   "contextFileName": "GEMINI.md"
 }

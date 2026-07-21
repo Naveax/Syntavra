@@ -117,3 +117,13 @@ The existing Roblox Studio orchestration profile remains hidden and fail-closed.
 - Unified implementation: **directly tested**
 - Cross-platform release validation: **PASS** on Ubuntu, Windows and macOS with Python 3.11, 3.12 and 3.13
 - Public efficiency claim: **`5X_NOT_PROVEN`**
+
+
+## Unified Production Core 0.6.0
+
+SignalCore 0.6.0 unifies encrypted exact evidence, authenticated fail-closed
+provider streaming, valid typed data envelopes, configuration provenance,
+transactional migrations, structured observability, retention, backup,
+policy rollout, durable scheduling and permissioned plugins behind one
+canonical runtime pipeline. See
+`docs/architecture/UNIFIED_PRODUCTION_CORE_V6.md`.

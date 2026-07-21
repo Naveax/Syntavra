@@ -31,7 +31,7 @@ from .structural import StructuralIndex
 from .util import atomic_write_json, stable_project_id
 from .verifier_graph import VerifierGraph
 
-VERSION = "0.3.0"
+VERSION = "0.6.0"
 
 
 def _jsonable(value: Any) -> Any:
@@ -485,7 +485,7 @@ def _add_sandbox_policy(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="signalcore", description="SignalCore 0.3.0 unified runtime control plane")
+    parser = argparse.ArgumentParser(prog="signalcore", description="SignalCore 0.6.0 unified runtime control plane")
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
     parser.add_argument("--skill-root", default=str(skill_root()))

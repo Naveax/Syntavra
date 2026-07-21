@@ -1,4 +1,4 @@
-name: Validate SignalCore Runtime 0.3
+name: Validate SignalCore Runtime 0.6
 
 on:
   pull_request:
@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - name: Install runtime dependencies
+        run: python -m pip install --disable-pip-version-check -e .
       - name: Compile ordinary source
         run: python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
       - name: Runtime tests
@@ -59,7 +61,7 @@ jobs:
           sandbox=json.loads(Path('sandbox.json').read_text())
           output=json.loads(Path('output.json').read_text())
           signalbench=json.loads(Path('signalbench.json').read_text())
-          assert doctor['runtime']['details']['version'] == '0.3.0'
+          assert doctor['runtime']['details']['version'] == '0.6.0'
           assert install['ok'] is True and install['dry_run'] is True
           assert 'local-restricted' in sandbox
           assert 'compact' in output['profiles']
@@ -76,12 +78,12 @@ jobs:
       - name: Install wheel build backend
         run: python -m pip install --disable-pip-version-check 'setuptools>=69' wheel
       - name: Build wheel without network isolation
-        run: python -m pip wheel --no-build-isolation --no-deps . -w dist
+        run: python -m pip wheel --no-build-isolation . -w dist
       - name: Install wheel into clean environment
         shell: bash
         run: |
           python -m venv /tmp/signalcore-wheel
-          /tmp/signalcore-wheel/bin/python -m pip install --no-index dist/signalcore_runtime-0.3.0-py3-none-any.whl
+          /tmp/signalcore-wheel/bin/python -m pip install --no-index --find-links dist signalcore-runtime==0.6.0
           cd /tmp
           /tmp/signalcore-wheel/bin/signalcore --help >/dev/null
           /tmp/signalcore-wheel/bin/python - <<'PY'
@@ -96,6 +98,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Install runtime dependencies
+        run: python -m pip install --disable-pip-version-check -e .
+      - name: Run V6 production-core benchmark
+        run: python benchmarks/v6_production_core_benchmark.py --output v6-production-core.json
       - name: Run committed v0.3 component benchmark
         run: python benchmarks/runtime_v03_benchmark.py --output runtime-v03-internal.json
       - uses: actions/upload-artifact@v4

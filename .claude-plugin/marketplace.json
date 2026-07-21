@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "signalcore",
-  "version": "0.3.0",
+  "version": "0.6.0",
   "description": "SignalCore unified structural intelligence, secure execution, reversible context and long-session runtime",
   "owner": {
     "name": "Naveax"

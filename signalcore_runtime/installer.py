@@ -107,7 +107,7 @@ class HostInstaller:
                 hooks["PostToolUse"] = entries
         value.setdefault("signalcore", {}).update({
             "managed": True,
-            "version": "0.3.0",
+            "version": "0.6.0",
             "project": str(self.project),
             "mode": negotiate(host)["mode"],
         })
@@ -216,7 +216,7 @@ class HostInstaller:
             merged_by_path[change.path] = row
         manifest = {
             "schema_version": 2,
-            "version": "0.3.0",
+            "version": "0.6.0",
             "project": str(self.project),
             "scope": scope,
             "changes": list(merged_by_path.values()),
@@ -258,7 +258,7 @@ class HostInstaller:
             "skill_root": self.skill_root.is_dir() and (self.skill_root / "SKILL.md").is_file(),
             "project_writable": os.access(self.project, os.W_OK),
             "state_writable": self.state_root.exists() or os.access(self.state_root.parent, os.W_OK),
-            "manifest_valid": installed is None or installed.get("version") == "0.3.0",
+            "manifest_valid": installed is None or installed.get("version") == "0.6.0",
         }
         return {
             "ok": all(checks.values()),

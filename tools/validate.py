@@ -10,7 +10,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "skills" / "signal-core"
-EXPECTED_VERSION = "0.3.0"
+EXPECTED_VERSION = "0.6.0"
 
 REQUIRED = [
     ROOT / "README.md",
@@ -31,6 +31,20 @@ REQUIRED = [
     ROOT / "benchmarks" / "signalbench" / "tasks.example.json",
     ROOT / "benchmarks" / "signalbench" / "arms.example.json",
     ROOT / "docs" / "architecture" / "UNIFIED_RUNTIME_V03.md",
+    ROOT / "docs" / "architecture" / "UNIFIED_PRODUCTION_CORE_V6.md",
+    ROOT / "benchmarks" / "v6_production_core_benchmark.py",
+    ROOT / "signalcore_runtime" / "runtime_pipeline.py",
+    ROOT / "signalcore_runtime" / "config_v6.py",
+    ROOT / "signalcore_runtime" / "crypto.py",
+    ROOT / "signalcore_runtime" / "backup.py",
+    ROOT / "signalcore_runtime" / "identity.py",
+    ROOT / "signalcore_runtime" / "observability.py",
+    ROOT / "signalcore_runtime" / "migrations.py",
+    ROOT / "signalcore_runtime" / "plugin_sdk.py",
+    ROOT / "signalcore_runtime" / "job_scheduler.py",
+    ROOT / "signalcore_runtime" / "policy_rollout.py",
+    ROOT / "signalcore_runtime" / "streaming.py",
+    ROOT / "signalcore_runtime" / "unified_cli.py",
     ROOT / "docs" / "operations" / "INSTALLER_AND_SANDBOX.md",
     ROOT / "docs" / "benchmark" / "SIGNALBENCH.md",
     SKILL / "SKILL.md",
@@ -84,8 +98,7 @@ def _scan_files() -> list[Path]:
         path
         for path in ROOT.rglob("*")
         if path.is_file()
-        and ".git" not in path.parts
-        and ".signalcore" not in path.parts
+        and not _is_generated_path(path.relative_to(ROOT))
         and path.suffix.casefold() not in skipped_suffixes
     ]
 
@@ -98,13 +111,21 @@ GENERATED_FILES = {
 }
 
 
+def _is_generated_path(relative: Path) -> bool:
+    return any(
+        part in {".git", ".signalcore", "__pycache__", ".pytest_cache", "build", "dist"}
+        or part.endswith(".egg-info")
+        for part in relative.parts
+    )
+
+
 def _manifest_candidates() -> list[Path]:
     candidates: list[Path] = []
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue
         relative = path.relative_to(ROOT)
-        if any(part in {".git", ".signalcore", "__pycache__", ".pytest_cache"} for part in relative.parts):
+        if _is_generated_path(relative):
             continue
         if (path.name == "MANIFEST.sha256" and path.parent == ROOT) or path.name in GENERATED_FILES or path.suffix == ".pyc":
             continue
@@ -173,7 +194,7 @@ def main() -> int:
     ))
     checks.append(("skill_identity", "name: signal-core" in skill_text, "canonical skill name"))
     bundled_skill = (ROOT / "signalcore_runtime" / "bundled_skill" / "SKILL.md").read_text(encoding="utf-8")
-    checks.append(("bundled_skill", 'version: "0.3.0"' in bundled_skill, "wheel-installable skill"))
+    checks.append(("bundled_skill", 'version: "0.6.0"' in bundled_skill, "wheel-installable skill"))
     checks.append(("build_backend", pyproject.get("build-system", {}).get("build-backend") == "setuptools.build_meta", "PEP 517 wheel"))
     checks.append((
         "compatibility_link",
