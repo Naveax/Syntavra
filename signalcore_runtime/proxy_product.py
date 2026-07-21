@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
 
 from .integration_matrix import PROVIDERS
 from .release_identity import CHANNEL, VERSION
+from .service_manager import ProviderProxyServiceManager, ServiceSpec
 
 
 @dataclass(frozen=True)
@@ -94,3 +97,116 @@ class ProxyProductRegistry:
             "reasons": reasons,
             "live_certification": "NOT_CERTIFIED" if item.live_certification else "UNKNOWN",
         }
+
+    @classmethod
+    def command(
+        cls,
+        provider: str,
+        *,
+        project: Path,
+        state_root: Path,
+        upstream: str = "",
+        listen_host: str = "127.0.0.1",
+        listen_port: int = 8787,
+        cache_policy: str = "auto",
+    ) -> tuple[str, ...]:
+        product = cls.plan(provider, upstream=upstream)
+        if not product["ok"]:
+            raise ValueError("proxy preset is not directly runnable: " + ",".join(product["reasons"]))
+        item = cls.by_provider(provider)
+        return (
+            sys.executable,
+            "-m",
+            "signalcore_runtime",
+            "--project",
+            str(project.resolve(strict=False)),
+            "--state-root",
+            str(state_root.resolve(strict=False)),
+            "provider",
+            "proxy",
+            "--provider",
+            item.gateway_provider,
+            "--upstream",
+            str(product["resolved_upstream"]),
+            "--listen-host",
+            listen_host,
+            "--listen-port",
+            str(listen_port),
+            "--credential-env",
+            item.credential_env,
+            "--credential-header",
+            item.credential_header,
+            "--credential-prefix",
+            item.credential_prefix,
+            "--cache-policy",
+            cache_policy,
+        )
+
+    @classmethod
+    def service_spec(
+        cls,
+        provider: str,
+        *,
+        project: Path,
+        state_root: Path,
+        upstream: str = "",
+        listen_host: str = "127.0.0.1",
+        listen_port: int = 8787,
+        cache_policy: str = "auto",
+        environment_file: str = "",
+    ) -> ServiceSpec:
+        return ServiceSpec(
+            name=f"signalcore-proxy-{provider.replace('_', '-').replace('.', '-')}",
+            command=cls.command(
+                provider,
+                project=project,
+                state_root=state_root,
+                upstream=upstream,
+                listen_host=listen_host,
+                listen_port=listen_port,
+                cache_policy=cache_policy,
+            ),
+            environment_file=environment_file,
+            working_directory=str(project.resolve(strict=False)),
+            description=f"SignalCore v{VERSION} pre-release {provider} provider proxy",
+            restart_seconds=3,
+        )
+
+    @classmethod
+    def service(
+        cls,
+        action: str,
+        provider: str,
+        *,
+        project: Path,
+        state_root: Path,
+        home: Path | None = None,
+        upstream: str = "",
+        listen_host: str = "127.0.0.1",
+        listen_port: int = 8787,
+        cache_policy: str = "auto",
+        environment_file: str = "",
+        platform_name: str | None = None,
+        apply: bool = False,
+        activate: bool = False,
+    ) -> dict[str, Any]:
+        spec = cls.service_spec(
+            provider,
+            project=project,
+            state_root=state_root,
+            upstream=upstream,
+            listen_host=listen_host,
+            listen_port=listen_port,
+            cache_policy=cache_policy,
+            environment_file=environment_file,
+        )
+        manager = ProviderProxyServiceManager(home)
+        if action == "plan":
+            return {"ok": True, "action": action, "spec": asdict(spec), "plan": asdict(manager.plan(spec, platform_name=platform_name))}
+        if action == "install":
+            return manager.install(spec, platform_name=platform_name, activate=activate, dry_run=not apply)
+        if action == "verify":
+            return manager.verify(spec, platform_name=platform_name)
+        if action == "uninstall":
+            return manager.uninstall(spec, platform_name=platform_name, deactivate=activate, dry_run=not apply)
+        raise ValueError(f"unsupported proxy service action: {action}")
