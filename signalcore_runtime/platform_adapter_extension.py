@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
 
 
 def install() -> None:
@@ -17,18 +16,18 @@ def install() -> None:
         current = host_adapters.KNOWN_HOSTS[host]
         host_adapters.KNOWN_HOSTS[host] = replace(current, config_path="")
 
-    # A generic editor executable or project directory is not proof that its AI
-    # extension is installed. Only integration-specific files may trigger setup.
+    # Generic editor executables, project directories and shared instruction files
+    # do not prove that a particular Copilot host integration is installed.
     vscode = host_adapters.KNOWN_HOSTS["vscode-copilot"]
     host_adapters.KNOWN_HOSTS["vscode-copilot"] = replace(
         vscode,
-        project_markers=(".vscode/mcp.json", ".github/copilot-instructions.md"),
+        project_markers=(".vscode/mcp.json",),
         user_markers=(),
     )
     jetbrains = host_adapters.KNOWN_HOSTS["jetbrains-copilot"]
     host_adapters.KNOWN_HOSTS["jetbrains-copilot"] = replace(
         jetbrains,
-        project_markers=(".idea/mcp.json", ".github/copilot-instructions.md"),
+        project_markers=(".idea/mcp.json",),
         user_markers=(),
     )
 
@@ -45,22 +44,22 @@ def install() -> None:
         "vscode-copilot": product_surface.PlatformAdapter(
             "vscode-copilot",
             (),
-            (".vscode/mcp.json", ".github/copilot-instructions.md"),
+            (".vscode/mcp.json",),
             "instructions+mcp",
             True,
             False,
             False,
-            "integration-marker-contract-tested",
+            "host-specific-marker-contract-tested",
         ),
         "jetbrains-copilot": product_surface.PlatformAdapter(
             "jetbrains-copilot",
             (),
-            (".idea/mcp.json", ".github/copilot-instructions.md"),
+            (".idea/mcp.json",),
             "instructions+mcp",
             True,
             False,
             False,
-            "integration-marker-contract-tested",
+            "host-specific-marker-contract-tested",
         ),
         "kiro": product_surface.PlatformAdapter(
             "kiro",
