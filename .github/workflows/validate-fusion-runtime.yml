@@ -44,12 +44,22 @@ jobs:
         run: python tools/validate.py
       - name: Unified internal benchmark and fail-closed release smoke
         run: python tools/validate_release.py --profile 5x --smoke --output release-smoke.json
-      - name: CLI unified-surface smoke
+      - name: Four-command product workflow smoke
         shell: bash
         run: |
           python -m signalcore_runtime --project . version > version.json
-          python -m signalcore_runtime --project . doctor > doctor.json
-          python -m signalcore_runtime --project . install --all --dry-run > install.json
+          python -m signalcore_runtime --project . setup --apply --mcp-profile minimal > setup.json
+          python -m signalcore_runtime --project . status > status.json
+          python -m signalcore_runtime --project . run manifest > product.json
+          python -m signalcore_runtime --project . run route repo.search > route.json
+          python -m signalcore_runtime --project . run proxy-plan openai > proxy.json
+          python -m signalcore_runtime --project . run session-open --session-id ci-session --metadata '{"goal":"ci"}' > session-open.json
+          python -m signalcore_runtime --project . run session-append ci-session decision '{"decision":"keep version 0.0.1"}' > session-append.json
+          python -m signalcore_runtime --project . run session-compact ci-session --force > session-compact.json
+          python -m signalcore_runtime --project . run session-continuity ci-session --token-budget 4096 > continuity.json
+          python -m signalcore_runtime --project . prove plan > proof-plan.json
+          python -m signalcore_runtime --project . prove long-context > long-context-plan.json
+          python -m signalcore_runtime --project . prove readiness > readiness.json || test $? -eq 4
           python -m signalcore_runtime --project . integrations > integrations.json
           python -m signalcore_runtime --project . context-stress --max-tier 10000000 > context.json
           python -m signalcore_runtime --project . signalbench2 plan --repetitions 30 > signalbench2.json
@@ -60,28 +70,83 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          version=json.loads(Path('version.json').read_text())
-          doctor=json.loads(Path('doctor.json').read_text())
-          install=json.loads(Path('install.json').read_text())
-          integrations=json.loads(Path('integrations.json').read_text())
-          context=json.loads(Path('context.json').read_text())
-          signalbench2=json.loads(Path('signalbench2.json').read_text())
-          sandbox=json.loads(Path('sandbox.json').read_text())
-          output=json.loads(Path('output.json').read_text())
-          signalbench=json.loads(Path('signalbench.json').read_text())
+          load=lambda name: json.loads(Path(name).read_text())
+          version=load('version.json')
+          setup=load('setup.json')
+          status=load('status.json')
+          product=load('product.json')
+          route=load('route.json')
+          proxy=load('proxy.json')
+          continuity=load('continuity.json')
+          proof=load('proof-plan.json')
+          long_context=load('long-context-plan.json')
+          readiness=load('readiness.json')
+          integrations=load('integrations.json')
+          context=load('context.json')
+          signalbench2=load('signalbench2.json')
+          sandbox=load('sandbox.json')
+          output=load('output.json')
+          signalbench=load('signalbench.json')
           assert version['identity']['version'] == '0.0.1'
           assert version['identity']['channel'] == 'pre-release'
-          assert doctor['runtime']['details']['version'] == '0.0.1'
-          assert doctor['ok'] is True
-          assert install['ok'] is True and install['dry_run'] is True
+          assert setup['ok'] is True and setup['dry_run'] is False
+          assert setup['profile'] == 'minimal'
+          assert status['doctor']['runtime']['details']['version'] == '0.0.1'
+          assert status['doctor']['ok'] is True
+          assert status['primary_workflow'] == ['setup', 'status', 'run', 'prove']
+          assert [row['command'] for row in product['mental_model']] == ['setup', 'status', 'run', 'prove']
+          assert route['allowed'] is True and route['category'] == 'read'
+          assert proxy['ok'] is True and proxy['stream_mode'] == 'commit-before-forward'
+          assert continuity['exact_recovery'] is True
+          assert continuity['continuity_restored'] is True
+          assert continuity['forced_restart'] is False
+          assert proof['claim'] == 'EXTERNAL_SUPERIORITY_NOT_PROVEN'
+          assert long_context['style'].startswith('OOLONG-like')
+          assert readiness['claim'] == 'DAILY_CODING_AGENT_READINESS_NOT_PROVEN'
           assert integrations['coverage']['providers'] >= 10
           assert integrations['coverage']['frameworks'] >= 15
           assert integrations['coverage']['hosts'] >= 18
+          assert integrations['proxy_presets']['providers'] == 10
           assert context['ok'] is True and context['tiers'][-1]['tier_tokens'] == 10000000
           assert signalbench2['schedule']['runs'] == 27000
           assert 'local-restricted' in sandbox
           assert 'compact' in output['profiles']
           assert signalbench['ok'] is True
+          PY
+
+  typescript-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/typescript/package.json
+      - name: Install, type-check and build
+        shell: bash
+        run: |
+          cd sdk/typescript
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run build
+          test -f dist/index.js
+          test -f dist/index.d.ts
+          test -f dist/receipts.js
+          test -f dist/receipts.d.ts
+      - name: Verify package contents
+        shell: bash
+        run: |
+          cd sdk/typescript
+          npm pack --dry-run --json > npm-pack-dry-run.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value=json.loads(Path('npm-pack-dry-run.json').read_text())[0]
+          files={row['path'] for row in value['files']}
+          required={'dist/index.js','dist/index.d.ts','dist/receipts.js','dist/receipts.d.ts','package.json'}
+          assert required <= files, sorted(required-files)
+          assert value['version'] == '0.0.1'
           PY
 
   wheel-install:
@@ -102,12 +167,18 @@ jobs:
           /tmp/signalcore-wheel/bin/python -m pip install --no-index --find-links dist signalcore-runtime==0.0.1
           cd /tmp
           /tmp/signalcore-wheel/bin/signalcore version > version.json
+          /tmp/signalcore-wheel/bin/signalcore run manifest > product.json
           /tmp/signalcore-wheel/bin/python - <<'PY'
           import json
           from pathlib import Path
+          from signalcore_runtime import ProductSurface, ProviderUsageReceipt, SessionContinuityController
           from signalcore_runtime.cli import skill_root
           assert (skill_root() / 'SKILL.md').is_file()
           assert json.loads(Path('version.json').read_text())['identity']['version'] == '0.0.1'
+          assert json.loads(Path('product.json').read_text())['version'] == '0.0.1'
+          assert ProductSurface.manifest()['channel'] == 'pre-release'
+          assert ProviderUsageReceipt
+          assert SessionContinuityController
           PY
 
   internal-benchmark:
