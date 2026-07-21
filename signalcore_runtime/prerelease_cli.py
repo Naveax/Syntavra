@@ -10,6 +10,7 @@ from typing import Any
 from .infinite_context import CONTEXT_TIERS, UnboundedContextCoordinator
 from .integration_matrix import IntegrationMatrix
 from .long_context_quality import LongContextQualityGate, LongContextReceipt, manifest as long_context_manifest
+from .product_maturity import ProductMaturityGate, load_maturity_document
 from .product_surface import (
     MCP_PROFILES,
     MeasuredBenchmarkGate,
@@ -117,6 +118,7 @@ def _parser() -> argparse.ArgumentParser:
     receipts = prove_sub.add_parser("receipts"); receipts.add_argument("path")
     benchmark = prove_sub.add_parser("benchmark"); benchmark.add_argument("path")
     long_context = prove_sub.add_parser("long-context"); long_context.add_argument("path", nargs="?")
+    maturity = prove_sub.add_parser("maturity"); maturity.add_argument("path")
     readiness = prove_sub.add_parser("readiness"); readiness.add_argument("--receipts")
     schema = prove_sub.add_parser("schema"); schema.add_argument("--output", default="schemas/provider-usage-receipt-v1.json")
 
@@ -223,6 +225,14 @@ def main(argv: list[str] | None = None) -> int:
                 "receipt_schema": "signalcore prove schema",
                 "workloads": ProductSurface.manifest()["proof"]["workloads"],
                 "long_context": long_context_manifest(),
+                "maturity": {
+                    "minimum_days": ProductMaturityGate.minimum_days,
+                    "minimum_onboarding_receipts": ProductMaturityGate.minimum_onboarding_receipts,
+                    "minimum_users": ProductMaturityGate.minimum_users,
+                    "minimum_repositories": ProductMaturityGate.minimum_repositories,
+                    "minimum_public_downloads": ProductMaturityGate.minimum_public_downloads,
+                    "minimum_verified_releases": ProductMaturityGate.minimum_verified_releases,
+                },
                 "measured_fields": ProductSurface.manifest()["proof"]["measured_fields"],
                 "minimums": {
                     "paired_runs": MeasuredBenchmarkGate.minimum_pairs,
@@ -242,6 +252,14 @@ def main(argv: list[str] | None = None) -> int:
                 _emit(long_context_manifest())
                 return 0
             value = LongContextQualityGate.evaluate(_load_long_context_receipts(Path(args.path)))
+            _emit(value)
+            return 0 if value["ok"] else 4
+        if args.action == "maturity":
+            document = _load_json_argument(args.path)
+            if not isinstance(document, dict):
+                raise ValueError("maturity document must be a JSON object")
+            onboarding, distributions, releases = load_maturity_document(document)
+            value = ProductMaturityGate.evaluate(onboarding, distributions, releases)
             _emit(value)
             return 0 if value["ok"] else 4
         receipt_path = Path(args.path) if hasattr(args, "path") else Path(args.receipts) if args.receipts else None
