@@ -22,6 +22,7 @@ classifiers = [
 
 [project.scripts]
 signalcore = "signalcore_runtime.cli:main"
+signalcore-product = "signalcore_runtime.product_v5_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["signalcore_runtime*"]
