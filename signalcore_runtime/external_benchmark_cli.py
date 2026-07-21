@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .external_benchmarks import ExternalBenchmarkGate, ExternalSuiteRegistry
+from .external_benchmarks import ExternalBenchmarkGate, ExternalSuiteRegistry, SUITES
 
 
 def _emit(value: Any) -> None:
@@ -21,7 +21,7 @@ def parser() -> argparse.ArgumentParser:
     actions.add_parser("suites", help="show pinned external benchmark contracts")
     external = actions.add_parser("external-suite", help="validate exact external suite receipts")
     external.add_argument("path", type=Path)
-    external.add_argument("--suite", choices=tuple(row.suite_id for row in ExternalSuiteRegistry.manifest()["suites"]))
+    external.add_argument("--suite", choices=tuple(row.suite_id for row in SUITES))
     return value
 
 
