@@ -86,6 +86,26 @@ class MCPEnforcementV001Tests(unittest.TestCase):
             response = self.server.handle(self._call("signalcore.process.submit", authorization))
         self.assertEqual(response["error"]["data"]["reason"], "unsandboxed-process-disabled")
 
+    def test_installed_profile_file_is_runtime_default(self) -> None:
+        state = self.root / "balanced-state"
+        state.mkdir()
+        (state / "mcp-profile.json").write_text(
+            '{"name":"balanced","max_active_tools":8}', encoding="utf-8"
+        )
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SIGNALCORE_MCP_PROFILE", None)
+            server = MCPServer(
+                project=self.root,
+                state_root=state,
+                skill_root=self.skill,
+                codex_home=self.root / ".codex-balanced",
+                host="codex",
+            )
+            listed = {row["name"] for row in server.exposed_tools()}
+        self.assertEqual(server.product_mcp_policy.profile, "balanced")
+        self.assertIn("signalcore.process.submit", listed)
+        self.assertIn("signalcore.fabric.route", listed)
+
 
 if __name__ == "__main__":
     unittest.main()
