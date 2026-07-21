@@ -109,7 +109,7 @@ class RuntimeV02CoreTests(unittest.TestCase):
             host="codex",
         )
         init = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        self.assertEqual(init["result"]["serverInfo"]["version"], "0.3.0")
+        self.assertEqual(init["result"]["serverInfo"]["version"], "0.6.0")
         tools = server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         names = {row["name"] for row in tools["result"]["tools"]}
         self.assertIn("signalcore.process.submit", names)

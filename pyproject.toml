@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "signalcore-runtime"
-version = "0.3.0"
+version = "0.6.0"
 description = "Unified structural, sandbox, reversible-context and long-session runtime for AI coding agents"
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = ["cryptography>=43"]
 license = {text = "MIT"}
 authors = [{name = "Naveax"}]
 keywords = ["ai-agent", "coding-agent", "context-engineering", "mcp", "sandbox", "structural-index", "reversible-compression"]
@@ -21,8 +22,8 @@ classifiers = [
 ]
 
 [project.scripts]
-signalcore = "signalcore_runtime.cli:main"
-signalcore-product = "signalcore_runtime.product_v5_cli:main"
+signalcore = "signalcore_runtime.unified_cli:main"
+signalcore-product = "signalcore_runtime.unified_cli:product_compat_main"
 
 [tool.setuptools.packages.find]
 include = ["signalcore_runtime*"]

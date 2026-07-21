@@ -29,7 +29,7 @@ from .util import stable_project_id
 class MCPServer:
     """Dependency-free MCP JSON-RPC server for the complete v0.3 runtime plane."""
 
-    VERSION = "0.3.0"
+    VERSION = "0.6.0"
 
     def __init__(self, *, project: Path, state_root: Path, skill_root: Path, codex_home: Path, host: str):
         self.project = project.resolve(strict=True)

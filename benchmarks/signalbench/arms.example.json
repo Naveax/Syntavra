@@ -16,7 +16,7 @@
       "arm_id": "signalcore-v030",
       "category": "candidate",
       "command": ["python", "adapters/signalcore.py", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
-      "version": "0.3.0",
+      "version": "0.6.0",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,

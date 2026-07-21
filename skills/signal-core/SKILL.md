@@ -1,6 +1,6 @@
 ---
 name: signal-core
-version: "0.3.0"
+version: "0.6.0"
 description: >
   Execute complex coding-agent work through SignalCore's local runtime:
   multi-language structural impact, durable zero-poll jobs, secure sandboxing,
