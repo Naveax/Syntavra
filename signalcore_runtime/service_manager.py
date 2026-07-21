@@ -63,6 +63,16 @@ class ProviderProxyServiceManager:
             return "windows"
         raise ValueError(f"unsupported service platform: {value or sys.platform}")
 
+    @staticmethod
+    def _uid() -> int:
+        getter = getattr(os, "getuid", None)
+        if callable(getter):
+            return int(getter())
+        try:
+            return int(os.environ.get("UID", "0"))
+        except ValueError:
+            return 0
+
     def plan(self, spec: ServiceSpec, *, platform_name: str | None = None) -> ServicePlan:
         platform_name = self._platform(platform_name)
         if platform_name == "linux":
@@ -74,8 +84,9 @@ class ProviderProxyServiceManager:
             label = f"dev.signalcore.{spec.name}"
             path = self.home / "Library" / "LaunchAgents" / f"{label}.plist"
             descriptor = self._launchd(spec, label)
-            activation = ("launchctl", "bootstrap", f"gui/{os.getuid()}", str(path))
-            deactivation = ("launchctl", "bootout", f"gui/{os.getuid()}", str(path))
+            domain = f"gui/{self._uid()}"
+            activation = ("launchctl", "bootstrap", domain, str(path))
+            deactivation = ("launchctl", "bootout", domain, str(path))
         else:
             path = self.home / "AppData" / "Local" / "SignalCore" / "services" / f"{spec.name}.xml"
             descriptor = self._windows_task(spec)
@@ -97,19 +108,10 @@ class ProviderProxyServiceManager:
     def _systemd(spec: ServiceSpec) -> str:
         command = " ".join(shlex.quote(str(item)) for item in spec.command)
         lines = [
-            "[Unit]",
-            f"Description={spec.description}",
-            "After=network-online.target",
-            "",
-            "[Service]",
-            "Type=simple",
-            f"ExecStart={command}",
-            "Restart=on-failure",
-            f"RestartSec={spec.restart_seconds}",
-            "NoNewPrivileges=true",
-            "PrivateTmp=true",
-            "ProtectSystem=strict",
-            "ProtectHome=read-only",
+            "[Unit]", f"Description={spec.description}", "After=network-online.target", "",
+            "[Service]", "Type=simple", f"ExecStart={command}", "Restart=on-failure",
+            f"RestartSec={spec.restart_seconds}", "NoNewPrivileges=true", "PrivateTmp=true",
+            "ProtectSystem=strict", "ProtectHome=read-only",
         ]
         if spec.working_directory:
             lines.append(f"WorkingDirectory={spec.working_directory}")
@@ -149,14 +151,7 @@ class ProviderProxyServiceManager:
 </Task>
 '''
 
-    def install(
-        self,
-        spec: ServiceSpec,
-        *,
-        platform_name: str | None = None,
-        activate: bool = False,
-        dry_run: bool = False,
-    ) -> dict[str, Any]:
+    def install(self, spec: ServiceSpec, *, platform_name: str | None = None, activate: bool = False, dry_run: bool = False) -> dict[str, Any]:
         plan = self.plan(spec, platform_name=platform_name)
         path = Path(plan.descriptor_path)
         self._validate_destination(path)
@@ -184,14 +179,7 @@ class ProviderProxyServiceManager:
             "path": str(path),
         }
 
-    def uninstall(
-        self,
-        spec: ServiceSpec,
-        *,
-        platform_name: str | None = None,
-        deactivate: bool = True,
-        dry_run: bool = False,
-    ) -> dict[str, Any]:
+    def uninstall(self, spec: ServiceSpec, *, platform_name: str | None = None, deactivate: bool = True, dry_run: bool = False) -> dict[str, Any]:
         plan = self.plan(spec, platform_name=platform_name)
         path = Path(plan.descriptor_path)
         self._validate_destination(path)
@@ -205,8 +193,9 @@ class ProviderProxyServiceManager:
         return {"ok": True, "dry_run": dry_run, "removed": path.exists() is False, "path": str(path)}
 
     def _validate_destination(self, path: Path) -> None:
+        resolved = path.resolve(strict=False)
         try:
-            path.relative_to(self.home)
+            resolved.relative_to(self.home)
         except ValueError as exc:
             raise ValueError("service descriptor must remain under the user home") from exc
         current = path
