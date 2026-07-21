@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .integration_matrix import HOSTS, IntegrationMatrix
+from .product_surface import MCP_PROFILES, PlatformAdapterRegistry, ProductSurface, SessionAnalyticsStore
 from .release_identity import CHANNEL, VERSION, ReleaseIdentity
 from .util import atomic_write_json
 
@@ -31,23 +32,29 @@ class InstallPlan:
     detected_hosts: tuple[str, ...]
     estimated_seconds: float
     one_command: bool = True
+    mental_model: tuple[str, ...] = ("setup", "status", "run", "prove")
 
 
 _HOST_BINARIES = {
     "claude-code": ("claude",),
     "codex": ("codex",),
     "gemini-cli": ("gemini",),
+    "vscode-copilot": ("code",),
     "cursor": ("cursor",),
     "windsurf": ("windsurf",),
     "opencode": ("opencode",),
     "aider": ("aider",),
     "qwen-code": ("qwen", "qwen-code"),
     "continue": ("continue",),
+    "zed": ("zed",),
+    "pi": ("pi",),
+    "omp": ("omp",),
+    "openclaw": ("openclaw",),
 }
 
 
 class ZeroFrictionManager:
-    """One-command pre-release installer/wrapper/doctor surface."""
+    """One-command, backup-first pre-release installer and product health surface."""
 
     def __init__(self, project_root: Path, state_root: Path | None = None):
         self.project_root = project_root.resolve(strict=False)
@@ -62,35 +69,64 @@ class ZeroFrictionManager:
                 found.append(host.integration_id)
         return tuple(sorted(found))
 
-    def install_plan(self, *, all_hosts: bool = False) -> InstallPlan:
+    def install_plan(self, *, all_hosts: bool = False, profile: str = "minimal") -> InstallPlan:
+        if profile not in MCP_PROFILES:
+            raise ValueError(f"unknown MCP profile: {profile}")
         detected = self.detected_hosts()
         targets = [item.integration_id for item in HOSTS] if all_hosts else list(detected or ("codex", "claude-code", "gemini-cli"))
         actions: list[InstallAction] = [
             InstallAction("backup", "existing-config", str(self.state_root / "backups"), True, "backup-first mutation"),
             InstallAction("write", "runtime-config", str(self.state_root / "config.json"), True, "canonical pre-release config"),
+            InstallAction("write", "product-surface", str(self.state_root / "product.json"), True, "four-command mental model"),
+            InstallAction("write", f"mcp-profile:{profile}", str(self.state_root / "mcp-profile.json"), True, "bounded tool visibility"),
+            InstallAction("write", "platform-adapters", str(self.state_root / "platform-adapters.json"), True, "real host config candidates"),
             InstallAction("install", "local-proxy", str(self.state_root / "proxy"), True, "credential-isolated provider gateway"),
         ]
         for host in targets:
             actions.append(InstallAction("configure", host, str(self.project_root), True, "native hook/MCP/wrapper integration"))
         actions.extend((
             InstallAction("verify", "doctor", str(self.project_root), False, "post-install verification"),
-            InstallAction("record", "installation-receipt", str(self.state_root / "install-receipt.json"), False, "auditable rollback"),
+            InstallAction("record", "installation-receipt", str(self.state_root / "install-receipt.json"), False, "measured onboarding and rollback"),
         ))
-        return InstallPlan(VERSION, CHANNEL, str(self.project_root), tuple(actions), detected, min(59.0, 8.0 + len(actions) * 2.0))
+        return InstallPlan(VERSION, CHANNEL, str(self.project_root), tuple(actions), detected, min(59.0, 6.0 + len(actions) * 1.5))
 
-    def install(self, *, all_hosts: bool = False, dry_run: bool = True) -> dict[str, Any]:
-        plan = self.install_plan(all_hosts=all_hosts)
+    def install(self, *, all_hosts: bool = False, dry_run: bool = True, profile: str = "minimal") -> dict[str, Any]:
+        started = time.perf_counter()
+        started_at = time.time()
+        plan = self.install_plan(all_hosts=all_hosts, profile=profile)
+        setup_bundle: dict[str, Any] | None = None
         if not dry_run:
             config = {
                 "version": VERSION,
                 "channel": CHANNEL,
                 "project_root": str(self.project_root),
                 "hosts": [item.target for item in plan.actions if item.action == "configure"],
-                "installed_at": time.time(),
+                "mcp_profile": profile,
+                "product_commands": list(plan.mental_model),
+                "installed_at": started_at,
             }
             atomic_write_json(self.state_root / "config.json", config, mode=0o600)
-            atomic_write_json(self.state_root / "install-receipt.json", {"plan": asdict(plan), "applied": True}, mode=0o600)
-        return {"ok": True, "dry_run": dry_run, "plan": asdict(plan)}
+            setup_bundle = ProductSurface.setup_bundle(self.project_root, self.state_root, profile)
+            elapsed_ms = (time.perf_counter() - started) * 1000.0
+            receipt = {
+                "plan": asdict(plan),
+                "applied": True,
+                "profile": profile,
+                "started_at": started_at,
+                "completed_at": time.time(),
+                "wall_time_ms": elapsed_ms,
+                "setup_bundle": setup_bundle,
+                "onboarding_claim": "MEASURED_LOCAL_INSTALL_ONLY",
+            }
+            atomic_write_json(self.state_root / "install-receipt.json", receipt, mode=0o600)
+        return {
+            "ok": True,
+            "dry_run": dry_run,
+            "profile": profile,
+            "plan": asdict(plan),
+            "setup_bundle": setup_bundle,
+            "wall_time_ms": (time.perf_counter() - started) * 1000.0,
+        }
 
     def wrapper_text(self, host: str) -> str:
         if not any(item.integration_id == host and item.family == "host" for item in HOSTS):
@@ -109,14 +145,26 @@ class ZeroFrictionManager:
 
     def doctor(self) -> dict[str, Any]:
         matrix = IntegrationMatrix.validate()
+        adapters = PlatformAdapterRegistry.validate()
         installed = (self.state_root / "config.json").is_file()
+        product_files = {
+            "product": (self.state_root / "product.json").is_file(),
+            "mcp_profile": (self.state_root / "mcp-profile.json").is_file(),
+            "platform_adapters": (self.state_root / "platform-adapters.json").is_file(),
+        }
         warnings: list[dict[str, str]] = []
         blocking: list[dict[str, str]] = []
         if not installed:
-            warnings.append({"code": "not-installed", "repair": "signalcore install --auto"})
+            warnings.append({"code": "not-installed", "repair": "signalcore setup --apply"})
+        elif not all(product_files.values()):
+            warnings.append({"code": "product-bundle-incomplete", "repair": "signalcore repair --apply"})
         if not os.access(self.state_root, os.W_OK):
             blocking.append({"code": "state-root-not-writable", "repair": "choose a writable --state-root"})
-        healthy = matrix["ok"] and not blocking
+        if not adapters["ok"]:
+            blocking.append({"code": "platform-adapter-matrix-invalid", "repair": "restore packaged platform adapter registry"})
+        healthy = matrix["ok"] and adapters["ok"] and not blocking
+        findings = len(warnings) + len(blocking)
+        repairable = sum(bool(item.get("repair")) for item in [*warnings, *blocking])
         return {
             "ok": healthy,
             "ready_to_install": healthy,
@@ -127,21 +175,40 @@ class ZeroFrictionManager:
                 "healthy": healthy,
                 "details": {"version": VERSION, "release_channel": CHANNEL},
             },
+            "product_surface": {
+                "mental_model": ["setup", "status", "run", "prove"],
+                "files": product_files,
+                "adapter_contracts": adapters,
+            },
             "matrix": matrix,
             "detected_hosts": self.detected_hosts(),
+            "detected_adapters": [row["host"] for row in PlatformAdapterRegistry.detect() if row["detected"]],
             "issues": blocking,
             "warnings": warnings,
-            "auto_repairable_ratio": 1.0,
+            "auto_repairable_ratio": repairable / max(1, findings),
         }
 
     def stats(self) -> dict[str, Any]:
-        receipt = self.state_root / "install-receipt.json"
+        receipt_path = self.state_root / "install-receipt.json"
+        analytics = SessionAnalyticsStore(self.state_root / "analytics" / "events.jsonl").report()
+        install_receipt: dict[str, Any] = {}
+        if receipt_path.is_file():
+            try:
+                install_receipt = __import__("json").loads(receipt_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                install_receipt = {"invalid": True}
         return {
             "version": VERSION,
             "channel": CHANNEL,
-            "installed": receipt.is_file(),
+            "installed": receipt_path.is_file(),
             "state_root": str(self.state_root),
             "detected_hosts": self.detected_hosts(),
+            "onboarding": {
+                "measured": bool(install_receipt.get("wall_time_ms") is not None),
+                "wall_time_ms": install_receipt.get("wall_time_ms"),
+                "claim": "LOCAL_INSTALL_RECEIPT" if install_receipt else "ONBOARDING_NOT_MEASURED",
+            },
+            "session_analytics": analytics,
             "savings_receipts": 0,
             "receipt_boundary": "real provider usage receipts are required",
         }
@@ -150,8 +217,11 @@ class ZeroFrictionManager:
         diagnosis = self.doctor()
         all_findings = [*diagnosis["issues"], *diagnosis["warnings"]]
         actions = [item["repair"] for item in all_findings]
-        if apply and any(item["code"] == "not-installed" for item in all_findings):
-            self.install(dry_run=False)
+        if apply:
+            if any(item["code"] == "not-installed" for item in all_findings):
+                self.install(dry_run=False)
+            elif any(item["code"] == "product-bundle-incomplete" for item in all_findings):
+                ProductSurface.setup_bundle(self.project_root, self.state_root, "minimal")
         final = self.doctor() if apply else diagnosis
         return {"ok": final["ok"], "apply": apply, "actions": actions, "remaining": [*final["issues"], *final["warnings"]]}
 
