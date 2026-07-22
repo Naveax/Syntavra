@@ -1,23 +1,42 @@
 # SignalCore v0.0.1 — Pre-Release Coding-Agent Runtime
 
-SignalCore is a local-first control plane for coding agents. It combines a credential-isolated provider proxy, bounded context, exact session history, enforced MCP routing, platform adapters, Python/TypeScript libraries and receipt-based benchmarking.
+SignalCore is a local-first control plane for coding agents. It combines a credential-isolated provider proxy, bounded active context, exact external session history, enforced MCP routing, platform adapters, Python/TypeScript libraries and receipt-based benchmarking.
 
-> **Version lock:** the repository and packages remain **0.0.1 / pre-release** until the owner explicitly authorizes another version.
+> **Version lock:** every active product and package identity remains **0.0.1 / pre-release** until the repository owner explicitly authorizes a version change.
 >
-> **Claim boundary:** external superiority, public adoption, live certification, SWE-bench performance, OOLONG performance and production maturity are **not proven** without external receipts.
+> **Claim boundary:** external superiority, public adoption, live certification, SWE-bench performance, OOLONG performance and production maturity are not proven without valid external receipts.
 
-## The product in four commands
+## Install in one command
+
+### Public pre-release package
 
 ```bash
-signalcore setup   # detect, plan, install or repair
-signalcore status  # health, sessions, metrics and proof gates
-signalcore run     # proxy, routing and session operations
-signalcore prove   # receipt and benchmark validation
+npx @signalcore/install
 ```
 
-Legacy commands remain available for compatibility, but these four commands are the primary mental model.
+The npm package is configured for the `next` distribution tag. Until it is published, the same installer can be executed directly from this repository:
 
-## Install from the repository
+```bash
+npx github:Naveax/SignalCore
+```
+
+Inspect the exact executable and argument plan without changing the machine:
+
+```bash
+npx github:Naveax/SignalCore -- --plan
+```
+
+The installer:
+
+- detects Python 3.11 or newer;
+- installs SignalCore from the selected Git ref;
+- applies the `minimal` MCP profile to detected coding-agent hosts;
+- runs `signalcore status`;
+- uses argv-only process execution rather than shell strings;
+- never accepts provider credentials;
+- preserves the 0.0.1 pre-release identity.
+
+Manual repository installation remains available:
 
 ```bash
 git clone https://github.com/Naveax/SignalCore.git
@@ -27,62 +46,61 @@ signalcore setup --apply --mcp-profile minimal
 signalcore status
 ```
 
-`setup` is backup-first, transactional and measured. By default it mutates only coding-agent hosts that are actually detected. `--all` is an explicit request to install every concrete supported adapter. Each host mutation is verified, recorded in the installation receipt and rolled back when a later host in the same batch fails.
+## Four-command product surface
 
-## MCP profiles
+```bash
+signalcore setup   # detect, plan, install or repair
+signalcore status  # health, sessions, metrics and proof gates
+signalcore run     # proxy, routing and session operations
+signalcore prove   # receipt and benchmark validation
+```
 
-The installed profile file is the runtime default; `SIGNALCORE_MCP_PROFILE` may override it for one process.
+Legacy commands remain available for compatibility, but these four operations are the public mental model.
 
-| Profile | Enforced tools | Use |
-|---|---:|---|
-| `minimal` | exactly 8 | Daily coding-agent hot loop |
-| `balanced` | exactly 36 | Repository work, sessions and provider telemetry |
-| `audit` | complete registered catalog | Evidence, migration, release and security review |
-
-Filtering `tools/list` is not treated as security. Every JSON-RPC `tools/call` is checked again. Unlisted tools fail closed. Destructive, network and execution operations require an authorization receipt; unsandboxed process submission is disabled unless the operator separately enables it.
+`setup` is backup-first, transactional and measured. It changes only detected hosts unless `--all` is explicitly supplied. Every mutation is verified and recorded; a later failure in the same batch triggers rollback.
 
 ## Daily workflow
 
 ```bash
-# Show the exact product surface
 signalcore run manifest
 
-# Verify that a read tool is allowed
 signalcore run route repo.search
-
-# An execution tool fails closed without sandbox + explicit authorization
 signalcore run route terminal.exec
 signalcore run route terminal.exec --sandboxed --user-authorized
 
-# Plan a credential-isolated provider proxy
 signalcore run proxy-plan openai
-signalcore run proxy-plan azure-openai --upstream https://YOUR-RESOURCE.openai.azure.com
-
-# Plan/install/verify a user-scoped proxy service
-signalcore run proxy-service plan openai
 signalcore run proxy-service install openai --apply --activate
 signalcore run proxy-service verify openai
 
-# Open, append, compact and restore a durable session
 signalcore run session-open --session-id my-session --metadata '{"goal":"repair repository"}'
 signalcore run session-append my-session decision '{"decision":"run focused tests"}'
 signalcore run session-compact my-session
 signalcore run session-continuity my-session
 ```
 
-## Proxy product surface
+## MCP profiles
+
+| Profile | Enforced tools | Intended use |
+|---|---:|---|
+| `minimal` | exactly 8 | Daily coding-agent hot loop |
+| `balanced` | exactly 36 | Repository work, sessions and provider telemetry |
+| `audit` | complete registered catalog | Evidence, migration, release and security review |
+
+Filtering `tools/list` is not a security boundary. Every `tools/call` is checked again. Unlisted tools fail closed. Destructive, network and execution operations require authorization receipts; unsandboxed execution is disabled unless separately enabled by the operator.
+
+## Proxy product
 
 SignalCore's proxy enforces:
 
 - provider credentials remain transport-only;
-- control endpoints require a separate token;
+- control endpoints use a separate control token;
 - remote bindings require TLS;
-- streaming uses commit-before-forward semantics;
+- streams use commit-before-forward delivery;
 - exact response evidence is committed before client delivery;
-- provider token/cost usage can be attached to claim-bearing receipts;
-- systemd, launchd and Windows Task Scheduler descriptors are user-scoped and reversible.
+- provider token and cost usage can be bound to claim-bearing receipts;
+- systemd, launchd and Windows Task Scheduler services are user-scoped and reversible.
 
-Ten provider families have explicit presets. OpenAI, Anthropic, Gemini and compatible API families can use direct proxy paths. SigV4, OAuth2 and non-compatible request families are marked adapter-required rather than presented as zero-code support.
+Ten provider families have explicit presets. OpenAI, Anthropic, Gemini and compatible APIs can use direct proxy routes. SigV4, OAuth2 and non-compatible request families are marked adapter-required rather than being represented as zero-code support.
 
 ## Python library
 
@@ -101,15 +119,15 @@ assert route.allowed
 client = SignalCoreClient(".signalcore/sdk", project=".")
 ```
 
-The dependency-free Python SDK accepts caller-supplied sync or async provider transports and adds request stabilization, exact evidence, safe replay and normalized usage capture.
+The Python SDK supports caller-provided synchronous or asynchronous transports, exact evidence, safe replay, sessions, routing and normalized provider usage.
 
 ## TypeScript library
 
 ```bash
 cd sdk/typescript
-npm install
+npm ci
 npm run check
-npm run build
+npm test
 ```
 
 ```ts
@@ -125,20 +143,20 @@ const client = new SignalCoreClient({
 });
 ```
 
-The package includes typed proxy calls, SSE parsing, retries, timeouts, control-plane health methods and receipt validation.
+The package includes typed proxy calls, SSE parsing, retries, timeouts, control-plane health methods and fail-closed receipt validation. Dependency installation is locked and tested on supported Node versions.
 
 ## Platform and framework coverage
 
-The current contract matrix contains:
+The contract registry currently includes:
 
 - **10 provider families**;
 - **15 framework surfaces**;
 - **18 coding-agent hosts**;
 - **18 concrete platform-adapter contracts**.
 
-Host detection uses host-specific executables or markers rather than generic repository files. Kiro uses project MCP plus native skills. Pi, Oh My Pi and OpenClaw use verified native-skill directories and do not receive invented MCP/config keys. A contract is not a live certification; `signalcore integrations` reports this boundary explicitly.
+Host detection uses host-specific executables or markers rather than generic repository files. Kiro uses project MCP plus native skills. Pi, Oh My Pi and OpenClaw use verified native-skill paths. A contract is not a live certification; `signalcore integrations` reports that boundary.
 
-## Sessions, async compaction and continuity
+## Sessions and continuity
 
 The session engine provides:
 
@@ -148,7 +166,7 @@ The session engine provides:
 - checkpoints, fork, merge, export and import;
 - bounded active context over exact external history;
 - measured compaction wall-time and continuity receipts;
-- exact summary expansion with no forced restart claim.
+- exact summary expansion without a forced-restart claim.
 
 The architecture claim is:
 
@@ -160,20 +178,11 @@ It is not a claim that a provider accepts infinite prompt tokens.
 
 ## Metrics and analytics
 
-`signalcore status` and `signalcore stats` expose:
+`signalcore status` and `signalcore stats` expose onboarding wall-time, host verification, token categories, provider cost, request wall-time, session/repository counts, compaction time, continuity restores, denied routes and unresolved proof gates.
 
-- onboarding and host-installation wall-time;
-- host verification results;
-- input, cached-input, billable-input and output tokens;
-- provider cost and request wall-time;
-- session and repository counts;
-- compaction wall-time and continuity restores;
-- denied tool routes;
-- unresolved proof-gate reasons.
+The default analytics stream is local and content-free. Prompt and response bodies are excluded.
 
-The default analytics log is local and content-free. Prompt and response bodies are not written to the analytics stream.
-
-## Real benchmark protocol
+## Benchmark and evidence commands
 
 ```bash
 signalcore prove plan
@@ -181,51 +190,61 @@ signalcore prove schema
 signalcore prove receipts receipts.json
 signalcore prove benchmark receipts.json
 signalcore prove long-context long-context-receipts.json
+signalcore prove external-suite swe-bench-receipts.json --suite swe-bench
 signalcore prove maturity maturity-evidence.json
 python benchmarks/measured_agent_benchmark.py receipts.json --output result.json
 ```
 
-Claim-bearing coding-agent runs require paired baseline/SignalCore provider receipts with measured tokens, cost, wall-time, success and quality. The committed gate requires at least 30 pairs, 5 repositories, 10 tasks and 3 workload families, with quality and success non-inferiority.
+Claim-bearing coding-agent runs require paired baseline/SignalCore receipts with measured tokens, cost, wall-time, success and quality. The committed gate requires at least 30 pairs, 5 repositories, 10 tasks and 3 workload families with quality and success non-inferiority.
 
-The OOLONG-like long-context gate measures required-fact recall, stale-fact rejection, evidence precision, exact recovery, session continuity, tokens and wall-time. A manifest or synthetic run cannot open the gate.
+The OOLONG-like gate measures required-fact recall, stale-fact rejection, evidence precision, exact recovery, continuity, tokens and wall-time. Synthetic fixtures test the gate but cannot open a public claim.
 
-The maturity gate requires external onboarding, rollback, live-integration, operating-system, package-adoption and signed release-cadence evidence. Repository-generated fixtures never count as public adoption.
+## Current public status
 
-## What is not yet externally proven
+```text
+EXTERNAL_SUPERIORITY_NOT_PROVEN
+LONG_CONTEXT_QUALITY_NOT_PROVEN
+MEASURED_AGENT_BENCHMARK_NOT_PROVEN
+LIVE_INTEGRATION_CERTIFICATION_NOT_PROVEN
+DAILY_CODING_AGENT_READINESS_NOT_PROVEN
+PUBLIC_PRODUCT_MATURITY_NOT_PROVEN
+```
 
-- real competitor superiority;
-- public SWE-bench success rate;
-- public OOLONG quality result;
-- live certification for every platform/provider adapter;
-- public package adoption and user count;
-- 90-day operational maturity.
-
-These remain measurable external gates, not README claims.
+Real competitor runs, SWE-bench, official OOLONG-family results, live integrations, provider receipts, onboarding population data, public adoption and 90-day operations remain external evidence tasks.
 
 ## Validation
 
 ```bash
 python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
-python -m unittest discover -s tests/runtime -q
-python tools/refresh_manifest.py
+python -m unittest discover -s tests -q
+python tools/check_repository_hygiene.py
+python tools/refresh_manifest.py --check
 python tools/validate.py
 python tools/validate_runtime.py
 
+npm ci
+npm test
+
 cd sdk/typescript
-npm install --ignore-scripts --no-audit --no-fund
+npm ci
 npm run check
-npm run build
+npm test
 ```
 
-CI runs Python tests across Ubuntu, Windows and macOS on Python 3.11–3.13, validates the four-command workflow, builds the wheel in a clean environment, type-checks the TypeScript SDK and creates pre-release artifact/SBOM bundles.
+CI validates Python 3.11–3.13 across Ubuntu, Windows and macOS, installer behavior, the TypeScript SDK across supported Node versions, clean wheel installation, CodeQL, dependency review, deterministic manifests, artifacts, SBOMs, checksums, reproducibility and provenance.
 
-## Documentation
+## Repository policy
 
+Development is performed on a focused branch and returned through a pull request. CI verifies `MANIFEST.sha256` but never commits directly to `main`. The supported hardening state is squash-merged after all required checks pass; old incomplete commit check icons are not rewritten.
+
+See:
+
+- `docs/operations/ONE_COMMAND_INSTALL.md`
+- `docs/operations/CI_AND_BRANCH_POLICY.md`
 - `docs/architecture/DAILY_AGENT_PRODUCT_001.md`
 - `docs/benchmark/MEASURED_AGENT_PROOF_001.md`
-- `schemas/provider-usage-receipt-v1.json`
-- `schemas/product-maturity-evidence-v1.json`
+- `docs/operations/EXTERNAL_EVIDENCE_RUNBOOK_001.md`
 
 ## Version policy
 
-`VERSION`, Python, TypeScript, skill, marketplace, extension, CodeMeta, CLI, workflows and artifact metadata must remain synchronized at **0.0.1** and **pre-release** until the owner explicitly changes the version policy.
+`VERSION`, Python, TypeScript, installer, skills, marketplace, extension, CodeMeta, CLI, workflows and artifact metadata remain synchronized at **0.0.1** and **pre-release** until the owner explicitly changes the policy.
