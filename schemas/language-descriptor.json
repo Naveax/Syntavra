@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntavra.dev/schemas/language-descriptor.json",
+  "title": "Syntavra Language Descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._+-]{0,127}$"
+    },
+    "suffixes": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^\\.[^\\s/\\\\\\u0000]+$"},
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "filenames": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^/\\\\\\u0000]+$"},
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "shebangs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\s/\\\\\\u0000]+$"},
+      "uniqueItems": true,
+      "maxItems": 128
+    },
+    "aliases": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._+-]{0,127}$"},
+      "uniqueItems": true,
+      "maxItems": 128
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {"enum": ["lexical", "syntax", "semantic"]},
+      "uniqueItems": true,
+      "default": ["lexical"]
+    }
+  },
+  "anyOf": [
+    {"required": ["suffixes"]},
+    {"required": ["filenames"]},
+    {"required": ["shebangs"]}
+  ]
+}
