@@ -33,7 +33,22 @@ jobs:
         with:
           node-version: '20'
       - name: Apply unified product migration
-        run: python tools/apply_syntavra_unification.py
+        id: migration
+        shell: bash
+        run: |
+          set +e
+          PYTHONFAULTHANDLER=1 python tools/apply_syntavra_unification.py > migration.log 2>&1
+          status=$?
+          cat migration.log
+          exit "$status"
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-migration-diagnostics
+          path: migration.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Refresh npm lockfiles
         shell: bash
         run: |
