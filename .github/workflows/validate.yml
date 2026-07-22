@@ -44,7 +44,7 @@ jobs:
           python -m pytest tests -q > .syntavra/ci/package-tests.log 2>&1
       - name: Upload package test diagnostics
         if: steps.package-tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: syntavra-package-tests-${{ matrix.os }}-py${{ matrix.python-version }}
           path: .syntavra/ci/package-tests.log

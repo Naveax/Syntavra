@@ -121,7 +121,7 @@ jobs:
             *.tgz
             sdk/typescript/*.tgz
       - name: Upload pre-release bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: syntavra-0.0.1-pre-release-${{ matrix.os }}
           path: |
@@ -173,7 +173,7 @@ jobs:
           if not result['reproducible']:
               raise SystemExit('wheel build is not reproducible')
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: syntavra-0.0.1-reproducibility
           path: /tmp/reproducibility.json

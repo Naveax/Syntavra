@@ -47,7 +47,7 @@ jobs:
           python -m pytest tests/runtime -q > .syntavra/ci/runtime-tests.log 2>&1
       - name: Upload runtime diagnostics
         if: steps.runtime-tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: syntavra-runtime-tests-${{ matrix.os }}-py${{ matrix.python }}
           path: .syntavra/ci/runtime-tests.log
@@ -213,7 +213,7 @@ jobs:
           assert value['external_superiority'] is False
           assert value['memory']['exact_recovery'] is True
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: syntavra-internal-component-measurement
           path: syntavra-component-measurement.json

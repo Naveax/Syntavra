@@ -114,7 +114,7 @@ jobs:
           PY
       - name: Upload portable diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: syntavra-portable-diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -132,7 +132,7 @@ jobs:
           subject-path: |
             syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
             syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: syntavra-portable-${{ matrix.platform }}-${{ matrix.arch }}
           path: |

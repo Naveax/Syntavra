@@ -154,7 +154,7 @@ jobs:
           git rev-parse HEAD > prepared-commit.txt
           cp MANIFEST.sha256 prepared-MANIFEST.sha256
       - name: Upload prepared integrity tree metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: syntavra-prepared-manifest-tree-${{ github.sha }}
           path: |
