@@ -26,18 +26,22 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x64
+            target_arch: ""
             extension: ""
           - os: windows-latest
             platform: win32
             arch: x64
+            target_arch: ""
             extension: ".exe"
           - os: macos-15-intel
             platform: darwin
             arch: x64
+            target_arch: x86_64
             extension: ""
           - os: macos-14
             platform: darwin
             arch: arm64
+            target_arch: arm64
             extension: ""
     runs-on: ${{ matrix.os }}
     steps:
@@ -50,9 +54,17 @@ jobs:
       - name: Build self-contained runtime
         shell: bash
         run: |
-          python -m PyInstaller --onefile --clean --name signalcore --collect-data signalcore_runtime tools/portable_entry.py
+          args=(--onefile --clean --name signalcore --collect-data signalcore_runtime)
+          if [[ "${{ matrix.platform }}" == "darwin" ]]; then
+            args+=(--target-arch "${{ matrix.target_arch }}")
+          fi
+          python -m PyInstaller "${args[@]}" tools/portable_entry.py
           asset="signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}"
           mv "dist/signalcore${{ matrix.extension }}" "$asset"
+          if [[ "${{ matrix.platform }}" == "darwin" ]]; then
+            codesign --force --deep --sign - "$asset"
+            codesign --verify --deep --strict --verbose=2 "$asset"
+          fi
           python - <<'PY'
           import hashlib
           import os
@@ -69,7 +81,19 @@ jobs:
         shell: bash
         run: |
           asset="signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}"
-          "$PWD/$asset" version > portable-version.json
+          set +e
+          "$PWD/$asset" version > portable-version.json 2> portable-version.stderr
+          status=$?
+          set -e
+          cat portable-version.stderr || true
+          if [[ $status -ne 0 ]]; then
+            file "$asset" || true
+            if [[ "${{ matrix.platform }}" == "darwin" ]]; then
+              codesign --display --verbose=4 "$asset" || true
+              codesign --verify --deep --strict --verbose=4 "$asset" || true
+            fi
+            exit "$status"
+          fi
           python - <<'PY'
           import json
           value = json.load(open("portable-version.json", encoding="utf-8"))
@@ -77,6 +101,18 @@ jobs:
           assert identity["version"] == "0.0.1", identity
           assert identity["channel"] == "pre-release", identity
           PY
+      - name: Upload portable diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
+            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
+            portable-version.json
+            portable-version.stderr
+          if-no-files-found: warn
+          retention-days: 7
       - name: Attest portable runtime
         if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v3
