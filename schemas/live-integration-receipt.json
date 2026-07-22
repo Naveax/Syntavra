@@ -1,0 +1,42 @@
+{
+  "$id": "https://syntavra.dev/schemas/live-integration-receipt-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "adapter_version": {"minLength": 1, "type": "string"},
+    "artifact_hash": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "config_hash": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "doctor_passed": {"type": "boolean"},
+    "environment_hash": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "external": {"const": true},
+    "family": {"enum": ["provider", "framework", "host"]},
+    "harness_commit": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+    "install_succeeded": {"type": "boolean"},
+    "integration_id": {"minLength": 1, "type": "string"},
+    "metadata": {"type": "object"},
+    "observed_at": {"format": "date-time", "type": "string"},
+    "operating_system": {"minLength": 1, "type": "string"},
+    "provider_usage_captured": {"type": "boolean"},
+    "receipt_id": {"minLength": 1, "type": "string"},
+    "request_succeeded": {"type": "boolean"},
+    "response_succeeded": {"type": "boolean"},
+    "rollback_verified": {"type": "boolean"},
+    "runtime_version": {"minLength": 1, "type": "string"},
+    "session_continuity_verified": {"type": "boolean"},
+    "syntavra_channel": {"const": "pre-release"},
+    "syntavra_version": {"const": "0.0.1"},
+    "streaming_verified": {"type": "boolean"},
+    "synthetic": {"const": false},
+    "tool_routing_verified": {"type": "boolean"}
+  },
+  "required": [
+    "receipt_id", "integration_id", "family", "observed_at", "syntavra_version",
+    "syntavra_channel", "adapter_version", "operating_system", "runtime_version",
+    "environment_hash", "config_hash", "harness_commit", "artifact_hash",
+    "install_succeeded", "doctor_passed", "request_succeeded", "response_succeeded",
+    "streaming_verified", "provider_usage_captured", "tool_routing_verified",
+    "session_continuity_verified", "rollback_verified", "external", "synthetic"
+  ],
+  "title": "Syntavra Live Integration Receipt",
+  "type": "object"
+}

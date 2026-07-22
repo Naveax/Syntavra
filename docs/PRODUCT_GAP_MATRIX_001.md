@@ -1,4 +1,4 @@
-# SignalCore v0.0.1 Pre-Release — Product Gap and Evidence Matrix
+# Syntavra v0.0.1 Pre-Release — Product Gap and Evidence Matrix
 
 ## Interpretation
 
@@ -11,17 +11,17 @@ The version remains **0.0.1 / pre-release** until the repository owner explicitl
 
 | Area | Current state | Evidence / command | Claim boundary |
 |---|---|---|---|
-| Installation and user experience | IMPLEMENTED + INTERNALLY_GATED | `signalcore setup --apply`, atomic host transactions, measured install receipt | Real population success rate requires external onboarding receipts |
+| Installation and user experience | IMPLEMENTED + INTERNALLY_GATED | `syntavra setup --apply`, atomic host transactions, measured install receipt | Real population success rate requires external onboarding receipts |
 | Proxy productization | IMPLEMENTED + INTERNALLY_GATED | Provider presets, fixed command, systemd/launchd/Task Scheduler lifecycle | Live provider certification requires external receipts |
-| Python library | IMPLEMENTED | `SignalCoreClient`, receipts, sessions, routing, proof APIs | Package adoption is external |
-| TypeScript library | IMPLEMENTED + BUILD-GATED | `@signalcore/client`, `@signalcore/client/receipts`, TS check/build/package | npm adoption is external |
+| Python library | IMPLEMENTED | `SyntavraClient`, receipts, sessions, routing, proof APIs | Package adoption is external |
+| TypeScript library | IMPLEMENTED + BUILD-GATED | `@syntavra/sdk`, `@syntavra/sdk/receipts`, TS check/build/package | npm adoption is external |
 | Framework breadth | IMPLEMENTED AS CONTRACTS | 15 framework surfaces | Every framework needs live certification receipts |
 | Provider breadth | IMPLEMENTED AS PRESETS/CONTRACTS | 10 provider families | SigV4/OAuth/non-compatible providers remain adapter-required |
 | Workload variety | INTERNALLY_GATED | coding, repo tasks, SWE-bench, long context, continuity, routing | Real workload results require pinned harness receipts |
-| Release frequency and maturity | EXTERNAL EVIDENCE REQUIRED | `signalcore prove maturity` | No maturity claim without 90-day external evidence |
-| Metrics/observability UI | IMPLEMENTED | `signalcore status`, `stats`, content-free analytics | Real token/cost values require provider receipts |
-| Academic long-context architecture | DOCUMENTED + IMPLEMENTED | exact external history, bounded active window, summary DAG | Literature motivates architecture; it does not prove SignalCore results |
-| Real long-context benchmark | EXTERNAL EVIDENCE REQUIRED | `signalcore prove external-suite --suite oolong` | No Oolong/LongBench/InfiniteBench score claimed |
+| Release frequency and maturity | EXTERNAL EVIDENCE REQUIRED | `syntavra prove maturity` | No maturity claim without 90-day external evidence |
+| Metrics/observability UI | IMPLEMENTED | `syntavra status`, `stats`, content-free analytics | Real token/cost values require provider receipts |
+| Academic long-context architecture | DOCUMENTED + IMPLEMENTED | exact external history, bounded active window, summary DAG | Literature motivates architecture; it does not prove Syntavra results |
+| Real long-context benchmark | EXTERNAL EVIDENCE REQUIRED | `syntavra prove external-suite --suite oolong` | No Oolong/LongBench/InfiniteBench score claimed |
 | Recursive paradigm evidence | INTERNALLY GATED + EXTERNAL REQUIRED | recursive suite contract, provenance, non-inferiority | Recursion advantage not claimed without paired runs |
 | Full coding-agent UX | IMPLEMENTED | setup → status → run → prove | Daily readiness remains gated by real task evidence |
 | Async compaction and continuity | IMPLEMENTED + INTERNALLY_GATED | continuity receipt, exact recovery, measured compaction | Cross-user operational reliability is external |

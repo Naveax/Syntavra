@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SignalCoreClient } from "../dist/index.js";
+import { SyntavraClient } from "../dist/index.js";
 
 function jsonResponse(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
@@ -11,14 +11,14 @@ function jsonResponse(data, status = 200, headers = {}) {
 
 test("rejects insecure remote proxy URLs", () => {
   assert.throws(
-    () => new SignalCoreClient({ baseUrl: "http://example.com:8787", allowRemote: true }),
+    () => new SyntavraClient({ baseUrl: "http://example.com:8787", allowRemote: true }),
     /require HTTPS/
   );
 });
 
 test("rejects provider credentials in payloads and headers", async () => {
   let called = false;
-  const client = new SignalCoreClient({
+  const client = new SyntavraClient({
     fetchImpl: async () => {
       called = true;
       return jsonResponse({ ok: true });
@@ -40,7 +40,7 @@ test("rejects provider credentials in payloads and headers", async () => {
 test("retries transient responses and preserves receipt headers", async () => {
   let attempts = 0;
   const events = [];
-  const client = new SignalCoreClient({
+  const client = new SyntavraClient({
     timeoutMs: 1_000,
     retry: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 1 },
     logger: (event) => events.push(event),
@@ -51,9 +51,9 @@ test("retries transient responses and preserves receipt headers", async () => {
         { id: "response-1" },
         200,
         {
-          "x-signalcore-replay": "miss",
-          "x-signalcore-request-handle": "request:1",
-          "x-signalcore-evidence": "evidence:1",
+          "x-syntavra-replay": "miss",
+          "x-syntavra-request-handle": "request:1",
+          "x-syntavra-evidence": "evidence:1",
           "x-request-id": "provider-request-1"
         }
       );
@@ -79,7 +79,7 @@ test("parses multi-line SSE and the done marker", async () => {
     "",
     ""
   ].join("\n");
-  const client = new SignalCoreClient({
+  const client = new SyntavraClient({
     fetchImpl: async () => new Response(payload, {
       status: 200,
       headers: { "content-type": "text/event-stream" }

@@ -3,6 +3,7 @@ __pycache__/
 *.so
 *.dylib
 *.dll
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -13,6 +14,7 @@ venv/
 .env
 .env.*
 !.env.example
+.syntavra/
 .signalcore/
 *.db
 *.db-shm

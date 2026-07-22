@@ -8,10 +8,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "skills" / "signal-core" / "scripts"
+SCRIPTS = ROOT / "skills" / "syntavra" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-spec = importlib.util.spec_from_file_location("signalcore_platforms", SCRIPTS / "platforms.py")
+spec = importlib.util.spec_from_file_location("syntavra_platforms", SCRIPTS / "platforms.py")
 platforms = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(platforms)
@@ -38,7 +38,7 @@ class PlatformTests(unittest.TestCase):
             home = Path(temp) / "home"
             project.mkdir(); home.mkdir()
             result = platforms.install("codex", scope="project", project=project, home=home)
-            target = project / ".codex" / "skills" / "signal-core"
+            target = project / ".codex" / "skills" / "syntavra"
             self.assertTrue(result["changed"])
             self.assertTrue((target / "SKILL.md").is_file())
             self.assertTrue((target / "scripts" / "platforms.py").is_file())
@@ -80,7 +80,7 @@ class PlatformTests(unittest.TestCase):
         self.assertNotIn("cursor", selected)
 
     def test_platform_json_valid(self):
-        data = json.loads((ROOT / "skills" / "signal-core" / "data" / "platforms.json").read_text(encoding="utf-8"))
+        data = json.loads((ROOT / "skills" / "syntavra" / "data" / "platforms.json").read_text(encoding="utf-8"))
         self.assertEqual(data["schema_version"], 1)
 
 

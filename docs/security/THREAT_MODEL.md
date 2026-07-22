@@ -14,8 +14,8 @@
 
 ## Fail-closed behavior
 
-SignalCore rejects corrupt evidence, missing summary parents/events, stale verifier identities, cross-project memory/evidence access, incomplete paired identity, configured-only difficulty and missing quota telemetry. Instruction-only operation receives no enforcement claims.
+Syntavra rejects corrupt evidence, missing summary parents/events, stale verifier identities, cross-project memory/evidence access, incomplete paired identity, configured-only difficulty and missing quota telemetry. Instruction-only operation receives no enforcement claims.
 
 ## Explicit non-goals
 
-SignalCore does not claim resistance to a fully privileged local operating-system attacker. It does not sandbox arbitrary untrusted binaries, replace OS access control or guarantee that host-provided telemetry is truthful. MCP or hook control is only as strong as the host integration that invokes it.
+Syntavra does not claim resistance to a fully privileged local operating-system attacker. It does not sandbox arbitrary untrusted binaries, replace OS access control or guarantee that host-provided telemetry is truthful. MCP or hook control is only as strong as the host integration that invokes it.

@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from signalcore_runtime.product_surface import MeasuredBenchmarkGate, ReceiptValidator
-from signalcore_runtime.release_identity import CHANNEL, VERSION
+from syntavra_runtime.product_surface import MeasuredBenchmarkGate, ReceiptValidator
+from syntavra_runtime.release_identity import CHANNEL, VERSION
 
 
 def parser() -> argparse.ArgumentParser:

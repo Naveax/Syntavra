@@ -6,6 +6,7 @@
     "public_product_maturity": "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN"
   },
   "development_status": "pre-alpha",
+  "product": "Syntavra",
   "publish_as_prerelease": true,
   "stable": false,
   "version": "0.0.1",

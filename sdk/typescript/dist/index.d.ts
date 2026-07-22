@@ -7,7 +7,7 @@ export interface RetryPolicy {
     maxDelayMs?: number;
     retryStatuses?: readonly number[];
 }
-export interface SignalCoreClientOptions {
+export interface SyntavraClientOptions {
     baseUrl?: string;
     controlToken?: string;
     controlTokenProvider?: () => string | Promise<string>;
@@ -15,9 +15,9 @@ export interface SignalCoreClientOptions {
     timeoutMs?: number;
     retry?: RetryPolicy;
     fetchImpl?: typeof fetch;
-    logger?: (event: SignalCoreClientEvent) => void;
+    logger?: (event: SyntavraClientEvent) => void;
 }
-export interface SignalCoreClientEvent {
+export interface SyntavraClientEvent {
     type: "request" | "response" | "retry" | "error";
     requestId: string;
     path: string;
@@ -26,7 +26,7 @@ export interface SignalCoreClientEvent {
     durationMs?: number;
     error?: string;
 }
-export interface SignalCoreResponse<T = Json> {
+export interface SyntavraResponse<T = Json> {
     status: number;
     ok: boolean;
     data: T;
@@ -36,7 +36,7 @@ export interface SignalCoreResponse<T = Json> {
     requestId: string;
     headers: Headers;
 }
-export interface SignalCoreStreamEvent<T = Json> {
+export interface SyntavraStreamEvent<T = Json> {
     event: string;
     data: T | string;
     id: string;
@@ -63,7 +63,7 @@ export interface AnthropicMessagesRequest {
     stream?: boolean;
     [key: string]: Json | undefined;
 }
-export declare class SignalCoreClient {
+export declare class SyntavraClient {
     readonly baseUrl: URL;
     private readonly staticControlToken;
     private readonly controlTokenProvider?;
@@ -71,17 +71,17 @@ export declare class SignalCoreClient {
     private readonly timeoutMs;
     private readonly retryPolicy;
     private readonly logger?;
-    constructor(options?: SignalCoreClientOptions);
+    constructor(options?: SyntavraClientOptions);
     private providerUrl;
     private providerHeaders;
     private fetchWithRetry;
-    invoke<T = Json>(path: string, request: Json, init?: RequestInit): Promise<SignalCoreResponse<T>>;
+    invoke<T = Json>(path: string, request: Json, init?: RequestInit): Promise<SyntavraResponse<T>>;
     invokeStream(path: string, request: Json, init?: RequestInit): Promise<Response>;
-    streamEvents<T = Json>(path: string, request: Json, init?: RequestInit): AsyncGenerator<SignalCoreStreamEvent<T>>;
-    openAI<T = Json>(request: OpenAIResponsesRequest): Promise<SignalCoreResponse<T>>;
-    openAIChat<T = Json>(request: OpenAIChatRequest): Promise<SignalCoreResponse<T>>;
-    anthropic<T = Json>(request: AnthropicMessagesRequest): Promise<SignalCoreResponse<T>>;
-    gemini<T = Json>(model: string, request: Json): Promise<SignalCoreResponse<T>>;
+    streamEvents<T = Json>(path: string, request: Json, init?: RequestInit): AsyncGenerator<SyntavraStreamEvent<T>>;
+    openAI<T = Json>(request: OpenAIResponsesRequest): Promise<SyntavraResponse<T>>;
+    openAIChat<T = Json>(request: OpenAIChatRequest): Promise<SyntavraResponse<T>>;
+    anthropic<T = Json>(request: AnthropicMessagesRequest): Promise<SyntavraResponse<T>>;
+    gemini<T = Json>(model: string, request: Json): Promise<SyntavraResponse<T>>;
     private token;
     private control;
     live<T = Json>(): Promise<T>;

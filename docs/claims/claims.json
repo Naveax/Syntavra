@@ -1,1 +1,144 @@
-{"claims":[{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.activation","limitations":["process attestation uses injected callback in tests"],"source_paths":["skills/signal-core/profiles/roblox_studio/activation.py","tests/roblox_profile/test_activation.py"],"status":"INTERNALLY_VERIFIED","value":"fail_closed","verification_command":"python -m unittest tests.roblox_profile.test_activation -q"},{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.task_state","limitations":[],"source_paths":["skills/signal-core/profiles/roblox_studio/task_state.py","skills/signal-core/profiles/roblox_studio/schemas/task-state.schema.json"],"status":"INTERNALLY_VERIFIED","value":2,"verification_command":"python -m unittest discover -s tests/roblox_profile -q"},{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.capabilities","limitations":["live support status differs per capability"],"source_paths":["skills/signal-core/profiles/roblox_studio/capabilities.py","skills/signal-core/profiles/roblox_studio/capability_graph.py"],"status":"INTERNALLY_VERIFIED","value":33,"verification_command":"python tools/validate_roblox_profile.py"},{"artifact_paths":["benchmarks/results/roblox-profile/simulated-50.json"],"claim_id":"roblox.simulated","limitations":["All external Roblox/Studio engines are simulated","No provider billing or competitor execution was measured"],"source_paths":["skills/signal-core/profiles/roblox_studio/profile.py","skills/signal-core/profiles/roblox_studio/adapters/simulated/__init__.py","benchmarks/roblox_profile_benchmark.py"],"status":"SIMULATED","value":50,"verification_command":"python benchmarks/roblox_profile_benchmark.py --cases 50 --mode simulated --output /tmp/report.json"},{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.transcript","limitations":["no sanitized real transcript committed"],"source_paths":["skills/signal-core/profiles/roblox_studio/adapters/transcript/__init__.py"],"status":"IMPLEMENTED","value":"adapter_contract","verification_command":"python -m unittest discover -s tests/roblox_profile -q"},{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.live","limitations":["no live artifact"],"source_paths":["skills/signal-core/profiles/roblox_studio/adapters/live/__init__.py"],"status":"PLANNED","value":"disabled_contract","verification_command":"python -m unittest discover -s tests/roblox_profile -q"},{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.datastore","limitations":["no migration execution engine"],"source_paths":["skills/signal-core/profiles/roblox_studio/capabilities.py"],"status":"PLANNED","value":"external_engine_only","verification_command":"python tools/validate_roblox_profile.py"},{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.external_engines","limitations":["asset animation Blender engines are not implemented"],"source_paths":["skills/signal-core/profiles/roblox_studio/registries.py"],"status":"PLANNED","value":"external_engine_only","verification_command":"python tools/validate_roblox_profile.py"},{"artifact_paths":["benchmarks/results/roblox-profile/profile-tests.json"],"claim_id":"roblox.tests","limitations":[],"source_paths":["tests/roblox_profile"],"status":"INTERNALLY_VERIFIED","value":119,"verification_command":"python -m unittest discover -s tests/roblox_profile -q"}],"schema_version":1,"source_commit":"701cf02ac8d07a8a726ebc154fcc7bfa3da09a8f","source_tree_hash":"d4762f45a6fa982aa3ad4819b998b818284ef57ef33d0d47926d9c1b1ac0ac24"}
+{
+  "claims": [
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.activation",
+      "limitations": [
+        "process attestation uses injected callback in tests"
+      ],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/activation.py",
+        "tests/roblox_profile/test_activation.py"
+      ],
+      "status": "INTERNALLY_VERIFIED",
+      "value": "fail_closed",
+      "verification_command": "python -m unittest tests.roblox_profile.test_activation -q"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.task_state",
+      "limitations": [],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/task_state.py",
+        "skills/syntavra/profiles/roblox_studio/schemas/task-state.schema.json"
+      ],
+      "status": "INTERNALLY_VERIFIED",
+      "value": 2,
+      "verification_command": "python -m unittest discover -s tests/roblox_profile -q"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.capabilities",
+      "limitations": [
+        "live support status differs per capability"
+      ],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/capabilities.py",
+        "skills/syntavra/profiles/roblox_studio/capability_graph.py"
+      ],
+      "status": "INTERNALLY_VERIFIED",
+      "value": 33,
+      "verification_command": "python tools/validate_roblox_profile.py"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/simulated-50.json"
+      ],
+      "claim_id": "roblox.simulated",
+      "limitations": [
+        "All external Roblox/Studio engines are simulated",
+        "No provider billing or competitor execution was measured"
+      ],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/profile.py",
+        "skills/syntavra/profiles/roblox_studio/adapters/simulated/__init__.py",
+        "benchmarks/roblox_profile_benchmark.py"
+      ],
+      "status": "SIMULATED",
+      "value": 50,
+      "verification_command": "python benchmarks/roblox_profile_benchmark.py --cases 50 --mode simulated --output /tmp/report.json"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.transcript",
+      "limitations": [
+        "no sanitized real transcript committed"
+      ],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/adapters/transcript/__init__.py"
+      ],
+      "status": "IMPLEMENTED",
+      "value": "adapter_contract",
+      "verification_command": "python -m unittest discover -s tests/roblox_profile -q"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.live",
+      "limitations": [
+        "no live artifact"
+      ],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/adapters/live/__init__.py"
+      ],
+      "status": "PLANNED",
+      "value": "disabled_contract",
+      "verification_command": "python -m unittest discover -s tests/roblox_profile -q"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.datastore",
+      "limitations": [
+        "no migration execution engine"
+      ],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/capabilities.py"
+      ],
+      "status": "PLANNED",
+      "value": "external_engine_only",
+      "verification_command": "python tools/validate_roblox_profile.py"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.external_engines",
+      "limitations": [
+        "asset animation Blender engines are not implemented"
+      ],
+      "source_paths": [
+        "skills/syntavra/profiles/roblox_studio/registries.py"
+      ],
+      "status": "PLANNED",
+      "value": "external_engine_only",
+      "verification_command": "python tools/validate_roblox_profile.py"
+    },
+    {
+      "artifact_paths": [
+        "benchmarks/results/roblox-profile/profile-tests.json"
+      ],
+      "claim_id": "roblox.tests",
+      "limitations": [],
+      "source_paths": [
+        "tests/roblox_profile"
+      ],
+      "status": "INTERNALLY_VERIFIED",
+      "value": 119,
+      "verification_command": "python -m unittest discover -s tests/roblox_profile -q"
+    }
+  ],
+  "schema_version": 1,
+  "source_commit": "61ef792e80a7889ec5ac51efef528a1d43162448",
+  "source_tree_hash": "6e73535428542214626a04ddb531ff1740771ca6e561c226416cbfe7d1c7d858"
+}

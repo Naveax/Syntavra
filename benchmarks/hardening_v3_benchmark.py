@@ -14,15 +14,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.host_output_pipeline import HostOutputPipeline
-from signalcore_runtime.readiness_gate import ReadinessEvidence, SignalCoreReadinessGate
-from signalcore_runtime.real_task_receipts import load_verified_real_tasks
-from signalcore_runtime.security_scan import scan_text
-from signalcore_runtime.session_retrieval import SessionSemanticRetriever
-from signalcore_runtime.tool_externalization import ToolOutputExternalizer
-from signalcore_runtime.tool_externalization_types import ExternalizationPolicy, ToolPayload
-from signalcore_runtime.usage_receipt_ledger import UsageReceiptLedger
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.host_output_pipeline import HostOutputPipeline
+from syntavra_runtime.readiness_gate import ReadinessEvidence, SyntavraReadinessGate
+from syntavra_runtime.real_task_receipts import load_verified_real_tasks
+from syntavra_runtime.security_scan import scan_text
+from syntavra_runtime.session_retrieval import SessionSemanticRetriever
+from syntavra_runtime.tool_externalization import ToolOutputExternalizer
+from syntavra_runtime.tool_externalization_types import ExternalizationPolicy, ToolPayload
+from syntavra_runtime.usage_receipt_ledger import UsageReceiptLedger
 
 
 @dataclass
@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         hardware = hashlib.sha256(b"benchmark-hardware").hexdigest()
         for index in range(30):
             ledger.record(
-                task_id=f"task-{index}", arm_id="signalcore", repetition=1, cache_mode="cold",
+                task_id=f"task-{index}", arm_id="syntavra", repetition=1, cache_mode="cold",
                 provider="openai", request_id=f"request-{index}",
                 provider_response={"id": f"response-{index}", "usage": {"input_tokens": 1000, "output_tokens": 100}},
                 usage_payload={"input_tokens": 1000, "output_tokens": 100}, quota_cost=1.0,
@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             pass_rate_delta=0.0,
             p95_latency_ms=p95_proxy_ms,
         )
-        readiness = SignalCoreReadinessGate.evaluate(evidence_gate)
+        readiness = SyntavraReadinessGate.evaluate(evidence_gate)
         result = {
             "schema_version": 1,
             "boundary": "Internal hardening benchmark with cryptographically verified real-task receipts. External competitor arms remain zero, so superiority is not proven.",

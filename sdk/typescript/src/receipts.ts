@@ -1,7 +1,7 @@
-export const SIGNALCORE_VERSION = "0.0.1" as const;
-export const SIGNALCORE_CHANNEL = "pre-release" as const;
+export const SYNTAVRA_VERSION = "0.0.1" as const;
+export const SYNTAVRA_CHANNEL = "pre-release" as const;
 
-export type SignalCoreWorkload =
+export type SyntavraWorkload =
   | "coding-agent"
   | "repository-task"
   | "swe-bench"
@@ -9,9 +9,9 @@ export type SignalCoreWorkload =
   | "session-continuity"
   | "tool-routing";
 
-export type SignalCoreArm =
+export type SyntavraArm =
   | "baseline"
-  | "signalcore"
+  | "syntavra"
   | "token-savior"
   | "context-mode"
   | "headroom"
@@ -35,8 +35,8 @@ export interface ProviderUsageReceipt {
   success: boolean;
   synthetic: boolean;
   raw_usage_hash: string;
-  workload: SignalCoreWorkload;
-  arm: SignalCoreArm;
+  workload: SyntavraWorkload;
+  arm: SyntavraArm;
   task_id: string;
   repetition: number;
   metadata?: Record<string, unknown>;
@@ -49,7 +49,7 @@ export interface ReceiptValidation {
   totalTokens: number;
 }
 
-const WORKLOADS = new Set<SignalCoreWorkload>([
+const WORKLOADS = new Set<SyntavraWorkload>([
   "coding-agent",
   "repository-task",
   "swe-bench",
@@ -58,9 +58,9 @@ const WORKLOADS = new Set<SignalCoreWorkload>([
   "tool-routing"
 ]);
 
-const ARMS = new Set<SignalCoreArm>([
+const ARMS = new Set<SyntavraArm>([
   "baseline",
-  "signalcore",
+  "syntavra",
   "token-savior",
   "context-mode",
   "headroom",
@@ -113,6 +113,6 @@ export function validateProviderUsageReceipt(receipt: ProviderUsageReceipt): Rec
 
 export function assertProviderUsageReceipt(receipt: ProviderUsageReceipt): ProviderUsageReceipt {
   const validation = validateProviderUsageReceipt(receipt);
-  if (!validation.ok) throw new Error(`invalid SignalCore receipt: ${validation.reasons.join(", ")}`);
+  if (!validation.ok) throw new Error(`invalid Syntavra receipt: ${validation.reasons.join(", ")}`);
   return receipt;
 }

@@ -10,11 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from benchmarks.runtime_v03_benchmark import run as run_internal_benchmark
-from signalcore_runtime.benchmark_harness import TIER_CONFIGS, validate_config
-from signalcore_runtime.claim_governance import decide_claim
-from signalcore_runtime.difficulty import evaluate_configured
-from signalcore_runtime.util import atomic_write_json
+from benchmarks.syntavra_component_benchmark import run as run_internal_measurement
+from syntavra_runtime.benchmark_harness import TIER_CONFIGS, validate_config
+from syntavra_runtime.claim_governance import decide_claim
+from syntavra_runtime.difficulty import evaluate_configured
+from syntavra_runtime.util import atomic_write_json
 
 CONTROLS = {name: True for name in (
     "same_prompt", "same_model", "same_reasoning", "same_repository", "same_verifier",
@@ -22,31 +22,37 @@ CONTROLS = {name: True for name in (
 )}
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", default="5x")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--output")
     args = parser.parse_args(argv)
+
     tiers = {tier: validate_config({"tier": tier, "axes": axes, "controls": CONTROLS}) for tier, axes in TIER_CONFIGS.items()}
     configured = evaluate_configured("20X", TIER_CONFIGS["20X"], integrity=CONTROLS)
     claim = decide_claim(
         tier="20X",
         baseline_costs=[],
-        signalcore_costs=[],
+        syntavra_costs=[],
         difficulty=configured,
         actual_quota_available=False,
     )
-    internal = run_internal_benchmark(scale=1 if args.smoke else 4)
+    internal = run_internal_measurement(scale=1 if args.smoke else 4)
     result = {
         "ok": all(value["ok"] for key, value in tiers.items() if key != "1X")
               and claim.claim == "5X_NOT_PROVEN"
-              and internal["ok"],
+              and internal["claim"] == "INTERNAL_FUNCTIONAL_MEASUREMENT_ONLY"
+              and internal["external_superiority"] is False
+              and internal["memory"]["exact_recovery"] is True,
+        "product": "Syntavra",
+        "version": "0.0.1",
+        "channel": "pre-release",
         "profile": args.profile,
         "difficulty_shapes": tiers,
         "claim_ceiling": asdict(claim),
-        "internal_benchmark": internal,
-        "note": "Unified v0.3 components are verified. Live paired provider/quota 5X superiority remains unproven.",
+        "internal_measurement": internal,
+        "note": "Canonical Syntavra components are internally verified. Live paired provider, long-context, integration and public maturity claims remain evidence-gated.",
     }
     if args.output:
         atomic_write_json(Path(args.output), result, mode=0o644)

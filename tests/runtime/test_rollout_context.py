@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.context_governor import evaluate, stable_prefix_hash
-from signalcore_runtime.rollout import RolloutTailer
+from syntavra_runtime.context_governor import evaluate, stable_prefix_hash
+from syntavra_runtime.rollout import RolloutTailer
 
 class RolloutContextTests(unittest.TestCase):
     def setUp(self): self.temp=tempfile.TemporaryDirectory(); self.root=Path(self.temp.name)

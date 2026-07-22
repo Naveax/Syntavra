@@ -1,11 +1,11 @@
 {
   "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
   "@type": "SoftwareSourceCode",
-  "name": "SignalCore",
+  "name": "Syntavra",
   "version": "0.0.1",
   "developmentStatus": "pre-alpha",
   "description": "Pre-release local-first structural intelligence, secure execution, reversible context and unbounded external-history control plane for coding agents.",
-  "codeRepository": "https://github.com/Naveax/SignalCore",
+  "codeRepository": "https://github.com/Naveax/Syntavra",
   "programmingLanguage": "Python",
   "runtimePlatform": "Python 3.11+",
   "author": {

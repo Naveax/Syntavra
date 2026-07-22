@@ -11,18 +11,18 @@ import sys
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.data_router import DataRoutePolicy, DataRouter
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.security_scan import IncrementalSecurityScanner
-from signalcore_runtime.streaming import StreamSemanticProcessor
-from signalcore_runtime.util import atomic_write_json
+from syntavra_runtime.data_router import DataRoutePolicy, DataRouter
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.security_scan import IncrementalSecurityScanner
+from syntavra_runtime.streaming import StreamSemanticProcessor
+from syntavra_runtime.util import atomic_write_json
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="benchmarks/results/v6-production-core/internal.json")
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="signalcore-v6-bench-") as temp_name:
+    with tempfile.TemporaryDirectory(prefix="syntavra-v6-bench-") as temp_name:
         root = Path(temp_name)
         store = EvidenceStore(root / "evidence", project_id="benchmark")
         rows = [{
@@ -58,7 +58,7 @@ def main() -> int:
             "visible_bytes": routed.visible_bytes,
             "visible_reduction": routed.reduction_ratio,
             "route_ms": route_ms,
-            "valid_json": isinstance(parsed, dict) and int(parsed.get("_signalcore", {}).get("schema_version", 0)) >= 1,
+            "valid_json": isinstance(parsed, dict) and int(parsed.get("_syntavra", {}).get("schema_version", 0)) >= 1,
             "exact_roundtrip": store.get(handle) == raw,
             "encrypted_at_rest": raw[:256] not in encrypted,
             "evidence_verify": store.verify(handle),
@@ -68,7 +68,7 @@ def main() -> int:
             "stream_security_clean": not scanner_summary.secret_types and not scanner_summary.injection_risk,
             "passes": bool(
                 routed.visible_bytes <= 4096 and routed.reduction_ratio > 0.99 and
-                isinstance(parsed, dict) and int(parsed.get("_signalcore", {}).get("schema_version", 0)) >= 1 and
+                isinstance(parsed, dict) and int(parsed.get("_syntavra", {}).get("schema_version", 0)) >= 1 and
                 store.get(handle) == raw and raw[:256] not in encrypted and store.verify(handle) and
                 stream_summary.event_count >= 2 and not scanner_summary.secret_types
             ),

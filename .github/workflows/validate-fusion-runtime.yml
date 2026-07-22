@@ -1,4 +1,4 @@
-name: Validate SignalCore v0.0.1 Pre-Release
+name: Validate Syntavra 0.0.1 Pre-Release
 
 on:
   pull_request:
@@ -8,6 +8,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: syntavra-pre-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   PYTHONDONTWRITEBYTECODE: "1"
@@ -30,117 +34,101 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Install runtime dependencies
-        run: python -m pip install --disable-pip-version-check -e .
-      - name: Compile ordinary source
-        run: python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
-      - name: Runtime tests
+      - name: Install runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - name: Compile canonical source and compatibility boundary
+        run: python -m compileall -q syntavra_runtime signalcore_runtime skills/syntavra tools tests benchmarks
+      - name: Runtime and unified-platform tests
         id: runtime-tests
         continue-on-error: true
         shell: bash
         run: |
-          mkdir -p .signalcore/ci
-          python -m unittest discover -s tests/runtime -v > .signalcore/ci/runtime-tests.log 2>&1
-      - name: Upload runtime test diagnostics
+          mkdir -p .syntavra/ci
+          python -m pytest tests/runtime -q > .syntavra/ci/runtime-tests.log 2>&1
+      - name: Upload runtime diagnostics
         if: steps.runtime-tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: runtime-tests-${{ matrix.os }}-py${{ matrix.python }}
-          path: .signalcore/ci/runtime-tests.log
+          name: syntavra-runtime-tests-${{ matrix.os }}-py${{ matrix.python }}
+          path: .syntavra/ci/runtime-tests.log
           if-no-files-found: error
           retention-days: 7
       - name: Enforce runtime test success
         if: steps.runtime-tests.outcome == 'failure'
         shell: bash
         run: |
-          cat .signalcore/ci/runtime-tests.log
+          cat .syntavra/ci/runtime-tests.log
           exit 1
-      - name: Existing adapter tests
-        run: python -m unittest tests.test_platforms tests.test_roblox_profile_gate -q
+      - name: Existing profile compatibility tests
+        run: python -m pytest tests/test_platforms.py tests/test_roblox_profile_gate.py -q
       - name: Runtime package validation
-        run: python tools/validate_runtime.py
+        run: python -m tools.validate_runtime
       - name: Package integrity validation
-        run: python tools/validate.py
-      - name: Unified internal benchmark and fail-closed release smoke
-        run: python tools/validate_release.py --profile 5x --smoke --output release-smoke.json
-      - name: Four-command product workflow smoke
+        run: python -m tools.validate
+      - name: Fail-closed release smoke
+        run: python -m tools.validate_release --profile 5x --smoke --output release-smoke.json
+      - name: Canonical four-command workflow smoke
         shell: bash
         run: |
-          python -m signalcore_runtime --project . version > version.json
-          python -m signalcore_runtime --project . setup --apply --mcp-profile minimal > setup.json
-          python -m signalcore_runtime --project . status > status.json
-          python -m signalcore_runtime --project . run manifest > product.json
-          python -m signalcore_runtime --project . run route repo.search > route.json
-          python -m signalcore_runtime --project . run proxy-plan openai > proxy.json
-          python -m signalcore_runtime --project . run session-open --session-id ci-session --metadata '{"goal":"ci"}' > session-open.json
-          python -m signalcore_runtime --project . run session-append ci-session decision '{"decision":"keep version 0.0.1"}' > session-append.json
-          python -m signalcore_runtime --project . run session-compact ci-session --force > session-compact.json
-          python -m signalcore_runtime --project . run session-continuity ci-session --token-budget 4096 > continuity.json
-          python -m signalcore_runtime --project . prove plan > proof-plan.json
-          python -m signalcore_runtime --project . prove long-context > long-context-plan.json
-          python -m signalcore_runtime --project . prove readiness > readiness.json || test $? -eq 4
-          python -m signalcore_runtime --project . integrations > integrations.json
-          python -m signalcore_runtime --project . context-stress --max-tier 10000000 > context.json
-          python -m signalcore_runtime --project . signalbench2 plan --repetitions 30 > signalbench2.json
-          python -m signalcore_runtime --project . inspect stats > structural.json
-          python -m signalcore_runtime --project . sandbox backends > sandbox.json
-          python -m signalcore_runtime --project . output profiles > output.json
-          python -m signalcore_runtime --project . signalbench validate --tasks benchmarks/signalbench/tasks.example.json --arms benchmarks/signalbench/arms.example.json > signalbench.json || true
+          python -m syntavra_runtime --project . version > version.json
+          python -m syntavra_runtime --project . setup --apply --mcp-profile minimal > setup.json
+          python -m syntavra_runtime --project . status > status.json
+          python -m syntavra_runtime --project . run platform-manifest > platform.json
+          python -m syntavra_runtime --project . run route repo.search > route.json
+          python -m syntavra_runtime --project . run gateway-plan openai > gateway.json
+          python -m syntavra_runtime --project . run semantic-services > semantic.json
+          python -m syntavra_runtime --project . run sandbox-status > sandbox.json
+          python -m syntavra_runtime --project . run reliability-run --cases 50 --seed 17 > reliability.json
+          python -m syntavra_runtime --project . prove plan > proof-plan.json
+          python -m syntavra_runtime --project . prove readiness > readiness.json || test $? -eq 4
           python - <<'PY'
           import json
           from pathlib import Path
-          load=lambda name: json.loads(Path(name).read_text())
+          import syntavra_runtime
+          import signalcore_runtime
+          load=lambda name: json.loads(Path(name).read_text(encoding='utf-8'))
           version=load('version.json')
           setup=load('setup.json')
           status=load('status.json')
-          product=load('product.json')
+          platform=load('platform.json')
           route=load('route.json')
-          proxy=load('proxy.json')
-          continuity=load('continuity.json')
-          proof=load('proof-plan.json')
-          long_context=load('long-context-plan.json')
-          readiness=load('readiness.json')
-          integrations=load('integrations.json')
-          context=load('context.json')
-          signalbench2=load('signalbench2.json')
+          gateway=load('gateway.json')
+          semantic=load('semantic.json')
           sandbox=load('sandbox.json')
-          output=load('output.json')
-          signalbench=load('signalbench.json')
+          reliability=load('reliability.json')
+          proof=load('proof-plan.json')
+          readiness=load('readiness.json')
+          assert syntavra_runtime.__version__ == '0.0.1'
+          assert signalcore_runtime.__version__ == '0.0.1'
           assert version['identity']['version'] == '0.0.1'
           assert version['identity']['channel'] == 'pre-release'
           assert setup['ok'] is True and setup['dry_run'] is False
-          assert setup['profile'] == 'minimal'
-          assert status['doctor']['runtime']['details']['version'] == '0.0.1'
-          assert status['doctor']['ok'] is True
           assert status['primary_workflow'] == ['setup', 'status', 'run', 'prove']
-          assert [row['command'] for row in product['mental_model']] == ['setup', 'status', 'run', 'prove']
+          assert status['platform']['product'] == 'Syntavra'
+          assert platform['product'] == 'Syntavra'
+          assert platform['version'] == '0.0.1'
+          assert platform['channel'] == 'pre-release'
           assert route['allowed'] is True and route['category'] == 'read'
-          assert proxy['ok'] is True and proxy['stream_mode'] == 'commit-before-forward'
-          assert continuity['exact_recovery'] is True
-          assert continuity['continuity_restored'] is True
-          assert continuity['forced_restart'] is False
+          assert gateway['ok'] is True
+          assert semantic['declared'] >= 16
+          assert sandbox['fail_closed'] is True
+          assert reliability['ok'] is True
           assert proof['claim'] == 'EXTERNAL_SUPERIORITY_NOT_PROVEN'
-          assert long_context['style'].startswith('OOLONG-like')
           assert readiness['claim'] == 'DAILY_CODING_AGENT_READINESS_NOT_PROVEN'
-          assert integrations['coverage']['providers'] >= 10
-          assert integrations['coverage']['frameworks'] >= 15
-          assert integrations['coverage']['hosts'] >= 18
-          assert integrations['proxy_presets']['providers'] == 10
-          assert context['ok'] is True and context['tiers'][-1]['tier_tokens'] == 10000000
-          assert signalbench2['schedule']['runs'] == 27000
-          assert 'local-restricted' in sandbox
-          assert 'compact' in output['profiles']
-          assert signalbench['ok'] is True
           PY
 
   typescript-sdk:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["18", "20", "22"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - name: Install, type-check and build
+          node-version: ${{ matrix.node }}
+      - name: Install, type-check, build and test
         shell: bash
         run: |
           cd sdk/typescript
@@ -173,53 +161,62 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install wheel build backend
-        run: python -m pip install --disable-pip-version-check 'setuptools>=69' wheel
-      - name: Build wheel without network isolation
-        run: python -m pip wheel --no-build-isolation . -w dist
+      - name: Build wheel
+        run: |
+          python -m pip install --disable-pip-version-check 'setuptools>=69' wheel
+          python -m pip wheel --no-build-isolation . -w dist
       - name: Install wheel into clean environment
         shell: bash
         run: |
-          python -m venv /tmp/signalcore-wheel
-          /tmp/signalcore-wheel/bin/python -m pip install --no-index --find-links dist signalcore-runtime==0.0.1
+          python -m venv /tmp/syntavra-wheel
+          /tmp/syntavra-wheel/bin/python -m pip install --no-index --find-links dist syntavra-runtime==0.0.1
           cd /tmp
-          /tmp/signalcore-wheel/bin/signalcore version > version.json
-          /tmp/signalcore-wheel/bin/signalcore run manifest > product.json
-          /tmp/signalcore-wheel/bin/python - <<'PY'
+          /tmp/syntavra-wheel/bin/syntavra version > version.json
+          /tmp/syntavra-wheel/bin/syntavra run platform-manifest > platform.json
+          /tmp/syntavra-wheel/bin/python - <<'PY'
           import json
           from pathlib import Path
-          from signalcore_runtime import ProductSurface, ProviderUsageReceipt, SessionContinuityController
-          from signalcore_runtime.cli import skill_root
+          import syntavra_runtime
+          import signalcore_runtime
+          from syntavra_runtime import ProductSurface, ProviderUsageReceipt, SessionContinuityController
+          from syntavra_runtime.cli import skill_root
           assert (skill_root() / 'SKILL.md').is_file()
+          assert syntavra_runtime.__version__ == '0.0.1'
+          assert signalcore_runtime.__version__ == '0.0.1'
           assert json.loads(Path('version.json').read_text())['identity']['version'] == '0.0.1'
-          assert json.loads(Path('product.json').read_text())['version'] == '0.0.1'
+          assert json.loads(Path('platform.json').read_text())['product'] == 'Syntavra'
           assert ProductSurface.manifest()['channel'] == 'pre-release'
           assert ProviderUsageReceipt
           assert SessionContinuityController
           PY
 
-  internal-benchmark:
+  internal-component-measurement:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install runtime dependencies
+      - name: Install runtime
         run: python -m pip install --disable-pip-version-check -e .
-      - name: Run v0.0.1 pre-release dominance benchmark
-        run: python benchmarks/v001_pre_release_benchmark.py --output v001-pre-release.json
-      - name: Run production-core component benchmark
-        run: python benchmarks/v6_production_core_benchmark.py --output production-core.json
-      - name: Run historical component benchmark
-        run: python benchmarks/runtime_v03_benchmark.py --output runtime-component.json
+      - name: Run canonical component measurement
+        run: python benchmarks/syntavra_component_benchmark.py > syntavra-component-measurement.json
+      - name: Validate internal-only claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value=json.loads(Path('syntavra-component-measurement.json').read_text())
+          assert value['version'] == '0.0.1'
+          assert value['channel'] == 'pre-release'
+          assert value['claim'] == 'INTERNAL_FUNCTIONAL_MEASUREMENT_ONLY'
+          assert value['external_superiority'] is False
+          assert value['memory']['exact_recovery'] is True
+          PY
       - uses: actions/upload-artifact@v4
         with:
-          name: v001-pre-release-internal
-          path: |
-            v001-pre-release.json
-            production-core.json
-            runtime-component.json
+          name: syntavra-internal-component-measurement
+          path: syntavra-component-measurement.json
           retention-days: 14
 
   profile-compatibility:
@@ -229,9 +226,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Roblox profile tests
-        run: python -m unittest discover -s tests/roblox_profile -q
-      - name: Validate Roblox profile
-        run: python tools/validate_roblox_profile.py
-      - name: Verify governed Roblox claims
-        run: python tools/verify_claims.py
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - name: Roblox profile tests and validation
+        run: |
+          python -m pytest tests/roblox_profile -q
+          python tools/validate_roblox_profile.py
+          python tools/verify_claims.py

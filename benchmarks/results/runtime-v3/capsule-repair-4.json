@@ -1,5 +1,5 @@
 {
-  "benchmark": "signalcore-capsule-only-repair",
+  "benchmark": "syntavra-capsule-only-repair",
   "scope": "four controlled Python mini-repositories; repair chosen from capsule evidence only; not SWE-bench or provider proof",
   "cases": 4,
   "passed_cases": 4,

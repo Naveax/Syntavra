@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.proxy_product import ProxyProductRegistry
+from syntavra_runtime.proxy_product import ProxyProductRegistry
 
 
 class ProxyProductV001Tests(unittest.TestCase):

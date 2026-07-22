@@ -11,9 +11,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.tool_externalization import ExternalizationPolicy, ToolOutputExternalizer, ToolPayload
-from signalcore_runtime.util import stable_project_id
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.tool_externalization import ExternalizationPolicy, ToolOutputExternalizer, ToolPayload
+from syntavra_runtime.util import stable_project_id
 
 
 def jsonable(value: Any) -> Any:
@@ -30,7 +30,7 @@ def emit(value: Any) -> None:
 
 def engine(args: argparse.Namespace) -> ToolOutputExternalizer:
     project = Path(args.project).resolve(strict=False)
-    state = Path(args.state_root).resolve(strict=False) if args.state_root else project / ".signalcore" / "runtime-v3"
+    state = Path(args.state_root).resolve(strict=False) if args.state_root else project / ".syntavra" / "runtime-v3"
     return ToolOutputExternalizer(
         state / "tool-externalization.sqlite3",
         evidence=EvidenceStore(state / "evidence", project_id=stable_project_id(project)),
@@ -45,7 +45,7 @@ def read_payload(args: argparse.Namespace) -> bytes:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="SignalCore lossless tool-output externalization")
+    parser = argparse.ArgumentParser(description="Syntavra lossless tool-output externalization")
     parser.add_argument("--project", default="."); parser.add_argument("--state-root")
     sub = parser.add_subparsers(dest="action", required=True)
 

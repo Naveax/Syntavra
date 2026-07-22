@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.evidence import EvidenceError, EvidenceStore
-from signalcore_runtime.output_firewall import summarize, validate_critical_invariant
+from syntavra_runtime.evidence import EvidenceError, EvidenceStore
+from syntavra_runtime.output_firewall import summarize, validate_critical_invariant
 
 class EvidenceFirewallTests(unittest.TestCase):
     def setUp(self): self.temp=tempfile.TemporaryDirectory(); self.root=Path(self.temp.name); self.store=EvidenceStore(self.root/"evidence",project_id="project")

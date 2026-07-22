@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import os
 
-os.environ["SIGNALCORE_PORTABLE_BOOTSTRAP"] = "1"
+os.environ["SYNTAVRA_PORTABLE_BOOTSTRAP"] = "1"
 
-from signalcore_runtime.prerelease_cli import main
+from syntavra_runtime.prerelease_cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

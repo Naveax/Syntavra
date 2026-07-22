@@ -8,13 +8,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "MANIFEST.sha256"
 GENERATED_FILES = {"fusion-release-smoke.json", "release-smoke.json", "platform-registry.json", "native-dry-run.json"}
+TRANSIENT_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    "node_modules",
+    ".venv",
+    "venv",
+    ".tox",
+    ".nox",
+    ".mypy_cache",
+    ".ruff_cache",
+}
 
 
 def is_generated_path(relative: Path) -> bool:
     parts = relative.parts
     return (
-        bool(parts) and parts[0] in {".git", ".signalcore", "build", "dist"}
-    ) or any(part in {"__pycache__", ".pytest_cache"} or part.endswith(".egg-info") for part in parts)
+        bool(parts) and parts[0] in {".git", ".syntavra", "build", "dist"}
+    ) or any(part in TRANSIENT_PARTS or part.endswith(".egg-info") for part in parts)
 
 
 def candidates() -> list[Path]:
@@ -39,14 +50,20 @@ def render() -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Regenerate the exact SignalCore repository SHA-256 manifest.")
+    parser = argparse.ArgumentParser(description="Regenerate the exact Syntavra repository SHA-256 manifest.")
     parser.add_argument("--check", action="store_true", help="fail when MANIFEST.sha256 is stale")
     args = parser.parse_args()
     expected = render()
     current = MANIFEST.read_text(encoding="utf-8") if MANIFEST.is_file() else ""
     if args.check:
         if current != expected:
+            current_lines = set(current.splitlines())
+            expected_lines = set(expected.splitlines())
             print("MANIFEST.sha256 is stale")
+            for line in sorted(current_lines - expected_lines)[:20]:
+                print(f"stale-or-missing: {line}")
+            for line in sorted(expected_lines - current_lines)[:20]:
+                print(f"new-or-changed: {line}")
             return 1
         print(f"MANIFEST.sha256 verified: {len(candidates())} files")
         return 0

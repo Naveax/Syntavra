@@ -10,17 +10,17 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "skills" / "signal-core" / "scripts"
-PROFILE = ROOT / "skills" / "signal-core" / "profiles" / "roblox_studio"
+SCRIPTS = ROOT / "skills" / "syntavra" / "scripts"
+PROFILE = ROOT / "skills" / "syntavra" / "profiles" / "roblox_studio"
 sys.path.insert(0, str(SCRIPTS))
 
-loader_spec = importlib.util.spec_from_file_location("signalcore_profile_loader_test", SCRIPTS / "profile_loader.py")
+loader_spec = importlib.util.spec_from_file_location("syntavra_profile_loader_test", SCRIPTS / "profile_loader.py")
 loader = importlib.util.module_from_spec(loader_spec)
 assert loader_spec and loader_spec.loader
 sys.modules[loader_spec.name] = loader
 loader_spec.loader.exec_module(loader)
 
-activation_spec = importlib.util.spec_from_file_location("signalcore_roblox_activation_test", PROFILE / "activation.py")
+activation_spec = importlib.util.spec_from_file_location("syntavra_roblox_activation_test", PROFILE / "activation.py")
 activation = importlib.util.module_from_spec(activation_spec)
 assert activation_spec and activation_spec.loader
 sys.modules[activation_spec.name] = activation

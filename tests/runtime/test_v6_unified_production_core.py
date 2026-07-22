@@ -11,25 +11,25 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from signalcore_runtime.backup import StateBackupManager
-from signalcore_runtime.config_v6 import ConfigError, ConfigManager
-from signalcore_runtime.crypto import (
+from syntavra_runtime.backup import StateBackupManager
+from syntavra_runtime.unified_config import ConfigError, ConfigManager
+from syntavra_runtime.crypto import (
     CryptoError, _chacha20_block, _poly1305, open_sealed, seal,
 )
-from signalcore_runtime.data_router import DataRoutePolicy, DataRouter
-from signalcore_runtime.evidence import EvidenceError, EvidenceStore
-from signalcore_runtime.identity import CapabilityTokenIssuer, IdentityError, Principal
-from signalcore_runtime.janitor import RetentionRule, RuntimeJanitor
-from signalcore_runtime.job_scheduler import DurableJobScheduler, JobSpec
-from signalcore_runtime.migrations import Migration, MigrationError, MigrationManager
-from signalcore_runtime.plugin_sdk import PluginError, PluginManifest, PluginRegistry
-from signalcore_runtime.policy_rollout import PolicyRolloutManager, VerifiedPolicyObservation
-from signalcore_runtime.retrieval_v6 import HybridRetriever, RetrievalCandidate
-from signalcore_runtime.runtime_pipeline import CanonicalRequestEnvelope, UnifiedRuntimePipeline
-from signalcore_runtime.schema_registry import SchemaDefinition, SchemaRegistry
-from signalcore_runtime.security_scan import IncrementalSecurityScanner, scan_bytes, scan_text
-from signalcore_runtime.streaming import SSEParser, StreamSemanticProcessor
-from signalcore_runtime.observability import Observability
+from syntavra_runtime.data_router import DataRoutePolicy, DataRouter
+from syntavra_runtime.evidence import EvidenceError, EvidenceStore
+from syntavra_runtime.identity import CapabilityTokenIssuer, IdentityError, Principal
+from syntavra_runtime.janitor import RetentionRule, RuntimeJanitor
+from syntavra_runtime.job_scheduler import DurableJobScheduler, JobSpec
+from syntavra_runtime.migrations import Migration, MigrationError, MigrationManager
+from syntavra_runtime.plugin_sdk import PluginError, PluginManifest, PluginRegistry
+from syntavra_runtime.policy_rollout import PolicyRolloutManager, VerifiedPolicyObservation
+from syntavra_runtime.semantic_retrieval import HybridRetriever, RetrievalCandidate
+from syntavra_runtime.runtime_pipeline import CanonicalRequestEnvelope, UnifiedRuntimePipeline
+from syntavra_runtime.schema_registry import SchemaDefinition, SchemaRegistry
+from syntavra_runtime.security_scan import IncrementalSecurityScanner, scan_bytes, scan_text
+from syntavra_runtime.streaming import SSEParser, StreamSemanticProcessor
+from syntavra_runtime.observability import Observability
 
 
 class _Plugin:
@@ -98,7 +98,7 @@ class V6UnifiedProductionCoreTests(unittest.TestCase):
             payload, hint="sql", query="id 199", policy=DataRoutePolicy(budget_bytes=512, max_rows=8),
         )
         decoded = json.loads(result.visible)
-        self.assertIn("_signalcore", decoded)
+        self.assertIn("_syntavra", decoded)
         self.assertLessEqual(result.visible_bytes, 512)
         streamed = DataRouter(self.evidence("stream")).route_rows(
             ({"id": index, "latency": index / 10, "email": f"u{index}@example.com"} for index in range(1000)),
@@ -135,10 +135,10 @@ class V6UnifiedProductionCoreTests(unittest.TestCase):
     def test_configuration_precedence_provenance_and_last_good_rollback(self) -> None:
         project = self.root / "project"; project.mkdir()
         state = self.root / "state"
-        config_path = project / ".signalcore" / "config.toml"; config_path.parent.mkdir()
+        config_path = project / ".syntavra" / "config.toml"; config_path.parent.mkdir()
         config_path.write_text('[runtime]\nprofile="compact"\n[routing]\nbudget_bytes=4096\n', encoding="utf-8")
         manager = ConfigManager(project_root=project, state_root=state, user_config=self.root / "missing.toml")
-        with patch.dict(os.environ, {"SIGNALCORE_CFG__RUNTIME__PROFILE": '"terse"'}, clear=False):
+        with patch.dict(os.environ, {"SYNTAVRA_CFG__RUNTIME__PROFILE": '"terse"'}, clear=False):
             snapshot = manager.load(force=True)
         self.assertEqual(snapshot.values["runtime"]["profile"], "terse")
         self.assertEqual(snapshot.explain("runtime.profile").scope, "environment")
@@ -263,7 +263,7 @@ class V6UnifiedProductionCoreTests(unittest.TestCase):
             evidence=evidence,
             config=ConfigManager(project_root=project, state_root=state),
             observability=Observability(state / "observability"),
-            authorizer=__import__("signalcore_runtime.identity", fromlist=["Authorizer"]).Authorizer({"agent": ("provider.invoke",)}),
+            authorizer=__import__("syntavra_runtime.identity", fromlist=["Authorizer"]).Authorizer({"agent": ("provider.invoke",)}),
         )
         request = CanonicalRequestEnvelope.create(
             project_id="p", host="codex", provider="test", model="m",
@@ -293,7 +293,7 @@ class V6UnifiedProductionCoreTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         source = (root / "sdk" / "typescript" / "src" / "index.ts").read_text(encoding="utf-8")
         javascript = root / "sdk" / "typescript" / "dist" / "index.js"
-        self.assertIn("remote SignalCore proxy connections require HTTPS", source)
+        self.assertIn("remote Syntavra proxy connections require HTTPS", source)
         self.assertIn("private readonly staticControlToken", source)
         self.assertIn("streamEvents", source)
         self.assertIn("retry-after", source.casefold())
@@ -304,8 +304,8 @@ class V6UnifiedProductionCoreTests(unittest.TestCase):
             completed = subprocess.run((node, "--check", str(javascript)), capture_output=True, text=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             module_uri = json.dumps(javascript.as_uri())
-            script = "import { SignalCoreClient } from " + module_uri + ";\n" + (
-                "try { new SignalCoreClient({baseUrl:'http://example.com', allowRemote:true}); process.exit(7); } "
+            script = "import { SyntavraClient } from " + module_uri + ";\n" + (
+                "try { new SyntavraClient({baseUrl:'http://example.com', allowRemote:true}); process.exit(7); } "
                 "catch (e) { if (!String(e).includes('HTTPS')) process.exit(8); }"
             )
             result = subprocess.run((node, "--input-type=module", "-e", script), capture_output=True, text=True, check=False)

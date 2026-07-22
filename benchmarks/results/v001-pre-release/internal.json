@@ -120,7 +120,7 @@
     "scheduled_runs": 27000,
     "tasks": 150
   },
-  "structural_v2": {
+  "semantic_structure": {
     "edges": 999,
     "nodes": 1000,
     "query_ms": 9.443858999986787,

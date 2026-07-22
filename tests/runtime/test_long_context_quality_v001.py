@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from signalcore_runtime.long_context_quality import (
+from syntavra_runtime.long_context_quality import (
     LONG_CONTEXT_TIERS,
     LongContextQualityGate,
     LongContextReceipt,
@@ -55,7 +55,7 @@ class LongContextQualityV001Tests(unittest.TestCase):
     def test_real_paired_receipts_open_quality_gate(self) -> None:
         rows = []
         for index in range(30):
-            rows.extend((self._receipt(index, "baseline"), self._receipt(index, "signalcore")))
+            rows.extend((self._receipt(index, "baseline"), self._receipt(index, "syntavra")))
         result = LongContextQualityGate.evaluate(rows)
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["claim"], "LONG_CONTEXT_QUALITY_VERIFIED")
@@ -64,7 +64,7 @@ class LongContextQualityV001Tests(unittest.TestCase):
         self.assertGreaterEqual(result["metrics"]["mean_required_fact_recall"], 0.98)
 
     def test_synthetic_or_unpaired_runs_fail_closed(self) -> None:
-        row = self._receipt(0, "signalcore")
+        row = self._receipt(0, "syntavra")
         synthetic = LongContextReceipt(**{**row.__dict__, "synthetic": True})
         result = LongContextQualityGate.evaluate([synthetic])
         self.assertFalse(result["ok"])

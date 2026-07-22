@@ -13,17 +13,17 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.compression import ContentRouter, ReversibleContentStore
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.host_adapters import KNOWN_HOSTS
-from signalcore_runtime.installer import HostInstaller
-from signalcore_runtime.output_governor import OutputGovernor
-from signalcore_runtime.sandbox import SandboxManager, SandboxPolicy
-from signalcore_runtime.session_runtime import SessionRuntime
-from signalcore_runtime.signalbench import ArmSpec, SignalBenchRunner, TaskSpec
-from signalcore_runtime.structural import StructuralIndex
-from signalcore_runtime.structural_parsers import ParserRegistry, parser_fixtures
-from signalcore_runtime.util import atomic_write_json, sha256_bytes
+from syntavra_runtime.compression import ContentRouter, ReversibleContentStore
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.host_adapters import KNOWN_HOSTS
+from syntavra_runtime.installer import HostInstaller
+from syntavra_runtime.output_governor import OutputGovernor
+from syntavra_runtime.sandbox import SandboxManager, SandboxPolicy
+from syntavra_runtime.session_runtime import SessionRuntime
+from syntavra_runtime.signalbench import ArmSpec, SignalBenchRunner, TaskSpec
+from syntavra_runtime.structural import StructuralIndex
+from syntavra_runtime.structural_parsers import ParserRegistry, parser_fixtures
+from syntavra_runtime.util import atomic_write_json, sha256_bytes
 
 
 def _measure(callable_):
@@ -76,7 +76,7 @@ def run(*, scale: int = 1) -> dict[str, Any]:
 
         skill_root = root / "skill"
         skill_root.mkdir()
-        (skill_root / "SKILL.md").write_text("name: signal-core\n", encoding="utf-8")
+        (skill_root / "SKILL.md").write_text("name: syntavra\n", encoding="utf-8")
         (project / ".claude").mkdir(exist_ok=True)
         installer = HostInstaller(project=project, skill_root=skill_root, home=root / "home")
         installer_first = installer.install(["claude-code", "cursor"])
@@ -90,7 +90,7 @@ def run(*, scale: int = 1) -> dict[str, Any]:
 
         output = OutputGovernor("compact").render({
             "result": "v0.3 internal benchmark completed",
-            "changed_files": ["signalcore_runtime/structural.py:1"],
+            "changed_files": ["syntavra_runtime/structural.py:1"],
             "behavior": "Unified runtime surfaces exercised",
             "verification": "all internal invariants passed",
             "limitations": "NOT PROVEN against external competitors",
@@ -100,7 +100,7 @@ def run(*, scale: int = 1) -> dict[str, Any]:
         task = TaskSpec("smoke", "known-edit", "smoke", str(project), "tree", ("python", "-c", "raise SystemExit(0)"))
         arms = [
             ArmSpec("plain", "extension", ("adapter", "{request}", "{output}"), "x", "same-model", "same", 1000),
-            ArmSpec("signalcore", "extension", ("adapter", "{request}", "{output}"), "0.3.0", "same-model", "same", 1000),
+            ArmSpec("syntavra", "extension", ("adapter", "{request}", "{output}"), "0.3.0", "same-model", "same", 1000),
         ]
         signalbench = SignalBenchRunner(root / "signalbench")
         signalbench_validation = signalbench.validate([task], arms)

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.memory import PersistentMemory
+from syntavra_runtime.memory import PersistentMemory
 
 
 class MemoryV02Tests(unittest.TestCase):

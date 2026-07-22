@@ -7,7 +7,7 @@ export interface RetryPolicy {
   retryStatuses?: readonly number[];
 }
 
-export interface SignalCoreClientOptions {
+export interface SyntavraClientOptions {
   baseUrl?: string;
   controlToken?: string;
   controlTokenProvider?: () => string | Promise<string>;
@@ -15,10 +15,10 @@ export interface SignalCoreClientOptions {
   timeoutMs?: number;
   retry?: RetryPolicy;
   fetchImpl?: typeof fetch;
-  logger?: (event: SignalCoreClientEvent) => void;
+  logger?: (event: SyntavraClientEvent) => void;
 }
 
-export interface SignalCoreClientEvent {
+export interface SyntavraClientEvent {
   type: "request" | "response" | "retry" | "error";
   requestId: string;
   path: string;
@@ -28,7 +28,7 @@ export interface SignalCoreClientEvent {
   error?: string;
 }
 
-export interface SignalCoreResponse<T = Json> {
+export interface SyntavraResponse<T = Json> {
   status: number;
   ok: boolean;
   data: T;
@@ -39,7 +39,7 @@ export interface SignalCoreResponse<T = Json> {
   headers: Headers;
 }
 
-export interface SignalCoreStreamEvent<T = Json> {
+export interface SyntavraStreamEvent<T = Json> {
   event: string;
   data: T | string;
   id: string;
@@ -95,12 +95,12 @@ function rejectCredentials(value: unknown, path = "request"): void {
 function validateBaseUrl(baseUrl: string, allowRemote: boolean): URL {
   const parsed = new URL(baseUrl);
   const loopback = ["127.0.0.1", "localhost", "::1", "[::1]"].includes(parsed.hostname);
-  if (!loopback && !allowRemote) throw new Error("remote SignalCore proxy URLs require allowRemote=true");
+  if (!loopback && !allowRemote) throw new Error("remote Syntavra proxy URLs require allowRemote=true");
   if (loopback && parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("local SignalCore proxy must use HTTP or HTTPS");
+    throw new Error("local Syntavra proxy must use HTTP or HTTPS");
   }
   if (!loopback && parsed.protocol !== "https:") {
-    throw new Error("remote SignalCore proxy connections require HTTPS");
+    throw new Error("remote Syntavra proxy connections require HTTPS");
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash) {
     throw new Error("baseUrl cannot contain credentials, query parameters, or fragments");
@@ -134,7 +134,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 function timeoutSignal(timeoutMs: number, external?: AbortSignal): { signal: AbortSignal; dispose: () => void } {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new DOMException("SignalCore request timed out", "TimeoutError")), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new DOMException("Syntavra request timed out", "TimeoutError")), timeoutMs);
   const onAbort = () => controller.abort(external?.reason ?? new DOMException("Aborted", "AbortError"));
   external?.addEventListener("abort", onAbort, { once: true });
   return {
@@ -146,16 +146,16 @@ function timeoutSignal(timeoutMs: number, external?: AbortSignal): { signal: Abo
   };
 }
 
-export class SignalCoreClient {
+export class SyntavraClient {
   readonly baseUrl: URL;
   private readonly staticControlToken: string;
   private readonly controlTokenProvider?: () => string | Promise<string>;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
   private readonly retryPolicy: Required<RetryPolicy>;
-  private readonly logger?: (event: SignalCoreClientEvent) => void;
+  private readonly logger?: (event: SyntavraClientEvent) => void;
 
-  constructor(options: SignalCoreClientOptions = {}) {
+  constructor(options: SyntavraClientOptions = {}) {
     this.baseUrl = validateBaseUrl(options.baseUrl ?? "http://127.0.0.1:8787", Boolean(options.allowRemote));
     this.staticControlToken = options.controlToken ?? "";
     this.controlTokenProvider = options.controlTokenProvider;
@@ -184,7 +184,7 @@ export class SignalCoreClient {
   private providerHeaders(init: RequestInit, id: string): Headers {
     const headers = new Headers(init.headers);
     for (const key of CREDENTIAL_HEADERS) {
-      if (headers.has(key)) throw new Error("provider credentials must not be sent by the SignalCore client");
+      if (headers.has(key)) throw new Error("provider credentials must not be sent by the Syntavra client");
     }
     headers.set("content-type", "application/json");
     headers.set("x-request-id", id);
@@ -218,10 +218,10 @@ export class SignalCoreClient {
         timed.dispose();
       }
     }
-    throw lastError ?? new Error("SignalCore request failed");
+    throw lastError ?? new Error("Syntavra request failed");
   }
 
-  async invoke<T = Json>(path: string, request: Json, init: RequestInit = {}): Promise<SignalCoreResponse<T>> {
+  async invoke<T = Json>(path: string, request: Json, init: RequestInit = {}): Promise<SyntavraResponse<T>> {
     rejectCredentials(request);
     const id = requestId();
     const response = await this.fetchWithRetry(this.providerUrl(path), {
@@ -238,9 +238,9 @@ export class SignalCoreClient {
       status: response.status,
       ok: response.ok,
       data,
-      replay: (response.headers.get("x-signalcore-replay") as "hit" | "miss" | null) ?? "unknown",
-      requestHandle: response.headers.get("x-signalcore-request-handle") ?? "",
-      evidenceHandle: response.headers.get("x-signalcore-evidence") ?? "",
+      replay: (response.headers.get("x-syntavra-replay") as "hit" | "miss" | null) ?? "unknown",
+      requestHandle: response.headers.get("x-syntavra-request-handle") ?? "",
+      evidenceHandle: response.headers.get("x-syntavra-evidence") ?? "",
       requestId: response.headers.get("x-request-id") ?? id,
       headers: response.headers
     };
@@ -257,17 +257,17 @@ export class SignalCoreClient {
     }, id, path);
   }
 
-  async *streamEvents<T = Json>(path: string, request: Json, init: RequestInit = {}): AsyncGenerator<SignalCoreStreamEvent<T>> {
+  async *streamEvents<T = Json>(path: string, request: Json, init: RequestInit = {}): AsyncGenerator<SyntavraStreamEvent<T>> {
     const response = await this.invokeStream(path, request, init);
-    if (!response.ok) throw new Error(`SignalCore stream failed: ${response.status}`);
-    if (!response.body) throw new Error("SignalCore stream response has no body");
+    if (!response.ok) throw new Error(`Syntavra stream failed: ${response.status}`);
+    if (!response.body) throw new Error("Syntavra stream response has no body");
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
     let eventName = "message";
     let eventId = "";
     let retry: number | undefined;
     let dataLines: string[] = [];
-    const flush = (): SignalCoreStreamEvent<T> | null => {
+    const flush = (): SyntavraStreamEvent<T> | null => {
       if (!dataLines.length) return null;
       const raw = dataLines.join("\n");
       const done = raw.trim() === "[DONE]";
@@ -312,16 +312,16 @@ export class SignalCoreClient {
     }
   }
 
-  openAI<T = Json>(request: OpenAIResponsesRequest): Promise<SignalCoreResponse<T>> {
+  openAI<T = Json>(request: OpenAIResponsesRequest): Promise<SyntavraResponse<T>> {
     return this.invoke<T>("/v1/responses", request as unknown as Json);
   }
-  openAIChat<T = Json>(request: OpenAIChatRequest): Promise<SignalCoreResponse<T>> {
+  openAIChat<T = Json>(request: OpenAIChatRequest): Promise<SyntavraResponse<T>> {
     return this.invoke<T>("/v1/chat/completions", request as unknown as Json);
   }
-  anthropic<T = Json>(request: AnthropicMessagesRequest): Promise<SignalCoreResponse<T>> {
+  anthropic<T = Json>(request: AnthropicMessagesRequest): Promise<SyntavraResponse<T>> {
     return this.invoke<T>("/v1/messages", request as unknown as Json);
   }
-  gemini<T = Json>(model: string, request: Json): Promise<SignalCoreResponse<T>> {
+  gemini<T = Json>(model: string, request: Json): Promise<SyntavraResponse<T>> {
     if (!/^[A-Za-z0-9._-]+$/.test(model)) throw new Error("invalid Gemini model path segment");
     return this.invoke<T>(`/v1beta/models/${model}:generateContent`, request);
   }
@@ -332,15 +332,15 @@ export class SignalCoreClient {
 
   private async control<T = Json>(path: string): Promise<T> {
     const token = await this.token();
-    if (!token) throw new Error("SignalCore control endpoints require a control token");
+    if (!token) throw new Error("Syntavra control endpoints require a control token");
     const headers = new Headers({ authorization: `Bearer ${token}`, "x-request-id": requestId() });
     const response = await this.fetchWithRetry(new URL(path, this.baseUrl), { headers }, headers.get("x-request-id")!, path);
-    if (!response.ok) throw new Error(`SignalCore control endpoint failed: ${response.status}`);
+    if (!response.ok) throw new Error(`Syntavra control endpoint failed: ${response.status}`);
     return response.json() as Promise<T>;
   }
 
-  live<T = Json>(): Promise<T> { return this.control<T>("/_signalcore/live"); }
-  health<T = Json>(): Promise<T> { return this.control<T>("/_signalcore/health"); }
-  ready<T = Json>(): Promise<T> { return this.control<T>("/_signalcore/ready"); }
-  verify<T = Json>(): Promise<T> { return this.control<T>("/_signalcore/verify"); }
+  live<T = Json>(): Promise<T> { return this.control<T>("/_syntavra/live"); }
+  health<T = Json>(): Promise<T> { return this.control<T>("/_syntavra/health"); }
+  ready<T = Json>(): Promise<T> { return this.control<T>("/_syntavra/ready"); }
+  verify<T = Json>(): Promise<T> { return this.control<T>("/_syntavra/verify"); }
 }

@@ -1,1 +1,39 @@
-{"benchmark_version":"1.0.0","cases":50,"competitor_groups":{"context_efficiency_pack":"NOT_COMPARABLE","enterprise_intelligence_pack":"NOT_COMPARABLE","full_rival_mega_pack":"NOT_COMPARABLE","native_agent_pack":"NOT_COMPARABLE","roblox_production_pack":"NOT_COMPARABLE"},"engine_versions":{"studio_bridge":"1.0.0-simulated"},"failure_categories":{},"hardware":"x86_64","latency_p50":6.026660499628633,"latency_p95":11.995938002655748,"limitations":["All external Roblox/Studio engines are simulated","No provider billing or competitor execution was measured"],"maturity":"SIMULATED_VERIFIED","mode":"simulated","model_versions":{},"operating_system":"Linux-4.4.0-x86_64-with-glibc2.41","python_version":"3.13.5","random_seed":1337,"request_count":100,"route_accuracy":50,"source_commit":"701cf02ac8d07a8a726ebc154fcc7bfa3da09a8f","source_tree_hash":"d4762f45a6fa982aa3ad4819b998b818284ef57ef33d0d47926d9c1b1ac0ac24","task_success":50,"token_usage":18500,"transfer_bytes":0,"unsafe_execution":0,"validator_success":50}
+{
+  "benchmark_version": "1.0.0",
+  "cases": 50,
+  "competitor_groups": {
+    "context_efficiency_pack": "NOT_COMPARABLE",
+    "enterprise_intelligence_pack": "NOT_COMPARABLE",
+    "full_rival_mega_pack": "NOT_COMPARABLE",
+    "native_agent_pack": "NOT_COMPARABLE",
+    "roblox_production_pack": "NOT_COMPARABLE"
+  },
+  "engine_versions": {
+    "studio_bridge": "1.0.0-simulated"
+  },
+  "failure_categories": {},
+  "hardware": "not-recorded",
+  "latency_p50": null,
+  "latency_p95": null,
+  "limitations": [
+    "All external Roblox/Studio engines are simulated",
+    "No provider billing or competitor execution was measured",
+    "Deterministic committed receipt omits volatile latency and environment measurements"
+  ],
+  "maturity": "SIMULATED_VERIFIED",
+  "measurement_scope": "DETERMINISTIC_SIMULATED_CORRECTNESS_ONLY",
+  "mode": "simulated",
+  "model_versions": {},
+  "operating_system": "not-recorded",
+  "python_version": "not-recorded",
+  "random_seed": 1337,
+  "request_count": 100,
+  "route_accuracy": 50,
+  "source_commit": "61ef792e80a7889ec5ac51efef528a1d43162448",
+  "source_tree_hash": "6e73535428542214626a04ddb531ff1740771ca6e561c226416cbfe7d1c7d858",
+  "task_success": 50,
+  "token_usage": 18500,
+  "transfer_bytes": 0,
+  "unsafe_execution": 0,
+  "validator_success": 50
+}

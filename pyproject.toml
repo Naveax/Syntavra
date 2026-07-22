@@ -3,34 +3,29 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "signalcore-runtime"
+name = "syntavra-runtime"
 version = "0.0.1"
-description = "Pre-release unified structural, sandbox, reversible-context and unbounded-session runtime for AI coding agents"
+description = "Pre-release unified AI engineering control plane and coding-agent runtime"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["cryptography>=43"]
 license = {text = "MIT"}
 authors = [{name = "Naveax"}]
-keywords = ["ai-agent", "coding-agent", "context-engineering", "mcp", "sandbox", "structural-index", "reversible-compression", "unbounded-context"]
-classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent"
-]
+keywords = ["ai-agent", "coding-agent", "semantic-intelligence", "context-engineering", "mcp", "sandbox", "exact-recovery"]
+classifiers = ["Development Status :: 2 - Pre-Alpha", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Programming Language :: Python :: 3.13", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent"]
 
 [project.scripts]
-signalcore = "signalcore_runtime.unified_cli:main"
-signalcore-product = "signalcore_runtime.unified_cli:product_compat_main"
+syntavra = "syntavra_runtime.unified_cli:main"
+
+[project.urls]
+Repository = "https://github.com/Naveax/Syntavra"
+Issues = "https://github.com/Naveax/Syntavra/issues"
 
 [tool.setuptools.packages.find]
-include = ["signalcore_runtime*"]
+include = ["syntavra_runtime*", "signalcore_runtime*"]
 
 [tool.setuptools.package-data]
-signalcore_runtime = ["bundled_skill/*.md", "bundled_skill/*.json"]
+syntavra_runtime = ["bundled_skill/*.md", "bundled_skill/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.history import ImmutableHistory
-from signalcore_runtime.verifier_graph import VerifierGraph
+from syntavra_runtime.history import ImmutableHistory
+from syntavra_runtime.verifier_graph import VerifierGraph
 
 class HistoryVerifierTests(unittest.TestCase):
     def setUp(self): self.temp=tempfile.TemporaryDirectory(); self.root=Path(self.temp.name)

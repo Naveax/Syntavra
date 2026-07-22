@@ -6,9 +6,9 @@ import unittest
 from dataclasses import dataclass
 from pathlib import Path
 
-from signalcore_runtime.adaptive_context import AdaptiveContextEngine, AdaptivePolicy, ToolObservation
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.signalbench_hardened import HardwareIdentity, HardenedSignalBench, UsageReceipt
+from syntavra_runtime.adaptive_context import AdaptiveContextEngine, AdaptivePolicy, ToolObservation
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.signalbench_hardened import HardwareIdentity, HardenedSignalBench, UsageReceipt
 
 
 @dataclass
@@ -81,8 +81,8 @@ class HardenedSignalBenchTests(unittest.TestCase):
     def test_clean_superiority_passes(self):
         rows = []; receipts = []
         for index in range(12):
-            task = f"t{index}"; rows += [row(task, "plain", quota=10), row(task, "signalcore", quota=2)]; receipts += [receipt(task, "plain", 10), receipt(task, "signalcore", 2)]
-        result = HardenedSignalBench.compare(rows, baseline_arm="plain", candidate_arm="signalcore", receipts=receipts)
+            task = f"t{index}"; rows += [row(task, "plain", quota=10), row(task, "syntavra", quota=2)]; receipts += [receipt(task, "plain", 10), receipt(task, "syntavra", 2)]
+        result = HardenedSignalBench.compare(rows, baseline_arm="plain", candidate_arm="syntavra", receipts=receipts)
         self.assertTrue(result["claimable_superiority"]); self.assertGreater(result["failure_inclusive_efficiency_ratio"], 4.9)
 
     def test_failures_consume_quota_and_block_claim(self):

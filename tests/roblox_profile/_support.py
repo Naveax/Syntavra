@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-PROFILE_PARENT = Path(__file__).resolve().parents[2] / "skills" / "signal-core" / "profiles"
+PROFILE_PARENT = Path(__file__).resolve().parents[2] / "skills" / "syntavra" / "profiles"
 if str(PROFILE_PARENT) not in sys.path:
     sys.path.insert(0, str(PROFILE_PARENT))
 

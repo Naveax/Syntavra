@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from signalcore_runtime.prerelease_cli import main
+from syntavra_runtime.prerelease_cli import main
 
 
 class PreReleaseCLIProductV001Tests(unittest.TestCase):

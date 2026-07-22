@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.zero_friction import ZeroFrictionManager
+from syntavra_runtime.zero_friction import ZeroFrictionManager
 
 
 class ZeroFrictionHostSetupV001Tests(unittest.TestCase):
@@ -13,7 +13,7 @@ class ZeroFrictionHostSetupV001Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
             (project / ".codex").mkdir()
-            manager = ZeroFrictionManager(project, project / ".signalcore" / "pre-release")
+            manager = ZeroFrictionManager(project, project / ".syntavra" / "pre-release")
             plan = manager.install_plan(profile="minimal")
             self.assertIn("codex", plan.detected_hosts)
             self.assertIn("codex", plan.installable_hosts)
@@ -23,10 +23,10 @@ class ZeroFrictionHostSetupV001Tests(unittest.TestCase):
             self.assertEqual(len(result["host_results"]), 1)
             self.assertTrue(result["host_results"][0]["verification"]["ok"])
             self.assertTrue((project / ".codex" / "mcp.json").is_file())
-            self.assertTrue((project / ".codex" / "skills" / "signal-core" / "SKILL.md").is_file())
+            self.assertTrue((project / ".codex" / "skills" / "syntavra" / "SKILL.md").is_file())
 
             config = json.loads((project / ".codex" / "mcp.json").read_text(encoding="utf-8"))
-            self.assertEqual(config["mcpServers"]["signalcore"]["command"], "signalcore")
+            self.assertEqual(config["mcpServers"]["syntavra"]["command"], "syntavra")
             doctor = manager.doctor()
             self.assertTrue(doctor["ok"], doctor)
             self.assertEqual(doctor["configured_hosts"], ["codex"])
@@ -37,7 +37,7 @@ class ZeroFrictionHostSetupV001Tests(unittest.TestCase):
             project = Path(directory)
             (project / ".codex").mkdir()
             (project / ".codex" / "mcp.json").write_text("not-json", encoding="utf-8")
-            state = project / ".signalcore" / "pre-release"
+            state = project / ".syntavra" / "pre-release"
             manager = ZeroFrictionManager(project, state)
             result = manager.install(dry_run=False)
             self.assertFalse(result["ok"])

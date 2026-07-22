@@ -1,4 +1,4 @@
-# SignalCore benchmarks
+# Syntavra benchmarks
 
 ## v0.3 internal component benchmark
 
@@ -16,10 +16,10 @@ This is not a competitor benchmark. It must retain `"claim": "5X_NOT_PROVEN"`.
 Use `benchmarks/signalbench/tasks.example.json` and `arms.example.json` as schemas. Pin real repository trees, product versions, model identity and verifiers before running:
 
 ```bash
-signalcore signalbench validate --tasks tasks.json --arms arms.json
-signalcore signalbench manifest --tasks tasks.json --arms arms.json --output manifest.json
-signalcore signalbench run --tasks tasks.json --arms arms.json --repetitions 10
-signalcore signalbench compare --results results.json --baseline plain --candidate signalcore-v030
+syntavra signalbench validate --tasks tasks.json --arms arms.json
+syntavra signalbench manifest --tasks tasks.json --arms arms.json --output manifest.json
+syntavra signalbench run --tasks tasks.json --arms arms.json --repetitions 10
+syntavra signalbench compare --results results.json --baseline plain --candidate syntavra-v030
 ```
 
 A public claim requires equal verified work, no verifier skip, no security regression, actual quota data, at least ten paired repetitions and the configured confidence-interval gate.

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.structural import StructuralIndex
+from syntavra_runtime.structural import StructuralIndex
 
 
 class StructuralV02Tests(unittest.TestCase):

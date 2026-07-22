@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  SIGNALCORE_CHANNEL,
-  SIGNALCORE_VERSION,
+  SYNTAVRA_CHANNEL,
+  SYNTAVRA_VERSION,
   assertProviderUsageReceipt,
   validateProviderUsageReceipt
 } from "../dist/receipts.js";
@@ -27,7 +27,7 @@ function receipt(overrides = {}) {
     synthetic: false,
     raw_usage_hash: "b".repeat(64),
     workload: "coding-agent",
-    arm: "signalcore",
+    arm: "syntavra",
     task_id: "task-1",
     repetition: 1,
     ...overrides
@@ -35,8 +35,8 @@ function receipt(overrides = {}) {
 }
 
 test("keeps the package identity locked", () => {
-  assert.equal(SIGNALCORE_VERSION, "0.0.1");
-  assert.equal(SIGNALCORE_CHANNEL, "pre-release");
+  assert.equal(SYNTAVRA_VERSION, "0.0.1");
+  assert.equal(SYNTAVRA_CHANNEL, "pre-release");
 });
 
 test("calculates billable and total token use", () => {
@@ -59,5 +59,5 @@ test("fails closed on invalid receipt data", () => {
   assert.ok(result.reasons.includes("cached-input-exceeds-input"));
   assert.ok(result.reasons.includes("weak-raw-usage-hash"));
   assert.ok(result.reasons.includes("invalid-quality-score"));
-  assert.throws(() => assertProviderUsageReceipt(invalid), /invalid SignalCore receipt/);
+  assert.throws(() => assertProviderUsageReceipt(invalid), /invalid Syntavra receipt/);
 });

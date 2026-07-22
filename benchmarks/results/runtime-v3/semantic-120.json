@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "benchmark": "signalcore-semantic-multihop-no-exact-sharded",
+  "benchmark": "syntavra-semantic-multihop-no-exact-sharded",
   "scope": "natural-language semantic multi-hop coding evidence; no exact markers, file names, or role metadata; not a model-market comparison; four isolated 30-case processes",
   "cases": 120,
   "shards": 4,

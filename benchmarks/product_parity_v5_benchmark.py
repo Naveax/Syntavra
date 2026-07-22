@@ -11,10 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.data_router import DataRoutePolicy, DataRouter
-from signalcore_runtime.policy_tuner import AdaptivePolicyTuner, PolicyObservation
-from signalcore_runtime.service_manager import ProviderProxyServiceManager, ServiceSpec
-from signalcore_runtime.util import atomic_write_json, canonical_json, sha256_bytes
+from syntavra_runtime.data_router import DataRoutePolicy, DataRouter
+from syntavra_runtime.policy_tuner import AdaptivePolicyTuner, PolicyObservation
+from syntavra_runtime.service_manager import ProviderProxyServiceManager, ServiceSpec
+from syntavra_runtime.util import atomic_write_json, canonical_json, sha256_bytes
 
 
 def main() -> int:
@@ -48,7 +48,7 @@ def main() -> int:
             ))
         recommendation = tuner.recommend("table", host="benchmark", model="same-model")
         service = ProviderProxyServiceManager(temp)
-        spec = ServiceSpec("signalcore-proxy", (sys.executable, "-m", "signalcore_runtime.product_v5_cli", "--help"))
+        spec = ServiceSpec("syntavra-proxy", (sys.executable, "-m", "syntavra_runtime.product_cli", "--help"))
         service_plans = {
             platform: asdict(service.plan(spec, platform_name=platform))
             for platform in ("linux", "darwin", "windows")

@@ -1,4 +1,4 @@
-name: Repository Hardening
+name: Syntavra Repository Hardening
 
 on:
   pull_request:
@@ -8,6 +8,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: syntavra-hardening-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   installer:
@@ -24,16 +28,15 @@ jobs:
           cache: npm
       - name: Install locked installer dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Test installer
-        run: npm test
-      - name: Verify installer command and package
+      - name: Test and inspect installer
         run: |
+          npm test
           node install/index.mjs --help
           npm pack --dry-run --json > installer-pack.json
       - name: Verify installer identity
         run: |
-          node -e "const p=require('./package.json'); if(p.name!=='@signalcore/install'||p.version!=='0.0.1') process.exit(1)"
-          node -e "const p=require('./package-lock.json'); if(p.version!=='0.0.1') process.exit(1)"
+          node -e "const p=require('./package.json'); if(p.name!=='@syntavra/install'||p.version!=='0.0.1') process.exit(1)"
+          node -e "const p=require('./package-lock.json'); if(p.name!=='@syntavra/install'||p.version!=='0.0.1') process.exit(1)"
 
   typescript-sdk:
     strategy:
@@ -48,48 +51,18 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: sdk/typescript/package-lock.json
-      - name: Install locked SDK dependencies
-        working-directory: sdk/typescript
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Type-check SDK
-        working-directory: sdk/typescript
-        run: npm run check
-      - name: Build SDK
-        id: sdk-build
-        continue-on-error: true
-        working-directory: sdk/typescript
-        run: npm run build > build.log 2>&1
-      - name: Upload SDK build diagnostics
-        if: steps.sdk-build.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: typescript-build-${{ matrix.node }}
-          path: sdk/typescript/build.log
-          if-no-files-found: error
-          retention-days: 7
-      - name: Enforce SDK build success
-        if: steps.sdk-build.outcome == 'failure'
+      - name: Build and test SDK
         working-directory: sdk/typescript
         run: |
-          cat build.log
-          exit 1
-      - name: Test receipt validation
-        working-directory: sdk/typescript
-        run: node --test test/receipts.test.mjs
-      - name: Test proxy client
-        working-directory: sdk/typescript
-        run: node --test test/client.test.mjs
-      - name: Inspect SDK package
-        working-directory: sdk/typescript
-        run: npm pack --dry-run --json > npm-pack-dry-run.json
-      - name: Verify distributable SDK
-        working-directory: sdk/typescript
-        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm test
+          npm pack --dry-run --json > npm-pack-dry-run.json
           test -f dist/index.js
           test -f dist/index.d.ts
           test -f dist/receipts.js
           test -f dist/receipts.d.ts
-          node -e "const p=require('./package.json'); if(p.version!=='0.0.1') process.exit(1)"
+          node -e "const p=require('./package.json'); if(p.name!=='@syntavra/sdk'||p.version!=='0.0.1') process.exit(1)"
 
   repository-policy:
     runs-on: ubuntu-latest
@@ -98,9 +71,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Repository hygiene
-        run: python tools/check_repository_hygiene.py
-      - name: Locked product identity
-        run: python tools/v6_materialize.py
-      - name: Manifest
-        run: python tools/refresh_manifest.py --check
+      - name: Install runtime and policy dependencies
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - name: Repository hygiene and manifest
+        run: |
+          python -m tools.check_repository_hygiene
+          python -m tools.refresh_manifest --check
+      - name: Locked product identity and namespace
+        run: |
+          python - <<'PY'
+          import json
+          import tomllib
+          from pathlib import Path
+          import syntavra_runtime
+          import signalcore_runtime
+          project=tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']
+          npm=json.loads(Path('package.json').read_text(encoding='utf-8'))
+          sdk=json.loads(Path('sdk/typescript/package.json').read_text(encoding='utf-8'))
+          release=json.loads(Path('release/pre-release.json').read_text(encoding='utf-8'))
+          assert project['name'] == 'syntavra-runtime'
+          assert project['version'] == '0.0.1'
+          assert npm['name'] == '@syntavra/install' and npm['version'] == '0.0.1'
+          assert sdk['name'] == '@syntavra/sdk' and sdk['version'] == '0.0.1'
+          assert syntavra_runtime.__version__ == '0.0.1'
+          assert signalcore_runtime.__version__ == '0.0.1'
+          assert release['version'] == '0.0.1'
+          assert release['channel'] == 'pre-release'
+          PY
+      - name: Security, recovery and claim-boundary tests
+        run: |
+          python -m pytest tests/runtime/test_syntavra_unified_platform.py -q
+          python tools/verify_claims.py

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.real_task_receipts import (
+from syntavra_runtime.real_task_receipts import (
     load_verified_real_tasks,
     verify_real_task_receipt,
 )
@@ -34,7 +34,7 @@ class RealTaskReceiptTests(unittest.TestCase):
         evidence_path.write_bytes(raw)
         receipt = {
             "schema_version": 1,
-            "receipt_type": "signalcore-real-repository-task",
+            "receipt_type": "syntavra-real-repository-task",
             "task": {
                 "identity": f"owner/repo#{name}@main:blob",
                 "repository": "owner/repo",

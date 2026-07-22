@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.hooks import HookEngine
+from syntavra_runtime.hooks import HookEngine
 
 
 class CompetitiveHookV4Tests(unittest.TestCase):
@@ -25,7 +25,7 @@ class CompetitiveHookV4Tests(unittest.TestCase):
         decision = self.engine.pre_tool({"tool": "shell", "argv": ["pytest", "-q"]})
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.mode, "replace")
-        self.assertEqual(decision.replacement["argv"][:3], ["signalcore", "run", "--background"])
+        self.assertEqual(decision.replacement["argv"][:3], ["syntavra", "run", "--background"])
         self.assertIn("long-running-command", decision.reasons)
 
     def test_untrusted_network_command_is_automatically_sandboxed(self):
@@ -36,7 +36,7 @@ class CompetitiveHookV4Tests(unittest.TestCase):
         })
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.mode, "replace")
-        self.assertEqual(decision.replacement["argv"][:3], ["signalcore", "sandbox", "execute"])
+        self.assertEqual(decision.replacement["argv"][:3], ["syntavra", "sandbox", "execute"])
         self.assertIn("untrusted-network-command", decision.reasons)
 
     def test_destructive_command_remains_fail_closed(self):

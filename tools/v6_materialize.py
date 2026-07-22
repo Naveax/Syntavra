@@ -39,8 +39,8 @@ def verify_locked_identity() -> dict:
         "marketplace": _json(".claude-plugin/marketplace.json").get("version"),
         "gemini": _json("gemini-extension.json").get("version"),
         "codemeta": _json("codemeta.json").get("version"),
-        "skill": _skill_version("skills/signal-core/SKILL.md"),
-        "bundled_skill": _skill_version("signalcore_runtime/bundled_skill/SKILL.md"),
+        "skill": _skill_version("skills/syntavra/SKILL.md"),
+        "bundled_skill": _skill_version("syntavra_runtime/bundled_skill/SKILL.md"),
         "pre_release": _json("release/pre-release.json").get("version"),
     }
     wrong = {name: value for name, value in versions.items() if value != VERSION}
@@ -55,7 +55,7 @@ def main() -> int:
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     if not result["ok"]:
         raise VersionMaterializationError(
-            "legacy materialization is disabled; SignalCore must remain at v0.0.1 pre-release"
+            "legacy materialization is disabled; Syntavra must remain at v0.0.1 pre-release"
         )
     return 0
 

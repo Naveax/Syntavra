@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from signalcore_runtime.product_maturity import (
+from syntavra_runtime.product_maturity import (
     DistributionReceipt,
     OnboardingReceipt,
     ProductMaturityGate,
@@ -38,8 +38,8 @@ class ProductMaturityV001Tests(unittest.TestCase):
                 synthetic=False,
             ))
         distributions = [
-            DistributionReceipt("dist-pypi", "2026-04-15T00:00:00+00:00", "pypi", "signalcore-runtime", "0.0.1", 700, 150, True, False),
-            DistributionReceipt("dist-npm", "2026-04-15T00:00:00+00:00", "npm", "@signalcore/client", "0.0.1", 700, 150, True, False),
+            DistributionReceipt("dist-pypi", "2026-04-15T00:00:00+00:00", "pypi", "syntavra-runtime", "0.0.1", 700, 150, True, False),
+            DistributionReceipt("dist-npm", "2026-04-15T00:00:00+00:00", "npm", "@syntavra/sdk", "0.0.1", 700, 150, True, False),
         ]
         releases = [
             ReleaseReceipt(f"release-{index}", (start + dt.timedelta(days=30 * index)).isoformat(), f"v0.0.1-pre.{index}", "0.0.1", "pre-release", True, True, True, False)

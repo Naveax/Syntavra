@@ -1,6 +1,6 @@
-# Contributing to SignalCore
+# Contributing to Syntavra
 
-SignalCore is a **0.0.1 pre-release** project. The version must not change unless the repository owner explicitly authorizes it.
+Syntavra is a **0.0.1 pre-release** project. The version must not change unless the repository owner explicitly authorizes it.
 
 ## Development workflow
 
@@ -14,7 +14,7 @@ SignalCore is a **0.0.1 pre-release** project. The version must not change unles
 ## Required validation
 
 ```bash
-python -m compileall -q signalcore_runtime skills/signal-core tools tests benchmarks
+python -m compileall -q syntavra_runtime skills/syntavra tools tests benchmarks
 python -m unittest discover -s tests -q
 python tools/check_repository_hygiene.py
 python tools/refresh_manifest.py

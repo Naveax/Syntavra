@@ -1,10 +1,10 @@
 {
-  "name": "@signalcore/install",
+  "name": "@syntavra/install",
   "version": "0.0.1",
-  "description": "One-command, cross-platform installer for SignalCore v0.0.1 pre-release",
+  "description": "One-command cross-platform installer for Syntavra 0.0.1 pre-release",
   "type": "module",
   "bin": {
-    "signalcore-install": "install/index.mjs"
+    "syntavra-install": "install/index.mjs"
   },
   "files": [
     "install/index.mjs",

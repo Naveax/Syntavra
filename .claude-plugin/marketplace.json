@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "signalcore",
+  "name": "syntavra",
   "version": "0.0.1",
-  "description": "SignalCore v0.0.1 pre-release structural intelligence, secure execution, reversible context and unbounded external-history runtime",
+  "description": "Syntavra v0.0.1 pre-release structural intelligence, secure execution, reversible context and unbounded external-history runtime",
   "owner": {
     "name": "Naveax"
   },
   "plugins": [
     {
-      "name": "signal-core",
+      "name": "syntavra",
       "description": "Pre-release multi-language impact, native enforcement, secure sandbox, reversible compression, durable sessions and paired benchmarking",
       "author": {
         "name": "Naveax"
@@ -17,9 +17,9 @@
       "source": "./",
       "strict": false,
       "skills": [
-        "./skills/signal-core"
+        "./skills/syntavra"
       ],
-      "homepage": "https://github.com/Naveax/SignalCore"
+      "homepage": "https://github.com/Naveax/Syntavra"
     }
   ]
 }

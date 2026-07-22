@@ -18,11 +18,11 @@ const REF_PATTERN = /^(?![-/])(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
 const MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024;
 
 function usage() {
-  return `SignalCore ${VERSION} ${CHANNEL} installer
+  return `Syntavra ${VERSION} ${CHANNEL} installer
 
 Usage:
-  npx @signalcore/install [options]
-  npx github:Naveax/SignalCore [options]
+  npx @syntavra/install [options]
+  npx github:Naveax/Syntavra [options]
 
 Options:
   --project <path>          Project to configure (default: current directory)
@@ -42,7 +42,7 @@ Options:
 
 function defaultInstallDir() {
   if (process.platform === "win32") {
-    return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "SignalCore", "bin");
+    return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Syntavra", "bin");
   }
   return path.join(os.homedir(), ".local", "bin");
 }
@@ -128,15 +128,15 @@ function platformKey(platform = process.platform, arch = process.arch) {
 export function portableAsset(options, platform = process.platform, arch = process.arch) {
   const key = platformKey(platform, arch);
   const extension = platform === "win32" ? ".exe" : "";
-  const name = `signalcore-${VERSION}-${key}${extension}`;
-  const base = `https://github.com/Naveax/SignalCore/releases/download/${options.releaseTag}`;
+  const name = `syntavra-${VERSION}-${key}${extension}`;
+  const base = `https://github.com/Naveax/Syntavra/releases/download/${options.releaseTag}`;
   return {
     key,
     name,
     checksumName: `${name}.sha256`,
     url: `${base}/${name}`,
     checksumUrl: `${base}/${name}.sha256`,
-    destination: path.join(options.installDir, platform === "win32" ? "signalcore.exe" : "signalcore")
+    destination: path.join(options.installDir, platform === "win32" ? "syntavra.exe" : "syntavra")
   };
 }
 
@@ -151,10 +151,10 @@ function run(command, args) {
 }
 
 export function buildPythonPlan(options, python) {
-  const source = `git+https://github.com/Naveax/SignalCore.git@${options.ref}`;
+  const source = `git+https://github.com/Naveax/Syntavra.git@${options.ref}`;
   const installArgs = [...python.prefix, "-m", "pip", "install", "--disable-pip-version-check", "--upgrade", source];
-  const setupArgs = [...python.prefix, "-m", "signalcore_runtime", "--project", options.project, "setup", "--apply", "--mcp-profile", options.profile];
-  const statusArgs = [...python.prefix, "-m", "signalcore_runtime", "--project", options.project, "status"];
+  const setupArgs = [...python.prefix, "-m", "syntavra_runtime", "--project", options.project, "setup", "--apply", "--mcp-profile", options.profile];
+  const statusArgs = [...python.prefix, "-m", "syntavra_runtime", "--project", options.project, "status"];
   return {
     mode: "python",
     source,
@@ -185,7 +185,7 @@ export function buildPlan(options, python = null, platform = process.platform, a
   const pythonPlan = python ? buildPythonPlan(options, python) : null;
   const selected = options.runtime === "python" ? pythonPlan : options.runtime === "portable" ? portable : portable;
   return {
-    installer: "@signalcore/install",
+    installer: "@syntavra/install",
     version: VERSION,
     channel: CHANNEL,
     runtime: options.runtime,
@@ -193,14 +193,14 @@ export function buildPlan(options, python = null, platform = process.platform, a
     profile: options.profile,
     selected,
     fallback: options.runtime === "auto" ? pythonPlan : null,
-    source: pythonPlan?.source || `git+https://github.com/Naveax/SignalCore.git@${options.ref}`,
+    source: pythonPlan?.source || `git+https://github.com/Naveax/Syntavra.git@${options.ref}`,
     commands: selected?.commands || []
   };
 }
 
 function request(url, redirects = 5) {
   return new Promise((resolve, reject) => {
-    const call = get(url, { headers: { "User-Agent": "@signalcore/install" } }, (response) => {
+    const call = get(url, { headers: { "User-Agent": "@syntavra/install" } }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location && redirects > 0) {
         response.resume();
         resolve(request(new URL(response.headers.location, url).toString(), redirects - 1));
@@ -242,7 +242,7 @@ async function sha256(file) {
 async function installPortable(options) {
   const asset = portableAsset(options);
   await mkdir(options.installDir, { recursive: true });
-  const temporaryDir = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(path.join(os.tmpdir(), "signalcore-install-")));
+  const temporaryDir = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(path.join(os.tmpdir(), "syntavra-install-")));
   const binary = path.join(temporaryDir, asset.name);
   const checksum = path.join(temporaryDir, asset.checksumName);
   try {
@@ -313,11 +313,11 @@ export async function main(argv = process.argv.slice(2)) {
     process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
     return 0;
   }
-  process.stdout.write(`SignalCore ${VERSION} ${CHANNEL}: runtime=${options.runtime}\n`);
+  process.stdout.write(`Syntavra ${VERSION} ${CHANNEL}: runtime=${options.runtime}\n`);
   if (options.runtime !== "python") {
     try {
       const result = await executePortable(options);
-      process.stdout.write(`\nSignalCore portable installation completed: ${result.asset.destination}\n`);
+      process.stdout.write(`\nSyntavra portable installation completed: ${result.asset.destination}\n`);
       return 0;
     } catch (error) {
       if (options.runtime === "portable") throw error;
@@ -326,13 +326,13 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const resolved = python || resolvePython(options.python);
   executePython(options, resolved);
-  process.stdout.write("\nSignalCore Python installation and verification completed.\n");
+  process.stdout.write("\nSyntavra Python installation and verification completed.\n");
   return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   main().then((code) => { process.exitCode = code; }).catch((error) => {
-    process.stderr.write(`SignalCore installer failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`Syntavra installer failed: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
 }

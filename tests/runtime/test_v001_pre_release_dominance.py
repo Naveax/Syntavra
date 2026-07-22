@@ -5,13 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.infinite_context import CONTEXT_TIERS, RecursiveExecutionEngine, RecursiveTask, UnboundedContextCoordinator
-from signalcore_runtime.integration_matrix import IntegrationMatrix
-from signalcore_runtime.public_proof import BetaReceipt, PublicProofGate, WORKLOADS
-from signalcore_runtime.release_identity import ReleaseIdentity, VersionLockError
-from signalcore_runtime.signalbench_v2 import CodingCorpusPlanner, PairedSchedule, SuperiorityGate, default_arms
-from signalcore_runtime.structural_v2 import GraphEdge, GraphNode, StructuralGraphV2
-from signalcore_runtime.zero_friction import ZeroFrictionManager
+from syntavra_runtime.infinite_context import CONTEXT_TIERS, RecursiveExecutionEngine, RecursiveTask, UnboundedContextCoordinator
+from syntavra_runtime.integration_matrix import IntegrationMatrix
+from syntavra_runtime.public_proof import BetaReceipt, PublicProofGate, WORKLOADS
+from syntavra_runtime.release_identity import ReleaseIdentity, VersionLockError
+from syntavra_runtime.paired_benchmark import CodingCorpusPlanner, PairedSchedule, SuperiorityGate, default_arms
+from syntavra_runtime.semantic_structure import GraphEdge, GraphNode, SemanticGraph
+from syntavra_runtime.zero_friction import ZeroFrictionManager
 
 
 class ReleaseIdentityTests(unittest.TestCase):
@@ -44,7 +44,7 @@ class IntegrationAndProductTests(unittest.TestCase):
 
 class StructuralV2Tests(unittest.TestCase):
     def test_query_impact_and_affected_test(self) -> None:
-        graph = StructuralGraphV2()
+        graph = SemanticGraph()
         graph.add_node(GraphNode("auth", "function", "auth.refresh", "src/auth.py", 10, 50, "python", "sc://auth", 0.9, ("security",)))
         graph.add_node(GraphNode("service", "class", "AuthService", "src/service.py", 1, 90, "python", "sc://service", 0.4))
         graph.add_node(GraphNode("test", "test", "test_refresh", "tests/test_auth.py", 1, 40, "python", "sc://test"))
@@ -69,7 +69,7 @@ class SignalBenchV2Tests(unittest.TestCase):
         self.assertTrue(first.pair_key)
 
     def test_synthetic_corpus_cannot_open_superiority_claim(self) -> None:
-        result = SuperiorityGate.evaluate([{"task_id": "x", "arm_id": "signalcore", "synthetic": True}])
+        result = SuperiorityGate.evaluate([{"task_id": "x", "arm_id": "syntavra", "synthetic": True}])
         self.assertFalse(result["ok"])
         self.assertEqual(result["claim"], "EXTERNAL_SUPERIORITY_NOT_PROVEN")
 

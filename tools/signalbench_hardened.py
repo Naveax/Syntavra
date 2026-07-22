@@ -10,8 +10,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.signalbench_hardened import HardenedSignalBench, UsageReceipt
-from signalcore_runtime.util import atomic_write_json
+from syntavra_runtime.signalbench_hardened import HardenedSignalBench, UsageReceipt
+from syntavra_runtime.util import atomic_write_json
 
 
 def load_rows(path: Path) -> list[dict[str, Any]]:

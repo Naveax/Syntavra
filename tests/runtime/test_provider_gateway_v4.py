@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.provider_gateway import ProviderGateway
-from signalcore_runtime.usage_receipt_ledger import UsageReceiptLedger
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.provider_gateway import ProviderGateway
+from syntavra_runtime.usage_receipt_ledger import UsageReceiptLedger
 
 
 class ProviderGatewayV4Tests(unittest.TestCase):
@@ -107,7 +107,7 @@ class ProviderGatewayV4Tests(unittest.TestCase):
             response,
             receipt={
                 "task_id": "provider-task",
-                "arm_id": "signalcore",
+                "arm_id": "syntavra",
                 "repetition": 1,
                 "cache_mode": "warm",
                 "quota_cost": 1.0,

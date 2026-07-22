@@ -6,8 +6,8 @@ import time
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.process_broker import ProcessBroker
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.process_broker import ProcessBroker
 
 class ProcessBrokerTests(unittest.TestCase):
     def setUp(self): self.temp=tempfile.TemporaryDirectory(); self.root=Path(self.temp.name); self.broker=ProcessBroker(self.root/"broker",EvidenceStore(self.root/"evidence",project_id="p"),heartbeat_interval=0.05)

@@ -1,13 +1,13 @@
-# SignalCore 0.0.1 Pre-Release — P0–P2 Closure Record
+# Syntavra 0.0.1 Pre-Release — P0–P2 Closure Record
 
-This record applies to the unified `main` product line through the `agent/v001-unified-hardening` integration branch. SignalCore remains **0.0.1 / pre-release**.
+This record applies to the unified `main` product line through the `agent/v001-unified-hardening` integration branch. Syntavra remains **0.0.1 / pre-release**.
 
 ## P0 — Repository, CI and installation
 
 Implemented in the integration branch:
 
-- one-command installer package: `npx @signalcore/install`;
-- repository fallback before registry publication: `npx github:Naveax/SignalCore`;
+- one-command installer package: `npx @syntavra/install`;
+- repository fallback before registry publication: `npx github:Naveax/Syntavra`;
 - Python 3.11+ detection, argv-only installation, detected-host setup and final status verification;
 - deterministic root and TypeScript npm lockfiles;
 - real installer and TypeScript SDK tests;

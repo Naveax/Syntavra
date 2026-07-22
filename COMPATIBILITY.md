@@ -1,6 +1,6 @@
-# SignalCore compatibility
+# Syntavra compatibility
 
-SignalCore uses one canonical `SKILL.md` and several delivery adapters. The core Python/SQLite runtime is host-independent; only discovery and instruction packaging vary by product.
+Syntavra uses one canonical `SKILL.md` and several delivery adapters. The core Python/SQLite runtime is host-independent; only discovery and instruction packaging vary by product.
 
 ## Support levels
 
@@ -13,19 +13,19 @@ SignalCore uses one canonical `SKILL.md` and several delivery adapters. The core
 
 | Platform | Level | Project installation | Global installation | Manual invocation |
 |---|---|---|---|---|
-| Agent Skills standard | Native | `.agents/skills/signal-core` | `~/.agents/skills/signal-core` | Mention `signal-core` |
-| OpenAI Codex | Native | `.codex/skills/signal-core` | `~/.codex/skills/signal-core` | `Use $signal-core` |
-| Claude Code | Native | `.claude/skills/signal-core` | `~/.claude/skills/signal-core` | Mention/install the skill or plugin |
-| Gemini CLI | Native | `.gemini/skills/signal-core` | `~/.gemini/skills/signal-core` | Ask Gemini to activate it |
-| Google Antigravity IDE | Native | `.agents/skills/signal-core` | `~/.gemini/config/skills/signal-core` | Mention/select the skill |
-| Google Antigravity CLI | Native | `.agent/skills/signal-core` | `~/.gemini/antigravity-cli/skills/signal-core` | `/skills` / mention the skill |
-| Windsurf Cascade | Native | `.windsurf/skills/signal-core` | `~/.codeium/windsurf/skills/signal-core` | `@signal-core` |
-| OpenCode | Native | `.opencode/skills/signal-core` | `~/.config/opencode/skills/signal-core` | Native `skill` tool |
-| VS Code / GitHub Copilot | Native | `.github/skills/signal-core` | — | Mention the skill in Chat |
-| Cursor | Rule bridge | `.cursor/rules/signal-core.mdc` | User Rules UI | `@signal-core` / project rule |
-| Cline | Rule bridge | `.clinerules/00-signal-core.md` | Cline global Rules | Enable SignalCore rule |
-| Continue | Rule bridge | `.continue/rules/00-signal-core.md` | Continue config/rules | Enable SignalCore rule |
-| JetBrains Junie | Instruction bridge | `AGENTS.md` | — | Reference SignalCore section |
+| Agent Skills standard | Native | `.agents/skills/syntavra` | `~/.agents/skills/syntavra` | Mention `syntavra` |
+| OpenAI Codex | Native | `.codex/skills/syntavra` | `~/.codex/skills/syntavra` | `Use $syntavra` |
+| Claude Code | Native | `.claude/skills/syntavra` | `~/.claude/skills/syntavra` | Mention/install the skill or plugin |
+| Gemini CLI | Native | `.gemini/skills/syntavra` | `~/.gemini/skills/syntavra` | Ask Gemini to activate it |
+| Google Antigravity IDE | Native | `.agents/skills/syntavra` | `~/.gemini/config/skills/syntavra` | Mention/select the skill |
+| Google Antigravity CLI | Native | `.agent/skills/syntavra` | `~/.gemini/antigravity-cli/skills/syntavra` | `/skills` / mention the skill |
+| Windsurf Cascade | Native | `.windsurf/skills/syntavra` | `~/.codeium/windsurf/skills/syntavra` | `@syntavra` |
+| OpenCode | Native | `.opencode/skills/syntavra` | `~/.config/opencode/skills/syntavra` | Native `skill` tool |
+| VS Code / GitHub Copilot | Native | `.github/skills/syntavra` | — | Mention the skill in Chat |
+| Cursor | Rule bridge | `.cursor/rules/syntavra.mdc` | User Rules UI | `@syntavra` / project rule |
+| Cline | Rule bridge | `.clinerules/00-syntavra.md` | Cline global Rules | Enable Syntavra rule |
+| Continue | Rule bridge | `.continue/rules/00-syntavra.md` | Continue config/rules | Enable Syntavra rule |
+| JetBrains Junie | Instruction bridge | `AGENTS.md` | — | Reference Syntavra section |
 | JetBrains integrated agents | Instruction/native-selected-agent | `AGENTS.md` or selected agent skill path | — | Depends on selected agent |
 | Roo Code, Aider, Zed, Kiro, Qwen Code, Kimi CLI, Goose | Universal bridge | `AGENTS.md` | Tool-specific | Attach instructions or run CLI |
 
@@ -65,7 +65,7 @@ python tools/install.py status --platforms all-verified --scope project
 python tools/install.py detect --project .
 ```
 
-Remove only SignalCore-managed files/blocks:
+Remove only Syntavra-managed files/blocks:
 
 ```bash
 python tools/install.py uninstall --platforms cursor,cline,continue --scope project
@@ -73,6 +73,6 @@ python tools/install.py uninstall --platforms cursor,cline,continue --scope proj
 
 ## Compatibility boundary
 
-A system is not marked **native** unless its documented discovery model loads Agent Skills or an equivalent skill package. Rule and universal bridges preserve SignalCore's workflow guidance, but they cannot guarantee native lazy loading, tool registration, hooks, usage accounting, or context behavior.
+A system is not marked **native** unless its documented discovery model loads Agent Skills or an equivalent skill package. Rule and universal bridges preserve Syntavra's workflow guidance, but they cannot guarantee native lazy loading, tool registration, hooks, usage accounting, or context behavior.
 
-The registry is data-driven in `skills/signal-core/data/platforms.json`. New hosts can be added without changing the routing, evidence, state, posterior, or telemetry cores.
+The registry is data-driven in `skills/syntavra/data/platforms.json`. New hosts can be added without changing the routing, evidence, state, posterior, or telemetry cores.

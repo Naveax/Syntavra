@@ -1,6 +1,8 @@
-name: Refresh SignalCore Branch Manifest
+name: Prepare Syntavra Branch Manifest
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - "agent/**"
@@ -12,33 +14,153 @@ permissions:
   contents: write
 
 concurrency:
-  group: signalcore-branch-manifest-${{ github.ref }}
-  cancel-in-progress: false
+  group: syntavra-branch-manifest-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  refresh:
-    if: github.ref_name != 'main' && github.actor != 'github-actions[bot]'
+  prepare:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Refresh deterministic SHA-256 manifest
-        run: python tools/refresh_manifest.py
-      - name: Commit only the branch manifest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: Rebuild committed TypeScript SDK output
+        working-directory: sdk/typescript
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm test
+          node --check dist/index.js
+      - name: Refresh Roblox profile integrity manifest
+        shell: python
+        run: |
+          import hashlib
+          from pathlib import Path
+          profile=Path('skills/syntavra/profiles/roblox_studio')
+          manifest=profile/'MANIFEST.sha256'
+          rows=[]
+          for path in sorted(profile.rglob('*'), key=lambda item: item.relative_to(profile).as_posix()):
+              if not path.is_file() or path == manifest or '__pycache__' in path.parts:
+                  continue
+              rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(profile).as_posix()}")
+          manifest.write_text('\n'.join(rows) + '\n', encoding='utf-8', newline='\n')
+      - name: Validate regenerated profile and tests
+        run: |
+          python -m unittest discover -s tests/roblox_profile -q
+          python tools/validate_roblox_profile.py
+      - name: Refresh deterministic Roblox claim evidence
         shell: bash
         run: |
-          if git diff --quiet -- MANIFEST.sha256; then
-            echo "MANIFEST.sha256 is already current"
-            exit 0
-          fi
+          source_commit="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          value=json.loads(Path('docs/claims/claims.json').read_text(encoding='utf-8'))
+          print(value['source_commit'])
+          PY
+          )"
+          python benchmarks/roblox_profile_benchmark.py \
+            --cases 50 \
+            --mode simulated \
+            --seed 1337 \
+            --source-commit "$source_commit" \
+            --output benchmarks/results/roblox-profile/simulated-50.json
+          SOURCE_COMMIT="$source_commit" python - <<'PY'
+          import json
+          import os
+          import unittest
+          from pathlib import Path
+
+          root=Path('.')
+          claims_path=root/'docs/claims/claims.json'
+          tests_path=root/'benchmarks/results/roblox-profile/profile-tests.json'
+          benchmark_path=root/'benchmarks/results/roblox-profile/simulated-50.json'
+          claims=json.loads(claims_path.read_text(encoding='utf-8'))
+          benchmark=json.loads(benchmark_path.read_text(encoding='utf-8'))
+          source_commit=os.environ['SOURCE_COMMIT']
+          tests_run=unittest.TestLoader().discover(str(root/'tests/roblox_profile')).countTestCases()
+
+          benchmark['measurement_scope']='DETERMINISTIC_SIMULATED_CORRECTNESS_ONLY'
+          benchmark['hardware']='not-recorded'
+          benchmark['operating_system']='not-recorded'
+          benchmark['python_version']='not-recorded'
+          benchmark['latency_p50']=None
+          benchmark['latency_p95']=None
+          limitation='Deterministic committed receipt omits volatile latency and environment measurements'
+          if limitation not in benchmark['limitations']:
+              benchmark['limitations'].append(limitation)
+          benchmark_path.write_text(json.dumps(benchmark, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+
+          tests_path.write_text(json.dumps({
+              'duration_ms': 0.0,
+              'errors': 0,
+              'failures': 0,
+              'maturity': 'INTERNALLY_VERIFIED',
+              'skipped': 0,
+              'source_commit': source_commit,
+              'source_tree_hash': benchmark['source_tree_hash'],
+              'status': 'PASS',
+              'tests_run': tests_run,
+          }, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+          claims['source_commit']=source_commit
+          claims['source_tree_hash']=benchmark['source_tree_hash']
+          for claim in claims['claims']:
+              if claim['claim_id'] == 'roblox.tests':
+                  claim['value']=tests_run
+          claims_path.write_text(json.dumps(claims, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+          PY
+          python tools/verify_claims.py
+      - name: Remove transient dependency trees
+        shell: bash
+        run: rm -rf sdk/typescript/node_modules
+      - name: Generate deterministic root SHA-256 manifest
+        run: python tools/refresh_manifest.py
+      - name: Materialize prepared integrity tree
+        id: prepared
+        shell: bash
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- MANIFEST.sha256
-          test "$(git diff --cached --name-only)" = "MANIFEST.sha256"
-          git commit -m "refresh branch integrity manifest"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          allowed='^(MANIFEST\.sha256|docs/claims/claims\.json|benchmarks/results/roblox-profile/(profile-tests|simulated-50)\.json|sdk/typescript/dist/(index\.js|index\.d\.ts|receipts\.js|receipts\.d\.ts)|skills/syntavra/profiles/roblox_studio/MANIFEST\.sha256)$'
+          changed="$(git diff --name-only)"
+          if [ -n "$changed" ]; then
+            while IFS= read -r path; do
+              echo "$path" | grep -Eq "$allowed" || { echo "unexpected generated change: $path"; exit 1; }
+            done <<< "$changed"
+            git add -- \
+              MANIFEST.sha256 \
+              docs/claims/claims.json \
+              benchmarks/results/roblox-profile/profile-tests.json \
+              benchmarks/results/roblox-profile/simulated-50.json \
+              sdk/typescript/dist \
+              skills/syntavra/profiles/roblox_studio/MANIFEST.sha256
+            git commit -m "prepare Syntavra generated integrity outputs"
+            temporary_branch="prepared-manifest/${GITHUB_SHA}"
+            git push --force origin "HEAD:refs/heads/${temporary_branch}"
+            printf '%s\n' "$temporary_branch" > prepared-branch.txt
+          else
+            printf '%s\n' "" > prepared-branch.txt
+          fi
+          git rev-parse 'HEAD^{tree}' > prepared-tree.txt
+          git rev-parse HEAD > prepared-commit.txt
+          cp MANIFEST.sha256 prepared-MANIFEST.sha256
+      - name: Upload prepared integrity tree metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-prepared-manifest-tree-${{ github.sha }}
+          path: |
+            prepared-MANIFEST.sha256
+            prepared-tree.txt
+            prepared-commit.txt
+            prepared-branch.txt
+          if-no-files-found: error
+          retention-days: 7

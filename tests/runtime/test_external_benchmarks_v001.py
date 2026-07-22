@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from signalcore_runtime.external_benchmarks import (
+from syntavra_runtime.external_benchmarks import (
     ExternalBenchmarkGate,
     ExternalBenchmarkReceipt,
     ExternalSuiteRegistry,
@@ -53,7 +53,7 @@ class ExternalBenchmarksV001Tests(unittest.TestCase):
     def test_real_paired_receipts_open_evidence_gate_for_manual_review(self) -> None:
         rows = []
         for index in range(30):
-            rows.extend((self._receipt(index, "baseline"), self._receipt(index, "signalcore")))
+            rows.extend((self._receipt(index, "baseline"), self._receipt(index, "syntavra")))
         result = ExternalBenchmarkGate.evaluate(rows, suite_id="swe-bench")
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["metrics"]["pairs"], 30)
@@ -63,7 +63,7 @@ class ExternalBenchmarksV001Tests(unittest.TestCase):
         self.assertEqual(result["public_superiority"], "ELIGIBLE_FOR_MANUAL_REVIEW")
 
     def test_suite_label_without_exact_harness_evidence_fails_closed(self) -> None:
-        row = self._receipt(0, "signalcore")
+        row = self._receipt(0, "syntavra")
         invalid = ExternalBenchmarkReceipt(**{
             **row.__dict__,
             "harness_commit": "latest",

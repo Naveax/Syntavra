@@ -84,7 +84,7 @@
         "issue_number": 1245,
         "patch_sha256": "37bfba6b76f02adedb1048bcbb442e826b866e16ae1e304b2d760e4df0e82208",
         "patched_tests": 31,
-        "receipt_path": "/home/runner/work/SignalCore/SignalCore/benchmarks/results/real-tasks/attrs-1245/receipt.json",
+        "receipt_path": "/home/runner/work/Syntavra/Syntavra/benchmarks/results/real-tasks/attrs-1245/receipt.json",
         "repository": "python-attrs/attrs"
       }
     ],

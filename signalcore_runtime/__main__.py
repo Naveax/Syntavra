@@ -1,4 +1,3 @@
-from .unified_cli import main
+from syntavra_runtime.unified_cli import main
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+raise SystemExit(main())

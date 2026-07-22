@@ -5,12 +5,12 @@ import json
 import time
 from pathlib import Path
 
-from signalcore_runtime.infinite_context import RecursiveExecutionEngine, RecursiveTask, UnboundedContextCoordinator
-from signalcore_runtime.integration_matrix import IntegrationMatrix
-from signalcore_runtime.public_proof import PublicProofGate
-from signalcore_runtime.release_identity import identity
-from signalcore_runtime.signalbench_v2 import CodingCorpusPlanner, PairedSchedule, default_arms
-from signalcore_runtime.structural_v2 import GraphEdge, GraphNode, StructuralGraphV2
+from syntavra_runtime.infinite_context import RecursiveExecutionEngine, RecursiveTask, UnboundedContextCoordinator
+from syntavra_runtime.integration_matrix import IntegrationMatrix
+from syntavra_runtime.public_proof import PublicProofGate
+from syntavra_runtime.release_identity import identity
+from syntavra_runtime.paired_benchmark import CodingCorpusPlanner, PairedSchedule, default_arms
+from syntavra_runtime.semantic_structure import GraphEdge, GraphNode, SemanticGraph
 
 
 def run() -> dict:
@@ -18,7 +18,7 @@ def run() -> dict:
     tiers = UnboundedContextCoordinator.stress_tiers(active_budget=4096)
     tasks = CodingCorpusPlanner.generate_slots()
     schedule = PairedSchedule(tasks, default_arms(), repetitions=30)
-    graph = StructuralGraphV2()
+    graph = SemanticGraph()
     for index in range(1000):
         node_id = f"n{index}"
         graph.add_node(GraphNode(node_id, "function", f"pkg.symbol_{index}", f"src/mod_{index % 50}.py", index + 1, index + 2, "python", f"sc://evidence/{node_id}", (index % 100) / 100))
@@ -37,7 +37,7 @@ def run() -> dict:
         "integration_coverage": IntegrationMatrix.validate(),
         "signalbench2": {"tasks": len(tasks), "arms": len(default_arms()), "repetitions": 30, "scheduled_runs": schedule.count, "claim": "EXTERNAL_SUPERIORITY_NOT_PROVEN"},
         "infinite_context": {"tiers": tiers, "max_tier": max(row["tier_tokens"] for row in tiers), "all_passed": all(row["within_budget"] and row["all_referenced"] and not row["forced_restart"] for row in tiers)},
-        "structural_v2": {"nodes": len(graph.nodes), "edges": sum(map(len, graph.outbound.values())), "query_ms": query_ms, "top_result": query[0].node.node_id if query else None},
+        "semantic_structure": {"nodes": len(graph.nodes), "edges": sum(map(len, graph.outbound.values())), "query_ms": query_ms, "top_result": query[0].node.node_id if query else None},
         "recursive_execution": {"tasks": recursive["tasks_executed"], "duplicates_suppressed": recursive["duplicates_suppressed"], "provenance": recursive["global_provenance_hash"]},
         "public_proof": {"workloads": PublicProofGate.workload_manifest()["workload_count"], "maturity": "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN"},
         "elapsed_ms": (time.perf_counter() - started) * 1000,

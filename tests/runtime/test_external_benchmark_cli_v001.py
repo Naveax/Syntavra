@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from signalcore_runtime.unified_cli import main
+from syntavra_runtime.unified_cli import main
 
 
 class ExternalBenchmarkCLIV001Tests(unittest.TestCase):

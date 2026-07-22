@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.benchmark_harness import OBSERVED_BASELINE, TIER_CONFIGS, validate_config
-from signalcore_runtime.claim_governance import decide_claim, verify_claim, write_claim
-from signalcore_runtime.difficulty import evaluate_configured, evaluate_observed
+from syntavra_runtime.benchmark_harness import OBSERVED_BASELINE, TIER_CONFIGS, validate_config
+from syntavra_runtime.claim_governance import decide_claim, verify_claim, write_claim
+from syntavra_runtime.difficulty import evaluate_configured, evaluate_observed
 
 CONTROLS = {name: True for name in (
     "same_prompt", "same_model", "same_reasoning", "same_repository", "same_verifier",
@@ -37,7 +37,7 @@ class DifficultyClaimTests(unittest.TestCase):
         decision = decide_claim(
             tier="20X",
             baseline_costs=[10] * 10,
-            signalcore_costs=[1] * 10,
+            syntavra_costs=[1] * 10,
             difficulty=difficulty,
         )
         self.assertEqual(decision.claim, "5X_NOT_PROVEN")
@@ -47,7 +47,7 @@ class DifficultyClaimTests(unittest.TestCase):
         decision = decide_claim(
             tier="20X",
             baseline_costs=[10] * 10,
-            signalcore_costs=[1] * 10,
+            syntavra_costs=[1] * 10,
             difficulty=self.observed(),
             actual_quota_available=False,
         )
@@ -57,7 +57,7 @@ class DifficultyClaimTests(unittest.TestCase):
         decision = decide_claim(
             tier="20X",
             baseline_costs=[10] * 7,
-            signalcore_costs=[1] * 7,
+            syntavra_costs=[1] * 7,
             difficulty=self.observed(),
         )
         self.assertEqual(decision.claim, "5X_NOT_PROVEN")
@@ -67,7 +67,7 @@ class DifficultyClaimTests(unittest.TestCase):
         decision = decide_claim(
             tier="20X",
             baseline_costs=[10] * 12,
-            signalcore_costs=[1] * 12,
+            syntavra_costs=[1] * 12,
             difficulty=self.observed(),
         )
         self.assertEqual(decision.claim, "5X_20X_QUALIFIED")
@@ -76,7 +76,7 @@ class DifficultyClaimTests(unittest.TestCase):
         decision = decide_claim(
             tier="20X",
             baseline_costs=[10] * 12,
-            signalcore_costs=[1] * 12,
+            syntavra_costs=[1] * 12,
             difficulty=self.observed(),
         )
         with tempfile.TemporaryDirectory() as temp:

@@ -19,7 +19,7 @@ CONFIGURATIONS = (
     Configuration("native_agent_pack", False, "provider agents are not configured in CI"),
     Configuration("roblox_production_pack", False, "live Roblox tools are not configured in CI"),
     Configuration("full_rival_mega_pack", False, "combined external pack unavailable"),
-    Configuration("signalcore", True, "simulated local vertical slice is available"),
+    Configuration("syntavra", True, "simulated local vertical slice is available"),
 )
 
 if __name__ == "__main__":

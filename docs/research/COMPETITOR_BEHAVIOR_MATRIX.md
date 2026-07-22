@@ -1,6 +1,6 @@
 # Competitor behavior matrix
 
-SignalCore independently targets the observable strengths commonly associated with coding-context and token-runtime tools:
+Syntavra independently targets the observable strengths commonly associated with coding-context and token-runtime tools:
 
 - structural repository navigation and transitive impact
 - persistent scoped memory and session continuity

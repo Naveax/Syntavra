@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.adaptive_context import AdaptiveContextEngine, AdaptivePolicy, ToolObservation
-from signalcore_runtime.evidence import EvidenceStore
+from syntavra_runtime.adaptive_context import AdaptiveContextEngine, AdaptivePolicy, ToolObservation
+from syntavra_runtime.evidence import EvidenceStore
 
 
 def fixtures():

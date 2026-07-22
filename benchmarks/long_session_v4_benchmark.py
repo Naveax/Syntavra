@@ -11,16 +11,16 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.long_session_planner import ContextPlanPolicy, LongSessionPlanner
-from signalcore_runtime.session_runtime import SessionRuntime
-from signalcore_runtime.util import atomic_write_json, sha256_bytes
+from syntavra_runtime.long_session_planner import ContextPlanPolicy, LongSessionPlanner
+from syntavra_runtime.session_runtime import SessionRuntime
+from syntavra_runtime.util import atomic_write_json, sha256_bytes
 
 
 def run(*, events: int = 2048, token_budget: int = 4096) -> dict:
     if events < 128:
         raise ValueError("events must be at least 128")
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="signalcore-long-session-v4-") as temp:
+    with tempfile.TemporaryDirectory(prefix="syntavra-long-session-v4-") as temp:
         runtime = SessionRuntime(Path(temp) / "sessions.sqlite3", project_id="benchmark-project")
         session = runtime.create_session(session_id="bench-long-session")
         append_started = time.perf_counter()
@@ -110,7 +110,7 @@ def run(*, events: int = 2048, token_budget: int = 4096) -> dict:
             },
             "stress": stress,
             "boundary": (
-                "This benchmark measures SignalCore internal long-session mechanisms. "
+                "This benchmark measures Syntavra internal long-session mechanisms. "
                 "It does not compare external products or provider task quality."
             ),
             "seconds": time.perf_counter() - started,

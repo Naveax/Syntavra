@@ -9,16 +9,16 @@ from dataclasses import asdict
 from pathlib import Path
 from unittest import mock
 
-from signalcore_runtime.compression import ContentRouter, ReversibleContentStore
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.host_adapters import KNOWN_HOSTS, detect_hosts, negotiate
-from signalcore_runtime.installer import HostInstaller
-from signalcore_runtime.output_governor import OutputGovernor
-from signalcore_runtime.sandbox import SandboxError, SandboxManager, SandboxPolicy
-from signalcore_runtime.session_runtime import SessionRuntime
-from signalcore_runtime.signalbench import ArmSpec, RunResult, SignalBenchRunner, TaskSpec
-from signalcore_runtime.structural import StructuralIndex
-from signalcore_runtime.structural_parsers import ParserRegistry
+from syntavra_runtime.compression import ContentRouter, ReversibleContentStore
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.host_adapters import KNOWN_HOSTS, detect_hosts, negotiate
+from syntavra_runtime.installer import HostInstaller
+from syntavra_runtime.output_governor import OutputGovernor
+from syntavra_runtime.sandbox import SandboxError, SandboxManager, SandboxPolicy
+from syntavra_runtime.session_runtime import SessionRuntime
+from syntavra_runtime.signalbench import ArmSpec, RunResult, SignalBenchRunner, TaskSpec
+from syntavra_runtime.structural import StructuralIndex
+from syntavra_runtime.structural_parsers import ParserRegistry
 
 
 class RuntimeV03UnifiedTests(unittest.TestCase):
@@ -74,7 +74,7 @@ class RuntimeV03UnifiedTests(unittest.TestCase):
             project = self.project(root)
             skill = root / "skill"
             skill.mkdir()
-            (skill / "SKILL.md").write_text("signalcore", encoding="utf-8")
+            (skill / "SKILL.md").write_text("syntavra", encoding="utf-8")
             (project / ".claude").mkdir()
             settings = project / ".claude" / "settings.json"
             settings.write_text(json.dumps({"existing": True}), encoding="utf-8")
@@ -84,7 +84,7 @@ class RuntimeV03UnifiedTests(unittest.TestCase):
             self.assertTrue(first["ok"] and second["ok"])
             value = json.loads(settings.read_text())
             self.assertTrue(value["existing"])
-            self.assertEqual(value["signalcore"]["version"], "0.0.1")
+            self.assertEqual(value["syntavra"]["version"], "0.0.1")
             self.assertEqual(len(value["hooks"]["PreToolUse"]), 1)
             doctor = installer.doctor()
             self.assertTrue(doctor["ok"])
@@ -131,7 +131,7 @@ class RuntimeV03UnifiedTests(unittest.TestCase):
                 self.assertLessEqual(result.visible_bytes, 1024)
                 self.assertTrue(store.verify_roundtrip(result.compression_id), path)
                 self.assertEqual(store.restore(result.compression_id), text.encode(), path)
-                self.assertIn("SignalCore CCR", result.visible_text)
+                self.assertIn("Syntavra CCR", result.visible_text)
             secret = router.compress("password=supersecret\nERROR denied", path="a.log")
             self.assertNotIn("supersecret", secret.visible_text)
             self.assertEqual(store.restore(secret.compression_id), b"password=supersecret\nERROR denied")
@@ -202,7 +202,7 @@ class RuntimeV03UnifiedTests(unittest.TestCase):
             self.assertFalse(runner.compare([base, bad], baseline_arm="base", candidate_arm="candidate")["claimable_superiority"])
 
     def test_bundled_skill_is_available_outside_repository_layout(self) -> None:
-        from signalcore_runtime import cli
+        from syntavra_runtime import cli
         bundled = Path(cli.__file__).resolve().parent / "bundled_skill"
         self.assertTrue((bundled / "SKILL.md").is_file())
         self.assertIn('version: "0.0.1"', (bundled / "SKILL.md").read_text(encoding="utf-8"))

@@ -8,11 +8,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.arm_runner import ArmExecutionPolicy, SecureArmRunner
-from signalcore_runtime.data_router import DataRoutePolicy, DataRouter
-from signalcore_runtime.policy_tuner import AdaptivePolicyTuner, PolicyObservation
-from signalcore_runtime.product_v5_extension import product_tools
-from signalcore_runtime.service_manager import ProviderProxyServiceManager, ServiceSpec
+from syntavra_runtime.arm_runner import ArmExecutionPolicy, SecureArmRunner
+from syntavra_runtime.data_router import DataRoutePolicy, DataRouter
+from syntavra_runtime.policy_tuner import AdaptivePolicyTuner, PolicyObservation
+from syntavra_runtime.product_extension import product_tools
+from syntavra_runtime.service_manager import ProviderProxyServiceManager, ServiceSpec
 
 
 class _Evidence:
@@ -97,7 +97,7 @@ class ProductParityV5Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             manager = ProviderProxyServiceManager(temp)
             canonical_home = Path(temp).resolve(strict=False)
-            spec = ServiceSpec("signalcore-proxy", (sys.executable, "-m", "signalcore_runtime.product_v5_cli", "--help"))
+            spec = ServiceSpec("syntavra-proxy", (sys.executable, "-m", "syntavra_runtime.product_cli", "--help"))
             for platform in ("linux", "darwin", "windows"):
                 plan = manager.plan(spec, platform_name=platform)
                 self.assertTrue(plan.user_scoped)
@@ -163,9 +163,9 @@ print('arm complete')
     def test_product_mcp_catalog_has_no_duplicate_names(self) -> None:
         names = [row["name"] for row in product_tools()]
         self.assertEqual(len(names), len(set(names)))
-        self.assertIn("signalcore.data.route", names)
-        self.assertIn("signalcore.policy.recommend", names)
-        self.assertIn("signalcore.service.plan", names)
+        self.assertIn("syntavra.data.route", names)
+        self.assertIn("syntavra.policy.recommend", names)
+        self.assertIn("syntavra.service.plan", names)
 
 
 if __name__ == "__main__":

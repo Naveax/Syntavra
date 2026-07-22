@@ -1,4 +1,4 @@
-# SignalCore Roblox Studio Mode
+# Syntavra Roblox Studio Mode
 
 Status: **INTERNALLY_VERIFIED control plane / SIMULATED external execution**.
 
@@ -8,7 +8,7 @@ Activation requires a short-lived HMAC-SHA256 envelope binding the Studio proces
 
 See:
 
-- [Architecture](skills/signal-core/profiles/roblox_studio/ARCHITECTURE.md)
-- [Benchmark results](skills/signal-core/profiles/roblox_studio/BENCHMARK_RESULTS.md)
-- [Completion report](skills/signal-core/profiles/roblox_studio/COMPLETION_REPORT.md)
+- [Architecture](skills/syntavra/profiles/roblox_studio/ARCHITECTURE.md)
+- [Benchmark results](skills/syntavra/profiles/roblox_studio/BENCHMARK_RESULTS.md)
+- [Completion report](skills/syntavra/profiles/roblox_studio/COMPLETION_REPORT.md)
 - [Transfer failure audit](docs/audits/ROBLOX_PROFILE_TRANSFER_FAILURE.md)

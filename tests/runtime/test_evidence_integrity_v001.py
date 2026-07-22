@@ -3,9 +3,9 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from signalcore_runtime.evidence_integrity import ExternalEvidenceIntegrityGate
-from signalcore_runtime.external_benchmarks import ExternalBenchmarkReceipt
-from signalcore_runtime.live_certification import LiveIntegrationReceipt
+from syntavra_runtime.evidence_integrity import ExternalEvidenceIntegrityGate
+from syntavra_runtime.external_benchmarks import ExternalBenchmarkReceipt
+from syntavra_runtime.live_certification import LiveIntegrationReceipt
 
 
 NOW = dt.datetime(2026, 7, 21, 12, 0, tzinfo=dt.timezone.utc)
@@ -49,8 +49,8 @@ class ExternalEvidenceIntegrityV001Tests(unittest.TestCase):
             integration_id="codex",
             family="host",
             observed_at=(NOW - dt.timedelta(days=index)).isoformat(),
-            signalcore_version="0.0.1",
-            signalcore_channel="pre-release",
+            syntavra_version="0.0.1",
+            syntavra_channel="pre-release",
             adapter_version="adapter-v1",
             operating_system=("linux", "windows", "macos")[index % 3],
             runtime_version="python-3.13",
@@ -73,7 +73,7 @@ class ExternalEvidenceIntegrityV001Tests(unittest.TestCase):
         )
 
     def test_unique_timestamped_benchmark_receipts_pass_integrity(self) -> None:
-        rows = [self.benchmark(index, arm) for index in range(3) for arm in ("baseline", "signalcore")]
+        rows = [self.benchmark(index, arm) for index in range(3) for arm in ("baseline", "syntavra")]
         observed = {
             row.receipt_id: (NOW - dt.timedelta(minutes=index)).isoformat()
             for index, row in enumerate(rows)

@@ -1,9 +1,9 @@
-name: Validate Roblox Studio profile
+name: Validate Syntavra Roblox Studio Profile
 
 on:
   pull_request:
     paths:
-      - "skills/signal-core/profiles/roblox_studio/**"
+      - "skills/syntavra/profiles/roblox_studio/**"
       - "tests/roblox_profile/**"
       - "benchmarks/roblox_profile_benchmark.py"
       - "benchmarks/results/roblox-profile/**"
@@ -13,13 +13,15 @@ on:
       - "README.md"
       - ".github/workflows/validate-roblox-profile.yml"
   push:
-    branches:
-      - main
-      - fix/sovereign-runtime-materialized
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: syntavra-roblox-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -38,12 +40,12 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          root = Path('.')
-          forbidden = list(root.rglob('payload-*.b64')) + [path for path in root.rglob('.signalcore-direct')]
+          root=Path('.')
+          forbidden=list(root.rglob('payload-*.b64')) + [path for path in root.rglob('.signalcore-direct')]
           if forbidden:
               raise SystemExit(f"forbidden encoded source transport: {forbidden}")
       - name: Compile profile
-        run: python -m compileall -q skills/signal-core/profiles/roblox_studio
+        run: python -m compileall -q skills/syntavra/profiles/roblox_studio
       - name: Run profile tests
         run: python -m unittest discover -s tests/roblox_profile -q
       - name: Validate profile

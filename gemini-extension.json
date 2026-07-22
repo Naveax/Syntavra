@@ -1,6 +1,6 @@
 {
-  "name": "signalcore",
+  "name": "syntavra",
   "version": "0.0.1",
-  "description": "SignalCore v0.0.1 pre-release runtime, sandbox, reversible compression, structural intelligence and unbounded external history",
+  "description": "Syntavra v0.0.1 pre-release runtime, sandbox, reversible compression, structural intelligence and unbounded external history",
   "contextFileName": "GEMINI.md"
 }

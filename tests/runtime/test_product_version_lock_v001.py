@@ -5,8 +5,8 @@ import re
 import unittest
 from pathlib import Path
 
-import signalcore_runtime
-from signalcore_runtime.release_identity import CHANNEL, VERSION
+import syntavra_runtime
+from syntavra_runtime.release_identity import CHANNEL, VERSION
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,8 +17,8 @@ class ProductVersionLockV001Tests(unittest.TestCase):
         self.assertEqual((ROOT / "VERSION").read_text(encoding="utf-8").strip(), "0.0.1")
         self.assertEqual(VERSION, "0.0.1")
         self.assertEqual(CHANNEL, "pre-release")
-        self.assertEqual(signalcore_runtime.__version__, "0.0.1")
-        self.assertEqual(signalcore_runtime.__release_channel__, "pre-release")
+        self.assertEqual(syntavra_runtime.__version__, "0.0.1")
+        self.assertEqual(syntavra_runtime.__release_channel__, "pre-release")
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertRegex(pyproject, r'(?m)^version\s*=\s*"0\.0\.1"\s*$')

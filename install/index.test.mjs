@@ -13,17 +13,17 @@ test("parses one-command defaults and keeps the version locked", () => {
   assert.equal(plan.channel, "pre-release");
   assert.equal(plan.selected.mode, "portable");
   assert.equal(plan.fallback.mode, "python");
-  assert.match(plan.source, /SignalCore\.git@main$/);
+  assert.match(plan.source, /Syntavra\.git@main$/);
 });
 
 test("portable plan supports CLI-independent installation", () => {
   const parsed = parseArgs(["--runtime", "portable", "--plan", "--install-dir", "/tmp/bin"]);
   const asset = portableAsset(parsed, "linux", "x64");
-  assert.equal(asset.name, "signalcore-0.0.1-linux-x64");
+  assert.equal(asset.name, "syntavra-0.0.1-linux-x64");
   const plan = buildPortablePlan(parsed, "linux", "x64");
   assert.equal(plan.mode, "portable");
   assert.equal(plan.commands[0].phase, "setup");
-  assert.match(plan.commands[0].command, /signalcore$/);
+  assert.match(plan.commands[0].command, /syntavra$/);
 });
 
 test("rejects unsafe refs, tags, profiles, and runtime modes", () => {
@@ -39,7 +39,7 @@ test("help is executable without probing Python or downloading", () => {
     encoding: "utf8"
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /npx @signalcore\/install/);
+  assert.match(result.stdout, /npx @syntavra\/install/);
   assert.match(result.stdout, /0\.0\.1 pre-release/);
   assert.match(result.stdout, /portable/);
 });

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PROFILE = ROOT / "skills" / "signal-core" / "profiles" / "roblox_studio"
+PROFILE = ROOT / "skills" / "syntavra" / "profiles" / "roblox_studio"
 sys.path.insert(0, str(PROFILE.parent))
 
 from roblox_studio.capabilities import default_capabilities
@@ -32,7 +32,7 @@ def main() -> int:
     checks: list[tuple[str, bool, str]] = []
     checks.append(("source_directory", PROFILE.is_dir(), str(PROFILE)))
     checks.append(("required_files", all(path.is_file() for path in REQUIRED), "ordinary source files"))
-    forbidden_payload = list(ROOT.rglob("payload-*.b64")) + list(ROOT.rglob(".signalcore-direct"))
+    forbidden_payload = list(ROOT.rglob("payload-*.b64")) + list(ROOT.rglob(".syntavra-direct"))
     checks.append(("no_encoded_source_transport", not forbidden_payload, ",".join(map(str, forbidden_payload))))
     specs = default_capabilities()
     engines = default_engines(specs)

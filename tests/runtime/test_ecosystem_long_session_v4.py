@@ -6,24 +6,24 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-import signalcore_runtime
-from signalcore_runtime.framework_adapters import (
+import syntavra_runtime
+from syntavra_runtime.framework_adapters import (
     AnthropicMessagesTransport,
     GeminiGenerateTransport,
     LangChainCallbackHandler,
     LiteLLMTransport,
     OpenAIChatTransport,
     OpenAIResponsesTransport,
-    SignalCoreMiddleware,
+    SyntavraMiddleware,
     framework_capabilities,
 )
-from signalcore_runtime.host_adapters import KNOWN_HOSTS, coverage_report, negotiate
-from signalcore_runtime.long_session_planner import ContextPlanPolicy, LongSessionPlanner
-from signalcore_runtime.mcp_server import MCPServer
-from signalcore_runtime.output_governor import OutputGovernor, PROFILES
-from signalcore_runtime.real_task_corpus import RealTaskCorpus
-from signalcore_runtime.sdk import SignalCoreClient
-from signalcore_runtime.session_runtime import SessionRuntime
+from syntavra_runtime.host_adapters import KNOWN_HOSTS, coverage_report, negotiate
+from syntavra_runtime.long_session_planner import ContextPlanPolicy, LongSessionPlanner
+from syntavra_runtime.mcp_server import MCPServer
+from syntavra_runtime.output_governor import OutputGovernor, PROFILES
+from syntavra_runtime.real_task_corpus import RealTaskCorpus
+from syntavra_runtime.sdk import SyntavraClient
+from syntavra_runtime.session_runtime import SessionRuntime
 
 
 def provider_response(text: str = "ok") -> dict:
@@ -69,7 +69,7 @@ def arm(index: int, *, model: str = "same-model") -> dict:
 class SDKFrameworkTests(unittest.TestCase):
     def test_sync_replay_async_and_framework_adapters(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            client = SignalCoreClient(Path(temp), project=Path(temp))
+            client = SyntavraClient(Path(temp), project=Path(temp))
             calls: list[dict] = []
 
             def transport(request):
@@ -98,7 +98,7 @@ class SDKFrameworkTests(unittest.TestCase):
                 async_transport,
             ))
             self.assertEqual(invocation.response["output_text"], "async")
-            middleware = SignalCoreMiddleware(
+            middleware = SyntavraMiddleware(
                 client,
                 provider="openai-compatible",
                 transport=lambda value: provider_response("middleware"),
@@ -129,7 +129,7 @@ class SDKFrameworkTests(unittest.TestCase):
 
     def test_langchain_observer_captures_success_and_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            client = SignalCoreClient(Path(temp), project=Path(temp))
+            client = SyntavraClient(Path(temp), project=Path(temp))
             handler = LangChainCallbackHandler(client, model="callback-model")
             handler.on_llm_start({"name": "callback-model"}, ["hello"], run_id="a")
             handler.on_llm_end({"output_text": "done", "usage": {"input_tokens": 4, "output_tokens": 2}}, run_id="a")
@@ -221,22 +221,22 @@ class EcosystemMCPTests(unittest.TestCase):
                 codex_home=root / "codex", host="generic-mcp",
             )
             names = {row["name"] for row in server.tools()}
-            self.assertIn("signalcore.ecosystem.capabilities", names)
-            self.assertIn("signalcore.session.plan", names)
-            self.assertTrue(server.call_tool("signalcore.ecosystem.capabilities", {})["long_session"]["query_aware_planning"])
-            server.call_tool("signalcore.session.open", {"session_id": "s", "metadata": {}})
+            self.assertIn("syntavra.ecosystem.capabilities", names)
+            self.assertIn("syntavra.session.plan", names)
+            self.assertTrue(server.call_tool("syntavra.ecosystem.capabilities", {})["long_session"]["query_aware_planning"])
+            server.call_tool("syntavra.session.open", {"session_id": "s", "metadata": {}})
             for index in range(40):
-                server.call_tool("signalcore.session.append", {
+                server.call_tool("syntavra.session.append", {
                     "session_id": "s", "event_type": "observation",
                     "payload": {"task": f"module-{index % 4}", "result": f"ok-{index}"},
                 })
-            plan = server.call_tool("signalcore.session.plan", {
+            plan = server.call_tool("syntavra.session.plan", {
                 "session_id": "s", "query": "module 2",
                 "policy": {"token_budget": 500, "recent_events": 8},
             })
             self.assertTrue(plan["verification"]["ok"])
             self.assertLessEqual(plan["used"], 500)
-            result = server.call_tool("signalcore.corpus.validate", {
+            result = server.call_tool("syntavra.corpus.validate", {
                 "tasks": [task(1)], "arms": [arm(1)],
             })
             self.assertFalse(result["ok"])

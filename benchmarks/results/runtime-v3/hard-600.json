@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "benchmark": "signalcore-context-os-extreme-agent-evidence-manual-sharded",
+  "benchmark": "syntavra-context-os-extreme-agent-evidence-manual-sharded",
   "scope": "hard deterministic evidence benchmark; six isolated 100-case processes; not a proprietary-system comparison",
   "cases": 600,
   "shards": 6,

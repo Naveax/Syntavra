@@ -1,12 +1,12 @@
 name: Bug report
-description: Report a reproducible SignalCore runtime, installation or integration defect
+description: Report a reproducible Syntavra runtime, installation or integration defect
 title: "[Bug] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        SignalCore is 0.0.1 pre-release. Remove credentials, private source and private prompts before submitting.
+        Syntavra is 0.0.1 pre-release. Remove credentials, private source and private prompts before submitting.
   - type: input
     id: environment
     attributes:

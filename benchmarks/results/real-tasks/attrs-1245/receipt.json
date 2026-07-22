@@ -93,7 +93,7 @@
       "method": "7 alternating baseline/patched process pairs; 11 inner repetitions per arm; 100000 items"
     }
   },
-  "receipt_type": "signalcore-real-repository-task",
+  "receipt_type": "syntavra-real-repository-task",
   "result": {
     "baseline_commit": "d3d3c836295f288e50f806e196a5afad70c7095d",
     "baseline_tests": {

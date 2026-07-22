@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from signalcore_runtime.cli import main
+from syntavra_runtime.cli import main
 
 
 class HostInstallationCLIV4Tests(unittest.TestCase):
@@ -21,7 +21,7 @@ class HostInstallationCLIV4Tests(unittest.TestCase):
         self.project.mkdir()
         self.skill.mkdir()
         self.home.mkdir()
-        (self.skill / "SKILL.md").write_text("# SignalCore\n", encoding="utf-8")
+        (self.skill / "SKILL.md").write_text("# Syntavra\n", encoding="utf-8")
 
     def tearDown(self):
         self.temp.cleanup()

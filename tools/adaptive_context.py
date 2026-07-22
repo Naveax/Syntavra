@@ -11,9 +11,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.adaptive_context import AdaptiveContextEngine, AdaptivePolicy, ToolObservation
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.util import stable_project_id
+from syntavra_runtime.adaptive_context import AdaptiveContextEngine, AdaptivePolicy, ToolObservation
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.util import stable_project_id
 
 
 def emit(value: Any) -> None:
@@ -23,7 +23,7 @@ def emit(value: Any) -> None:
 
 def active_engine(args: argparse.Namespace) -> AdaptiveContextEngine:
     project = Path(args.project).resolve(strict=False)
-    state = Path(args.state_root).resolve(strict=False) if args.state_root else project / ".signalcore" / "runtime-v3"
+    state = Path(args.state_root).resolve(strict=False) if args.state_root else project / ".syntavra" / "runtime-v3"
     return AdaptiveContextEngine(state / "adaptive-context.sqlite3", evidence=EvidenceStore(state / "evidence", project_id=stable_project_id(project)), policy=AdaptivePolicy.for_profile(getattr(args, "profile", "balanced")))
 
 
@@ -34,7 +34,7 @@ def payload(args: argparse.Namespace) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="SignalCore Adaptive Context Engine")
+    parser = argparse.ArgumentParser(description="Syntavra Adaptive Context Engine")
     parser.add_argument("--project", default="."); parser.add_argument("--state-root")
     sub = parser.add_subparsers(dest="action", required=True)
     capture = sub.add_parser("capture"); capture.add_argument("--command", default=""); capture.add_argument("--tool-name", default="shell"); capture.add_argument("--path", default=""); capture.add_argument("--scope-key", default="default"); capture.add_argument("--profile", choices=("compact", "balanced", "audit"), default="balanced"); capture.add_argument("--input"); capture.add_argument("--text")

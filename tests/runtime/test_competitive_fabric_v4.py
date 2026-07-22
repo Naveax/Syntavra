@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.competitive_fabric import (
+from syntavra_runtime.competitive_fabric import (
     CacheAligner,
     CommandCompactor,
     CompetitiveContextFabric,
@@ -24,20 +24,20 @@ class CompetitiveFabricV4Tests(unittest.TestCase):
 
     def test_auto_profile_keeps_required_tools_and_reduces_surface(self):
         available = [
-            "signalcore.status",
-            "signalcore.inspect.map",
-            "signalcore.inspect.impact",
-            "signalcore.output.capture",
-            "signalcore.output.search",
-            "signalcore.output.reveal",
-            "signalcore.session.semantic_context",
-            "signalcore.fabric.route",
-            "signalcore.fabric.doctor",
-            "signalcore.process.submit",
-            "signalcore.process.completions",
-            "signalcore.sandbox.execute",
-            "signalcore.usage.record",
-            "signalcore.usage.verify",
+            "syntavra.status",
+            "syntavra.inspect.map",
+            "syntavra.inspect.impact",
+            "syntavra.output.capture",
+            "syntavra.output.search",
+            "syntavra.output.reveal",
+            "syntavra.session.semantic_context",
+            "syntavra.fabric.route",
+            "syntavra.fabric.doctor",
+            "syntavra.process.submit",
+            "syntavra.process.completions",
+            "syntavra.sandbox.execute",
+            "syntavra.usage.record",
+            "syntavra.usage.verify",
         ]
         result = ToolSurfacePlanner().plan(
             "run pytest and inspect the failing auth symbol",
@@ -45,8 +45,8 @@ class CompetitiveFabricV4Tests(unittest.TestCase):
             available_tools=available,
             requested_profile="auto",
         )
-        self.assertIn("signalcore.process.submit", result["selected_tools"])
-        self.assertIn("signalcore.inspect.impact", result["selected_tools"])
+        self.assertIn("syntavra.process.submit", result["selected_tools"])
+        self.assertIn("syntavra.inspect.impact", result["selected_tools"])
         self.assertLess(result["selected_count"], result["available_count"])
         self.assertTrue(result["profile_hash"])
 
@@ -72,7 +72,7 @@ class CompetitiveFabricV4Tests(unittest.TestCase):
         self.assertEqual(blocked.mode, "blocked")
         network = router.route(["curl", "https://example.com"], network_untrusted=True)
         self.assertEqual(network.mode, "sandbox-replace")
-        self.assertIn("signalcore.sandbox.execute", network.recommended_tools)
+        self.assertIn("syntavra.sandbox.execute", network.recommended_tools)
         tests = router.route(["pytest", "-q"])
         self.assertEqual(tests.mode, "background-replace")
         self.assertIn("--background", tests.replacement_argv)

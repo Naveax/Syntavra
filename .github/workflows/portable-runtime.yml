@@ -1,9 +1,10 @@
-name: Build SignalCore Portable Runtime
+name: Build Syntavra Portable Runtime
 
 on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "syntavra_runtime/**"
       - "signalcore_runtime/**"
       - "tools/portable_entry.py"
       - "install/**"
@@ -16,6 +17,10 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+
+concurrency:
+  group: syntavra-portable-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -54,13 +59,13 @@ jobs:
       - name: Build self-contained runtime
         shell: bash
         run: |
-          args=(--onefile --clean --name signalcore --collect-data signalcore_runtime)
+          args=(--onefile --clean --name syntavra --collect-data syntavra_runtime --collect-data signalcore_runtime)
           if [[ "${{ matrix.platform }}" == "darwin" ]]; then
             args+=(--target-arch "${{ matrix.target_arch }}")
           fi
           python -m PyInstaller "${args[@]}" tools/portable_entry.py
-          asset="signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}"
-          mv "dist/signalcore${{ matrix.extension }}" "$asset"
+          asset="syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}"
+          mv "dist/syntavra${{ matrix.extension }}" "$asset"
           if [[ "${{ matrix.platform }}" == "darwin" ]]; then
             codesign --force --deep --sign - "$asset"
             codesign --verify --deep --strict --verbose=2 "$asset"
@@ -69,47 +74,54 @@ jobs:
           import hashlib
           import os
           from pathlib import Path
-          asset = Path(f"signalcore-0.0.1-{os.environ['SC_PLATFORM']}-{os.environ['SC_ARCH']}{os.environ['SC_EXTENSION']}")
-          digest = hashlib.sha256(asset.read_bytes()).hexdigest()
-          asset.with_name(asset.name + ".sha256").write_text(f"{digest}  {asset.name}\n", encoding="utf-8")
+          asset=Path(f"syntavra-0.0.1-{os.environ['SYNTAVRA_PLATFORM']}-{os.environ['SYNTAVRA_ARCH']}{os.environ['SYNTAVRA_EXTENSION']}")
+          digest=hashlib.sha256(asset.read_bytes()).hexdigest()
+          asset.with_name(asset.name + '.sha256').write_text(f"{digest}  {asset.name}\n", encoding='utf-8')
           PY
         env:
-          SC_PLATFORM: ${{ matrix.platform }}
-          SC_ARCH: ${{ matrix.arch }}
-          SC_EXTENSION: ${{ matrix.extension }}
-      - name: Verify locked identity
+          SYNTAVRA_PLATFORM: ${{ matrix.platform }}
+          SYNTAVRA_ARCH: ${{ matrix.arch }}
+          SYNTAVRA_EXTENSION: ${{ matrix.extension }}
+      - name: Verify locked identity and canonical product surface
         shell: bash
         run: |
-          asset="signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}"
+          asset="syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}"
           set +e
           "$PWD/$asset" version > portable-version.json 2> portable-version.stderr
-          status=$?
+          version_status=$?
+          "$PWD/$asset" --project . run platform-manifest > portable-platform.json 2>> portable-version.stderr
+          platform_status=$?
           set -e
           cat portable-version.stderr || true
-          if [[ $status -ne 0 ]]; then
+          if [[ $version_status -ne 0 || $platform_status -ne 0 ]]; then
             file "$asset" || true
             if [[ "${{ matrix.platform }}" == "darwin" ]]; then
               codesign --display --verbose=4 "$asset" || true
               codesign --verify --deep --strict --verbose=4 "$asset" || true
             fi
-            exit "$status"
+            exit 1
           fi
           python - <<'PY'
           import json
-          value = json.load(open("portable-version.json", encoding="utf-8"))
-          identity = value["identity"]
-          assert identity["version"] == "0.0.1", identity
-          assert identity["channel"] == "pre-release", identity
+          version=json.load(open('portable-version.json', encoding='utf-8'))
+          platform=json.load(open('portable-platform.json', encoding='utf-8'))
+          identity=version['identity']
+          assert identity['version'] == '0.0.1', identity
+          assert identity['channel'] == 'pre-release', identity
+          assert platform['product'] == 'Syntavra', platform
+          assert platform['version'] == '0.0.1', platform
+          assert platform['channel'] == 'pre-release', platform
           PY
       - name: Upload portable diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: portable-diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
+          name: syntavra-portable-diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
-            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
-            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
+            syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
+            syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
             portable-version.json
+            portable-platform.json
             portable-version.stderr
           if-no-files-found: warn
           retention-days: 7
@@ -118,15 +130,16 @@ jobs:
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
-            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
-            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
+            syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
+            syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: portable-${{ matrix.platform }}-${{ matrix.arch }}
+          name: syntavra-portable-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
-            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
-            signalcore-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
+            syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
+            syntavra-0.0.1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}.sha256
             portable-version.json
+            portable-platform.json
           if-no-files-found: error
           retention-days: 90
 
@@ -137,7 +150,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: portable-*
+          pattern: syntavra-portable-*
           path: release-assets
           merge-multiple: true
       - name: Create or update pre-release
@@ -147,6 +160,6 @@ jobs:
         shell: bash
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --prerelease --title "SignalCore 0.0.1 pre-release" --notes "Portable runtime artifacts for the locked SignalCore 0.0.1 pre-release line."
+            gh release create "$TAG" --prerelease --title "Syntavra 0.0.1 pre-release" --notes "Portable runtime artifacts for the locked Syntavra 0.0.1 pre-release line."
           fi
-          gh release upload "$TAG" release-assets/signalcore-0.0.1-* --clobber
+          gh release upload "$TAG" release-assets/syntavra-0.0.1-* --clobber

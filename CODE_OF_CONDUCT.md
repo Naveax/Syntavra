@@ -1,6 +1,6 @@
 # Community Conduct
 
-SignalCore contributors and users must keep technical collaboration professional, specific and safe.
+Syntavra contributors and users must keep technical collaboration professional, specific and safe.
 
 Expected conduct:
 

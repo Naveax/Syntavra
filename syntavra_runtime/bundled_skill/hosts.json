@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "runtime": "syntavra_runtime",
+  "install_command": "syntavra install --all",
+  "doctor_command": "syntavra doctor"
+}

@@ -1,4 +1,4 @@
-name: Validate SignalCore Repository Manifest
+name: Validate Syntavra Repository Manifest
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: signalcore-manifest-${{ github.ref }}
+  group: syntavra-manifest-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

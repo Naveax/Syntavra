@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.product_surface import (
+from syntavra_runtime.product_surface import (
     MCP_PROFILES,
     MENTAL_MODEL,
     MeasuredBenchmarkGate,
@@ -16,7 +16,7 @@ from signalcore_runtime.product_surface import (
     SessionAnalyticsStore,
     ToolRoutingEnforcer,
 )
-from signalcore_runtime.release_identity import CHANNEL, VERSION
+from syntavra_runtime.release_identity import CHANNEL, VERSION
 
 
 class ProductSurfaceV001Tests(unittest.TestCase):
@@ -83,7 +83,7 @@ class ProductSurfaceV001Tests(unittest.TestCase):
         rows = []
         for index in range(30):
             rows.append(self._receipt(index, "baseline"))
-            rows.append(self._receipt(index, "signalcore"))
+            rows.append(self._receipt(index, "syntavra"))
         validation = ReceiptValidator.evaluate(rows)
         self.assertTrue(validation["ok"], validation)
         result = MeasuredBenchmarkGate.evaluate(rows)
@@ -94,7 +94,7 @@ class ProductSurfaceV001Tests(unittest.TestCase):
         self.assertGreaterEqual(result["metrics"]["mean_quality_delta"], 0.0)
 
     def test_synthetic_receipts_never_open_external_proof(self) -> None:
-        row = self._receipt(0, "signalcore")
+        row = self._receipt(0, "syntavra")
         synthetic = ProviderUsageReceipt(**{**row.__dict__, "synthetic": True})
         result = MeasuredBenchmarkGate.evaluate([synthetic])
         self.assertFalse(result["ok"])
@@ -103,7 +103,7 @@ class ProductSurfaceV001Tests(unittest.TestCase):
     def test_setup_bundle_and_content_free_session_analytics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            state = root / ".signalcore" / "pre-release"
+            state = root / ".syntavra" / "pre-release"
             bundle = ProductSurface.setup_bundle(root, state, "minimal")
             self.assertTrue(bundle["ok"])
             self.assertTrue((state / "product.json").is_file())

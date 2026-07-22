@@ -1,6 +1,6 @@
-# SignalCore Support
+# Syntavra Support
 
-SignalCore is currently **0.0.1 pre-release** software.
+Syntavra is currently **0.0.1 pre-release** software.
 
 ## Bugs and installation problems
 
@@ -8,7 +8,7 @@ Open a bug report with:
 
 - operating system and Python/Node versions;
 - the exact installation command;
-- `signalcore status` output with secrets removed;
+- `syntavra status` output with secrets removed;
 - the failing command and minimal reproduction;
 - whether rollback completed successfully.
 

@@ -1,13 +1,13 @@
 # Security policy
 
-SignalCore is **0.0.1 pre-release** software. Security boundaries are fail-closed, but the project has not yet established long-term production maturity.
+Syntavra is **0.0.1 pre-release** software. Security boundaries are fail-closed, but the project has not yet established long-term production maturity.
 
 ## Supported version
 
 | Version | Status |
 |---|---|
 | 0.0.1 pre-release | Security fixes accepted |
-| Any other version | Not an authorized SignalCore release |
+| Any other version | Not an authorized Syntavra release |
 
 The version remains locked until the repository owner explicitly authorizes a change.
 

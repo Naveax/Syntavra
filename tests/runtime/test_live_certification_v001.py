@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from signalcore_runtime.live_certification import LiveCertificationGate, LiveIntegrationReceipt
+from syntavra_runtime.live_certification import LiveCertificationGate, LiveIntegrationReceipt
 
 
 class LiveCertificationV001Tests(unittest.TestCase):
@@ -13,8 +13,8 @@ class LiveCertificationV001Tests(unittest.TestCase):
             integration_id=integration_id,
             family=family,
             observed_at=f"2026-07-{index + 1:02d}T12:00:00+00:00",
-            signalcore_version="0.0.1",
-            signalcore_channel="pre-release",
+            syntavra_version="0.0.1",
+            syntavra_channel="pre-release",
             adapter_version="adapter-contract-v1",
             operating_system=("linux", "windows", "macos")[index % 3],
             runtime_version="python-3.13",

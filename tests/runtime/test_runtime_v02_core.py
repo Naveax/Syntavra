@@ -10,15 +10,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from signalcore_runtime.context_governor import pack_context
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.history import ImmutableHistory
-from signalcore_runtime.hooks import HookEngine
-from signalcore_runtime.mcp_server import MCPServer
-from signalcore_runtime.models import ContextItem
-from signalcore_runtime.output_firewall import summarize
-from signalcore_runtime.process_broker import ProcessBroker
-from signalcore_runtime.structural import StructuralIndex
+from syntavra_runtime.context_governor import pack_context
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.history import ImmutableHistory
+from syntavra_runtime.hooks import HookEngine
+from syntavra_runtime.mcp_server import MCPServer
+from syntavra_runtime.models import ContextItem
+from syntavra_runtime.output_firewall import summarize
+from syntavra_runtime.process_broker import ProcessBroker
+from syntavra_runtime.structural import StructuralIndex
 
 
 class RuntimeV02CoreTests(unittest.TestCase):
@@ -100,9 +100,9 @@ class RuntimeV02CoreTests(unittest.TestCase):
         self.assertIn("--background", rewritten.replacement["argv"])
 
     def test_mcp_initialize_and_tool_list(self):
-        skill = self.root / "skills" / "signal-core"
+        skill = self.root / "skills" / "syntavra"
         skill.mkdir(parents=True)
-        (skill / "SKILL.md").write_text("name: signal-core\n")
+        (skill / "SKILL.md").write_text("name: syntavra\n")
         server = MCPServer(
             project=self.root,
             state_root=self.root / ".state",
@@ -112,11 +112,11 @@ class RuntimeV02CoreTests(unittest.TestCase):
         )
         init = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
         self.assertEqual(init["result"]["serverInfo"]["version"], "0.0.1")
-        with patch.dict(os.environ, {"SIGNALCORE_MCP_PROFILE": "audit"}):
+        with patch.dict(os.environ, {"SYNTAVRA_MCP_PROFILE": "audit"}):
             tools = server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         names = {row["name"] for row in tools["result"]["tools"]}
-        self.assertIn("signalcore.process.submit", names)
-        self.assertIn("signalcore.inspect.impact", names)
+        self.assertIn("syntavra.process.submit", names)
+        self.assertIn("syntavra.inspect.impact", names)
 
 
 if __name__ == "__main__":

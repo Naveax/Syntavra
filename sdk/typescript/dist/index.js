@@ -23,12 +23,12 @@ function validateBaseUrl(baseUrl, allowRemote) {
     const parsed = new URL(baseUrl);
     const loopback = ["127.0.0.1", "localhost", "::1", "[::1]"].includes(parsed.hostname);
     if (!loopback && !allowRemote)
-        throw new Error("remote SignalCore proxy URLs require allowRemote=true");
+        throw new Error("remote Syntavra proxy URLs require allowRemote=true");
     if (loopback && parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        throw new Error("local SignalCore proxy must use HTTP or HTTPS");
+        throw new Error("local Syntavra proxy must use HTTP or HTTPS");
     }
     if (!loopback && parsed.protocol !== "https:") {
-        throw new Error("remote SignalCore proxy connections require HTTPS");
+        throw new Error("remote Syntavra proxy connections require HTTPS");
     }
     if (parsed.username || parsed.password || parsed.search || parsed.hash) {
         throw new Error("baseUrl cannot contain credentials, query parameters, or fragments");
@@ -61,7 +61,7 @@ function sleep(ms, signal) {
 }
 function timeoutSignal(timeoutMs, external) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new DOMException("SignalCore request timed out", "TimeoutError")), timeoutMs);
+    const timer = setTimeout(() => controller.abort(new DOMException("Syntavra request timed out", "TimeoutError")), timeoutMs);
     const onAbort = () => controller.abort(external?.reason ?? new DOMException("Aborted", "AbortError"));
     external?.addEventListener("abort", onAbort, { once: true });
     return {
@@ -72,7 +72,7 @@ function timeoutSignal(timeoutMs, external) {
         }
     };
 }
-export class SignalCoreClient {
+export class SyntavraClient {
     baseUrl;
     staticControlToken;
     controlTokenProvider;
@@ -111,7 +111,7 @@ export class SignalCoreClient {
         const headers = new Headers(init.headers);
         for (const key of CREDENTIAL_HEADERS) {
             if (headers.has(key))
-                throw new Error("provider credentials must not be sent by the SignalCore client");
+                throw new Error("provider credentials must not be sent by the Syntavra client");
         }
         headers.set("content-type", "application/json");
         headers.set("x-request-id", id);
@@ -148,7 +148,7 @@ export class SignalCoreClient {
                 timed.dispose();
             }
         }
-        throw lastError ?? new Error("SignalCore request failed");
+        throw lastError ?? new Error("Syntavra request failed");
     }
     async invoke(path, request, init = {}) {
         rejectCredentials(request);
@@ -167,9 +167,9 @@ export class SignalCoreClient {
             status: response.status,
             ok: response.ok,
             data,
-            replay: response.headers.get("x-signalcore-replay") ?? "unknown",
-            requestHandle: response.headers.get("x-signalcore-request-handle") ?? "",
-            evidenceHandle: response.headers.get("x-signalcore-evidence") ?? "",
+            replay: response.headers.get("x-syntavra-replay") ?? "unknown",
+            requestHandle: response.headers.get("x-syntavra-request-handle") ?? "",
+            evidenceHandle: response.headers.get("x-syntavra-evidence") ?? "",
             requestId: response.headers.get("x-request-id") ?? id,
             headers: response.headers
         };
@@ -187,9 +187,9 @@ export class SignalCoreClient {
     async *streamEvents(path, request, init = {}) {
         const response = await this.invokeStream(path, request, init);
         if (!response.ok)
-            throw new Error(`SignalCore stream failed: ${response.status}`);
+            throw new Error(`Syntavra stream failed: ${response.status}`);
         if (!response.body)
-            throw new Error("SignalCore stream response has no body");
+            throw new Error("Syntavra stream response has no body");
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
         let buffer = "";
         let eventName = "message";
@@ -278,15 +278,15 @@ export class SignalCoreClient {
     async control(path) {
         const token = await this.token();
         if (!token)
-            throw new Error("SignalCore control endpoints require a control token");
+            throw new Error("Syntavra control endpoints require a control token");
         const headers = new Headers({ authorization: `Bearer ${token}`, "x-request-id": requestId() });
         const response = await this.fetchWithRetry(new URL(path, this.baseUrl), { headers }, headers.get("x-request-id"), path);
         if (!response.ok)
-            throw new Error(`SignalCore control endpoint failed: ${response.status}`);
+            throw new Error(`Syntavra control endpoint failed: ${response.status}`);
         return response.json();
     }
-    live() { return this.control("/_signalcore/live"); }
-    health() { return this.control("/_signalcore/health"); }
-    ready() { return this.control("/_signalcore/ready"); }
-    verify() { return this.control("/_signalcore/verify"); }
+    live() { return this.control("/_syntavra/live"); }
+    health() { return this.control("/_syntavra/health"); }
+    ready() { return this.control("/_syntavra/ready"); }
+    verify() { return this.control("/_syntavra/verify"); }
 }

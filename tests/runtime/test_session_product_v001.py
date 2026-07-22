@@ -5,7 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.session_product import SessionContinuityController
+from syntavra_runtime.session_product import SessionContinuityController
 
 
 class SessionProductV001Tests(unittest.TestCase):

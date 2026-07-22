@@ -1,5 +1,5 @@
 {
-  "benchmark": "signalcore-runtime-optimizer-controlled",
+  "benchmark": "syntavra-runtime-optimizer-controlled",
   "scope": "controlled generated terminal outputs and policy matrices; not provider-agent quality",
   "cases": 400,
   "mean_reduction": 0.8601746691293619,

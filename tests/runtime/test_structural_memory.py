@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.memory import PersistentMemory
-from signalcore_runtime.structural import StructuralIndex
+from syntavra_runtime.memory import PersistentMemory
+from syntavra_runtime.structural import StructuralIndex
 
 class StructuralMemoryTests(unittest.TestCase):
     def setUp(self): self.temp=tempfile.TemporaryDirectory(); self.root=Path(self.temp.name)

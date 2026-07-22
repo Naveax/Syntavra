@@ -1,5 +1,5 @@
-SignalCore 0.3.0
+Syntavra 0.3.0
 
 Copyright (c) Naveax. Released under the MIT License.
 
-SignalCore uses clean-room, independently implemented behavioral requirements when studying public competitor systems. No competitor source code is vendored or required at runtime. Optional external tools such as Docker, Podman and bubblewrap remain subject to their own licenses.
+Syntavra uses clean-room, independently implemented behavioral requirements when studying public competitor systems. No competitor source code is vendored or required at runtime. Optional external tools such as Docker, Podman and bubblewrap remain subject to their own licenses.

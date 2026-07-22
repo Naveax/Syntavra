@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from signalcore_runtime.cli import main
+from syntavra_runtime.cli import main
 
 
 class ProviderProxyCLIV4Tests(unittest.TestCase):

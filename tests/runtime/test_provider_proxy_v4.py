@@ -10,10 +10,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.provider_gateway import ProviderGateway
-from signalcore_runtime.provider_proxy import ProviderProxyRuntime, ProxyConfig
-from signalcore_runtime.usage_receipt_ledger import UsageReceiptLedger
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.provider_gateway import ProviderGateway
+from syntavra_runtime.provider_proxy import ProviderProxyRuntime, ProxyConfig
+from syntavra_runtime.usage_receipt_ledger import UsageReceiptLedger
 
 
 class _UpstreamHandler(BaseHTTPRequestHandler):
@@ -73,7 +73,7 @@ class ProviderProxyV6CompatibilityTests(unittest.TestCase):
                 upstream_base=f"http://{upstream_host}:{upstream_port}",
                 listen_port=0,
                 credential_env="TEST_PROVIDER_KEY",
-                control_token_env="TEST_SIGNALCORE_CONTROL_TOKEN",
+                control_token_env="TEST_SYNTAVRA_CONTROL_TOKEN",
                 allow_insecure_upstream=True,
                 timeout_seconds=5,
                 max_buffered_response_bytes=1024 * 1024,
@@ -83,7 +83,7 @@ class ProviderProxyV6CompatibilityTests(unittest.TestCase):
         )
         self.env = patch.dict(os.environ, {
             "TEST_PROVIDER_KEY": "server-secret",
-            "TEST_SIGNALCORE_CONTROL_TOKEN": "c" * 32,
+            "TEST_SYNTAVRA_CONTROL_TOKEN": "c" * 32,
         }, clear=False)
         self.env.start()
         self.host, self.port = self.proxy.start()
@@ -134,27 +134,27 @@ class ProviderProxyV6CompatibilityTests(unittest.TestCase):
         self.assertEqual(_UpstreamHandler.last_authorization, "Bearer server-secret")
         self.assertNotEqual(_UpstreamHandler.last_authorization, "Bearer client-secret")
         self.assertIn("prompt_cache_key", _UpstreamHandler.last_payload)
-        self.assertEqual(headers["X-SignalCore-Replay"], "miss")
-        handle = headers["X-SignalCore-Evidence"]
+        self.assertEqual(headers["X-Syntavra-Replay"], "miss")
+        handle = headers["X-Syntavra-Evidence"]
         self.assertTrue(handle.startswith("sc://sha256/"))
         digest = handle.rsplit("/", 1)[1]
         object_path = self.proxy.gateway.evidence.objects / digest[:2] / digest[2:]
         self.assertNotIn(b'"output_text": "answer"', object_path.read_bytes())
         status, headers, raw = self.request(self.payload())
         self.assertEqual(status, 200)
-        self.assertEqual(headers["X-SignalCore-Replay"], "hit")
+        self.assertEqual(headers["X-Syntavra-Replay"], "hit")
         self.assertEqual(json.loads(raw)["id"], "resp-proxy")
         self.assertEqual(_UpstreamHandler.calls, 1)
         self.assertTrue(self.proxy.verify()["ok"])
 
     def test_control_endpoints_require_token_even_on_loopback(self) -> None:
-        status, payload = self.control("/_signalcore/health")
+        status, payload = self.control("/_syntavra/health")
         self.assertEqual(status, 401)
         self.assertEqual(payload["error"], "invalid-control-token")
-        status, health = self.control("/_signalcore/health", token="c" * 32)
+        status, health = self.control("/_syntavra/health", token="c" * 32)
         self.assertEqual(status, 200)
         self.assertTrue(health["ok"])
-        status, ready = self.control("/_signalcore/ready", token="c" * 32)
+        status, ready = self.control("/_syntavra/ready", token="c" * 32)
         self.assertEqual(status, 200)
         self.assertTrue(ready["ready"])
 
@@ -162,8 +162,8 @@ class ProviderProxyV6CompatibilityTests(unittest.TestCase):
         status, headers, raw = self.request(self.payload(stream=True))
         self.assertEqual(status, 200)
         self.assertEqual(raw, _UpstreamHandler.stream_body)
-        self.assertEqual(headers["X-SignalCore-Capture"], "complete-before-delivery")
-        self.assertTrue(headers["X-SignalCore-Evidence"].startswith("sc://sha256/"))
+        self.assertEqual(headers["X-Syntavra-Capture"], "complete-before-delivery")
+        self.assertTrue(headers["X-Syntavra-Evidence"].startswith("sc://sha256/"))
         status, _, _ = self.request(self.payload(stream=True))
         self.assertEqual(status, 200)
         self.assertEqual(_UpstreamHandler.calls, 2)

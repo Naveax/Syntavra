@@ -1,7 +1,7 @@
 {
-  "name": "@signalcore/client",
+  "name": "@syntavra/sdk",
   "version": "0.0.1",
-  "description": "Pre-release typed, credential-isolated client and measured receipt helpers for SignalCore",
+  "description": "TypeScript SDK for Syntavra 0.0.1 pre-release",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

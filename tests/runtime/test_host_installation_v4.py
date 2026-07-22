@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.host_installation import HostInstallationManager
+from syntavra_runtime.host_installation import HostInstallationManager
 
 
 class HostInstallationV4Tests(unittest.TestCase):
@@ -19,7 +19,7 @@ class HostInstallationV4Tests(unittest.TestCase):
         self.project.mkdir()
         self.home.mkdir()
         self.skill.mkdir()
-        (self.skill / "SKILL.md").write_text("# SignalCore Skill\n\nUse exact evidence.\n", encoding="utf-8")
+        (self.skill / "SKILL.md").write_text("# Syntavra Skill\n\nUse exact evidence.\n", encoding="utf-8")
         (self.skill / "REFERENCE.md").write_text("reference\n", encoding="utf-8")
         self.manager = HostInstallationManager(
             self.root / "install.sqlite3",
@@ -42,8 +42,8 @@ class HostInstallationV4Tests(unittest.TestCase):
         merged = json.loads(config.read_text(encoding="utf-8"))
         self.assertEqual(merged["userSetting"], 7)
         self.assertEqual(merged["mcpServers"]["existing"]["command"], "existing")
-        self.assertEqual(merged["mcpServers"]["signalcore"]["command"], "signalcore")
-        installed_skill = self.project / ".codex" / "skills" / "signal-core"
+        self.assertEqual(merged["mcpServers"]["syntavra"]["command"], "syntavra")
+        installed_skill = self.project / ".codex" / "skills" / "syntavra"
         self.assertTrue((installed_skill / "SKILL.md").is_file())
         self.assertTrue((installed_skill / "REFERENCE.md").is_file())
         self.assertTrue(self.manager.verify("codex")["ok"])

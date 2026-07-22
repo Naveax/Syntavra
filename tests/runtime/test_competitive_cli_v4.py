@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from signalcore_runtime.cli import build_parser, main
+from syntavra_runtime.cli import build_parser, main
 
 
 class CompetitiveCLIV4Tests(unittest.TestCase):

@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from signalcore_runtime.unified_cli import main
+from syntavra_runtime.unified_cli import main
 
 
 class LiveCertificationCLIV001Tests(unittest.TestCase):
@@ -24,8 +24,8 @@ class LiveCertificationCLIV001Tests(unittest.TestCase):
             "integration_id": "codex",
             "family": "host",
             "observed_at": f"2026-07-{index + 1:02d}T12:00:00+00:00",
-            "signalcore_version": "0.0.1",
-            "signalcore_channel": "pre-release",
+            "syntavra_version": "0.0.1",
+            "syntavra_channel": "pre-release",
             "adapter_version": "adapter-v1",
             "operating_system": ("linux", "windows", "macos")[index % 3],
             "runtime_version": "python-3.13",

@@ -1,4 +1,4 @@
-# SignalCore Threat Model
+# Syntavra Threat Model
 
 The detailed runtime model is maintained in `docs/security/THREAT_MODEL.md`.
 
@@ -42,7 +42,7 @@ The detailed runtime model is maintained in `docs/security/THREAT_MODEL.md`.
 
 ## Residual risks
 
-SignalCore does not defend against a fully privileged local operating-system attacker.
+Syntavra does not defend against a fully privileged local operating-system attacker.
 Live provider behavior, native host hook semantics, Roblox Studio transport, Creator Store,
 Blender, device simulation and DataStore migration require separate live certification.
 Internal tests and implementation benchmarks cannot inherit independent or public maturity.
@@ -67,4 +67,4 @@ Session events are hash chained. Summary nodes are derived views, not source tru
 
 ### Benchmark integrity
 
-Competitors execute as independent external adapters. SignalCore does not import their source. Claim-bearing results freeze execution identities and require equal verified work, actual quota data, no required-verifier skip and no security regression.
+Competitors execute as independent external adapters. Syntavra does not import their source. Claim-bearing results freeze execution identities and require equal verified work, actual quota data, no required-verifier skip and no security regression.

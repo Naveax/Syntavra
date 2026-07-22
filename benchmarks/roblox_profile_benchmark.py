@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PROFILE_PARENT = ROOT / "skills" / "signal-core" / "profiles"
+PROFILE_PARENT = ROOT / "skills" / "syntavra" / "profiles"
 sys.path.insert(0, str(PROFILE_PARENT))
 sys.path.insert(0, str(ROOT / "tests" / "roblox_profile"))
 

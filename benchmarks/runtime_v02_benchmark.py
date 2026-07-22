@@ -13,13 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 import sys
 sys.path.insert(0, str(ROOT))
 
-from signalcore_runtime.context_governor import pack_context
-from signalcore_runtime.evidence import EvidenceStore
-from signalcore_runtime.history import ImmutableHistory
-from signalcore_runtime.models import ContextItem
-from signalcore_runtime.output_firewall import summarize
-from signalcore_runtime.structural import StructuralIndex
-from signalcore_runtime.util import atomic_write_json
+from syntavra_runtime.context_governor import pack_context
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.history import ImmutableHistory
+from syntavra_runtime.models import ContextItem
+from syntavra_runtime.output_firewall import summarize
+from syntavra_runtime.structural import StructuralIndex
+from syntavra_runtime.util import atomic_write_json
 
 
 def measure_peak(function):
@@ -103,7 +103,7 @@ def run(output: Path | None = None, *, output_lines: int = 350_000) -> dict:
 
         result = {
             "schema_version": 2,
-            "scope": "internal SignalCore 0.1-style paths versus SignalCore 0.2 implementations; not competitor evidence",
+            "scope": "internal Syntavra 0.1-style paths versus Syntavra 0.2 implementations; not competitor evidence",
             "structural": {
                 "files": expected_paths,
                 "direct_only_recall": direct_recall,

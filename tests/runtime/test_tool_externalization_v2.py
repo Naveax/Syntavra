@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from signalcore_runtime.tool_externalization import ExternalizationPolicy, ToolOutputExternalizer, ToolPayload
+from syntavra_runtime.tool_externalization import ExternalizationPolicy, ToolOutputExternalizer, ToolPayload
 
 
 class MemoryEvidence:
