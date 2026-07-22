@@ -12,6 +12,10 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: syntavra-artifacts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -38,8 +42,8 @@ jobs:
       - name: Verify locked identity and canonical product surface
         shell: bash
         run: |
-          python tools/check_repository_hygiene.py
-          python tools/validate.py
+          python -m tools.check_repository_hygiene
+          python -m tools.validate
           python -m syntavra_runtime version > version.json
           python -m syntavra_runtime --project . setup --mcp-profile minimal > setup-plan.json
           python -m syntavra_runtime --project . run platform-manifest > platform-manifest.json
