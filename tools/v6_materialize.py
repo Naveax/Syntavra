@@ -32,7 +32,10 @@ def verify_locked_identity() -> dict:
     versions = {
         "VERSION": _read("VERSION").strip(),
         "pyproject": match.group(1) if match else None,
+        "installer": _json("package.json").get("version"),
+        "installer_lock": _json("package-lock.json").get("version"),
         "typescript": _json("sdk/typescript/package.json").get("version"),
+        "typescript_lock": _json("sdk/typescript/package-lock.json").get("version"),
         "marketplace": _json(".claude-plugin/marketplace.json").get("version"),
         "gemini": _json("gemini-extension.json").get("version"),
         "codemeta": _json("codemeta.json").get("version"),
