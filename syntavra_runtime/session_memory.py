@@ -1,9 +1,21 @@
 from .platform_common import *
 
+
 class SessionMemory:
     """Exact event chain plus multi-view summary DAG and branch operations."""
 
-    VIEWS = ("task", "decision", "change", "failure", "security", "dependency")
+    VIEWS = (
+        "task",
+        "decision",
+        "change",
+        "failure",
+        "security",
+        "dependency",
+        "repository",
+        "test",
+        "provider",
+        "handoff",
+    )
 
     def __init__(self, path: Path, *, project_id: str):
         self.path = path
@@ -74,21 +86,25 @@ class SessionMemory:
 
     @staticmethod
     def _summary(view: str, events: Sequence[dict[str, Any]]) -> str:
-        selected: list[str] = []
         view_terms = {
             "task": ("task", "goal", "request", "plan"),
-            "decision": ("decision", "decide", "chosen", "keep"),
-            "change": ("patch", "edit", "change", "file", "commit"),
-            "failure": ("fail", "error", "exception", "test"),
-            "security": ("security", "authorization", "policy", "secret", "sandbox"),
+            "decision": ("decision", "decide", "chosen", "keep", "revert", "supersede"),
+            "change": ("patch", "edit", "change", "file", "commit", "diff"),
+            "failure": ("fail", "error", "exception", "test", "panic", "timeout"),
+            "security": ("security", "authorization", "policy", "secret", "sandbox", "capability"),
             "dependency": ("dependency", "import", "package", "provider", "adapter"),
+            "repository": ("repository", "branch", "commit", "symbol", "module", "worktree"),
+            "test": ("test", "verify", "coverage", "assert", "benchmark"),
+            "provider": ("provider", "model", "token", "cost", "receipt", "cache"),
+            "handoff": ("handoff", "agent", "resume", "migration", "fork", "merge"),
         }[view]
+        selected: list[str] = []
         for event in events:
             rendered = json.dumps(event["payload"], ensure_ascii=False, sort_keys=True)
             corpus = f"{event['event_type']} {rendered}".casefold()
             if any(term in corpus for term in view_terms):
-                selected.append(f"#{event['sequence']} {event['event_type']}: {rendered[:500]}")
-        return "\n".join(selected[-80:]) or f"No {view} events in selected range."
+                selected.append(f"#{event['sequence']} {event['event_type']}: {rendered[:700]}")
+        return "\n".join(selected[-100:]) or f"No {view} events in selected range."
 
     def compact(self, session_id: str, *, views: Sequence[str] | None = None) -> dict[str, Any]:
         events = self.events(session_id)
@@ -111,27 +127,38 @@ class SessionMemory:
                 created.append({"summary_id": summary_id, **body})
         return {"ok": True, "session_id": session_id, "events": len(events), "summaries": created, "exact_history_preserved": self.verify(session_id)["ok"]}
 
+    @staticmethod
+    def _payload_weight(payload: Mapping[str, Any]) -> float:
+        importance = float(payload.get("importance", 0.0) or 0.0)
+        pinned = 15.0 if payload.get("pinned") else 0.0
+        stale = 35.0 if payload.get("stale") or payload.get("reverted") or payload.get("superseded") else 0.0
+        return max(-40.0, min(30.0, importance * 10.0 + pinned - stale))
+
     def retrieve(self, session_id: str, query: str, *, limit: int = 12) -> dict[str, Any]:
         query_terms = _tokens(query)
         candidates: list[tuple[float, dict[str, Any]]] = []
         events = self.events(session_id)
         total = max(1, len(events))
         for event in events:
-            rendered = json.dumps(event["payload"], ensure_ascii=False, sort_keys=True)
+            payload = event["payload"]
+            rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True)
             matched = query_terms & _tokens(f"{event['event_type']} {rendered}")
             if query_terms and not matched:
                 continue
-            score = (len(matched) / max(1, len(query_terms))) * 80 + (event["sequence"] / total) * 20
-            candidates.append((score, {"type": "event", "score": score, "sequence": event["sequence"], "event_type": event["event_type"], "payload": event["payload"], "event_hash": event["event_hash"]}))
+            relevance = (len(matched) / max(1, len(query_terms))) * 65
+            recency = (event["sequence"] / total) * 15
+            weight = self._payload_weight(payload)
+            score = relevance + recency + weight
+            candidates.append((score, {"type": "event", "score": score, "sequence": event["sequence"], "event_type": event["event_type"], "payload": payload, "event_hash": event["event_hash"]}))
         with _connect(self.path) as db:
             summaries = db.execute("SELECT * FROM summaries WHERE session_id = ?", (session_id,)).fetchall()
         for row in summaries:
             matched = query_terms & _tokens(f"{row['view']} {row['summary_text']}")
             if query_terms and not matched:
                 continue
-            score = (len(matched) / max(1, len(query_terms))) * 75 + 10
+            score = (len(matched) / max(1, len(query_terms))) * 70 + 8
             candidates.append((score, {"type": "summary", "score": score, "summary_id": row["summary_id"], "view": row["view"], "summary": row["summary_text"], "source_sequences": json.loads(row["source_sequences_json"])}))
-        results = [row for _, row in sorted(candidates, key=lambda item: -item[0])[:max(1, limit)]]
+        results = [row for _, row in sorted(candidates, key=lambda item: (-item[0], str(item[1].get("sequence", item[1].get("summary_id", "")))))[:max(1, limit)]]
         return {"session_id": session_id, "query": query, "results": results, "exact_recovery": self.verify(session_id)["ok"]}
 
     def checkpoint(self, session_id: str, label: str = "") -> dict[str, Any]:
@@ -170,7 +197,8 @@ class SessionMemory:
     def verify(self, session_id: str) -> dict[str, Any]:
         previous = "0" * 64
         failures: list[str] = []
-        for event in self.events(session_id):
+        events = self.events(session_id)
+        for event in events:
             body = {"session_id": session_id, "sequence": event["sequence"], "event_type": event["event_type"], "payload": event["payload"], "previous_hash": previous}
             digest = sha256_bytes(canonical_json(body))
             if event["previous_hash"] != previous:
@@ -178,7 +206,7 @@ class SessionMemory:
             if event["event_hash"] != digest:
                 failures.append(f"hash:{event['sequence']}")
             previous = event["event_hash"]
-        return {"ok": not failures, "session_id": session_id, "events": len(self.events(session_id)), "last_hash": previous, "failures": failures}
+        return {"ok": not failures, "session_id": session_id, "events": len(events), "last_hash": previous, "failures": failures}
 
     def stats(self) -> dict[str, Any]:
         with _connect(self.path) as db:
@@ -187,5 +215,5 @@ class SessionMemory:
                 "events": int(db.execute("SELECT COUNT(*) value FROM events").fetchone()["value"]),
                 "summaries": int(db.execute("SELECT COUNT(*) value FROM summaries").fetchone()["value"]),
                 "checkpoints": int(db.execute("SELECT COUNT(*) value FROM checkpoints").fetchone()["value"]),
+                "views": list(self.VIEWS),
             }
-
