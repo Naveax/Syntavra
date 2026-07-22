@@ -42,3 +42,17 @@ All lower-level context, artifact, semantic, session, agent, sandbox, adapter, h
 ## Claim boundary
 
 Internal functional measurements do not establish competitor superiority or production maturity. The corresponding gates remain closed until reproducible external receipts satisfy the published SignalBench and live-certification contracts.
+
+<!--
+Internal and simulated Roblox Studio evidence registry markers. These markers identify
+claim records only; they do not upgrade any claim to live, public, or independent proof.
+[claim:roblox.activation]
+[claim:roblox.task_state]
+[claim:roblox.capabilities]
+[claim:roblox.simulated]
+[claim:roblox.transcript]
+[claim:roblox.live]
+[claim:roblox.datastore]
+[claim:roblox.external_engines]
+[claim:roblox.tests]
+-->
