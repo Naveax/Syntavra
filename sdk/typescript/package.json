@@ -16,17 +16,29 @@
       "import": "./dist/receipts.js"
     }
   },
-  "files": ["dist", "src", "README.md", "tsconfig.json"],
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "tsconfig.json"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test"
+    "test": "npm run build && node --test test/*.test.mjs",
+    "ci": "npm run check && npm test && npm pack --dry-run --json"
   },
   "devDependencies": {
     "typescript": "6.0.3"
   },
   "sideEffects": false,
-  "engines": {"node": ">=18"},
-  "publishConfig": {"provenance": true, "access": "public", "tag": "next"},
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "provenance": true,
+    "access": "public",
+    "tag": "next"
+  },
   "license": "MIT"
 }
