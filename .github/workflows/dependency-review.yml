@@ -38,10 +38,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Audit resolved Python dependencies
+      - name: Audit SignalCore Python project dependencies
         run: |
-          python -m pip install --disable-pip-version-check -e . pip-audit
-          pip-audit --strict
+          python -m pip install --disable-pip-version-check pip-audit
+          pip-audit --strict .
       - name: Report native dependency-review availability
         if: always()
         shell: bash
