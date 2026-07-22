@@ -23,7 +23,7 @@ CANONICAL_ACTIONS = {
     "platform-status", "platform-doctor", "platform-manifest",
     "context-compile", "output-capture",
     "artifact-put", "artifact-query", "artifact-verify", "artifact-stats",
-    "graph-index", "graph-query", "graph-impact",
+    "graph-index", "graph-query", "graph-impact", "language",
     "semantic-services", "semantic-import", "evidence-stats", "evidence-neighbors",
     "memory-open", "memory-append", "memory-compact", "memory-retrieve",
     "memory-checkpoint", "memory-fork", "memory-merge", "memory-restore", "memory-verify",
@@ -111,11 +111,34 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
     graph_impact = run_sub.add_parser("graph-impact")
     graph_impact.add_argument("node_id")
     graph_impact.add_argument("--max-depth", type=int, default=6)
+
+    language = run_sub.add_parser("language")
+    language_sub = language.add_subparsers(dest="language_action", required=True)
+    language_sub.add_parser("inventory")
+    language_detect = language_sub.add_parser("detect")
+    language_detect.add_argument("path")
+    language_index = language_sub.add_parser("index")
+    language_index.add_argument("--max-file-bytes", type=int, default=2_000_000)
+    language_query = language_sub.add_parser("query")
+    language_query.add_argument("query")
+    language_query.add_argument("--limit", type=int, default=20)
+    language_import = language_sub.add_parser("import-index")
+    language_import.add_argument("path")
+    language_import.add_argument("--format", choices=("auto", "lsif", "scip-json"), default="auto")
+    language_import.add_argument("--repository-commit")
+    language_import.add_argument("--current-commit")
+    language_import.add_argument("--allow-stale", action="store_true")
+    language_import.add_argument("--source-name")
+    language_remove = language_sub.add_parser("remove-index")
+    language_remove.add_argument("source_key")
+    language_sub.add_parser("doctor")
+
     run_sub.add_parser("semantic-services")
     semantic_import = run_sub.add_parser("semantic-import")
     semantic_import.add_argument("format", choices=("lsif", "scip-json", "coverage", "trace"))
     semantic_import.add_argument("path")
-    semantic_import.add_argument("--repository-commit", default="unknown")
+    semantic_import.add_argument("--repository-commit")
+    semantic_import.add_argument("--allow-stale", action="store_true")
     semantic_import.add_argument("--test-id", default="coverage-suite")
     run_sub.add_parser("evidence-stats")
     evidence_neighbors = run_sub.add_parser("evidence-neighbors")
@@ -310,14 +333,49 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
         return {"ok": True, "query": args.query, "results": runtime.graph.query(args.query, limit=args.limit)}
     if action == "graph-impact":
         return runtime.graph.impact(args.node_id, max_depth=args.max_depth)
+    if action == "language":
+        operation = args.language_action
+        if operation in {"inventory", "doctor"}:
+            return runtime.graph.language_status(project)
+        if operation == "detect":
+            source = _project_path(project, args.path).resolve(strict=True)
+            try:
+                source.relative_to(project.resolve(strict=True))
+            except ValueError as error:
+                raise PermissionError("language detection path escapes project") from error
+            if not source.is_file():
+                raise ValueError("language detection path must be a file")
+            detection = runtime.graph.languages.detect(source, source.read_bytes())
+            return {"ok": True, "path": source.relative_to(project).as_posix(), "detection": asdict(detection)}
+        if operation == "index":
+            return runtime.graph.index_repository(project, max_file_bytes=args.max_file_bytes)
+        if operation == "query":
+            return {"ok": True, "query": args.query, "results": runtime.graph.query(args.query, limit=args.limit)}
+        if operation == "import-index":
+            return runtime.graph.import_semantic_index(
+                _project_path(project, args.path).resolve(strict=True),
+                repository_root=project,
+                format=args.format,
+                repository_commit=args.repository_commit,
+                current_commit=args.current_commit,
+                allow_stale=args.allow_stale,
+                source_name=args.source_name,
+            )
+        if operation == "remove-index":
+            return runtime.graph.remove_semantic_index(args.source_key)
+        raise RuntimeError(operation)
     if action == "semantic-services":
-        return runtime.language_services.status()
+        return runtime.graph.language_status(project)
     if action == "semantic-import":
         source = _project_path(project, args.path)
-        if args.format == "lsif":
-            return runtime.semantic_importer.import_lsif(source, repository_commit=args.repository_commit)
-        if args.format == "scip-json":
-            return runtime.semantic_importer.import_scip_json(source, repository_commit=args.repository_commit)
+        if args.format in {"lsif", "scip-json"}:
+            return runtime.graph.import_semantic_index(
+                source.resolve(strict=True),
+                repository_root=project,
+                format=args.format,
+                repository_commit=args.repository_commit,
+                allow_stale=args.allow_stale,
+            )
         value = _load(str(source))
         if args.format == "coverage":
             return runtime.runtime_evidence.import_coverage(value, test_id=args.test_id, repository_commit=args.repository_commit)

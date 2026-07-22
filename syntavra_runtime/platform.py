@@ -14,7 +14,11 @@ from .artifacts import (
     OutputFirewall,
 )
 from .semantic_intelligence import IncrementalCodeIntelligenceGraph
-from .semantic_services import LanguageServiceRegistry, SemanticIndexImporter
+from .python_semantic_resolution import install as _install_python_semantic_resolution
+from .semantic_services import (
+    LanguageServiceRegistry as CompatibilityLanguageServiceRegistry,
+    SemanticIndexImporter,
+)
 from .runtime_evidence import RuntimeEvidenceGraph
 from .session_memory import SessionMemory
 from .capability_security import CapabilityDecision, CapabilitySecurity
@@ -28,8 +32,56 @@ from .interactive_console import InteractiveConsole
 from .reliability_lab import ReliabilityLaboratory
 from .update_manager import DistributionManager
 
-# Stable public name. The implementation is the probed, fail-closed broker.
+# Install the evidence-aware parser on the shared graph class. This runs for the
+# normal package and for portable entry points that import the platform module.
+_install_python_semantic_resolution(IncrementalCodeIntelligenceGraph)
+del _install_python_semantic_resolution
+
+# Keep the historical semantic-services JSON contract while preserving the
+# richer universal-language status object used by the canonical language CLI.
+if not getattr(IncrementalCodeIntelligenceGraph, "_syntavra_language_status_compat", False):
+    _language_status_core = IncrementalCodeIntelligenceGraph.language_status
+
+    def _language_status_compat(
+        self: IncrementalCodeIntelligenceGraph,
+        repository_root: Path | None = None,
+        _core: Any = _language_status_core,
+    ) -> dict[str, Any]:
+        value = _core(self, repository_root)
+        registry = value.get("language_registry", {})
+        analyzers = value.get("sandboxed_analyzers", {})
+        lsp = value.get("lsp_services", {})
+        universal_boundary = str(value.get("claim_boundary") or "")
+        value["declared"] = int(registry.get("registered_languages", 0))
+        value["available"] = (
+            len(registry.get("adapters", ()))
+            + int(analyzers.get("services", analyzers.get("declared", 0)) or 0)
+            + int(lsp.get("services", lsp.get("declared", 0)) or 0)
+        )
+        value["universal_claim_boundary"] = universal_boundary
+        value["claim_boundary"] = (
+            "declared support is not live certification; unknown and future text languages remain navigable, "
+            "while exact semantic claims require validated parser, analyzer, LSP, LSIF or SCIP evidence"
+        )
+        return value
+
+    IncrementalCodeIntelligenceGraph.language_status = _language_status_compat
+    IncrementalCodeIntelligenceGraph._syntavra_language_status_compat = True
+    del _language_status_core
+
+# Stable public name. This façade preserves the historical status payload while
+# delegating all discovery and execution to the universal evidence-graded core.
 NativeSandboxBroker = HardenedSandboxBroker
+
+
+class LanguageServiceRegistry(CompatibilityLanguageServiceRegistry):
+    def status(self, root: Path | None = None) -> dict[str, Any]:
+        value = super().status(root)
+        value["claim_boundary"] = (
+            "declared support is not live certification; lexical fallback is universal, while exact semantic "
+            "support requires a validated adapter, hash-pinned analyzer, hash-pinned LSP server, or fresh LSIF/SCIP evidence"
+        )
+        return value
 
 
 class SyntavraPlatform:
@@ -44,8 +96,12 @@ class SyntavraPlatform:
         self.context = ContextCompiler(self.artifacts)
         self.graph = IncrementalCodeIntelligenceGraph(self.state_root / "semantic-graph.sqlite3")
         self.runtime_evidence = RuntimeEvidenceGraph(self.state_root / "runtime-evidence.sqlite3")
+
+        # Backward-compatible public attributes. They are façades over the same
+        # universal, evidence-graded model rather than the historical fixed list.
         self.language_services = LanguageServiceRegistry()
-        self.semantic_importer = SemanticIndexImporter(self.runtime_evidence)
+        self.semantic_importer = SemanticIndexImporter(self.graph)
+
         project_id = sha256_bytes(str(self.project).encode("utf-8"))
         self.memory = SessionMemory(self.state_root / "session-memory.sqlite3", project_id=project_id)
         self.security = CapabilitySecurity(self.state_root / "security")
@@ -73,7 +129,7 @@ class SyntavraPlatform:
             "artifacts": self.artifacts.stats(),
             "semantic_graph": self.graph.stats(),
             "runtime_evidence": self.runtime_evidence.stats(),
-            "language_services": self.language_services.status(),
+            "language_platform": self.graph.language_status(self.project),
             "memory": self.memory.stats(),
             "headless": self.headless.stats(),
             "sandbox": self.sandbox.health(self.project),
@@ -84,7 +140,10 @@ class SyntavraPlatform:
                 "pre_context_output_firewall": True,
                 "content_addressed_exact_recovery": True,
                 "incremental_semantic_graph": True,
-                "lsp_scip_lsif_services": True,
+                "universal_future_language_fallback": True,
+                "sandboxed_language_analyzers": True,
+                "generic_hash_pinned_lsp": True,
+                "atomic_lsif_scip_import": True,
                 "runtime_evidence_graph": True,
                 "multi_view_session_memory": True,
                 "signed_single_use_capabilities": True,
@@ -104,14 +163,14 @@ class SyntavraPlatform:
         artifact_check = self.artifacts.verify()
         adapter_check = AdapterRegistry.validate()
         sandbox = self.sandbox.health(self.project)
-        language_services = self.language_services.status()
+        language_platform = self.graph.language_status(self.project)
         return {
             "ok": artifact_check["ok"] and adapter_check["ok"],
             "artifact_integrity": artifact_check,
             "adapters": adapter_check,
             "semantic_graph": self.graph.stats(),
             "runtime_evidence": self.runtime_evidence.stats(),
-            "language_services": language_services,
+            "language_platform": language_platform,
             "memory": self.memory.stats(),
             "headless": self.headless.stats(),
             "sandbox": sandbox,
@@ -132,7 +191,10 @@ def manifest() -> dict[str, Any]:
             "artifact-store",
             "semantic-intelligence",
             "runtime-evidence",
-            "language-services",
+            "universal-language-platform",
+            "sandboxed-language-services",
+            "generic-lsp-bridge",
+            "semantic-index-import",
             "session-memory",
             "capability-security",
             "execution-sandbox",

@@ -1,0 +1,105 @@
+name: Syntavra Security Alert Triage
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: read
+
+concurrency:
+  group: syntavra-security-triage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out analyzed source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Export sanitized CodeQL alert metadata
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GITHUB_TOKEN"]
+          records = []
+          for number in range(1, 6):
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repository}/code-scanning/alerts/{number}",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "syntavra-security-triage",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      alert = json.load(response)
+              except urllib.error.HTTPError as error:
+                  records.append({"number": number, "available": False, "http_status": error.code})
+                  continue
+              rule = alert.get("rule") or {}
+              instance = alert.get("most_recent_instance") or {}
+              location = instance.get("location") or {}
+              records.append({
+                  "number": alert.get("number", number),
+                  "available": True,
+                  "state": alert.get("state"),
+                  "created_at": alert.get("created_at"),
+                  "updated_at": alert.get("updated_at"),
+                  "fixed_at": alert.get("fixed_at"),
+                  "dismissed_at": alert.get("dismissed_at"),
+                  "dismissed_reason": alert.get("dismissed_reason"),
+                  "rule": {
+                      "id": rule.get("id"),
+                      "name": rule.get("name"),
+                      "description": rule.get("description"),
+                      "severity": rule.get("severity"),
+                      "security_severity_level": rule.get("security_severity_level"),
+                      "tags": rule.get("tags") or [],
+                      "help_uri": rule.get("help_uri"),
+                  },
+                  "instance": {
+                      "ref": instance.get("ref"),
+                      "commit_sha": instance.get("commit_sha"),
+                      "state": instance.get("state"),
+                      "message": (instance.get("message") or {}).get("text"),
+                      "classifications": instance.get("classifications") or [],
+                      "location": {
+                          "path": location.get("path"),
+                          "start_line": location.get("start_line"),
+                          "end_line": location.get("end_line"),
+                          "start_column": location.get("start_column"),
+                          "end_column": location.get("end_column"),
+                      },
+                  },
+              })
+          Path("code-scanning-alerts.json").write_text(
+              json.dumps(records, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload sanitized alert metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-code-scanning-alerts
+          path: code-scanning-alerts.json
+          if-no-files-found: error
+          retention-days: 7

@@ -70,13 +70,11 @@ else:
         HeadlessRuntime,
         IncrementalCodeIntelligenceGraph,
         InteractiveConsole,
-        LanguageServiceRegistry,
         NativeSandboxBroker,
         OutputFirewall,
         ReliabilityLaboratory,
         RuntimeEvidenceGraph,
         SecretlessProviderGateway,
-        SemanticIndexImporter,
         SessionMemory,
         SyntavraPlatform,
         manifest as platform_manifest,
@@ -97,6 +95,9 @@ else:
     from .integration_matrix import IntegrationMatrix, IntegrationSpec
     from .interactive_console import ConsoleSnapshot, TokenPanel
     from .job_scheduler import DurableJobScheduler, JobSpec
+    from .language_lsp import GenericLSPAdapter, LSPServiceManifest, LSPServiceRegistry
+    from .language_platform import LanguageAdapter, LanguageDescriptor, LanguageDetection, LanguageParseResult, LanguageRegistry
+    from .language_services import LanguageServiceManifest, SandboxedLanguageServiceAdapter
     from .long_context_quality import LongContextQualityGate, LongContextReceipt
     from .long_session_planner import ContextPlanPolicy, LongSessionPlanner
     from .mcp_policy import MCPAuthorizationDecision, MCPToolPolicy
@@ -122,7 +123,15 @@ else:
     from .runtime_pipeline import CanonicalRequestEnvelope, UnifiedRuntimePipeline
     from .runtime_evidence import EvidenceEdge, EvidenceNode
     from .sdk import SDKInvocation, SyntavraClient
-    from .semantic_services import LSPClient, LSPProtocolError, LanguageServiceSpec, LanguageServiceStatus
+    from .semantic_indexes import LSIFImporter, SCIPJSONImporter, SemanticIndexBundle, SemanticIndexEdge, SemanticIndexNode
+    from .semantic_services import (
+        LSPClient,
+        LSPProtocolError,
+        LanguageServiceRegistry,
+        LanguageServiceSpec,
+        LanguageServiceStatus,
+        SemanticIndexImporter,
+    )
     from .service_manager import ProviderProxyServiceManager, ServicePlan, ServiceSpec
     from .session_product import SessionContinuityController
     from .paired_benchmark import CodingCorpusPlanner, PairedSchedule, SuperiorityGate
@@ -144,26 +153,30 @@ else:
         "EvidenceNode", "EvidenceStore", "ExecutionReceipt", "ExternalBenchmarkGate",
         "ExternalBenchmarkReceipt", "ExternalSuiteRegistry", "ExternalSuiteRunner",
         "ExternalSuiteSpec", "FaultInjector", "FaultResult", "FirewallReceipt", "FuzzResult",
-        "GraphEdge", "GraphNode", "HeadlessJob", "HeadlessRuntime",
+        "GenericLSPAdapter", "GraphEdge", "GraphNode", "HeadlessJob", "HeadlessRuntime",
         "IncrementalCodeIntelligenceGraph", "IntegrationMatrix", "IntegrationSpec",
-        "InteractiveConsole", "JobSpec", "JobState", "LSPClient", "LSPProtocolError",
-        "LanguageServiceRegistry", "LanguageServiceSpec", "LanguageServiceStatus",
-        "LongContextQualityGate", "LongContextReceipt", "LongSessionPlanner", "MCPAuthorizationDecision",
-        "MCPProfile", "MCPToolPolicy", "MeasuredBenchmarkGate", "NativeSandboxBroker",
-        "OnboardingReceipt", "OutputFirewall", "PairedSchedule", "PatchProposal", "PatchProvider",
-        "PlatformAdapter", "PlatformAdapterRegistry", "PolicyObservation", "PolicyRecommendation",
+        "InteractiveConsole", "JobSpec", "JobState", "LSIFImporter", "LSPClient",
+        "LSPProtocolError", "LSPServiceManifest", "LSPServiceRegistry", "LanguageAdapter",
+        "LanguageDescriptor", "LanguageDetection", "LanguageParseResult", "LanguageRegistry",
+        "LanguageServiceManifest", "LanguageServiceRegistry", "LanguageServiceSpec",
+        "LanguageServiceStatus", "LongContextQualityGate", "LongContextReceipt",
+        "LongSessionPlanner", "MCPAuthorizationDecision", "MCPProfile", "MCPToolPolicy",
+        "MeasuredBenchmarkGate", "NativeSandboxBroker", "OnboardingReceipt", "OutputFirewall",
+        "PairedSchedule", "PatchProposal", "PatchProvider", "PlatformAdapter",
+        "PlatformAdapterRegistry", "PolicyObservation", "PolicyRecommendation",
         "PolicyRolloutManager", "Principal", "ProductMaturityGate", "ProductSurface",
         "ProviderProxyServiceManager", "ProviderUsageReceipt", "ProxyPreset", "ProxyProductRegistry",
         "PublicProofGate", "ReceiptValidator", "RecursiveExecutionEngine", "RecursiveTask",
         "ReleaseIdentity", "ReleaseReceipt", "ReliabilityLaboratory", "ReliabilityReport",
-        "RuntimeEvidenceGraph", "SDKInvocation", "SandboxBackend", "SandboxPolicy",
-        "SecureArmRunner", "SemanticGraph", "SemanticIndexImporter", "SecretlessProviderGateway",
-        "ServicePlan", "ServiceSpec", "SessionAnalyticsStore", "SessionContinuityController",
-        "SessionMemory", "StateBackupManager", "SuperiorityGate", "SyntavraClient",
-        "SyntavraPlatform", "TokenPanel", "ToolRouteDecision", "ToolRoutingEnforcer",
-        "UnifiedRuntimePipeline", "UnboundedContextCoordinator", "UpdateArtifact", "UpdateManifest",
-        "UpdateReceipt", "VerifiedPolicyObservation", "VersionLockError", "WorkloadSpec",
-        "ZeroFrictionManager", "platform_manifest",
+        "RuntimeEvidenceGraph", "SCIPJSONImporter", "SDKInvocation", "SandboxBackend",
+        "SandboxPolicy", "SandboxedLanguageServiceAdapter", "SecureArmRunner", "SemanticGraph",
+        "SemanticIndexBundle", "SemanticIndexEdge", "SemanticIndexImporter", "SemanticIndexNode",
+        "SecretlessProviderGateway", "ServicePlan", "ServiceSpec", "SessionAnalyticsStore",
+        "SessionContinuityController", "SessionMemory", "StateBackupManager", "SuperiorityGate",
+        "SyntavraClient", "SyntavraPlatform", "TokenPanel", "ToolRouteDecision",
+        "ToolRoutingEnforcer", "UnifiedRuntimePipeline", "UnboundedContextCoordinator",
+        "UpdateArtifact", "UpdateManifest", "UpdateReceipt", "VerifiedPolicyObservation",
+        "VersionLockError", "WorkloadSpec", "ZeroFrictionManager", "platform_manifest",
     ]
 
 del _os

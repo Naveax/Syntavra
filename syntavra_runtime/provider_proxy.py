@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import ssl
 import tempfile
@@ -33,6 +34,38 @@ _FORWARD_HEADERS = {
     "x-request-id", "traceparent", "tracestate", "idempotency-key",
 }
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+_HEADER_NAME_RE = re.compile(r"^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$")
+_MAX_HEADER_VALUE_BYTES = 8192
+
+
+def _validated_header_name(value: str) -> str:
+    name = str(value)
+    if not name or not _HEADER_NAME_RE.fullmatch(name):
+        raise ValueError("invalid HTTP header name")
+    return name
+
+
+def _validated_header_value(value: str) -> str:
+    text = str(value)
+    if any(character in text for character in ("\r", "\n", "\x00")):
+        raise ValueError("HTTP header value contains a prohibited control character")
+    if any(ord(character) < 32 and character != "\t" for character in text):
+        raise ValueError("HTTP header value contains a prohibited control character")
+    try:
+        encoded = text.encode("latin-1")
+    except UnicodeEncodeError as error:
+        raise ValueError("HTTP header value is not Latin-1 encodable") from error
+    if len(encoded) > _MAX_HEADER_VALUE_BYTES:
+        raise ValueError("HTTP header value exceeds the configured safety limit")
+    return text
+
+
+def _validated_header(name: str, value: str) -> tuple[str, str]:
+    return _validated_header_name(name), _validated_header_value(value)
+
+
+def _new_request_id() -> str:
+    return "sc-" + uuid.uuid4().hex
 
 
 @dataclass(frozen=True)
@@ -92,6 +125,11 @@ class ProxyConfig:
                 raise ValueError("remote proxy binding requires TLS certificate and key")
         if bool(self.tls_cert_file) != bool(self.tls_key_file):
             raise ValueError("tls_cert_file and tls_key_file must be configured together")
+        if self.credential_header:
+            _validated_header_name(self.credential_header)
+        if self.credential_prefix:
+            _validated_header_value(self.credential_prefix)
+        _validated_header_value(self.default_anthropic_version)
 
 
 @dataclass(frozen=True)
@@ -182,10 +220,9 @@ class ProviderProxyRuntime:
         if not value:
             raise RuntimeError(f"missing provider credential environment variable: {self.config.credential_env}")
         default_header, default_prefix = self._provider_defaults(self.config.provider)
-        return (
-            self.config.credential_header or default_header,
-            (self.config.credential_prefix if self.config.credential_prefix else default_prefix) + value,
-        )
+        header_name = self.config.credential_header or default_header
+        header_value = (self.config.credential_prefix if self.config.credential_prefix else default_prefix) + value
+        return _validated_header(header_name, header_value)
 
     def _control_token(self) -> str:
         value = os.environ.get(self.config.control_token_env, "")
@@ -209,21 +246,36 @@ class ProviderProxyRuntime:
     def _headers(self, incoming: Mapping[str, str], body_length: int, request_id: str) -> dict[str, str]:
         result: dict[str, str] = {}
         for key, value in incoming.items():
-            name = key.casefold()
+            name = str(key).casefold()
             if name in _HOP_BY_HOP or name in _CREDENTIAL_HEADERS:
                 continue
             if name in _FORWARD_HEADERS or name.startswith("x-syntavra-client-"):
-                result[key] = value
-        result["Content-Length"] = str(body_length)
+                try:
+                    safe_key, safe_value = _validated_header(str(key), str(value))
+                except ValueError:
+                    continue
+                result[safe_key] = safe_value
+        result["Content-Length"] = str(max(0, int(body_length)))
         result.setdefault("Content-Type", "application/json")
-        result["X-Request-ID"] = request_id
+        result["X-Request-ID"] = _validated_header_value(request_id)
         canonical = ProviderGateway.capabilities(self.config.provider)["provider"]
         if canonical == "anthropic":
-            result.setdefault("anthropic-version", self.config.default_anthropic_version)
+            result.setdefault("anthropic-version", _validated_header_value(self.config.default_anthropic_version))
         credential = self._credential()
         if credential:
             result[credential[0]] = credential[1]
         return result
+
+    @staticmethod
+    def _safe_response_headers(headers: Mapping[str, str]) -> dict[str, str]:
+        safe: dict[str, str] = {}
+        for key, value in headers.items():
+            try:
+                safe_key, safe_value = _validated_header(str(key), str(value))
+            except ValueError:
+                continue
+            safe[safe_key] = safe_value
+        return safe
 
     def _raw_capture(
         self,
@@ -249,7 +301,8 @@ class ProviderProxyRuntime:
                 "status_code": int(status_code),
                 "content_type": content_type,
                 "response_headers": {
-                    key: value for key, value in response_headers.items()
+                    key: value
+                    for key, value in self._safe_response_headers(response_headers).items()
                     if key.casefold() not in _HOP_BY_HOP and key.casefold() not in _CREDENTIAL_HEADERS
                 },
             },
@@ -350,15 +403,15 @@ class ProviderProxyRuntime:
             def log_message(self, format: str, *args: Any) -> None:
                 return
 
-            def _json(self, status: int, payload: Mapping[str, Any], headers: Mapping[str, str] | None = None) -> None:
+            def _json(self, status: int, payload: Mapping[str, Any], *, request_id: str | None = None) -> None:
                 body = canonical_json(dict(payload))
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
-                for key, value in (headers or {}).items():
-                    self.send_header(key, value)
+                if request_id is not None:
+                    self.send_header("X-Request-ID", _validated_header_value(request_id))
                 self.end_headers()
                 self.wfile.write(body)
 
@@ -403,7 +456,7 @@ class ProviderProxyRuntime:
                     runtime._exit()
 
             def _post(self, started: float) -> None:
-                request_id = self.headers.get("X-Request-ID") or "sc-" + uuid.uuid4().hex
+                request_id = _new_request_id()
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
                 except ValueError:
@@ -430,7 +483,7 @@ class ProviderProxyRuntime:
                 try:
                     plan = runtime._prepare(payload)
                 except Exception as exc:
-                    self._json(HTTPStatus.BAD_REQUEST, {"error": type(exc).__name__, "detail": str(exc)})
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": type(exc).__name__, "detail": "request validation failed"})
                     return
                 streaming = bool(plan.prepared_request.get("stream") or plan.prepared_request.get("streaming"))
                 if plan.replay_hit and not streaming:
@@ -441,8 +494,8 @@ class ProviderProxyRuntime:
                         self.send_header("Content-Type", "application/json")
                         self.send_header("Content-Length", str(len(body)))
                         self.send_header("X-Syntavra-Replay", "hit")
-                        self.send_header("X-Syntavra-Request-Handle", plan.request_handle)
-                        self.send_header("X-Request-ID", request_id)
+                        self.send_header("X-Syntavra-Request-Handle", _validated_header_value(plan.request_handle))
+                        self.send_header("X-Request-ID", _validated_header_value(request_id))
                         self.end_headers()
                         self.wfile.write(body)
                         duration = (time.perf_counter() - started) * 1000
@@ -480,7 +533,7 @@ class ProviderProxyRuntime:
                         latency_ms=duration, success=False,
                         metadata={"error": type(exc).__name__, "request_id": request_id},
                     )
-                    self._json(HTTPStatus.BAD_GATEWAY, {"error": type(exc).__name__, "detail": str(exc)})
+                    self._json(HTTPStatus.BAD_GATEWAY, {"error": type(exc).__name__, "detail": "upstream request failed"})
 
             def _forward_response_headers(
                 self,
@@ -494,17 +547,17 @@ class ProviderProxyRuntime:
                 request_id: str,
             ) -> None:
                 self.send_response(status)
-                for key, value in headers.items():
+                for key, value in runtime._safe_response_headers(headers).items():
                     name = key.casefold()
                     if name in _HOP_BY_HOP or name in _CREDENTIAL_HEADERS or name == "content-length":
                         continue
                     self.send_header(key, value)
-                self.send_header("Content-Length", str(content_length))
+                self.send_header("Content-Length", str(max(0, int(content_length))))
                 self.send_header("X-Syntavra-Replay", "miss")
-                self.send_header("X-Syntavra-Request-Handle", plan.request_handle)
+                self.send_header("X-Syntavra-Request-Handle", _validated_header_value(plan.request_handle))
                 self.send_header("X-Syntavra-Capture", "complete-before-delivery" if streaming else "complete")
-                self.send_header("X-Syntavra-Evidence", evidence_handle)
-                self.send_header("X-Request-ID", request_id)
+                self.send_header("X-Syntavra-Evidence", _validated_header_value(evidence_handle))
+                self.send_header("X-Request-ID", _validated_header_value(request_id))
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
 
@@ -569,7 +622,7 @@ class ProviderProxyRuntime:
                             "secret_types": list(raw_capture.secret_types),
                             "injection_risk": raw_capture.injection_risk,
                         },
-                        {"X-Request-ID": request_id},
+                        request_id=request_id,
                     )
                     return
                 semantic_handle = ""
@@ -612,7 +665,7 @@ class ProviderProxyRuntime:
 
             def _proxy_without_json_body(self, method: str) -> None:
                 started = time.perf_counter()
-                request_id = self.headers.get("X-Request-ID") or "sc-" + uuid.uuid4().hex
+                request_id = _new_request_id()
                 try:
                     url = runtime._upstream_url(self.path)
                     headers = runtime._headers(self.headers, 0, request_id)
@@ -652,7 +705,7 @@ class ProviderProxyRuntime:
                         metadata={"status": status, "method": method, "request_id": request_id, "transport_handle": capture.transport_handle},
                     )
                 except Exception as exc:
-                    self._json(HTTPStatus.BAD_GATEWAY, {"error": type(exc).__name__, "detail": str(exc)})
+                    self._json(HTTPStatus.BAD_GATEWAY, {"error": type(exc).__name__, "detail": "upstream request failed"})
 
         return Handler
 

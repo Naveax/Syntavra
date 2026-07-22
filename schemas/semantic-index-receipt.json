@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntavra.dev/schemas/semantic-index-receipt.json",
+  "title": "Syntavra Semantic Index Import Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ok", "source_key", "format", "source_sha256", "stale",
+    "evidence_status", "nodes", "edges", "diagnostics"
+  ],
+  "properties": {
+    "ok": {"const": true},
+    "source_key": {"type": "string", "pattern": "^semantic-source:[0-9a-f]{64}$"},
+    "format": {"enum": ["lsif", "scip-json"]},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "repository_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "current_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "stale": {"type": "boolean"},
+    "evidence_status": {"enum": ["exact", "candidate-stale"]},
+    "nodes": {"type": "integer", "minimum": 0},
+    "edges": {"type": "integer", "minimum": 0},
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"type": "string", "maxLength": 4096}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"stale": {"const": true}}, "required": ["stale"]},
+      "then": {"properties": {"evidence_status": {"const": "candidate-stale"}}}
+    },
+    {
+      "if": {"properties": {"stale": {"const": false}}, "required": ["stale"]},
+      "then": {"properties": {"evidence_status": {"const": "exact"}}}
+    }
+  ]
+}
