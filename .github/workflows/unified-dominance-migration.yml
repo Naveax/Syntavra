@@ -1,0 +1,65 @@
+name: Apply Syntavra Unified Migration
+
+on:
+  push:
+    branches:
+      - agent/unified-dominance
+    paths:
+      - tools/apply_syntavra_unification.py
+      - .github/workflows/unified-dominance-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Apply unified product migration
+        run: python tools/apply_syntavra_unification.py
+      - name: Refresh npm lockfiles
+        shell: bash
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          npm --prefix sdk/typescript install --package-lock-only --ignore-scripts
+      - name: Install migrated Python package
+        run: python -m pip install --disable-pip-version-check -e .
+      - name: Compile canonical and compatibility namespaces
+        run: python -m compileall -q syntavra_runtime signalcore_runtime
+      - name: Verify canonical imports
+        run: |
+          python - <<'PY'
+          import syntavra_runtime
+          import signalcore_runtime
+          from syntavra_runtime.platform import SyntavraPlatform
+          assert syntavra_runtime.__version__ == '0.0.1'
+          assert signalcore_runtime.__version__ == '0.0.1'
+          assert SyntavraPlatform.__name__ == 'SyntavraPlatform'
+          PY
+      - name: Installer tests
+        run: npm test
+      - name: Refresh repository manifest
+        run: python tools/refresh_manifest.py
+      - name: Commit migrated repository
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No migration changes.'
+            exit 0
+          fi
+          git commit -m 'establish Syntavra unified product identity'
+          git push origin HEAD:${{ github.ref_name }}
