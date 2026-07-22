@@ -10,10 +10,12 @@ import signal
 import subprocess
 import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+from .bounded_process import run_bounded_process, terminate_process_tree
 
 
 _SECRET_MARKERS = ("TOKEN", "SECRET", "PASSWORD", "PASSWD", "API_KEY", "PRIVATE_KEY", "CREDENTIAL")
@@ -37,6 +39,8 @@ class SandboxPolicy:
     cpu_seconds: int | None = None
     allow_child_processes: bool = True
     strict_native: bool = False
+    max_stdout_bytes: int = 32 * 1024 * 1024
+    max_stderr_bytes: int = 8 * 1024 * 1024
     environment_allowlist: tuple[str, ...] = ("PATH", "HOME", "USER", "USERNAME", "TMP", "TEMP", "TMPDIR", "LANG", "LC_ALL", "SYSTEMROOT", "COMSPEC")
 
     def normalized(self) -> "SandboxPolicy":
@@ -56,6 +60,8 @@ class SandboxPolicy:
             cpu_seconds=self.cpu_seconds,
             allow_child_processes=self.allow_child_processes,
             strict_native=self.strict_native,
+            max_stdout_bytes=max(0, int(self.max_stdout_bytes)),
+            max_stderr_bytes=max(0, int(self.max_stderr_bytes)),
             environment_allowlist=self.environment_allowlist,
         )
 
@@ -81,6 +87,9 @@ class ExecutionReceipt:
     duration_ms: float
     exit_code: int
     timed_out: bool
+    output_limit_exceeded: bool
+    stdout_bytes_seen: int
+    stderr_bytes_seen: int
     stdout: str
     stderr: str
     stdout_sha256: str
@@ -90,7 +99,7 @@ class ExecutionReceipt:
 
     @property
     def ok(self) -> bool:
-        return self.exit_code == 0 and not self.timed_out
+        return self.exit_code == 0 and not self.timed_out and not self.output_limit_exceeded
 
 
 class NativeSandboxBroker:
@@ -193,18 +202,24 @@ class NativeSandboxBroker:
     def backend(self, policy: SandboxPolicy) -> SandboxBackend:
         system = platform.system().casefold()
         if system == "linux":
-            return self._linux_backend(policy)
-        if system == "darwin":
-            return self._macos_backend(policy)
-        if system == "windows":
-            return self._windows_backend(policy)
-        return SandboxBackend(
-            name="portable-process-boundary",
-            platform=system or "unknown",
-            available=False,
-            enforced=("cwd-boundary", "environment-filter", "timeout"),
-            unsupported=("native-isolation",),
-        )
+            selected = self._linux_backend(policy)
+        elif system == "darwin":
+            selected = self._macos_backend(policy)
+        elif system == "windows":
+            selected = self._windows_backend(policy)
+        else:
+            selected = SandboxBackend(
+                name="portable-process-boundary",
+                platform=system or "unknown",
+                available=False,
+                enforced=("cwd-boundary", "environment-filter", "timeout"),
+                unsupported=("native-isolation",),
+            )
+        if not policy.allow_child_processes and "child-process-blocking" not in selected.enforced:
+            unsupported = tuple(dict.fromkeys((*selected.unsupported, "child-process-blocking")))
+            detail = (selected.detail + "; " if selected.detail else "") + "backend cannot prove child-process prevention"
+            selected = replace(selected, unsupported=unsupported, detail=detail)
+        return selected
 
     @staticmethod
     def _cwd(workspace: Path, cwd: Path | None) -> Path:
@@ -250,19 +265,7 @@ class NativeSandboxBroker:
 
     @staticmethod
     def _terminate(process: subprocess.Popen[bytes]) -> None:
-        if process.poll() is not None:
-            return
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, check=False)
-        else:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        terminate_process_tree(process)
 
     def run(
         self,
@@ -285,33 +288,32 @@ class NativeSandboxBroker:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         started_at = _now()
         started = time.monotonic()
-        process = subprocess.Popen(
+        result = run_bounded_process(
             argv,
-            cwd=selected_cwd,
-            env=env,
-            stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=os.name != "nt",
+            cwd=str(selected_cwd),
+            environment=env,
+            input_bytes=input_bytes,
+            timeout_seconds=normalized.timeout_seconds,
+            stdout_limit=normalized.max_stdout_bytes,
+            stderr_limit=normalized.max_stderr_bytes,
             creationflags=creationflags,
+            start_new_session=os.name != "nt",
             preexec_fn=self._limit_resources(normalized) if os.name != "nt" else None,
         )
-        timed_out = False
-        try:
-            stdout, stderr = process.communicate(input=input_bytes, timeout=normalized.timeout_seconds)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            self._terminate(process)
-            stdout, stderr = process.communicate()
-        duration = (time.monotonic() - started) * 1000.0
+        stdout = result.stdout
+        stderr = result.stderr
+        duration = result.duration_ms
         receipt_body = {
             "command": list(command),
             "cwd": str(selected_cwd),
             "backend": asdict(backend),
             "started_at": started_at,
             "duration_ms": round(duration, 3),
-            "exit_code": int(process.returncode if process.returncode is not None else -1),
-            "timed_out": timed_out,
+            "exit_code": result.exit_code,
+            "timed_out": result.timed_out,
+            "output_limit_exceeded": result.output_limit_exceeded,
+            "stdout_bytes_seen": result.stdout_bytes_seen,
+            "stderr_bytes_seen": result.stderr_bytes_seen,
             "stdout_sha256": _hash(stdout),
             "stderr_sha256": _hash(stderr),
         }
@@ -324,7 +326,10 @@ class NativeSandboxBroker:
             started_at=started_at,
             duration_ms=round(duration, 3),
             exit_code=receipt_body["exit_code"],
-            timed_out=timed_out,
+            timed_out=result.timed_out,
+            output_limit_exceeded=result.output_limit_exceeded,
+            stdout_bytes_seen=result.stdout_bytes_seen,
+            stderr_bytes_seen=result.stderr_bytes_seen,
             stdout=stdout.decode("utf-8", errors="replace"),
             stderr=stderr.decode("utf-8", errors="replace"),
             stdout_sha256=receipt_body["stdout_sha256"],
@@ -339,6 +344,8 @@ class NativeSandboxBroker:
                 "cpu_seconds": normalized.cpu_seconds,
                 "allow_child_processes": normalized.allow_child_processes,
                 "strict_native": normalized.strict_native,
+                "max_stdout_bytes": normalized.max_stdout_bytes,
+                "max_stderr_bytes": normalized.max_stderr_bytes,
             },
         )
         if self.state_root:

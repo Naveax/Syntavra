@@ -295,6 +295,8 @@ class SandboxedLanguageServiceAdapter:
                 strict_native=self.manifest.strict_native,
                 allow_child_processes=False,
                 network_hosts=(),
+                max_stdout_bytes=self.manifest.max_output_bytes,
+                max_stderr_bytes=min(self.manifest.max_output_bytes, 2 * 1024 * 1024),
             ),
             input_bytes=encoded,
         )
