@@ -1,0 +1,87 @@
+name: Syntavra Universal Language CLI Diagnostics
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: syntavra-language-cli-diagnostic-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          persist-credentials: false
+
+      - name: Reproduce integration patch without repository mutation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path(".github/workflows/universal-language-cli-integration.yml").read_text(encoding="utf-8")
+          start_marker = "          python - <<'PY'\n"
+          end_marker = "\n          PY\n"
+          start = workflow.index(start_marker) + len(start_marker)
+          end = workflow.index(end_marker, start)
+          lines = workflow[start:end].splitlines()
+          script = "\n".join(line[10:] if line.startswith("          ") else line for line in lines)
+          compile(script, "universal-language-cli-integration", "exec")
+          exec(script, {"__name__": "__main__"})
+          PY
+
+      - name: Run isolated diagnostics
+        id: diagnostics
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          commands = [
+              ("compile", [sys.executable, "-m", "compileall", "-q", "syntavra_runtime/semantic_intelligence.py", "syntavra_runtime/platform.py", "syntavra_runtime/platform_cli.py"]),
+              ("language-platform", [sys.executable, "-m", "unittest", "tests.runtime.test_language_platform"]),
+              ("language-ambiguity", [sys.executable, "-m", "unittest", "tests.runtime.test_language_ambiguity_security"]),
+              ("language-services", [sys.executable, "-m", "unittest", "tests.runtime.test_language_services"]),
+              ("language-lsp", [sys.executable, "-m", "unittest", "tests.runtime.test_language_lsp"]),
+              ("semantic-indexes", [sys.executable, "-m", "unittest", "tests.runtime.test_semantic_indexes"]),
+              ("semantic-index-store", [sys.executable, "-m", "unittest", "tests.runtime.test_semantic_index_store"]),
+              ("cli-inventory", [sys.executable, "-m", "syntavra_runtime", "--project", ".", "run", "language", "inventory"]),
+          ]
+          root = Path("language-cli-diagnostics")
+          root.mkdir()
+          summary = []
+          failed = False
+          for name, command in commands:
+              result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+              (root / f"{name}.stdout.txt").write_text(result.stdout, encoding="utf-8")
+              (root / f"{name}.stderr.txt").write_text(result.stderr, encoding="utf-8")
+              summary.append({"name": name, "returncode": result.returncode, "command": command})
+              failed = failed or result.returncode != 0
+          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(summary, indent=2))
+          raise SystemExit(1 if failed else 0)
+          PY
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-universal-language-cli-diagnostics
+          path: language-cli-diagnostics
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce diagnostic result
+        if: steps.diagnostics.outcome != 'success'
+        run: exit 1
