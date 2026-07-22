@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from syntavra_runtime.platform import SecretlessProviderGateway
@@ -12,8 +14,12 @@ def test_gateway_plan_has_explicit_success_without_secret_material() -> None:
     assert plan["provider"] == "openai"
     assert plan["agent_environment_contains_secret"] is False
     assert plan["child_process_secret_inheritance"] == "denied"
+    assert plan["transport_injection"]["credential_env"] == "OPENAI_API_KEY"
     assert plan["transport_injection"]["visibility"] == "gateway-process-only"
-    assert "secret" not in str(plan).casefold().replace("contains_secret", "")
+    assert "sk-test-secret" not in json.dumps(plan)
+    assert SecretlessProviderGateway.sanitize_environment(
+        {"OPENAI_API_KEY": "sk-test-secret", "PATH": "/bin"}
+    ) == {"PATH": "/bin"}
 
 
 def test_gateway_plan_rejects_unknown_provider() -> None:
