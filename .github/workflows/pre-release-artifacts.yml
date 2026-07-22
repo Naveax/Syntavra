@@ -1,4 +1,4 @@
-name: Build SignalCore v0.0.1 Pre-Release Artifacts
+name: Build Syntavra 0.0.1 Pre-Release Artifacts
 
 on:
   workflow_dispatch:
@@ -33,17 +33,29 @@ jobs:
             sdk/typescript/package-lock.json
       - name: Install build and runtime dependencies
         run: |
-          python -m pip install --disable-pip-version-check build cyclonedx-bom
+          python -m pip install --disable-pip-version-check build cyclonedx-bom pytest
           python -m pip install --disable-pip-version-check -e .
-      - name: Verify locked pre-release identity and product surface
+      - name: Verify locked identity and canonical product surface
         shell: bash
         run: |
-          python tools/v6_materialize.py
           python tools/check_repository_hygiene.py
-          python -m signalcore_runtime version
-          python -m signalcore_runtime --project . setup --mcp-profile minimal > setup-plan.json
-          python -m signalcore_runtime --project . run manifest > product-manifest.json
-          python -m signalcore_runtime --project . prove plan > proof-plan.json
+          python tools/validate.py
+          python -m syntavra_runtime version > version.json
+          python -m syntavra_runtime --project . setup --mcp-profile minimal > setup-plan.json
+          python -m syntavra_runtime --project . run platform-manifest > platform-manifest.json
+          python -m syntavra_runtime --project . prove plan > proof-plan.json
+          python -m pytest tests/runtime/test_syntavra_unified_platform.py -q
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          identity=json.loads(Path('version.json').read_text())['identity']
+          platform=json.loads(Path('platform-manifest.json').read_text())
+          assert identity['version'] == '0.0.1'
+          assert identity['channel'] == 'pre-release'
+          assert platform['product'] == 'Syntavra'
+          assert platform['version'] == '0.0.1'
+          assert platform['external_claims'] == 'NOT_PROVEN_WITHOUT_EXTERNAL_RECEIPTS'
+          PY
       - name: Build Python wheel and source archive
         run: python -m build
       - name: Build one-command installer package
@@ -52,7 +64,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
           npm pack --json > installer-npm-pack.json
-      - name: Check and build TypeScript client package
+      - name: Check and build TypeScript SDK
         shell: bash
         run: |
           cd sdk/typescript
@@ -64,14 +76,13 @@ jobs:
           test -f dist/receipts.js
           test -f dist/receipts.d.ts
           npm pack --json > npm-pack.json
-      - name: Generate CycloneDX Python SBOM
-        run: cyclonedx-py environment --output-format JSON --output-file signalcore-python-sbom.json
-      - name: Generate npm CycloneDX SBOMs
+      - name: Generate CycloneDX SBOMs
         shell: bash
         run: |
-          npm sbom --sbom-format cyclonedx > signalcore-installer-sbom.json
+          cyclonedx-py environment --output-format JSON --output-file syntavra-python-sbom.json
+          npm sbom --sbom-format cyclonedx > syntavra-installer-sbom.json
           cd sdk/typescript
-          npm sbom --sbom-format cyclonedx > signalcore-typescript-sbom.json
+          npm sbom --sbom-format cyclonedx > syntavra-typescript-sbom.json
       - name: Generate checksums
         shell: bash
         run: |
@@ -79,45 +90,48 @@ jobs:
           import hashlib
           import json
           from pathlib import Path
-          files = []
+          files=[]
           for root in (Path('dist'), Path('.'), Path('sdk/typescript')):
-              pattern = '*' if root != Path('.') else '*.tgz'
+              pattern='*' if root != Path('.') else '*.tgz'
               for path in root.glob(pattern):
-                  if path.is_file() and path.name not in {'npm-pack.json', 'installer-npm-pack.json'}:
+                  if path.is_file() and path.name not in {'npm-pack.json','installer-npm-pack.json'}:
                       files.append(path)
-          rows = [{
+          rows=[{
               'path': path.as_posix(),
               'bytes': path.stat().st_size,
               'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
           } for path in sorted(set(files))]
           Path('pre-release-checksums.json').write_text(json.dumps({
+              'product': 'Syntavra',
               'version': '0.0.1',
               'channel': 'pre-release',
               'artifacts': rows,
           }, sort_keys=True, indent=2) + '\n', encoding='utf-8', newline='\n')
           PY
       - name: Attest pre-release artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
             dist/*
             *.tgz
             sdk/typescript/*.tgz
-      - name: Upload pre-release artifact bundle
+      - name: Upload pre-release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: signalcore-v0.0.1-pre-release-${{ matrix.os }}
+          name: syntavra-0.0.1-pre-release-${{ matrix.os }}
           path: |
             dist/
             *.tgz
             installer-npm-pack.json
             sdk/typescript/*.tgz
             sdk/typescript/npm-pack.json
-            sdk/typescript/signalcore-typescript-sbom.json
-            signalcore-installer-sbom.json
-            signalcore-python-sbom.json
+            sdk/typescript/syntavra-typescript-sbom.json
+            syntavra-installer-sbom.json
+            syntavra-python-sbom.json
+            version.json
             setup-plan.json
-            product-manifest.json
+            platform-manifest.json
             proof-plan.json
             pre-release-checksums.json
           if-no-files-found: error
@@ -135,28 +149,28 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check build
           SOURCE_DATE_EPOCH=1700000000 python -m build --wheel --outdir /tmp/build-a
-          rm -rf build *.egg-info signalcore_runtime.egg-info
+          rm -rf build *.egg-info
           SOURCE_DATE_EPOCH=1700000000 python -m build --wheel --outdir /tmp/build-b
           python - <<'PY'
           import hashlib
           import json
           from pathlib import Path
-          a = next(Path('/tmp/build-a').glob('*.whl'))
-          b = next(Path('/tmp/build-b').glob('*.whl'))
-          result = {
+          a=next(Path('/tmp/build-a').glob('*.whl'))
+          b=next(Path('/tmp/build-b').glob('*.whl'))
+          result={
+              'product': 'Syntavra',
               'version': '0.0.1',
               'channel': 'pre-release',
               'build_a_sha256': hashlib.sha256(a.read_bytes()).hexdigest(),
               'build_b_sha256': hashlib.sha256(b.read_bytes()).hexdigest(),
           }
-          result['reproducible'] = result['build_a_sha256'] == result['build_b_sha256']
+          result['reproducible']=result['build_a_sha256'] == result['build_b_sha256']
           Path('/tmp/reproducibility.json').write_text(json.dumps(result, sort_keys=True, indent=2) + '\n')
-          print(result)
           if not result['reproducible']:
               raise SystemExit('wheel build is not reproducible')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: signalcore-v0.0.1-reproducibility
+          name: syntavra-0.0.1-reproducibility
           path: /tmp/reproducibility.json
           retention-days: 90
