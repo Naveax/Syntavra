@@ -5,12 +5,11 @@ import json
 import os
 import random
 import sqlite3
-import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Mapping
 
 
 def _now() -> str:
@@ -103,6 +102,10 @@ class ReliabilityLaboratory:
         self.seed = int(seed)
         self.random = random.Random(self.seed)
 
+    def reseed(self, seed: int) -> None:
+        self.seed = int(seed)
+        self.random = random.Random(self.seed)
+
     def fuzz_json(self, parser: Callable[[str], Any], *, cases: int = 1000, max_length: int = 2048) -> FuzzResult:
         started = time.monotonic()
         passed = rejected = 0
@@ -116,23 +119,16 @@ class ReliabilityLaboratory:
                     "nested": {"ok": bool(index % 2), "text": "x" * self.random.randint(0, 64)},
                 }
                 candidate = json.dumps(value, ensure_ascii=False)
-                expected_valid = True
             else:
                 length = self.random.randint(0, max(1, max_length))
                 candidate = "".join(self.random.choice(alphabet) for _ in range(length))
-                expected_valid = False
             try:
                 parser(candidate)
                 passed += 1
-                if expected_valid:
-                    continue
             except (ValueError, TypeError, json.JSONDecodeError, KeyError, IndexError):
                 rejected += 1
-                if not expected_valid:
-                    continue
             except Exception as error:
                 failures.append(f"case {index}: {type(error).__name__}: {error}")
-                continue
         return FuzzResult(
             name="json-parser",
             cases=max(0, cases),
@@ -207,24 +203,32 @@ class ReliabilityLaboratory:
         root = self.state_root / "faults" / "sqlite"
         root.mkdir(parents=True, exist_ok=True)
         path = root / "state.sqlite3"
-        path.unlink(missing_ok=True)
+        backup = path.with_suffix(".backup")
+        for candidate in (path, backup, Path(str(path) + "-wal"), Path(str(path) + "-shm")):
+            candidate.unlink(missing_ok=True)
         with sqlite3.connect(path) as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("CREATE TABLE state(id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
             db.execute("INSERT INTO state(value) VALUES('committed')")
-        backup = path.with_suffix(".backup")
+            db.commit()
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         backup.write_bytes(path.read_bytes())
         FaultInjector.truncate(path, max(1, path.stat().st_size // 3))
         detected = False
+        detail = ""
         try:
             with sqlite3.connect(path) as db:
-                db.execute("PRAGMA integrity_check").fetchall()
-        except sqlite3.DatabaseError:
+                rows = db.execute("PRAGMA integrity_check").fetchall()
+                messages = [str(row[0]) for row in rows]
+                detected = messages != ["ok"]
+                detail = "; ".join(messages[:10])
+        except sqlite3.DatabaseError as error:
             detected = True
+            detail = f"{type(error).__name__}: {error}"
         path.write_bytes(backup.read_bytes())
         with sqlite3.connect(path) as db:
-            recovered = db.execute("SELECT value FROM state").fetchone()[0] == "committed"
-        return FaultResult("sqlite-corruption-recovery", True, detected, recovered)
+            recovered = db.execute("PRAGMA integrity_check").fetchone()[0] == "ok" and db.execute("SELECT value FROM state").fetchone()[0] == "committed"
+        return FaultResult("sqlite-corruption-recovery", True, detected, recovered, detail)
 
     def capability_replay(self, security: Any) -> FaultResult:
         token = security.issue(
@@ -262,6 +266,8 @@ class ReliabilityLaboratory:
         capability_security: Any | None = None,
         parser_cases: int = 1000,
     ) -> ReliabilityReport:
+        # A campaign is reproducible regardless of previous use of this instance.
+        self.random = random.Random(self.seed)
         started = _now()
         fuzz = [self.fuzz_json(json_parser, cases=parser_cases)]
         faults = [self.partial_atomic_write(), self.sqlite_recovery()]
