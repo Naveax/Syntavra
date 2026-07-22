@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .platform_common import CHANNEL, VERSION, canonical_json, sha256_bytes
+from .platform_common import CHANNEL, VERSION, sha256_bytes
 from .artifacts import (
     ArtifactRecord,
     ArtifactStore,
@@ -22,12 +21,15 @@ from .capability_security import CapabilityDecision, CapabilitySecurity
 from .secretless_gateway import SecretlessProviderGateway
 from .adapter_platform import ADAPTERS, AdapterContract, CodingAgent, AdapterRegistry
 from .adapter_runtime import AdapterPlatformRuntime
-from .execution_sandbox import NativeSandboxBroker
+from .sandbox_runtime import HardenedSandboxBroker
 from .autonomous_agent import AutonomousCodingAgent
 from .headless_runtime import HeadlessRuntime
 from .interactive_console import InteractiveConsole
 from .reliability_lab import ReliabilityLaboratory
 from .update_manager import DistributionManager
+
+# Stable public name. The implementation is the probed, fail-closed broker.
+NativeSandboxBroker = HardenedSandboxBroker
 
 
 class SyntavraPlatform:
@@ -47,7 +49,7 @@ class SyntavraPlatform:
         project_id = sha256_bytes(str(self.project).encode("utf-8"))
         self.memory = SessionMemory(self.state_root / "session-memory.sqlite3", project_id=project_id)
         self.security = CapabilitySecurity(self.state_root / "security")
-        self.sandbox = NativeSandboxBroker(self.state_root)
+        self.sandbox = HardenedSandboxBroker(self.state_root)
         self.agent = CodingAgent(project=self.project, graph=self.graph, memory=self.memory, security=self.security)
         self.autonomous_agent = AutonomousCodingAgent(
             self.project,
@@ -64,6 +66,7 @@ class SyntavraPlatform:
 
     def status(self) -> dict[str, Any]:
         return {
+            "product": "Syntavra",
             "version": VERSION,
             "channel": CHANNEL,
             "project": str(self.project),
@@ -73,7 +76,7 @@ class SyntavraPlatform:
             "language_services": self.language_services.status(),
             "memory": self.memory.stats(),
             "headless": self.headless.stats(),
-            "sandbox": self.sandbox.describe(self.project),
+            "sandbox": self.sandbox.health(self.project),
             "adapters": AdapterRegistry.validate(),
             "providers": sorted(SecretlessProviderGateway.PROVIDERS),
             "capabilities": {
@@ -88,7 +91,7 @@ class SyntavraPlatform:
                 "secretless_provider_gateway": True,
                 "cli_and_non_cli_adapters": True,
                 "bounded_autonomous_agent": True,
-                "native_sandbox_broker": True,
+                "probed_native_sandbox": True,
                 "headless_job_runtime": True,
                 "interactive_token_console": True,
                 "fault_injection_laboratory": True,
@@ -100,7 +103,7 @@ class SyntavraPlatform:
     def doctor(self) -> dict[str, Any]:
         artifact_check = self.artifacts.verify()
         adapter_check = AdapterRegistry.validate()
-        sandbox = self.sandbox.describe(self.project)
+        sandbox = self.sandbox.health(self.project)
         language_services = self.language_services.status()
         return {
             "ok": artifact_check["ok"] and adapter_check["ok"],
@@ -119,6 +122,7 @@ class SyntavraPlatform:
 
 def manifest() -> dict[str, Any]:
     return {
+        "product": "Syntavra",
         "version": VERSION,
         "channel": CHANNEL,
         "runtime": "unified",
@@ -163,6 +167,7 @@ __all__ = [
     "DistributionManager",
     "FirewallReceipt",
     "HeadlessRuntime",
+    "HardenedSandboxBroker",
     "IncrementalCodeIntelligenceGraph",
     "InteractiveConsole",
     "LanguageServiceRegistry",
