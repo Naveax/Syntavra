@@ -37,6 +37,37 @@ from .update_manager import DistributionManager
 _install_python_semantic_resolution(IncrementalCodeIntelligenceGraph)
 del _install_python_semantic_resolution
 
+# Keep the historical semantic-services JSON contract while preserving the
+# richer universal-language status object used by the canonical language CLI.
+if not getattr(IncrementalCodeIntelligenceGraph, "_syntavra_language_status_compat", False):
+    _language_status_core = IncrementalCodeIntelligenceGraph.language_status
+
+    def _language_status_compat(
+        self: IncrementalCodeIntelligenceGraph,
+        repository_root: Path | None = None,
+    ) -> dict[str, Any]:
+        value = _language_status_core(self, repository_root)
+        registry = value.get("language_registry", {})
+        analyzers = value.get("sandboxed_analyzers", {})
+        lsp = value.get("lsp_services", {})
+        universal_boundary = str(value.get("claim_boundary") or "")
+        value["declared"] = int(registry.get("registered_languages", 0))
+        value["available"] = (
+            len(registry.get("adapters", ()))
+            + int(analyzers.get("services", analyzers.get("declared", 0)) or 0)
+            + int(lsp.get("services", lsp.get("declared", 0)) or 0)
+        )
+        value["universal_claim_boundary"] = universal_boundary
+        value["claim_boundary"] = (
+            "declared support is not live certification; unknown and future text languages remain navigable, "
+            "while exact semantic claims require validated parser, analyzer, LSP, LSIF or SCIP evidence"
+        )
+        return value
+
+    IncrementalCodeIntelligenceGraph.language_status = _language_status_compat
+    IncrementalCodeIntelligenceGraph._syntavra_language_status_compat = True
+    del _language_status_core
+
 # Stable public name. This façade preserves the historical status payload while
 # delegating all discovery and execution to the universal evidence-graded core.
 NativeSandboxBroker = HardenedSandboxBroker
