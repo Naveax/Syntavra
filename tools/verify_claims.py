@@ -13,6 +13,7 @@ CLAIMS = ROOT / "docs" / "claims" / "claims.json"
 README = ROOT / "README.md"
 PROFILE = ROOT / "skills" / "syntavra" / "profiles" / "roblox_studio"
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+DETERMINISTIC_SCOPE = "DETERMINISTIC_SIMULATED_CORRECTNESS_ONLY"
 
 
 def source_tree_hash() -> str:
@@ -105,6 +106,12 @@ def main() -> int:
         failures.append("simulated benchmark result is incomplete")
     if benchmark.get("unsafe_execution") != 0:
         failures.append("unsafe execution claim is not zero")
+    if benchmark.get("measurement_scope") != DETERMINISTIC_SCOPE:
+        failures.append("simulated receipt is not labeled as deterministic correctness-only evidence")
+    if benchmark.get("latency_p50") is not None or benchmark.get("latency_p95") is not None:
+        failures.append("volatile latency values must not be committed as deterministic evidence")
+    if benchmark.get("hardware") != "not-recorded" or benchmark.get("operating_system") != "not-recorded" or benchmark.get("python_version") != "not-recorded":
+        failures.append("volatile environment identity must not be committed in deterministic evidence")
 
     result = {
         "ok": not failures,
