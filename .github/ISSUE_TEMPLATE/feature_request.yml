@@ -1,0 +1,40 @@
+name: Feature or integration request
+description: Propose a focused product, provider, framework or host improvement
+title: "[Request] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user or operator problem, not only the desired implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installation and onboarding
+        - Provider proxy
+        - Python SDK
+        - TypeScript SDK
+        - Coding-agent adapter
+        - MCP routing
+        - Sessions and compaction
+        - Metrics and analytics
+        - Benchmark and evidence
+        - Security and supply chain
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproduction or external evidence
+      description: Include public specifications, receipts or test conditions when relevant.
