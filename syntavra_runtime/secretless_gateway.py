@@ -1,5 +1,6 @@
 from .platform_common import *
 
+
 class SecretlessProviderGateway:
     """Provider transport plan that never places provider secrets in agent state."""
 
@@ -33,6 +34,7 @@ class SecretlessProviderGateway:
             raise ValueError(f"unsupported provider: {provider}")
         spec = cls.PROVIDERS[key]
         return {
+            "ok": True,
             "version": VERSION,
             "channel": CHANNEL,
             "provider": key,
@@ -50,4 +52,3 @@ class SecretlessProviderGateway:
             "logs": "redacted",
             "receipt": sha256_bytes(canonical_json({"provider": key, "protocol": spec["protocol"], "credential_source": credential_source, "upstream": upstream})),
         }
-
