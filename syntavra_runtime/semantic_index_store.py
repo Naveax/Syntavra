@@ -168,6 +168,20 @@ class SemanticIndexStore:
                 raise ValueError("semantic index edge references a node outside its bundle")
 
         with _connect(self.database_path) as db:
+            for node_id in node_ids:
+                exists = db.execute("SELECT 1 FROM nodes WHERE node_id = ?", (node_id,)).fetchone()
+                if not exists:
+                    continue
+                owned_by_current = db.execute(
+                    "SELECT 1 FROM semantic_source_nodes WHERE source_key = ? AND node_id = ?",
+                    (key, node_id),
+                ).fetchone()
+                owned_by_other = db.execute(
+                    "SELECT 1 FROM semantic_source_nodes WHERE source_key != ? AND node_id = ? LIMIT 1",
+                    (key, node_id),
+                ).fetchone()
+                if not owned_by_current or owned_by_other:
+                    raise ValueError(f"semantic index node id collision: {node_id}")
             self._remove_owned_rows(db, key)
             db.execute(
                 """INSERT INTO semantic_sources

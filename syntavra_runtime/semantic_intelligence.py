@@ -2,6 +2,7 @@ from .platform_common import *
 from .language_platform import LanguageDetection, LanguageParseResult, LanguageRegistry
 from .language_services import LanguageServiceRegistry, SandboxedLanguageServiceAdapter
 from .language_lsp import GenericLSPAdapter, LSPServiceRegistry
+from .semantic_index_store import SemanticIndexStore
 
 
 _DECLARATION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -101,6 +102,7 @@ class IncrementalCodeIntelligenceGraph:
             for column, statement in migrations.items():
                 if column not in existing:
                     db.execute(statement)
+        self.semantic_indexes = SemanticIndexStore(path)
 
     @staticmethod
     def _node_id(path: str, kind: str, name: str, line: int) -> str:
@@ -608,6 +610,30 @@ class IncrementalCodeIntelligenceGraph:
             **self.stats(),
         }
 
+    def import_semantic_index(
+        self,
+        index_path: Path,
+        *,
+        repository_root: Path,
+        format: str = "auto",
+        repository_commit: str | None = None,
+        current_commit: str | None = None,
+        allow_stale: bool = False,
+        source_name: str | None = None,
+    ) -> dict[str, Any]:
+        return self.semantic_indexes.import_path(
+            index_path,
+            repository_root=repository_root,
+            format=format,
+            repository_commit=repository_commit,
+            current_commit=current_commit,
+            allow_stale=allow_stale,
+            source_name=source_name,
+        )
+
+    def remove_semantic_index(self, source_key: str) -> dict[str, Any]:
+        return self.semantic_indexes.remove(source_key)
+
     def query(self, text: str, *, limit: int = 20) -> list[dict[str, Any]]:
         query_tokens = _tokens(text)
         with _connect(self.path) as db:
@@ -701,6 +727,7 @@ class IncrementalCodeIntelligenceGraph:
             "detectors": detectors,
             "unknown_language_files": unknown,
             "universal_text_fallback": True,
+            **self.semantic_indexes.stats(),
         }
 
 
