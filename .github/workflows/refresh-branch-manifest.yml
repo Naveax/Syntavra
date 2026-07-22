@@ -1,6 +1,8 @@
 name: Prepare Syntavra Branch Manifest
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - "agent/**"
@@ -12,17 +14,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: syntavra-branch-manifest-${{ github.ref }}
+  group: syntavra-branch-manifest-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   prepare:
-    if: github.ref_name != 'main' && github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
