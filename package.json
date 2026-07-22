@@ -1,0 +1,30 @@
+{
+  "name": "@signalcore/install",
+  "version": "0.0.1",
+  "description": "One-command, cross-platform installer for SignalCore v0.0.1 pre-release",
+  "type": "module",
+  "bin": {
+    "signalcore-install": "install/index.mjs"
+  },
+  "files": [
+    "install/index.mjs",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "release/pre-release.json"
+  ],
+  "scripts": {
+    "test": "node --test install/*.test.mjs",
+    "pack:check": "npm pack --dry-run --json"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next",
+    "provenance": true
+  },
+  "license": "MIT",
+  "private": false
+}
