@@ -5,11 +5,12 @@ import json
 import os
 import sqlite3
 import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 
 from .execution_sandbox import NativeSandboxBroker, SandboxPolicy
 
@@ -18,13 +19,23 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _connect(path: Path) -> sqlite3.Connection:
+@contextmanager
+def _connect(path: Path) -> Iterator[sqlite3.Connection]:
+    """Open one transactional SQLite connection and always release its file handle."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db.row_factory = sqlite3.Row
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("PRAGMA foreign_keys=ON")
-    return db
+    try:
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA foreign_keys=ON")
+        yield db
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _canonical(value: Mapping[str, Any]) -> str:
@@ -222,7 +233,6 @@ class HeadlessRuntime:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM jobs WHERE state=? ORDER BY created_at LIMIT 1", (JobState.QUEUED.value,)).fetchone()
             if row is None:
-                db.commit()
                 return None
             updated = _now()
             db.execute(
@@ -234,7 +244,6 @@ class HeadlessRuntime:
                 (row["job_id"], "claimed", _canonical({"worker": worker}), updated),
             )
             final = db.execute("SELECT * FROM jobs WHERE job_id = ?", (row["job_id"],)).fetchone()
-            db.commit()
         assert final is not None
         return self._record(final)
 
