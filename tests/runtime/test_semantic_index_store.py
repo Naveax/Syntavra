@@ -124,9 +124,9 @@ class SemanticIndexStoreTests(unittest.TestCase):
                 current_commit="a" * 40,
             )
             self.assertEqual(first["source_key"], second["source_key"])
-            self.assertFalse(graph.query("old_symbol"))
-            self.assertTrue(graph.query("new_symbol"))
-            self.assertTrue(graph.query("local_symbol"))
+            self.assertFalse(any(item["name"] == "old_symbol" for item in graph.query("old_symbol", limit=100)))
+            self.assertTrue(any(item["name"] == "new_symbol" for item in graph.query("new_symbol", limit=100)))
+            self.assertTrue(any(item["name"] == "local_symbol" for item in graph.query("local_symbol", limit=100)))
             self.assertEqual(store.stats()["semantic_index_sources"], 1)
             self.assertEqual(store.stats()["semantic_index_nodes"], 1)
 
