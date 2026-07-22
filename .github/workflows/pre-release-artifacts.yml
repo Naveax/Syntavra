@@ -27,6 +27,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            sdk/typescript/package-lock.json
       - name: Install build and runtime dependencies
         run: |
           python -m pip install --disable-pip-version-check build cyclonedx-bom
@@ -35,19 +39,26 @@ jobs:
         shell: bash
         run: |
           python tools/v6_materialize.py
+          python tools/check_repository_hygiene.py
           python -m signalcore_runtime version
           python -m signalcore_runtime --project . setup --mcp-profile minimal > setup-plan.json
           python -m signalcore_runtime --project . run manifest > product-manifest.json
           python -m signalcore_runtime --project . prove plan > proof-plan.json
       - name: Build Python wheel and source archive
         run: python -m build
-      - name: Check and build npm pre-release package
+      - name: Build one-command installer package
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm pack --json > installer-npm-pack.json
+      - name: Check and build TypeScript client package
         shell: bash
         run: |
           cd sdk/typescript
-          npm install --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
           npm run check
-          npm run build
+          npm test
           test -f dist/index.js
           test -f dist/index.d.ts
           test -f dist/receipts.js
@@ -55,9 +66,10 @@ jobs:
           npm pack --json > npm-pack.json
       - name: Generate CycloneDX Python SBOM
         run: cyclonedx-py environment --output-format JSON --output-file signalcore-python-sbom.json
-      - name: Generate npm CycloneDX SBOM
+      - name: Generate npm CycloneDX SBOMs
         shell: bash
         run: |
+          npm sbom --sbom-format cyclonedx > signalcore-installer-sbom.json
           cd sdk/typescript
           npm sbom --sbom-format cyclonedx > signalcore-typescript-sbom.json
       - name: Generate checksums
@@ -68,37 +80,48 @@ jobs:
           import json
           from pathlib import Path
           files = []
-          for root in (Path('dist'), Path('sdk/typescript')):
-              for path in root.glob('*'):
-                  if path.is_file() and path.name != 'npm-pack.json':
+          for root in (Path('dist'), Path('.'), Path('sdk/typescript')):
+              pattern = '*' if root != Path('.') else '*.tgz'
+              for path in root.glob(pattern):
+                  if path.is_file() and path.name not in {'npm-pack.json', 'installer-npm-pack.json'}:
                       files.append(path)
           rows = [{
               'path': path.as_posix(),
               'bytes': path.stat().st_size,
               'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
-          } for path in sorted(files)]
+          } for path in sorted(set(files))]
           Path('pre-release-checksums.json').write_text(json.dumps({
               'version': '0.0.1',
               'channel': 'pre-release',
               'artifacts': rows,
           }, sort_keys=True, indent=2) + '\n', encoding='utf-8', newline='\n')
           PY
+      - name: Attest pre-release artifacts
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            dist/*
+            *.tgz
+            sdk/typescript/*.tgz
       - name: Upload pre-release artifact bundle
         uses: actions/upload-artifact@v4
         with:
           name: signalcore-v0.0.1-pre-release-${{ matrix.os }}
           path: |
             dist/
+            *.tgz
+            installer-npm-pack.json
             sdk/typescript/*.tgz
             sdk/typescript/npm-pack.json
             sdk/typescript/signalcore-typescript-sbom.json
+            signalcore-installer-sbom.json
             signalcore-python-sbom.json
             setup-plan.json
             product-manifest.json
             proof-plan.json
             pre-release-checksums.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
 
   reproducibility:
     runs-on: ubuntu-latest
@@ -136,4 +159,4 @@ jobs:
         with:
           name: signalcore-v0.0.1-reproducibility
           path: /tmp/reproducibility.json
-          retention-days: 30
+          retention-days: 90
