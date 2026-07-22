@@ -88,6 +88,18 @@ jobs:
           benchmark=json.loads(benchmark_path.read_text(encoding='utf-8'))
           source_commit=os.environ['SOURCE_COMMIT']
           tests_run=unittest.TestLoader().discover(str(root/'tests/roblox_profile')).countTestCases()
+
+          benchmark['measurement_scope']='DETERMINISTIC_SIMULATED_CORRECTNESS_ONLY'
+          benchmark['hardware']='not-recorded'
+          benchmark['operating_system']='not-recorded'
+          benchmark['python_version']='not-recorded'
+          benchmark['latency_p50']=None
+          benchmark['latency_p95']=None
+          limitation='Deterministic committed receipt omits volatile latency and environment measurements'
+          if limitation not in benchmark['limitations']:
+              benchmark['limitations'].append(limitation)
+          benchmark_path.write_text(json.dumps(benchmark, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+
           tests_path.write_text(json.dumps({
               'duration_ms': 0.0,
               'errors': 0,
