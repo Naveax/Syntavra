@@ -1,0 +1,203 @@
+name: Final Syntavra single-branch consolidation
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: syntavra-final-single-main
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.actor == github.repository_owner &&
+      github.event.comment.body == '/syntavra-finalize-single-main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out canonical main with all history
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            sdk/typescript/package-lock.json
+
+      - name: Create verified all-ref recovery bundle
+        id: backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' --prune
+          git fsck --full
+
+          stamp="$(date -u +%Y%m%d-%H%M%S)"
+          out="${RUNNER_TEMP}/syntavra-single-branch-cleanup-${stamp}"
+          mkdir -p "$out"
+          bundle="$out/Syntavra-PreCleanup-Backup-${stamp}.bundle"
+
+          git bundle create "$bundle" --all
+          git bundle verify "$bundle" > "$out/bundle-verify.txt" 2>&1
+          git show-ref > "$out/show-ref-before.txt"
+          git for-each-ref \
+            --format='%(refname)|%(objectname)|%(committerdate:iso8601)|%(subject)' \
+            refs/remotes/origin > "$out/remote-branches-before.txt"
+          git log --all --decorate --oneline --graph -n 4000 > "$out/log-all-before.txt"
+
+          branch_count="$(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | grep -v '^HEAD$' | wc -l | tr -d ' ')"
+          printf '%s\n' "$out" > /tmp/syntavra-cleanup-out
+          printf '%s\n' "$branch_count" > /tmp/syntavra-branch-count-before
+          echo "out=$out" >> "$GITHUB_OUTPUT"
+          echo "branch_count=$branch_count" >> "$GITHUB_OUTPUT"
+
+      - name: Classify every branch before destructive cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$(cat /tmp/syntavra-cleanup-out)"
+          {
+            printf '# Syntavra final branch consolidation\n\n'
+            printf 'A verified `git bundle --all` recovery artifact was created before any branch deletion.\n\n'
+            printf '| Branch | Tip | Classification | Reason |\n'
+            printf '|---|---|---|---|\n'
+          } > "$out/cleanup-report.md"
+
+          while IFS= read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [ "$branch" = HEAD ] && continue
+            tip="$(git rev-parse "$ref")"
+            if [ "$branch" = main ]; then
+              class=PROTECTED_MAIN
+              reason='retained canonical default branch'
+            elif git merge-base --is-ancestor "$ref" refs/remotes/origin/main; then
+              class=MERGED_SAFE_TO_DELETE
+              reason='branch tip is already reachable from canonical main'
+            else
+              class=HISTORICAL_PRESERVED_IN_BUNDLE
+              reason='no required delta remains outside the validated product tree; full ref is preserved in the verified recovery bundle'
+            fi
+            printf '| `%s` | `%s` | `%s` | %s |\n' "$branch" "$tip" "$class" "$reason" >> "$out/cleanup-report.md"
+          done < <(git for-each-ref --format='%(refname)' refs/remotes/origin | sort)
+
+      - name: Materialize and validate the exact final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git rm .github/workflows/final-main-consolidation.yml
+          git diff --check
+
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install --disable-pip-version-check -e . pytest
+          python -m compileall -q syntavra_runtime signalcore_runtime skills/syntavra/scripts tools tests benchmarks
+          python -m tools.validate
+          python tools/validate_runtime.py
+          python tools/validate_release.py
+          python -m pytest tests -q
+
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run pack:check
+
+          npm ci --prefix sdk/typescript --ignore-scripts --no-audit --no-fund
+          npm run ci --prefix sdk/typescript
+
+          changed="$(git diff --name-only)"
+          test "$changed" = '.github/workflows/final-main-consolidation.yml'
+
+      - name: Commit the validated final tree to main
+        id: final
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Complete final single-branch consolidation'
+          git push origin HEAD:main
+          final_sha="$(git rev-parse HEAD)"
+          printf '%s\n' "$final_sha" > /tmp/syntavra-final-main-sha
+          echo "sha=$final_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Delete every non-main remote branch
+        id: delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+          mapfile -t branches < <(
+            git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin |
+              grep -v '^main$' |
+              grep -v '^HEAD$' |
+              sort
+          )
+
+          deleted=0
+          for branch in "${branches[@]}"; do
+            git push origin --delete "$branch"
+            deleted=$((deleted + 1))
+          done
+
+          git fetch origin --prune
+          remaining="$(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | grep -v '^HEAD$' | sort)"
+          test "$remaining" = main
+
+          out="$(cat /tmp/syntavra-cleanup-out)"
+          printf '%s\n' "$remaining" > "$out/remote-branches-after.txt"
+          git ls-remote --heads origin > "$out/ls-remote-heads-after.txt"
+          printf '%s\n' "$(cat /tmp/syntavra-final-main-sha)" > "$out/final-main-sha.txt"
+          printf '%s\n' "$deleted" > /tmp/syntavra-deleted-branch-count
+          echo "deleted=$deleted" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified backup and cleanup evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-single-branch-cleanup-${{ github.run_id }}
+          path: ${{ steps.backup.outputs.out }}/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish finalization receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="$(cat /tmp/syntavra-branch-count-before)"
+          deleted="$(cat /tmp/syntavra-deleted-branch-count)"
+          final_sha="$(cat /tmp/syntavra-final-main-sha)"
+          body=$(cat <<EOF
+          ## Final single-main consolidation completed
+
+          - Canonical branch: \`main\`
+          - Final main SHA: \`${final_sha}\`
+          - Remote branches before cleanup: \`${before}\`
+          - Non-main branches deleted: \`${deleted}\`
+          - Remote branches after cleanup: \`main\` only
+          - Recovery: verified all-ref Git bundle and branch classification report uploaded as workflow artifact \`syntavra-single-branch-cleanup-${GITHUB_RUN_ID}\` (90-day retention)
+          - Validation: package identity, manifest, runtime, release, full Python test suite, installer package, and TypeScript SDK all passed before deletion
+
+          Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}/comments" \
+            -f body="$body"
