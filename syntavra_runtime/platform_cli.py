@@ -6,10 +6,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping
 
-from .adapter_runtime import AdapterMaturity
 from .autonomous_agent import AgentMode, AgentTask, PatchProposal
 from .execution_sandbox import SandboxPolicy
-from .headless_runtime import JobState
 from .interactive_console import TokenPanel
 from .platform import (
     AdapterRegistry,
@@ -18,12 +16,11 @@ from .platform import (
     SyntavraPlatform,
     manifest,
 )
-from .update_manager import DistributionManager, UpdateArtifact
+from .update_manager import UpdateArtifact
 
 
-ACTIONS = {
+CANONICAL_ACTIONS = {
     "platform-status", "platform-doctor", "platform-manifest",
-    "competitive-status", "competitive-doctor", "competitive-manifest",
     "context-compile", "output-capture",
     "artifact-put", "artifact-query", "artifact-verify", "artifact-stats",
     "graph-index", "graph-query", "graph-impact",
@@ -38,6 +35,8 @@ ACTIONS = {
     "headless-cancel", "headless-resume", "headless-export", "headless-import",
     "console", "reliability-run", "update-install", "update-rollback",
 }
+COMPATIBILITY_ACTIONS = {"competitive-status", "competitive-doctor", "competitive-manifest"}
+ACTIONS = CANONICAL_ACTIONS | COMPATIBILITY_ACTIONS
 
 
 def _load(value: str) -> Any:
@@ -59,11 +58,22 @@ def _json_object(value: str, label: str) -> dict[str, Any]:
     return item
 
 
+def _argv(value: str, label: str) -> list[str]:
+    item = _load(value)
+    if not isinstance(item, list) or not item or not all(isinstance(part, str) and "\x00" not in part for part in item):
+        raise ValueError(f"{label} must be a non-empty JSON argv list")
+    return item
+
+
+def _project_path(project: Path, value: str) -> Path:
+    candidate = Path(value)
+    return (candidate if candidate.is_absolute() else project / candidate).resolve(strict=False)
+
+
 def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     for name in ("platform-status", "platform-doctor", "platform-manifest"):
         run_sub.add_parser(name)
-    # Compatibility aliases retained without introducing a second product model.
-    for name in ("competitive-status", "competitive-doctor", "competitive-manifest"):
+    for name in sorted(COMPATIBILITY_ACTIONS):
         run_sub.add_parser(name, help=argparse.SUPPRESS)
 
     context = run_sub.add_parser("context-compile")
@@ -171,6 +181,10 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
     sandbox_run.add_argument("--timeout", type=float, default=300.0)
     sandbox_run.add_argument("--strict-native", action="store_true")
     sandbox_run.add_argument("--network-host", action="append", default=[])
+    sandbox_run.add_argument("--writable-path", action="append", default=[])
+    sandbox_run.add_argument("--memory-bytes", type=int)
+    sandbox_run.add_argument("--cpu-seconds", type=int)
+    sandbox_run.add_argument("--no-child-processes", action="store_true")
 
     gateway = run_sub.add_parser("gateway-plan")
     gateway.add_argument("provider")
@@ -201,6 +215,9 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
     execute.add_argument("verifier", help="JSON argv")
     execute.add_argument("--mode", choices=tuple(item.value for item in AgentMode), default=AgentMode.REVIEW_REQUIRED.value)
     execute.add_argument("--attempts", type=int, default=3)
+    execute.add_argument("--timeout", type=float, default=900.0)
+    execute.add_argument("--token-budget", type=int)
+    execute.add_argument("--cost-budget", type=float)
     execute.add_argument("--authorized", action="store_true")
     execute.add_argument("--session-id")
     execute.add_argument("--retain-workspace", action="store_true")
@@ -222,9 +239,9 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
     cancel.add_argument("--reason", default="operator cancellation")
     resume = run_sub.add_parser("headless-resume")
     resume.add_argument("job_id")
-    export = run_sub.add_parser("headless-export")
-    export.add_argument("job_id")
-    export.add_argument("destination")
+    export_job = run_sub.add_parser("headless-export")
+    export_job.add_argument("job_id")
+    export_job.add_argument("destination")
     import_job = run_sub.add_parser("headless-import")
     import_job.add_argument("source")
     import_job.add_argument("--workspace")
@@ -290,18 +307,18 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
     if action == "graph-index":
         return runtime.graph.index_repository(project, max_file_bytes=args.max_file_bytes)
     if action == "graph-query":
-        return {"query": args.query, "results": runtime.graph.query(args.query, limit=args.limit)}
+        return {"ok": True, "query": args.query, "results": runtime.graph.query(args.query, limit=args.limit)}
     if action == "graph-impact":
         return runtime.graph.impact(args.node_id, max_depth=args.max_depth)
     if action == "semantic-services":
         return runtime.language_services.status()
     if action == "semantic-import":
-        source = Path(args.path)
+        source = _project_path(project, args.path)
         if args.format == "lsif":
             return runtime.semantic_importer.import_lsif(source, repository_commit=args.repository_commit)
         if args.format == "scip-json":
             return runtime.semantic_importer.import_scip_json(source, repository_commit=args.repository_commit)
-        value = _load(args.path)
+        value = _load(str(source))
         if args.format == "coverage":
             return runtime.runtime_evidence.import_coverage(value, test_id=args.test_id, repository_commit=args.repository_commit)
         spans = value.get("spans", value) if isinstance(value, dict) else value
@@ -338,21 +355,29 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
     if action == "capability-verify":
         return runtime.security.verify(args.token, tool=args.tool, arguments=_load(args.arguments), resource=args.resource, consume=not args.no_consume)
     if action == "sandbox-status":
-        return runtime.sandbox.describe(project)
+        return runtime.sandbox.health(project)
     if action == "sandbox-run":
-        command = _load(args.command)
-        if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
-            raise ValueError("sandbox command must be a JSON argv list")
+        command = _argv(args.command, "sandbox command")
+        writable = tuple(_project_path(project, value) for value in args.writable_path) or (project,)
         receipt = runtime.sandbox.run(
             command,
-            policy=SandboxPolicy(workspace=project, timeout_seconds=args.timeout, strict_native=args.strict_native, network_hosts=tuple(args.network_host)),
-            cwd=Path(args.cwd).resolve(strict=True) if args.cwd else None,
+            policy=SandboxPolicy(
+                workspace=project,
+                writable_paths=writable,
+                timeout_seconds=args.timeout,
+                strict_native=args.strict_native,
+                network_hosts=tuple(args.network_host),
+                memory_bytes=args.memory_bytes,
+                cpu_seconds=args.cpu_seconds,
+                allow_child_processes=not args.no_child_processes,
+            ),
+            cwd=_project_path(project, args.cwd).resolve(strict=True) if args.cwd else None,
         )
         return asdict(receipt) | {"ok": receipt.ok}
     if action == "gateway-plan":
         return SecretlessProviderGateway.plan(args.provider, upstream=args.upstream, credential_source=args.credential_source)
     if action == "adapters":
-        return {"validation": AdapterRegistry.validate(), "adapters": AdapterRegistry.detect(project=project) if args.detect else AdapterRegistry.records()}
+        return {"ok": True, "validation": AdapterRegistry.validate(), "adapters": AdapterRegistry.detect(project=project) if args.detect else AdapterRegistry.records()}
     if action == "adapter-conformance":
         return asdict(runtime.adapters.conformance(args.adapter_id))
     if action == "adapter-configure":
@@ -365,15 +390,18 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
         return runtime.agent.plan(args.task, session_id=args.session_id, max_symbols=args.max_symbols)
     if action == "agent-execute":
         rows = _load(args.patches)
-        verifier = _load(args.verifier)
-        if not isinstance(rows, list) or not isinstance(verifier, list) or not all(isinstance(item, str) for item in verifier):
-            raise ValueError("patches and verifier must be JSON lists")
+        if not isinstance(rows, list):
+            raise ValueError("patches must be a JSON list")
+        verifier = _argv(args.verifier, "verifier")
         receipt = runtime.autonomous_agent.execute(
             AgentTask(
                 instruction=args.task,
                 verifier=tuple(verifier),
                 mode=AgentMode(args.mode),
                 max_attempts=args.attempts,
+                timeout_seconds=args.timeout,
+                token_budget=args.token_budget,
+                cost_budget=args.cost_budget,
                 retain_workspace=args.retain_workspace,
             ),
             _SequenceProvider(rows),
@@ -382,38 +410,39 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
         )
         return asdict(receipt) | {"ok": receipt.ok}
     if action == "headless-submit":
-        command = _load(args.command)
-        if not isinstance(command, list):
-            raise ValueError("headless command must be a JSON argv list")
-        return asdict(runtime.headless.submit(command, workspace=Path(args.workspace), workspace_type=args.workspace_type, policy=_json_object(args.policy, "policy"), metadata=_json_object(args.metadata, "metadata")))
+        command = _argv(args.command, "headless command")
+        workspace = _project_path(project, args.workspace).resolve(strict=True)
+        return asdict(runtime.headless.submit(command, workspace=workspace, workspace_type=args.workspace_type, policy=_json_object(args.policy, "policy"), metadata=_json_object(args.metadata, "metadata")))
     if action == "headless-run":
         job = runtime.headless.run_once(args.worker)
         return {"ok": True, "job": asdict(job) if job else None}
     if action == "headless-status":
-        return asdict(runtime.headless.get(args.job_id)) if args.job_id else runtime.headless.stats()
+        return ({"ok": True, "job": asdict(runtime.headless.get(args.job_id))} if args.job_id else runtime.headless.stats())
     if action == "headless-events":
         return {"ok": True, "events": runtime.headless.events(args.job_id)}
     if action == "headless-cancel":
-        return asdict(runtime.headless.cancel(args.job_id, args.reason))
+        return {"ok": True, "job": asdict(runtime.headless.cancel(args.job_id, args.reason))}
     if action == "headless-resume":
-        return asdict(runtime.headless.resume(args.job_id))
+        return {"ok": True, "job": asdict(runtime.headless.resume(args.job_id))}
     if action == "headless-export":
-        return runtime.headless.export_bundle(args.job_id, Path(args.destination))
+        return runtime.headless.export_bundle(args.job_id, _project_path(project, args.destination))
     if action == "headless-import":
-        return asdict(runtime.headless.import_bundle(Path(args.source), workspace_override=Path(args.workspace) if args.workspace else None))
+        workspace = _project_path(project, args.workspace).resolve(strict=True) if args.workspace else None
+        return {"ok": True, "job": asdict(runtime.headless.import_bundle(_project_path(project, args.source), workspace_override=workspace))}
     if action == "console":
-        values = _json_object(args.snapshot, "console snapshot")
+        values = dict(_json_object(args.snapshot, "console snapshot"))
         token_values = values.pop("tokens", values.pop("token_panel", {}))
         snapshot = runtime.console.snapshot(tokens=TokenPanel(**token_values), **values)
         if args.output:
-            return runtime.console.write_dashboard_payload(snapshot, Path(args.output))
+            return runtime.console.write_dashboard_payload(snapshot, _project_path(project, args.output))
         return {"ok": True, "format": "json" if args.json else "tui", "output": runtime.console.json(snapshot) if args.json else runtime.console.render(snapshot)}
     if action == "reliability-run":
-        runtime.reliability.seed = args.seed
-        return asdict(runtime.reliability.campaign(artifact_store=runtime.artifacts, capability_security=runtime.security, parser_cases=args.cases))
+        runtime.reliability.reseed(args.seed)
+        report = runtime.reliability.campaign(artifact_store=runtime.artifacts, capability_security=runtime.security, parser_cases=max(0, args.cases))
+        return asdict(report) | {"ok": report.ok}
     if action == "update-install":
         artifact = UpdateArtifact(**_json_object(args.artifact, "artifact"))
-        receipt = runtime.distribution.install(Path(args.source), artifact, executable_name=args.name)
+        receipt = runtime.distribution.install(_project_path(project, args.source), artifact, executable_name=args.name)
         return asdict(receipt) | {"ok": receipt.ok}
     if action == "update-rollback":
         return runtime.distribution.rollback(args.name, expected_previous_sha256=args.sha256)
