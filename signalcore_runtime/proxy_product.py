@@ -114,7 +114,7 @@ class ProxyProductRegistry:
         if not product["ok"]:
             raise ValueError("proxy preset is not directly runnable: " + ",".join(product["reasons"]))
         item = cls.by_provider(provider)
-        return (
+        command = [
             sys.executable,
             "-m",
             "signalcore_runtime",
@@ -136,11 +136,12 @@ class ProxyProductRegistry:
             item.credential_env,
             "--credential-header",
             item.credential_header,
-            "--credential-prefix",
-            item.credential_prefix,
             "--cache-policy",
             cache_policy,
-        )
+        ]
+        if item.credential_prefix:
+            command.extend(("--credential-prefix", item.credential_prefix))
+        return tuple(command)
 
     @classmethod
     def service_spec(
