@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: syntavra-branch-manifest-${{ github.event.pull_request.number || github.ref }}
@@ -31,10 +31,33 @@ jobs:
           python-version: "3.13"
       - name: Generate deterministic SHA-256 manifest
         run: python tools/refresh_manifest.py
-      - name: Upload prepared manifest
+      - name: Materialize prepared manifest tree
+        id: prepared
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- MANIFEST.sha256; then
+            git add -- MANIFEST.sha256
+            test "$(git diff --cached --name-only)" = "MANIFEST.sha256"
+            git commit -m "prepare Syntavra branch integrity manifest"
+            temporary_branch="prepared-manifest/${GITHUB_SHA}"
+            git push --force origin "HEAD:refs/heads/${temporary_branch}"
+            printf '%s\n' "$temporary_branch" > prepared-branch.txt
+          else
+            printf '%s\n' "" > prepared-branch.txt
+          fi
+          git rev-parse 'HEAD^{tree}' > prepared-tree.txt
+          git rev-parse HEAD > prepared-commit.txt
+          cp MANIFEST.sha256 prepared-MANIFEST.sha256
+      - name: Upload prepared manifest tree metadata
         uses: actions/upload-artifact@v4
         with:
-          name: syntavra-branch-manifest-${{ github.sha }}
-          path: MANIFEST.sha256
+          name: syntavra-prepared-manifest-tree-${{ github.sha }}
+          path: |
+            prepared-MANIFEST.sha256
+            prepared-tree.txt
+            prepared-commit.txt
+            prepared-branch.txt
           if-no-files-found: error
           retention-days: 7
