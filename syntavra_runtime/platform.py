@@ -14,6 +14,10 @@ from .artifacts import (
     OutputFirewall,
 )
 from .semantic_intelligence import IncrementalCodeIntelligenceGraph
+from .semantic_services import (
+    LanguageServiceRegistry as CompatibilityLanguageServiceRegistry,
+    SemanticIndexImporter,
+)
 from .runtime_evidence import RuntimeEvidenceGraph
 from .session_memory import SessionMemory
 from .capability_security import CapabilityDecision, CapabilitySecurity
@@ -27,8 +31,10 @@ from .interactive_console import InteractiveConsole
 from .reliability_lab import ReliabilityLaboratory
 from .update_manager import DistributionManager
 
-# Stable public name. The implementation is the probed, fail-closed broker.
+# Stable public names. The compatibility registry delegates language discovery to
+# the universal platform and never revives the removed executable whitelist.
 NativeSandboxBroker = HardenedSandboxBroker
+LanguageServiceRegistry = CompatibilityLanguageServiceRegistry
 
 
 class SyntavraPlatform:
@@ -43,6 +49,12 @@ class SyntavraPlatform:
         self.context = ContextCompiler(self.artifacts)
         self.graph = IncrementalCodeIntelligenceGraph(self.state_root / "semantic-graph.sqlite3")
         self.runtime_evidence = RuntimeEvidenceGraph(self.state_root / "runtime-evidence.sqlite3")
+
+        # Backward-compatible public attributes. They are façades over the same
+        # universal, evidence-graded model rather than the historical fixed list.
+        self.language_services = CompatibilityLanguageServiceRegistry()
+        self.semantic_importer = SemanticIndexImporter(self.graph)
+
         project_id = sha256_bytes(str(self.project).encode("utf-8"))
         self.memory = SessionMemory(self.state_root / "session-memory.sqlite3", project_id=project_id)
         self.security = CapabilitySecurity(self.state_root / "security")
@@ -173,11 +185,13 @@ __all__ = [
     "HardenedSandboxBroker",
     "IncrementalCodeIntelligenceGraph",
     "InteractiveConsole",
+    "LanguageServiceRegistry",
     "NativeSandboxBroker",
     "OutputFirewall",
     "ReliabilityLaboratory",
     "RuntimeEvidenceGraph",
     "SecretlessProviderGateway",
+    "SemanticIndexImporter",
     "SessionMemory",
     "SyntavraPlatform",
     "manifest",
