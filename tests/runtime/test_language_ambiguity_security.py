@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -13,19 +12,17 @@ class LanguageAmbiguityAndTrustTests(unittest.TestCase):
     @staticmethod
     def registry() -> LanguageRegistry:
         registry = LanguageRegistry(discover_entry_points=False)
-        registry.register_descriptor(LanguageDescriptor("objective-c-test", suffixes=(".m",), source="test"))
-        registry.register_descriptor(LanguageDescriptor("matlab-test", suffixes=(".m",), source="test"))
-        registry.register_descriptor(LanguageDescriptor("verilog-test", suffixes=(".v",), source="test"))
-        registry.register_descriptor(LanguageDescriptor("coq-test", suffixes=(".v",), source="test"))
+        registry.register_descriptor(LanguageDescriptor("synthetic-alpha", suffixes=(".ambx",), source="test"))
+        registry.register_descriptor(LanguageDescriptor("synthetic-beta", suffixes=(".ambx",), source="test"))
         return registry
 
     def test_unresolved_shared_suffix_remains_ambiguous(self) -> None:
         registry = self.registry()
-        detection = registry.detect(Path("model.m"), b"alpha beta gamma\n")
+        detection = registry.detect(Path("model.ambx"), b"alpha beta gamma\n")
         self.assertTrue(detection.language_id.startswith("ambiguous:"))
         self.assertEqual(detection.capability_level, "lexical")
         self.assertEqual(detection.confidence, 0.4)
-        self.assertEqual(set(detection.candidates), {"matlab-test", "objective-c-test"})
+        self.assertEqual(set(detection.candidates), {"synthetic-alpha", "synthetic-beta"})
         self.assertIn("exact semantic claims are disabled", detection.diagnostics[0])
 
     def test_manifest_descriptor_wins_only_as_explicit_repository_override(self) -> None:
@@ -33,12 +30,12 @@ class LanguageAmbiguityAndTrustTests(unittest.TestCase):
         registry.register_descriptor(
             LanguageDescriptor(
                 "future-matrix-language",
-                suffixes=(".m",),
+                suffixes=(".ambx",),
                 capabilities=frozenset({"lexical"}),
                 source="manifest:/repo/.syntavra/languages/future.json",
             )
         )
-        detection = registry.detect(Path("model.m"), b"alpha beta gamma\n")
+        detection = registry.detect(Path("model.ambx"), b"alpha beta gamma\n")
         self.assertEqual(detection.language_id, "future-matrix-language")
         self.assertEqual(detection.descriptor_source, "manifest:/repo/.syntavra/languages/future.json")
         self.assertIn("manifest-override", detection.evidence)
