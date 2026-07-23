@@ -1,0 +1,44 @@
+name: Export current Syntavra main
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  export:
+    if: github.actor == github.repository_owner && github.head_ref == 'agent/export-current-main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify final product commit
+        run: test "$(git rev-parse HEAD^)" = 'ce52e42dd6c22001acf366a14b4677c8a9d5c85e' || test "$(git rev-parse HEAD)" = 'ce52e42dd6c22001acf366a14b4677c8a9d5c85e'
+      - name: Export exact product tree and repository bundle
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz --prefix=Syntavra/ ce52e42dd6c22001acf366a14b4677c8a9d5c85e -o /tmp/syntavra-main-ce52e42.tar.gz
+          git bundle create /tmp/syntavra-main-ce52e42.bundle ce52e42dd6c22001acf366a14b4677c8a9d5c85e
+          sha256sum /tmp/syntavra-main-ce52e42.tar.gz /tmp/syntavra-main-ce52e42.bundle > /tmp/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-main-ce52e42-source
+          path: |
+            /tmp/syntavra-main-ce52e42.tar.gz
+            /tmp/syntavra-main-ce52e42.bundle
+            /tmp/SHA256SUMS
+          retention-days: 7
+          if-no-files-found: error
+      - name: Close trigger PR and remove trigger branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" -f state=closed
+          git push origin --delete "$GITHUB_HEAD_REF"
