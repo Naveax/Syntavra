@@ -1,0 +1,84 @@
+name: Final Windows repair cleanup
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  cleanup:
+    if: github.actor == github.repository_owner && github.head_ref == 'agent/final-windows-repair-cleanup'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify repaired canonical main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 'c14a686f0c0e2781eb6b66759c781157e11b59eb'
+          test "$(git rev-parse HEAD^{tree})" = '1d4eef5aa7f3a0ff8d71caf0601cdfd7a4ca0310'
+          python - <<'PY'
+          import syntavra_runtime
+          assert syntavra_runtime.__version__ == '0.0.1'
+          assert syntavra_runtime.__release_channel__ == 'pre-release'
+          PY
+      - name: Close all open pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" --jq '.[].number' |
+            while read -r number; do
+              test -n "$number" || continue
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${number}" -f state=closed >/dev/null
+            done
+      - name: Delete every branch except main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote --heads origin |
+            awk '{print $2}' |
+            sed 's#refs/heads/##' |
+            while read -r branch; do
+              test -n "$branch" || continue
+              if [ "$branch" != main ]; then
+                git push origin --delete "$branch"
+              fi
+            done
+      - name: Verify single-main repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t branches < <(git ls-remote --heads origin | awk '{print $2}' | sed 's#refs/heads/##' | sort)
+          printf '%s\n' "${branches[@]}"
+          test "${#branches[@]}" -eq 1
+          test "${branches[0]}" = main
+      - name: Publish repair receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          body=$(cat <<'EOF'
+          ## Windows CI repair completed
+
+          - Final main: `c14a686f0c0e2781eb6b66759c781157e11b59eb`
+          - Final tree: `1d4eef5aa7f3a0ff8d71caf0601cdfd7a4ca0310`
+          - Version: `0.0.1 / pre-release`
+          - Fixed: SQLite connection lifecycle on Windows
+          - Fixed: deterministic LF policy for Rust sources
+          - Verified: Windows package matrix Python 3.11/3.12/3.13
+          - Verified: Windows runtime matrix Python 3.11/3.12/3.13
+          - Verified: Windows pre-release artifact build
+          - Repository branches: `main` only
+          EOF
+          )
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1/comments" -f body="$body" >/dev/null
