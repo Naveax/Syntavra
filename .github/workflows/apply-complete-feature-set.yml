@@ -47,7 +47,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             sdk/typescript/package-lock.json
-            integrations/vscode/package-lock.json
+            integrations/vscode-syntavra/package.json
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -135,9 +135,9 @@ jobs:
           npm pack --prefix sdk/typescript --dry-run --json
 
       - name: Validate VS Code extension
-        working-directory: integrations/vscode
+        working-directory: integrations/vscode-syntavra
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --ignore-scripts --no-audit --no-fund
           npm test
           npm pack --dry-run --json
 
