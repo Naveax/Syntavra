@@ -13,8 +13,7 @@ permissions:
 
 env:
   EXPECTED_BASE_SHA: bb995d26a1894ed21af4f56680bfbd912c8187c4
-  TRANSPORT_PATH: .syntavra-transport/token-saver.patch.gz.b64
-  EXPECTED_TRANSPORT_BLOB_SHA: 3d6421ebe232ae9f4f452d35233e8d7f6e3967ff
+  EXPECTED_TRANSPORT_SHA256: dba8bd41aa52e6db1a86edcc396b9f3e7698370e76c63b40e08848072390c1d5
   EXPECTED_PATCH_SHA256: b8118a775290f2b765c798857c2fb7fa5ed46c78548b9e259500e95dffb31c60
   EXPECTED_FINAL_TREE: ed41e2dcfef463a33a6dd4fb53d131a92012bb42
 
@@ -33,16 +32,6 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - name: Publish run start receipt
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        shell: bash
-        run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            -f body="SYNTAVRA_UNIFICATION_RUN: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
       - name: Check out staged main
         uses: actions/checkout@v4
         with:
@@ -62,74 +51,38 @@ jobs:
             package-lock.json
             sdk/typescript/package-lock.json
 
-      - name: Verify staged main boundary
+      - name: Verify staging boundary and reconstruct patch
         shell: bash
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
           unexpected=$(
             git diff --name-only "$EXPECTED_BASE_SHA"..HEAD |
-              grep -vE '^(\.github/workflows/apply-token-saver-unification\.yml|\.syntavra-transport/token-saver\.patch\.gz\.b64)$' || true
+              grep -vE '^(\.github/workflows/apply-token-saver-unification\.yml|\.syntavra-transport/.*)$' || true
           )
           test -z "$unexpected"
-          test -f "$TRANSPORT_PATH"
 
-      - name: Diagnose and verify implementation patch
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        shell: bash
-        run: |
-          set -uo pipefail
-          actual_blob=$(git rev-parse "HEAD:${TRANSPORT_PATH}")
-          git cat-file blob "$actual_blob" > /tmp/syntavra.patch.gz.b64
+          : > /tmp/syntavra.patch.gz.b64
+          for i in $(seq -w 0 31); do
+            file=".syntavra-transport/chunk-${i}.txt"
+            test -f "$file"
+            cat "$file" >> /tmp/syntavra.patch.gz.b64
+          done
+          test "$(sha256sum /tmp/syntavra.patch.gz.b64 | awk '{print $1}')" = "$EXPECTED_TRANSPORT_SHA256"
 
-          base64_status=0
-          base64 -d /tmp/syntavra.patch.gz.b64 > /tmp/syntavra.patch.gz 2>/tmp/syntavra-base64.err || base64_status=$?
-          gzip_status=0
-          gzip -dc /tmp/syntavra.patch.gz > /tmp/syntavra.patch 2>/tmp/syntavra-gzip.err || gzip_status=$?
+          base64 -d /tmp/syntavra.patch.gz.b64 | gzip -d > /tmp/syntavra.patch
+          test "$(sha256sum /tmp/syntavra.patch | awk '{print $1}')" = "$EXPECTED_PATCH_SHA256"
+          git apply --check /tmp/syntavra.patch
 
-          if test -s /tmp/syntavra.patch; then
-            actual_patch=$(sha256sum /tmp/syntavra.patch | awk '{print $1}')
-          else
-            actual_patch=EMPTY
-          fi
-
-          apply_status=not-run
-          : > /tmp/syntavra-apply.err
-          if test "$base64_status" -eq 0 && test "$gzip_status" -eq 0; then
-            if git apply --check /tmp/syntavra.patch > /tmp/syntavra-apply.err 2>&1; then
-              apply_status=0
-            else
-              apply_status=$?
-            fi
-          fi
-
-          base64_note=$(tr '\n' ' ' < /tmp/syntavra-base64.err | cut -c1-240)
-          gzip_note=$(tr '\n' ' ' < /tmp/syntavra-gzip.err | cut -c1-240)
-          apply_note=$(tr '\n' ' ' < /tmp/syntavra-apply.err | cut -c1-480)
-          diagnostic="SYNTAVRA_TRANSPORT_DIAG: blob=${actual_blob}; base64=${base64_status}; gzip=${gzip_status}; patch=${actual_patch}; apply=${apply_status}; base64_note=${base64_note}; gzip_note=${gzip_note}; apply_note=${apply_note}"
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$diagnostic"
-
-          set -e
-          test "$actual_blob" = "$EXPECTED_TRANSPORT_BLOB_SHA"
-          test "$base64_status" -eq 0
-          test "$gzip_status" -eq 0
-          test "$actual_patch" = "$EXPECTED_PATCH_SHA256"
-          test "$apply_status" = 0
-
-      - name: Apply exact patch and verify final tree
+      - name: Apply exact implementation and assert final tree
         shell: bash
         run: |
           set -euo pipefail
           git apply --index /tmp/syntavra.patch
           git rm .github/workflows/apply-token-saver-unification.yml
-          git rm "$TRANSPORT_PATH"
-          rmdir .syntavra-transport || true
+          git rm -r .syntavra-transport
           git diff --check --cached
-          actual=$(git write-tree)
-          echo "final-tree=${actual}"
-          test "$actual" = "$EXPECTED_FINAL_TREE"
+          test "$(git write-tree)" = "$EXPECTED_FINAL_TREE"
 
       - name: Validate exact final tree
         shell: bash
@@ -167,7 +120,7 @@ jobs:
           git push --force-with-lease="refs/heads/main:${staged_main}" origin "${final_sha}:refs/heads/main"
           echo "sha=${final_sha}" >> "$GITHUB_OUTPUT"
 
-      - name: Remove temporary PRs, branches and transport comments
+      - name: Clean temporary PRs and branches
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -175,19 +128,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" --slurp |
             jq 'add | .[] | select(.head.ref | startswith("agent/apply-token-saver-unification") or startswith("agent/transport-token-saver-patch")) | .number' |
             while read -r pr_number; do
               gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" -f state=closed
             done
 
-          mapfile -t temporary_branches < <(
+          mapfile -t branches < <(
             git ls-remote --heads origin |
               awk '{sub("refs/heads/", "", $2); print $2}' |
               grep -E '^(agent/apply-token-saver-unification|agent/transport-token-saver-patch)' || true
           )
-          for branch in "${temporary_branches[@]}"; do
+          for branch in "${branches[@]}"; do
             git push origin --delete "$branch"
           done
 
@@ -198,7 +150,7 @@ jobs:
           - Final tree: \`${EXPECTED_FINAL_TREE}\`
           - Version: \`0.0.1 / pre-release\`
           - Validation: repository, manifest, runtime, release, complete Python suite, installer package, TypeScript SDK and package dry-runs passed
-          - Cleanup: temporary workflow, patch transport, trigger PRs and temporary branches removed
+          - Cleanup: temporary workflow, transport, trigger PRs and temporary branches removed
           - Claims: external superiority, live certification, public maturity and provider-cost claims remain fail-closed until real external receipts exist
 
           Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
