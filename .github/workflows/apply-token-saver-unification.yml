@@ -73,19 +73,48 @@ jobs:
           test -z "$unexpected"
           test -f "$TRANSPORT_PATH"
 
-      - name: Verify and decode implementation patch
+      - name: Diagnose and verify implementation patch
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           actual_blob=$(git rev-parse "HEAD:${TRANSPORT_PATH}")
-          echo "transport-blob=${actual_blob}"
-          test "$actual_blob" = "$EXPECTED_TRANSPORT_BLOB_SHA"
+          git cat-file blob "$actual_blob" > /tmp/syntavra.patch.gz.b64
 
-          git cat-file blob "$actual_blob" | base64 -d | gzip -d > /tmp/syntavra.patch
-          actual_patch=$(sha256sum /tmp/syntavra.patch | awk '{print $1}')
-          echo "patch-sha256=${actual_patch}"
+          base64_status=0
+          base64 -d /tmp/syntavra.patch.gz.b64 > /tmp/syntavra.patch.gz 2>/tmp/syntavra-base64.err || base64_status=$?
+          gzip_status=0
+          gzip -dc /tmp/syntavra.patch.gz > /tmp/syntavra.patch 2>/tmp/syntavra-gzip.err || gzip_status=$?
+
+          if test -s /tmp/syntavra.patch; then
+            actual_patch=$(sha256sum /tmp/syntavra.patch | awk '{print $1}')
+          else
+            actual_patch=EMPTY
+          fi
+
+          apply_status=not-run
+          : > /tmp/syntavra-apply.err
+          if test "$base64_status" -eq 0 && test "$gzip_status" -eq 0; then
+            if git apply --check /tmp/syntavra.patch > /tmp/syntavra-apply.err 2>&1; then
+              apply_status=0
+            else
+              apply_status=$?
+            fi
+          fi
+
+          base64_note=$(tr '\n' ' ' < /tmp/syntavra-base64.err | cut -c1-240)
+          gzip_note=$(tr '\n' ' ' < /tmp/syntavra-gzip.err | cut -c1-240)
+          apply_note=$(tr '\n' ' ' < /tmp/syntavra-apply.err | cut -c1-480)
+          diagnostic="SYNTAVRA_TRANSPORT_DIAG: blob=${actual_blob}; base64=${base64_status}; gzip=${gzip_status}; patch=${actual_patch}; apply=${apply_status}; base64_note=${base64_note}; gzip_note=${gzip_note}; apply_note=${apply_note}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1/comments" -f body="$diagnostic"
+
+          set -e
+          test "$actual_blob" = "$EXPECTED_TRANSPORT_BLOB_SHA"
+          test "$base64_status" -eq 0
+          test "$gzip_status" -eq 0
           test "$actual_patch" = "$EXPECTED_PATCH_SHA256"
-          git apply --check /tmp/syntavra.patch
+          test "$apply_status" = 0
 
       - name: Apply exact patch and verify final tree
         shell: bash
@@ -161,7 +190,7 @@ jobs:
           done
 
           gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1/comments?per_page=100" --slurp |
-            jq 'add | .[] | select(.body | startswith("SYNTAVRA_PATCH_PART_") or startswith("SYNTAVRA_UNIFICATION_RUN:")) | .id' |
+            jq 'add | .[] | select(.body | startswith("SYNTAVRA_PATCH_PART_") or startswith("SYNTAVRA_UNIFICATION_RUN:") or startswith("SYNTAVRA_TRANSPORT_DIAG:")) | .id' |
             while read -r comment_id; do
               gh api --method DELETE "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"
             done
