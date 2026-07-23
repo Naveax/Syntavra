@@ -1,0 +1,188 @@
+name: Apply complete Syntavra competitive feature set
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: syntavra-complete-feature-set
+  cancel-in-progress: false
+
+env:
+  EXPECTED_BASE_SHA: ce52e42dd6c22001acf366a14b4677c8a9d5c85e
+  EXPECTED_TRANSPORT_SHA256: bba0b72615defd410bc38d525e3462c9872de4c23b3d1569e5f89901b3720099
+  EXPECTED_PATCH_SHA256: 03e38ac8e26438ee27018140d270e3dfecfae3009ae34cc7580159ff99a01a75
+  EXPECTED_FINAL_TREE: 8f8d631d5ebc2bcf2beb4af3b99c3761bc28453b
+  VALIDATION_BRANCH: agent/validated-complete-feature-set
+
+jobs:
+  validate:
+    if: >-
+      github.actor == github.repository_owner &&
+      startsWith(github.head_ref, 'agent/apply-complete-feature-set')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out staged PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            sdk/typescript/package-lock.json
+            integrations/vscode/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify staging boundary and reconstruct exact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          unexpected=$(
+            git diff --name-only "$EXPECTED_BASE_SHA"..HEAD |
+              grep -vE '^(\.github/workflows/apply-complete-feature-set\.yml|\.syntavra-transport/)' || true
+          )
+          test -z "$unexpected"
+
+          : > /tmp/syntavra-complete.patch.gz.b64
+          mapfile -t parts < <(git ls-tree -r --name-only HEAD .syntavra-transport | sort)
+          test "${#parts[@]}" -eq 34
+          for part in "${parts[@]}"; do
+            git show "HEAD:${part}" >> /tmp/syntavra-complete.patch.gz.b64
+          done
+
+          transport_sha=$(sha256sum /tmp/syntavra-complete.patch.gz.b64 | awk '{print $1}')
+          echo "transport-sha256=${transport_sha}"
+          test "$transport_sha" = "$EXPECTED_TRANSPORT_SHA256"
+
+          base64 -d /tmp/syntavra-complete.patch.gz.b64 | gzip -d > /tmp/syntavra-complete.patch
+          patch_sha=$(sha256sum /tmp/syntavra-complete.patch | awk '{print $1}')
+          echo "patch-sha256=${patch_sha}"
+          test "$patch_sha" = "$EXPECTED_PATCH_SHA256"
+          git apply --check /tmp/syntavra-complete.patch
+
+      - name: Apply implementation and assert exact final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --index /tmp/syntavra-complete.patch
+          git rm .github/workflows/apply-complete-feature-set.yml
+          git rm -r .syntavra-transport
+          git diff --check --cached
+          final_tree=$(git write-tree)
+          echo "final-tree=${final_tree}"
+          test "$final_tree" = "$EXPECTED_FINAL_TREE"
+
+      - name: Install Python validation dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install --disable-pip-version-check -e . pytest build
+
+      - name: Validate repository, runtime and release
+        run: |
+          python -m compileall -q syntavra_runtime signalcore_runtime skills/syntavra/scripts tools tests benchmarks
+          python -m tools.refresh_manifest --check
+          python -m tools.check_repository_hygiene
+          python -m tools.validate
+          python -m tools.validate_runtime
+          python -m tools.validate_release
+
+      - name: Run complete Python test suite in five shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < <(find tests -type f -name 'test_*.py' | sort)
+          test "${#test_files[@]}" -ge 70
+          for shard in 0 1 2 3 4; do
+            shard_files=()
+            for index in "${!test_files[@]}"; do
+              if (( index % 5 == shard )); then
+                shard_files+=("${test_files[$index]}")
+              fi
+            done
+            echo "Running shard ${shard}: ${#shard_files[@]} files"
+            python -m pytest -q "${shard_files[@]}"
+          done
+
+      - name: Validate npm installer
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run pack:check
+
+      - name: Validate TypeScript SDK
+        run: |
+          npm ci --prefix sdk/typescript --ignore-scripts --no-audit --no-fund
+          npm run ci --prefix sdk/typescript
+          npm pack --prefix sdk/typescript --dry-run --json
+
+      - name: Validate VS Code extension
+        working-directory: integrations/vscode
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm pack --dry-run --json
+
+      - name: Validate native zero-dependency companion
+        working-directory: native/syntavra-native
+        run: |
+          cargo test --locked
+          cargo build --locked --release
+
+      - name: Build Python distribution and reassert final tree
+        run: |
+          python -m build
+          git diff --check --cached
+          test "$(git write-tree)" = "$EXPECTED_FINAL_TREE"
+
+      - name: Publish validated tree to temporary branch
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Validate complete Syntavra competitive feature set'
+          validated_sha=$(git rev-parse HEAD)
+          git push --force origin "${validated_sha}:refs/heads/${VALIDATION_BRANCH}"
+          echo "sha=${validated_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish validation receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VALIDATED_SHA: ${{ steps.publish.outputs.sha }}
+        shell: bash
+        run: |
+          body=$(cat <<EOF
+          ## Complete feature-set validation passed
+
+          - Validated branch: \`${VALIDATION_BRANCH}\`
+          - Validated commit: \`${VALIDATED_SHA}\`
+          - Final tree: \`${EXPECTED_FINAL_TREE}\`
+          - Version: \`0.0.1 / pre-release\`
+          - Gates: exact transport, exact patch, exact tree, repository/runtime/release validators, complete Python suite, npm installer, TypeScript SDK, VS Code extension, Python distribution and Rust native companion
+          - Registry publication and external superiority remain fail-closed until real credentials and provider-billed receipts exist
+
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$body"
