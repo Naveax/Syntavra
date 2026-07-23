@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import urllib.request
 from dataclasses import asdict
 from pathlib import Path
@@ -15,6 +16,7 @@ from syntavra_runtime.dashboard import LocalDashboard
 from syntavra_runtime.hooks import HookEngine
 from syntavra_runtime.host_adapters import KNOWN_HOSTS, coverage_report
 from syntavra_runtime.host_installation import HostInstallationManager
+from syntavra_runtime import memory_intelligence as memory_intelligence_module
 from syntavra_runtime.memory_intelligence import MemoryIntelligenceStore
 from syntavra_runtime.notifications import NotificationFeed
 from syntavra_runtime.optimization_modes import MODES, OptimizationModeStore, SavingsLedger, render_statusline
@@ -132,6 +134,36 @@ def test_watcher_incremental_reindex_and_background_embedding(tmp_path: Path) ->
     worker = BackgroundIntelligenceWorker(project=tmp_path, state_root=state)
     result = worker.run(iterations=1, interval_seconds=0.001)
     assert result["ok"] and result["iterations"] == 1
+
+
+def test_memory_intelligence_closes_every_sqlite_connection(tmp_path: Path, monkeypatch) -> None:
+    real_connect = sqlite3.connect
+    connections = []
+
+    class TrackingConnection(sqlite3.Connection):
+        closed = False
+
+        def close(self):
+            self.closed = True
+            return super().close()
+
+    def tracked_connect(*args, **kwargs):
+        kwargs["factory"] = TrackingConnection
+        connection = real_connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(memory_intelligence_module.sqlite3, "connect", tracked_connect)
+    store = MemoryIntelligenceStore(tmp_path / "memory.sqlite3")
+    observation = store.add("close SQLite handles", kind="constraint")
+    store.search("SQLite")
+    store.feedback(observation.observation_id, success=True)
+    store.backfill_embeddings()
+    store.stats()
+    store.export_jsonl(tmp_path / "memory.jsonl")
+
+    assert connections
+    assert all(connection.closed for connection in connections)
 
 
 def test_memory_extraction_roi_hybrid_search_backfill_and_export(tmp_path: Path) -> None:

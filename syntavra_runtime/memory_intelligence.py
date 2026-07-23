@@ -8,9 +8,10 @@ import os
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence
 
 from .notifications import NotificationFeed
 from .util import canonical_json, sha256_bytes
@@ -66,8 +67,17 @@ class MemoryIntelligenceStore:
     def _db(self) -> sqlite3.Connection:
         db=sqlite3.connect(self.path); db.row_factory=sqlite3.Row; return db
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        db = self._db()
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
+
     def _init(self) -> None:
-        with self._db() as db:
+        with self._connection() as db:
             db.executescript("""
             CREATE TABLE IF NOT EXISTS observations(
               observation_id TEXT PRIMARY KEY,text TEXT NOT NULL,kind TEXT NOT NULL,
@@ -86,7 +96,7 @@ class MemoryIntelligenceStore:
     def add(self, text: str, *, kind: str="observation", importance: float=.5, confidence: float=.7, validity: float=1.0, metadata: Mapping[str,Any]|None=None, embed: bool=True) -> MemoryObservation:
         if not text.strip(): raise ValueError("memory text is required")
         now=time.time(); source_hash=sha256_bytes(text.strip().encode("utf-8")); observation_id=sha256_bytes(canonical_json({"text":text.strip(),"kind":kind,"source_hash":source_hash}))
-        with self._db() as db:
+        with self._connection() as db:
             db.execute(
                 """
                 INSERT INTO observations(
@@ -143,13 +153,13 @@ class MemoryIntelligenceStore:
         return [self.add(str(row.get("text") or ""),kind=str(row.get("kind") or "observation"),importance=float(row.get("importance",.5)),confidence=float(row.get("confidence",.7)),validity=float(row.get("validity",1)),metadata=row.get("metadata") if isinstance(row.get("metadata"),Mapping) else {}) for row in rows if str(row.get("text") or "").strip()]
 
     def backfill_embeddings(self, *, limit: int=1000) -> dict[str,int]:
-        with self._db() as db:
+        with self._connection() as db:
             rows=db.execute("SELECT observation_id,text FROM observations WHERE embedding_json IS NULL LIMIT ?",(limit,)).fetchall()
             for row in rows: db.execute("UPDATE observations SET embedding_json=?,updated_at=? WHERE observation_id=?",(json.dumps(_embedding(row["text"])),time.time(),row["observation_id"]))
         return {"embedded":len(rows),"remaining":self.stats()["missing_embeddings"]}
 
     def feedback(self, observation_id: str, *, success: bool, still_valid: bool=True) -> MemoryObservation:
-        with self._db() as db:
+        with self._connection() as db:
             row=db.execute("SELECT * FROM observations WHERE observation_id=?",(observation_id,)).fetchone()
             if not row: raise KeyError(observation_id)
             success_count=int(row["success_count"])+(1 if success else 0); failure_count=int(row["failure_count"])+(0 if success else 1); validity=float(row["validity"]) if still_valid else 0.0
@@ -159,7 +169,7 @@ class MemoryIntelligenceStore:
 
     def search(self, query: str, *, limit: int=20, include_invalid: bool=False) -> list[dict[str,Any]]:
         query_tokens=_tokens(query); qembed=_embedding(query)
-        with self._db() as db: rows=db.execute("SELECT * FROM observations").fetchall()
+        with self._connection() as db: rows=db.execute("SELECT * FROM observations").fetchall()
         docs=[_tokens(row["text"]) for row in rows]; n=max(1,len(docs)); df={term:sum(term in doc for doc in docs) for term in set(query_tokens)}
         results=[]
         for row,doc in zip(rows,docs):
@@ -175,7 +185,7 @@ class MemoryIntelligenceStore:
         return sorted(results,key=lambda row:(-row["score"],row["observation"]["observation_id"]))[:max(1,limit)]
 
     def ranked(self, *, limit: int=100) -> list[dict[str,Any]]:
-        with self._db() as db: rows=db.execute("SELECT * FROM observations").fetchall()
+        with self._connection() as db: rows=db.execute("SELECT * FROM observations").fetchall()
         items=[self._row(row) for row in rows]
         return [asdict(item)|{"roi":item.roi} for item in sorted(items,key=lambda item:(-item.roi,item.observation_id))[:limit]]
 
@@ -186,5 +196,5 @@ class MemoryIntelligenceStore:
         return {"path":str(path),"observations":len(rows),"sha256":sha256_bytes(path.read_bytes())}
 
     def stats(self) -> dict[str,int]:
-        with self._db() as db:
+        with self._connection() as db:
             return {"observations":int(db.execute("SELECT COUNT(*) FROM observations").fetchone()[0]),"valid":int(db.execute("SELECT COUNT(*) FROM observations WHERE validity>0").fetchone()[0]),"missing_embeddings":int(db.execute("SELECT COUNT(*) FROM observations WHERE embedding_json IS NULL").fetchone()[0])}
