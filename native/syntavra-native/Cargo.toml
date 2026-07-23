@@ -1,0 +1,10 @@
+[package]
+name = "syntavra-native"
+version = "0.0.1"
+edition = "2021"
+description = "Zero-dependency native statusline and pre-tool optimizer for Syntavra"
+license = "MIT"
+
+[[bin]]
+name = "syntavra-native"
+path = "src/main.rs"

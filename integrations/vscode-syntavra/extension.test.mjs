@@ -1,0 +1,2 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import fs from 'node:fs';
+test('extension declares core commands',()=>{const p=JSON.parse(fs.readFileSync(new URL('./package.json',import.meta.url))); const names=p.contributes.commands.map(x=>x.command); for(const n of ['syntavra.setMode','syntavra.openDashboard','syntavra.reindex']) assert.ok(names.includes(n)); assert.equal(p.version,'0.0.1')});

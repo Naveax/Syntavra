@@ -6,6 +6,20 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, TextIO
 
+from .adaptive_provider_router import AdaptiveProviderRouter
+from .agent_config_auditor import AgentConfigAuditor
+from .code_intelligence import CodeIntelligenceIndex
+from .command_rewriter import CommandRewriteEngine
+from .dashboard import LocalDashboard
+from .memory_intelligence import MemoryIntelligenceStore
+from .notifications import NotificationFeed
+from .optimization_modes import OptimizationModeStore, SavingsLedger, render_statusline
+from .prompt_cache_optimizer import PromptCacheOptimizer
+from .repository_watcher import RepositoryWatcher
+from .secret_redaction import SecretRedactor
+from .subtask_router import AutomaticSubtaskDelegator
+from .transcript_miner import TranscriptOpportunityMiner
+from .wire_format import LosslessWireCodec
 from .competitive_fabric import CompetitiveContextFabric, StructuralNavigator
 from .compression import ContentRouter, ReversibleContentStore
 from .context_governor import evaluate
@@ -61,6 +75,14 @@ class MCPServer:
         )
         self.navigator = StructuralNavigator(self.project)
         self.application = MCPApplicationPipeline(self.state_root)
+        self.mode_store = OptimizationModeStore(self.state_root)
+        self.savings = SavingsLedger(self.state_root)
+        self.rewriter = CommandRewriteEngine()
+        self.cache_optimizer = PromptCacheOptimizer(self.state_root)
+        self.notification_feed = NotificationFeed(self.state_root)
+        self.memory_intelligence = MemoryIntelligenceStore(self.state_root / "memory-intelligence.sqlite3", notification_feed=self.notification_feed)
+        self.wire_codec = LosslessWireCodec()
+        self.secret_redactor = SecretRedactor()
 
     @property
     def product_mcp_policy(self):
@@ -279,6 +301,21 @@ class MCPServer:
                 "syntavra.fabric.insights", "Inspect local savings, reliability, cache, and routing analytics",
                 {"since_seconds": {"type": "number"}},
             ),
+            tool("syntavra.mode", "Get or switch optimization mode", {"mode": {"type": "string"}}),
+            tool("syntavra.statusline", "Render live savings statusline", {"verbose": {"type": "boolean"}}),
+            tool("syntavra.command.rewrite", "Fail-closed pre-tool command rewrite", {"command": command_schema}, ["command"]),
+            tool("syntavra.transcript.mine", "Find missed token-saving opportunities", {"source": {}}, ["source"]),
+            tool("syntavra.cache.plan", "Plan stable prompt-cache prefix and expiry", {"messages": {"type": "array", "items": {"type": "object"}}, "provider": {"type": "string"}, "model": {"type": "string"}, "ttl": {"type": "integer"}}, ["messages", "provider", "model"]),
+            tool("syntavra.cache.health", "Show cache expiry and amortization health"),
+            tool("syntavra.config.audit", "Audit agent configuration token waste"),
+            tool("syntavra.secret.redact", "Redact secrets before MCP response", {"value": {}}, ["value"]),
+            tool("syntavra.wire", "Lossless compact MCP response wire codec", {"action": {"type": "string"}, "value": {}, "minimum_savings": {"type": "number"}}, ["action", "value"]),
+            tool("syntavra.code.intelligence", "Query code graph analytics", {"action": {"type": "string"}, "query": {"type": "string"}, "paths": {"type": "array", "items": {"type": "string"}}, "target_name": {"type": "string"}}, ["action"]),
+            tool("syntavra.memory.intelligence", "Extract, rank, search, backfill or export memory", {"action": {"type": "string"}, "text": {"type": "string"}, "query": {"type": "string"}, "path": {"type": "string"}, "limit": {"type": "integer"}}, ["action"]),
+            tool("syntavra.provider.route", "Quota, rate-limit and complexity-aware provider routing", {"task": {"type": "string"}, "candidates": {"type": "array", "items": {"type": "object"}}, "changed_files": {"type": "integer"}, "token_estimate": {"type": "integer"}}, ["task", "candidates"]),
+            tool("syntavra.subtask.plan", "Build specialized short-handoff subtasks", {"objective": {"type": "string"}, "context_paths": {"type": "array", "items": {"type": "string"}}, "max_tasks": {"type": "integer"}}, ["objective"]),
+            tool("syntavra.repository.watch", "Poll changes and incrementally rebuild code index", {"iterations": {"type": "integer"}, "interval": {"type": "number"}}),
+            tool("syntavra.dashboard.snapshot", "Read local dashboard state"),
         ]
 
     def exposed_tools(self) -> list[dict[str, Any]]:
@@ -303,6 +340,55 @@ class MCPServer:
         )
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        if name == "syntavra.mode":
+            return self.mode_store.set(str(arguments["mode"]), source="mcp") if arguments.get("mode") else self.mode_store.manifest()
+        if name == "syntavra.statusline":
+            return {"statusline": render_statusline(self.state_root, compact=not bool(arguments.get("verbose", False))), "savings": self.savings.summary()}
+        if name == "syntavra.command.rewrite":
+            return self.rewriter.rewrite(arguments["command"]).to_dict()
+        if name == "syntavra.transcript.mine":
+            return TranscriptOpportunityMiner().analyze(arguments["source"])
+        if name == "syntavra.cache.plan":
+            return asdict(self.cache_optimizer.plan(list(arguments["messages"]), provider=str(arguments["provider"]), model=str(arguments["model"]), ttl_seconds=arguments.get("ttl")))
+        if name == "syntavra.cache.health":
+            return self.cache_optimizer.health()
+        if name == "syntavra.config.audit":
+            return AgentConfigAuditor(self.project).audit()
+        if name == "syntavra.secret.redact":
+            value, receipt = self.secret_redactor.redact(arguments["value"]); return {"value": value, "receipt": receipt}
+        if name == "syntavra.wire":
+            return self.wire_codec.encode(arguments["value"], min_savings_ratio=float(arguments.get("minimum_savings", .08))) if str(arguments["action"]) == "encode" else self.wire_codec.decode(arguments["value"])
+        if name == "syntavra.code.intelligence":
+            index=CodeIntelligenceIndex(self.project); index.build(); action=str(arguments["action"]); query=str(arguments.get("query", "")); paths=list(arguments.get("paths") or [])
+            methods={"report":index.report,"dead":index.dead_code,"untested":index.untested_symbols,"pagerank":index.pagerank,"hotspots":index.hotspots,"cycles":index.cycles,"coupling":index.coupling,"boundaries":index.module_boundaries,"duplicates":index.duplicates,"anti-patterns":index.anti_patterns}
+            if action in methods: return methods[action]()
+            if action == "call": return index.call_hierarchy(query)
+            if action == "class": return index.class_hierarchy(query)
+            if action == "provenance": return index.provenance(query)
+            if action == "risk": return index.pr_risk(paths)
+            if action == "signal": return index.signal_chain(query)
+            if action == "delete": return index.delete_safe(query)
+            if action == "refactor": return index.refactor_plan(query, target_name=str(arguments.get("target_name", "")))
+            if action == "cross-repo": return index.cross_repo_contracts([Path(row) for row in paths])
+            raise ValueError(f"unknown code-intelligence action: {action}")
+        if name == "syntavra.memory.intelligence":
+            action=str(arguments["action"]); limit=int(arguments.get("limit", 20))
+            if action == "add": return asdict(self.memory_intelligence.add(str(arguments["text"])))
+            if action == "extract": return {"observations":[asdict(row) for row in self.memory_intelligence.extract(str(arguments["text"]))]}
+            if action == "search": return {"results":self.memory_intelligence.search(str(arguments["query"]),limit=limit)}
+            if action == "rank": return {"results":self.memory_intelligence.ranked(limit=limit)}
+            if action == "backfill": return self.memory_intelligence.backfill_embeddings(limit=limit)
+            if action == "export": return self.memory_intelligence.export_jsonl(Path(str(arguments["path"])))
+            if action == "stats": return self.memory_intelligence.stats()
+            raise ValueError(f"unknown memory action: {action}")
+        if name == "syntavra.provider.route":
+            router=AdaptiveProviderRouter.from_mappings(list(arguments["candidates"])); return asdict(router.route(str(arguments["task"]),changed_files=int(arguments.get("changed_files",0)),token_estimate=int(arguments.get("token_estimate",0))))
+        if name == "syntavra.subtask.plan":
+            return asdict(AutomaticSubtaskDelegator().plan(str(arguments["objective"]),context_paths=list(arguments.get("context_paths") or []),max_tasks=int(arguments.get("max_tasks",8))))
+        if name == "syntavra.repository.watch":
+            watcher=RepositoryWatcher(self.project,self.state_root); rows=watcher.watch(iterations=int(arguments.get("iterations",1)),interval_seconds=float(arguments.get("interval",1)),callback=lambda changes:{"index":CodeIntelligenceIndex(self.project).build(),"changed":list(changes.changed)}); return {"changes":[asdict(row) for row in rows],"status":watcher.status()}
+        if name == "syntavra.dashboard.snapshot":
+            return LocalDashboard(project=self.project,state_root=self.state_root).snapshot()
         if name == "syntavra.status":
             return asdict(inspect_runtime(
                 project_root=self.project,

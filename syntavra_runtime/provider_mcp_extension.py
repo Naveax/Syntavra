@@ -5,6 +5,7 @@ from dataclasses import asdict
 from typing import Any
 
 from .provider_gateway import ProviderGateway, ProviderPlan
+from .provider_registry import default_provider_registry
 
 
 _PROVIDER_NAMES = frozenset({
@@ -114,7 +115,11 @@ def install() -> None:
 
     def extended_call_tool(self: Any, name: str, arguments: dict[str, Any]) -> Any:
         if name == "syntavra.provider.capabilities":
-            return self.provider_gateway.capabilities(arguments.get("provider"))
+            value = self.provider_gateway.capabilities(arguments.get("provider"))
+            value["gateway_presets"] = default_provider_registry().catalog()["providers"]
+            value["gateway_preset_count"] = len(value["gateway_presets"])
+            value["claim_boundary"] = "provider presets are installable contracts, not live certification"
+            return value
         if name == "syntavra.provider.prepare":
             return asdict(self.provider_gateway.prepare(
                 str(arguments["provider"]),

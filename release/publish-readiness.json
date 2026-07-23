@@ -1,0 +1,9 @@
+{
+  "version": "0.0.1",
+  "channel": "pre-release",
+  "python": {"package": "syntavra-runtime", "uvx": "uvx --from syntavra-runtime syntavra", "published": false},
+  "npm": {"package": "@syntavra/install", "tag": "next", "published": false},
+  "vscode": {"package": "syntavra-vscode", "published": false},
+  "native": {"package": "syntavra-native", "published": false},
+  "claim_boundary": "Registry publication requires owner credentials and successful release receipts."
+}

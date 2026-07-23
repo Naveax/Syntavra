@@ -1,0 +1,28 @@
+{
+  "name": "syntavra-vscode",
+  "displayName": "Syntavra 0.0.1",
+  "description": "Statusline, modes, watcher and local dashboard for Syntavra",
+  "version": "0.0.1",
+  "publisher": "naveax",
+  "engines": {"vscode": "^1.90.0"},
+  "categories": ["Other", "Programming Languages"],
+  "activationEvents": ["onStartupFinished", "onCommand:syntavra.setMode", "onCommand:syntavra.openDashboard"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {"command": "syntavra.setMode", "title": "Syntavra: Set Optimization Mode"},
+      {"command": "syntavra.openDashboard", "title": "Syntavra: Open Local Dashboard"},
+      {"command": "syntavra.reindex", "title": "Syntavra: Incremental Reindex"}
+    ],
+    "configuration": {
+      "title": "Syntavra",
+      "properties": {
+        "syntavra.executable": {"type": "string", "default": "syntavra"},
+        "syntavra.dashboardPort": {"type": "number", "default": 8788},
+        "syntavra.reindexOnSave": {"type": "boolean", "default": true}
+      }
+    }
+  },
+  "scripts": {"test": "node --test extension.test.mjs", "pack:check": "npx --yes @vscode/vsce ls"},
+  "license": "MIT"
+}

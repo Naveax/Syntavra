@@ -36,6 +36,7 @@ REQUIRED = [
     ROOT / "docs" / "SIGNALBENCH.md",
     ROOT / "docs" / "OPERATIONS.md",
     ROOT / "docs" / "TOKEN_SAVER_PLAN_001.md",
+    ROOT / "docs" / "COMPLETE_COMPETITIVE_FEATURE_SET_001.md",
     ROOT / "benchmarks" / "syntavra_component_benchmark.py",
     ROOT / "benchmarks" / "signalbench" / "README.md",
     ROOT / "benchmarks" / "signalbench" / "tasks.example.json",
@@ -70,12 +71,35 @@ REQUIRED = [
     ROOT / "syntavra_runtime" / "token_attribution.py",
     ROOT / "syntavra_runtime" / "command_compactors.py",
     ROOT / "syntavra_runtime" / "context_pack.py",
+    ROOT / "syntavra_runtime" / "optimization_modes.py",
+    ROOT / "syntavra_runtime" / "command_rewriter.py",
+    ROOT / "syntavra_runtime" / "transcript_miner.py",
+    ROOT / "syntavra_runtime" / "prompt_cache_optimizer.py",
+    ROOT / "syntavra_runtime" / "repository_watcher.py",
+    ROOT / "syntavra_runtime" / "background_workers.py",
+    ROOT / "syntavra_runtime" / "dashboard.py",
+    ROOT / "syntavra_runtime" / "agent_config_auditor.py",
+    ROOT / "syntavra_runtime" / "secret_redaction.py",
+    ROOT / "syntavra_runtime" / "wire_format.py",
+    ROOT / "syntavra_runtime" / "code_intelligence.py",
+    ROOT / "syntavra_runtime" / "memory_intelligence.py",
+    ROOT / "syntavra_runtime" / "notifications.py",
+    ROOT / "syntavra_runtime" / "adaptive_provider_router.py",
+    ROOT / "syntavra_runtime" / "subtask_router.py",
+    ROOT / "syntavra_runtime" / "competitive_features.py",
+    ROOT / "native" / "syntavra-native" / "Cargo.toml",
+    ROOT / "native" / "syntavra-native" / "src" / "main.rs",
+    ROOT / "integrations" / "vscode-syntavra" / "package.json",
+    ROOT / "integrations" / "vscode-syntavra" / "extension.js",
+    ROOT / "integrations" / "vscode-syntavra" / "extension.test.mjs",
+    ROOT / "release" / "publish-readiness.json",
     ROOT / "syntavra_runtime" / "release_identity.py",
     ROOT / "syntavra_runtime" / "bundled_skill" / "SKILL.md",
     ROOT / "syntavra_runtime" / "bundled_skill" / "hosts.json",
     ROOT / "signalcore_runtime" / "__init__.py",
     ROOT / "tests" / "runtime" / "test_syntavra_unified_platform.py",
     ROOT / "tests" / "runtime" / "test_token_saver_unification_v001.py",
+    ROOT / "tests" / "runtime" / "test_complete_competitive_features_v001.py",
     SKILL / "SKILL.md",
     SKILL / "data" / "platforms.json",
     SKILL / "scripts" / "platforms.py",
@@ -205,6 +229,23 @@ def main() -> int:
     checks.append(("platform_registry", len(ids) >= 20 and len(ids) == len(set(ids)), f"platform_count={len(ids)}"))
     required_hosts = {"codex", "claude-code", "gemini-cli", "windsurf", "opencode", "vscode-copilot"}
     checks.append(("native_core", required_hosts.issubset(ids), f"missing={sorted(required_hosts - set(ids))}"))
+
+    from syntavra_runtime.competitive_features import manifest as competitive_feature_manifest
+    from syntavra_runtime.command_compactors import CommandCompactorRegistry
+    from syntavra_runtime.command_rewriter import CommandRewriteEngine
+    from syntavra_runtime.host_adapters import coverage_report
+    from syntavra_runtime.provider_registry import default_provider_registry
+    feature_manifest = competitive_feature_manifest(ROOT)
+    checks.append(("competitive_feature_manifest", bool(feature_manifest.get("ok")), json.dumps(feature_manifest.get("gates", {}), sort_keys=True)))
+    checks.append(("pretool_rewrite_coverage", CommandRewriteEngine().manifest()["count"] >= 60, str(CommandRewriteEngine().manifest()["count"])))
+    checks.append(("command_compactor_coverage", CommandCompactorRegistry().manifest()["count"] >= 60, str(CommandCompactorRegistry().manifest()["count"])))
+    host_coverage = coverage_report()
+    checks.append(("host_installation_coverage", host_coverage["controlled_hosts"] >= 30, json.dumps(host_coverage, sort_keys=True)))
+    provider_count = len(default_provider_registry().catalog()["providers"])
+    checks.append(("provider_gateway_coverage", provider_count >= 40, f"providers={provider_count}"))
+    readiness = _json(ROOT / "release" / "publish-readiness.json")
+    publication_targets = [readiness.get(name, {}) for name in ("python", "npm", "vscode", "native")]
+    checks.append(("publication_claim_boundary", readiness.get("version") == EXPECTED_VERSION and len(publication_targets) == 4 and all(isinstance(row, dict) and row.get("published") is False for row in publication_targets), "publication remains credential-gated"))
 
     roblox = _json(SKILL / "profiles" / "roblox_studio" / "profile.json")
     activation = roblox.get("activation", {})

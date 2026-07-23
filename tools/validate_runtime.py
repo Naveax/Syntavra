@@ -18,6 +18,11 @@ from syntavra_runtime.integration_matrix import IntegrationMatrix
 from syntavra_runtime.models import ContextItem
 from syntavra_runtime.release_identity import CHANNEL, VERSION
 from syntavra_runtime.paired_benchmark import CodingCorpusPlanner, PairedSchedule, default_arms
+from syntavra_runtime.competitive_features import manifest as competitive_feature_manifest
+from syntavra_runtime.command_compactors import CommandCompactorRegistry
+from syntavra_runtime.command_rewriter import CommandRewriteEngine
+from syntavra_runtime.host_adapters import coverage_report
+from syntavra_runtime.provider_registry import default_provider_registry
 
 REQUIRED = [ROOT / "syntavra_runtime" / name for name in (
     "__init__.py", "cli.py", "bootstrap.py", "process_broker.py", "rollout.py",
@@ -39,6 +44,12 @@ REQUIRED = [ROOT / "syntavra_runtime" / name for name in (
     "headless_runtime.py", "interactive_console.py", "reliability_lab.py",
     "update_manager.py", "tool_registry.py", "mcp_application.py",
     "token_attribution.py", "command_compactors.py", "context_pack.py",
+    "optimization_modes.py", "command_rewriter.py", "transcript_miner.py",
+    "prompt_cache_optimizer.py", "repository_watcher.py", "background_workers.py",
+    "worker_entry.py", "dashboard.py", "agent_config_auditor.py",
+    "secret_redaction.py", "wire_format.py", "code_intelligence.py",
+    "memory_intelligence.py", "notifications.py", "adaptive_provider_router.py",
+    "subtask_router.py", "competitive_features.py",
 )]
 CONTROLS = {name: True for name in (
     "same_prompt", "same_model", "same_reasoning", "same_repository", "same_verifier",
@@ -67,6 +78,14 @@ def main() -> int:
     checks.append(("context_pack", pack.mandatory_satisfied and pack.used <= 20))
     integration = IntegrationMatrix.validate()
     checks.append(("integration_targets", integration["ok"] and integration["providers"] >= 10 and integration["frameworks"] >= 15 and integration["hosts"] >= 18))
+    features = competitive_feature_manifest(ROOT)
+    checks.append(("competitive_feature_manifest", bool(features.get("ok"))))
+    checks.append(("pretool_rewrite_coverage", CommandRewriteEngine().manifest()["count"] >= 60))
+    checks.append(("command_compactor_coverage", CommandCompactorRegistry().manifest()["count"] >= 60))
+    checks.append(("live_host_contract_coverage", coverage_report()["controlled_hosts"] >= 30))
+    checks.append(("provider_gateway_coverage", len(default_provider_registry().catalog()["providers"]) >= 40))
+    checks.append(("native_companion", (ROOT / "native/syntavra-native/Cargo.toml").is_file() and (ROOT / "native/syntavra-native/src/main.rs").is_file()))
+    checks.append(("vscode_extension", (ROOT / "integrations/vscode-syntavra/package.json").is_file() and (ROOT / "integrations/vscode-syntavra/extension.js").is_file()))
     tasks = CodingCorpusPlanner.generate_slots()
     schedule = PairedSchedule(tasks, default_arms(), repetitions=30)
     checks.append(("signalbench_schedule", len(tasks) == 150 and schedule.count == 27000))

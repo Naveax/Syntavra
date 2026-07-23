@@ -9,6 +9,7 @@ from typing import Any, Mapping, Sequence
 
 from .competitive_fabric import CacheAligner
 from .evidence import EvidenceStore
+from .prompt_cache_optimizer import PromptCacheOptimizer
 from .security_scan import scan_text
 from .state import StateDB
 from .usage_receipt_ledger import UsageReceiptLedger, normalize_provider_usage
@@ -51,6 +52,11 @@ class ProviderPlan:
     replay_response_handle: str
     prepared_request: dict[str, Any]
     reasons: tuple[str, ...]
+    cache_expires_at: float = 0.0
+    cache_refresh_after: float = 0.0
+    cacheable_tokens: int = 0
+    volatile_tokens: int = 0
+    cache_reordered: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,6 +145,7 @@ class ProviderGateway:
         self.evidence = evidence
         self.usage_ledger = usage_ledger
         self.aligner = CacheAligner()
+        self.prompt_cache_optimizer = PromptCacheOptimizer(path.parent)
         with self.state.transaction(immediate=True) as db:
             db.executescript(
                 """
@@ -227,6 +234,34 @@ class ProviderGateway:
         if isinstance(messages, Sequence):
             return [item for item in messages if isinstance(item, Mapping)]
         return []
+
+    @staticmethod
+    def _apply_safe_message_order(
+        request: dict[str, Any],
+        *,
+        family: str,
+        ordered: Sequence[Mapping[str, Any]],
+        original: Sequence[Mapping[str, Any]],
+    ) -> bool:
+        """Apply stable-prefix ordering only when role semantics are unambiguous.
+
+        System/developer messages may be normalized ahead of conversational rows. Tool
+        and assistant messages are never moved because their order carries execution
+        semantics. Gemini contents are left untouched unless the sequence is already
+        stable-prefix ordered.
+        """
+        if list(ordered) == list(original):
+            return False
+        stable = [row for row in ordered if PromptCacheOptimizer._stable_message(row)]
+        if family == "gemini":
+            return False
+        if not stable or any(str(row.get("role") or "").casefold() not in {"system", "developer"} for row in stable):
+            return False
+        key = "messages" if isinstance(request.get("messages"), list) else "input"
+        if not isinstance(request.get(key), list):
+            return False
+        request[key] = [copy.deepcopy(dict(row)) for row in ordered]
+        return True
 
     @staticmethod
     def _has_tools(request: Mapping[str, Any]) -> bool:
@@ -353,6 +388,27 @@ class ProviderGateway:
         prepared = copy.deepcopy(dict(request))
         resolved_model = str(model or prepared.get("model") or "unknown")
         messages = self._message_sequence(prepared, capabilities.request_family)
+        cache_plan = self.prompt_cache_optimizer.plan(
+            messages,
+            provider=capabilities.provider,
+            model=resolved_model,
+            ttl_seconds=max(1, int(prompt_cache_ttl_seconds)),
+            reorder=cache_policy != "off",
+        )
+        ordered_messages = [
+            *[row for row in messages if PromptCacheOptimizer._stable_message(row)],
+            *[row for row in messages if not PromptCacheOptimizer._stable_message(row)],
+        ]
+        cache_reordered = False
+        if cache_policy != "off" and cache_plan.reordered:
+            cache_reordered = self._apply_safe_message_order(
+                prepared,
+                family=capabilities.request_family,
+                ordered=ordered_messages,
+                original=messages,
+            )
+            if cache_reordered:
+                messages = self._message_sequence(prepared, capabilities.request_family)
         alignment = self.aligner.align(messages, keep_tail=1 if messages else 0)
         stable_request = self._stable_copy(prepared)
         request_hash = sha256_bytes(canonical_json(stable_request))
@@ -363,6 +419,13 @@ class ProviderGateway:
             "request": stable_request,
         }))
         reasons: list[str] = []
+        if cache_reordered:
+            reasons.append("stable-prefix-layout-applied")
+        elif cache_plan.reordered:
+            reasons.append("stable-prefix-layout-proposed-not-safe-to-reorder")
+        if cache_policy != "off":
+            reasons.append(f"cache-refresh-after:{int(cache_plan.refresh_after)}")
+            reasons.append(f"cache-expires-at:{int(cache_plan.expires_at)}")
         prompt_cache_mode = "disabled"
         if cache_policy != "off":
             prompt_cache_mode, prompt_reasons = self._apply_prompt_cache(
@@ -425,6 +488,11 @@ class ProviderGateway:
             replay_response_handle=replay_handle,
             prepared_request=prepared,
             reasons=tuple(dict.fromkeys(reasons)),
+            cache_expires_at=cache_plan.expires_at if cache_policy != "off" else 0.0,
+            cache_refresh_after=cache_plan.refresh_after if cache_policy != "off" else 0.0,
+            cacheable_tokens=cache_plan.cacheable_tokens if cache_policy != "off" else 0,
+            volatile_tokens=cache_plan.volatile_tokens,
+            cache_reordered=cache_reordered,
         )
 
     def replay(self, plan_or_cache_key: ProviderPlan | str) -> dict[str, Any] | None:

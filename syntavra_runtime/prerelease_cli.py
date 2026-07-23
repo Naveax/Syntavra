@@ -7,6 +7,22 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from .adaptive_provider_router import AdaptiveProviderRouter
+from .agent_config_auditor import AgentConfigAuditor
+from .background_workers import BackgroundIntelligenceWorker
+from .code_intelligence import CodeIntelligenceIndex
+from .command_rewriter import CommandRewriteEngine
+from .dashboard import LocalDashboard
+from .memory_intelligence import MemoryIntelligenceStore
+from .notifications import NotificationFeed
+from .optimization_modes import MODES, OptimizationModeStore, SavingsLedger, render_statusline
+from .prompt_cache_optimizer import PromptCacheOptimizer
+from .repository_watcher import RepositoryWatcher
+from .secret_redaction import SecretRedactor
+from .subtask_router import AutomaticSubtaskDelegator
+from .transcript_miner import TranscriptOpportunityMiner
+from .wire_format import LosslessWireCodec
+from .competitive_features import manifest as competitive_feature_manifest
 from .infinite_context import CONTEXT_TIERS, UnboundedContextCoordinator
 from .platform import SyntavraPlatform
 from .platform_cli import add_run_subcommands as add_platform_run_subcommands, handle as handle_platform
@@ -29,6 +45,7 @@ from .release_identity import VERSION, identity, validate_repository_identity
 from .session_product import SessionContinuityController
 from .paired_benchmark import CodingCorpusPlanner, PairedSchedule, SuperiorityGate, default_arms
 from .semantic_structure import GraphEdge, GraphNode, SemanticGraph
+from .signalbench import SignalBenchRunner, load_results
 from .usage_receipt_ledger import UsageReceiptLedger
 from .util import stable_project_id
 from .zero_friction import ZeroFrictionManager
@@ -155,6 +172,85 @@ def _parser() -> argparse.ArgumentParser:
     session_continuity.add_argument("session_id")
     session_continuity.add_argument("--token-budget", type=int, default=32_000)
     run_sub.add_parser("session-status")
+
+    mode = run_sub.add_parser("mode")
+    mode.add_argument("mode", nargs="?", choices=tuple(MODES))
+    mode.add_argument("--source", default="user")
+    statusline = run_sub.add_parser("statusline")
+    statusline.add_argument("--verbose", action="store_true")
+    rewrite = run_sub.add_parser("rewrite")
+    rewrite.add_argument("rewrite_argv", nargs=argparse.REMAINDER)
+    transcript = run_sub.add_parser("transcript-mine")
+    transcript.add_argument("source")
+    watch = run_sub.add_parser("watch")
+    watch.add_argument("--iterations", type=int, default=1)
+    watch.add_argument("--interval", type=float, default=1.0)
+    watch.add_argument("--no-index", action="store_true")
+    dashboard = run_sub.add_parser("dashboard")
+    dashboard.add_argument("--host", default="127.0.0.1")
+    dashboard.add_argument("--port", type=int, default=8788)
+    dashboard.add_argument("--open", action="store_true")
+    dashboard.add_argument("--snapshot", action="store_true")
+    run_sub.add_parser("audit-config")
+    worker = run_sub.add_parser("worker")
+    worker.add_argument("worker_action", choices=("run","start","status"))
+    worker.add_argument("--iterations", type=int, default=1)
+    worker.add_argument("--interval", type=float, default=2.0)
+    cache_plan = run_sub.add_parser("cache-plan")
+    cache_plan.add_argument("source", help="JSON message list or path")
+    cache_plan.add_argument("--provider", required=True)
+    cache_plan.add_argument("--model", required=True)
+    cache_plan.add_argument("--ttl", type=int)
+    cache_plan.add_argument("--no-reorder", action="store_true")
+    run_sub.add_parser("cache-health")
+    amortize = run_sub.add_parser("cache-amortize")
+    amortize.add_argument("--write", type=int, required=True)
+    amortize.add_argument("--read", type=int, required=True)
+    amortize.add_argument("--uncached", type=int, required=True)
+    amortize.add_argument("--requests", type=int, required=True)
+    memory_add = run_sub.add_parser("memory-add")
+    memory_add.add_argument("text")
+    memory_add.add_argument("--kind", default="observation")
+    memory_add.add_argument("--importance", type=float, default=.5)
+    memory_add.add_argument("--confidence", type=float, default=.7)
+    memory_extract = run_sub.add_parser("memory-extract")
+    memory_extract.add_argument("source")
+    memory_search = run_sub.add_parser("memory-search")
+    memory_search.add_argument("query")
+    memory_search.add_argument("--limit", type=int, default=20)
+    memory_export = run_sub.add_parser("memory-export")
+    memory_export.add_argument("path")
+    memory_backfill = run_sub.add_parser("memory-backfill")
+    memory_backfill.add_argument("--limit", type=int, default=1000)
+    run_sub.add_parser("memory-intelligence-status")
+    notify = run_sub.add_parser("notify")
+    notify.add_argument("title")
+    notify.add_argument("body")
+    notify.add_argument("--severity", choices=("info","warning","critical"), default="info")
+    notify.add_argument("--channel", default="local")
+    notify.add_argument("--discord-webhook", default="")
+    notify.add_argument("--telegram-token", default="")
+    notify.add_argument("--telegram-chat", default="")
+    provider_route = run_sub.add_parser("provider-route")
+    provider_route.add_argument("task")
+    provider_route.add_argument("candidates", help="JSON list or path")
+    provider_route.add_argument("--changed-files", type=int, default=0)
+    provider_route.add_argument("--tokens", type=int, default=0)
+    delegate = run_sub.add_parser("delegate")
+    delegate.add_argument("objective")
+    delegate.add_argument("--context-path", action="append", default=[])
+    delegate.add_argument("--max-tasks", type=int, default=8)
+    redact = run_sub.add_parser("redact")
+    redact.add_argument("source", help="JSON/text value or path")
+    wire = run_sub.add_parser("wire")
+    wire.add_argument("wire_action", choices=("encode","decode"))
+    wire.add_argument("source", help="JSON value or path")
+    wire.add_argument("--minimum-savings", type=float, default=.08)
+    code = run_sub.add_parser("code-intel")
+    code.add_argument("intel_action", choices=("report","call","class","dead","untested","provenance","risk","pagerank","hotspots","cycles","coupling","boundaries","signal","duplicates","delete","refactor","anti-patterns","cross-repo"))
+    code.add_argument("query", nargs="?", default="")
+    code.add_argument("--path", action="append", default=[])
+    code.add_argument("--target-name", default="")
     add_platform_run_subcommands(run_sub)
 
     prove = sub.add_parser("prove", help="validate measured external evidence")
@@ -170,6 +266,10 @@ def _parser() -> argparse.ArgumentParser:
     maturity.add_argument("path")
     readiness = prove_sub.add_parser("readiness")
     readiness.add_argument("--receipts")
+    provider_billed = prove_sub.add_parser("provider-billed")
+    provider_billed.add_argument("path")
+    provider_billed.add_argument("--baseline", default="plain-host")
+    provider_billed.add_argument("--candidate", default="syntavra-minimal")
     schema = prove_sub.add_parser("schema")
     schema.add_argument("--output", default="schemas/provider-usage-receipt.json")
 
@@ -236,6 +336,14 @@ def _handle_prove(args: argparse.Namespace, state: Path) -> int:
             "claim": "EXTERNAL_SUPERIORITY_NOT_PROVEN",
         })
         return 0
+    if args.action == "provider-billed":
+        rows = load_results(Path(args.path))
+        value = SignalBenchRunner.compare(rows, baseline_arm=args.baseline, candidate_arm=args.candidate)
+        value["provider_observed_runs"] = sum(bool(row.provider_observed) for row in rows)
+        value["total_runs"] = len(rows)
+        value["fail_closed"] = True
+        _emit(value)
+        return 0 if value["claimable_superiority"] else 4
     if args.action == "schema":
         output = Path(args.output)
         _emit({"ok": True, "output": str(output), "schema": write_receipt_schema(output)})
@@ -266,6 +374,107 @@ def _handle_prove(args: argparse.Namespace, state: Path) -> int:
     _emit(value)
     return 0 if value["ok"] else 4
 
+
+
+def _read_text_or_path(value: str) -> str:
+    path = Path(value)
+    return path.read_text(encoding="utf-8") if path.is_file() else value
+
+
+def _handle_competitive_run(args: argparse.Namespace, *, project: Path, state: Path) -> tuple[bool, Any, int]:
+    action = args.action
+    if action == "mode":
+        store = OptimizationModeStore(state)
+        return True, store.set(args.mode, source=args.source) if args.mode else store.manifest(), 0
+    if action == "statusline":
+        return True, {"statusline": render_statusline(state, compact=not args.verbose), "mode": OptimizationModeStore(state).manifest(), "savings": SavingsLedger(state).summary()}, 0
+    if action == "rewrite":
+        if not args.rewrite_argv: raise ValueError("rewrite command is required")
+        return True, CommandRewriteEngine().rewrite(args.rewrite_argv).to_dict(), 0
+    if action == "transcript-mine":
+        return True, TranscriptOpportunityMiner().analyze(Path(args.source) if Path(args.source).is_file() else args.source), 0
+    if action == "watch":
+        watcher = RepositoryWatcher(project, state)
+        callback = None if args.no_index else lambda changes: {"index": CodeIntelligenceIndex(project).build(), "changed": list(changes.changed)}
+        rows = watcher.watch(interval_seconds=args.interval, iterations=args.iterations, callback=callback)
+        return True, {"changes": [asdict(row) for row in rows], "status": watcher.status()}, 0
+    if action == "dashboard":
+        dashboard = LocalDashboard(project=project, state_root=state)
+        if args.snapshot: return True, dashboard.snapshot(), 0
+        dashboard.serve(host=args.host, port=args.port, open_browser=args.open)
+        return True, {"ok": True, "stopped": True}, 0
+    if action == "worker":
+        worker=BackgroundIntelligenceWorker(project=project,state_root=state)
+        if args.worker_action=="status": return True,worker.status(),0
+        if args.worker_action=="start": return True,worker.spawn(project=project,state_root=state,interval_seconds=args.interval),0
+        return True,worker.run(iterations=args.iterations,interval_seconds=args.interval),0
+    if action == "audit-config":
+        return True, AgentConfigAuditor(project).audit(), 0
+    if action == "cache-plan":
+        messages = _load_json_argument(args.source)
+        if not isinstance(messages, list): raise ValueError("cache-plan source must contain a JSON message list")
+        plan = PromptCacheOptimizer(state).plan(messages, provider=args.provider, model=args.model, ttl_seconds=args.ttl, reorder=not args.no_reorder)
+        return True, asdict(plan), 0
+    if action == "cache-health":
+        return True, PromptCacheOptimizer(state).health(), 0
+    if action == "cache-amortize":
+        return True, PromptCacheOptimizer.amortization(cache_write_tokens=args.write, cache_read_tokens=args.read, uncached_input_tokens=args.uncached, requests=args.requests), 0
+    memory = MemoryIntelligenceStore(state / "memory-intelligence.sqlite3", notification_feed=NotificationFeed(state))
+    if action == "memory-add":
+        return True, asdict(memory.add(args.text, kind=args.kind, importance=args.importance, confidence=args.confidence)), 0
+    if action == "memory-extract":
+        return True, {"observations": [asdict(row) for row in memory.extract(_read_text_or_path(args.source))]}, 0
+    if action == "memory-search":
+        return True, {"results": memory.search(args.query, limit=args.limit)}, 0
+    if action == "memory-export":
+        return True, memory.export_jsonl(Path(args.path)), 0
+    if action == "memory-backfill":
+        return True, memory.backfill_embeddings(limit=args.limit), 0
+    if action == "memory-intelligence-status":
+        return True, {"stats": memory.stats(), "ranked": memory.ranked(limit=100)}, 0
+    if action == "notify":
+        feed=NotificationFeed(state); item=feed.record(channel=args.channel,severity=args.severity,title=args.title,body=args.body)
+        delivered=feed.deliver(item,discord_webhook=args.discord_webhook,telegram_bot_token=args.telegram_token,telegram_chat_id=args.telegram_chat)
+        return True, {"notification":asdict(item),"delivery":delivered}, 0 if all(row.get("ok", True) for row in delivered.values()) else 3
+    if action == "provider-route":
+        rows=_load_json_argument(args.candidates)
+        if not isinstance(rows,list): raise ValueError("provider candidates must be a JSON list")
+        return True, asdict(AdaptiveProviderRouter.from_mappings(rows).route(args.task,changed_files=args.changed_files,token_estimate=args.tokens)), 0
+    if action == "delegate":
+        return True, asdict(AutomaticSubtaskDelegator().plan(args.objective,context_paths=args.context_path,max_tasks=args.max_tasks)), 0
+    if action == "redact":
+        raw=_read_text_or_path(args.source)
+        try: value=json.loads(raw)
+        except json.JSONDecodeError: value=raw
+        redacted,receipt=SecretRedactor().redact(value)
+        return True,{"value":redacted,"receipt":receipt},0
+    if action == "wire":
+        value=_load_json_argument(args.source)
+        codec=LosslessWireCodec()
+        return True, codec.encode(value,min_savings_ratio=args.minimum_savings) if args.wire_action=="encode" else codec.decode(value),0
+    if action == "code-intel":
+        index=CodeIntelligenceIndex(project); index.build(); name=args.intel_action
+        if name=="report": value=index.report()
+        elif name=="call": value=index.call_hierarchy(args.query)
+        elif name=="class": value=index.class_hierarchy(args.query)
+        elif name=="dead": value=index.dead_code()
+        elif name=="untested": value=index.untested_symbols()
+        elif name=="provenance": value=index.provenance(args.query)
+        elif name=="risk": value=index.pr_risk(args.path)
+        elif name=="pagerank": value=index.pagerank()
+        elif name=="hotspots": value=index.hotspots()
+        elif name=="cycles": value=index.cycles()
+        elif name=="coupling": value=index.coupling()
+        elif name=="boundaries": value=index.module_boundaries()
+        elif name=="signal": value=index.signal_chain(args.query)
+        elif name=="duplicates": value=index.duplicates()
+        elif name=="delete": value=index.delete_safe(args.query)
+        elif name=="refactor": value=index.refactor_plan(args.query,target_name=args.target_name)
+        elif name=="anti-patterns": value=index.anti_patterns()
+        elif name=="cross-repo": value=index.cross_repo_contracts([Path(item) for item in args.path])
+        else: raise RuntimeError(name)
+        return True,value,0
+    return False,None,0
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
@@ -330,6 +539,7 @@ def main(argv: list[str] | None = None) -> int:
                 "proxy_presets": ProxyProductRegistry.validate(),
                 "primary_workflow": ["setup", "status", "run", "prove"],
                 "platform": platform.status(),
+                "competitive_features": competitive_feature_manifest(project),
             }
         _emit(value)
         return 0 if doctor["ok"] else 2
@@ -339,9 +549,14 @@ def main(argv: list[str] | None = None) -> int:
         if platform_result is not None:
             _emit(platform_result)
             return 0 if platform_result.get("ok", True) else 3
+        handled, competitive_value, competitive_code = _handle_competitive_run(args, project=project, state=state)
+        if handled:
+            _emit(competitive_value)
+            return competitive_code
         if args.action == "manifest":
             value = ProductSurface.manifest()
             value["proxy_presets"] = ProxyProductRegistry.validate()
+            value["competitive_features"] = competitive_feature_manifest(project)
             _emit(value)
             return 0
         if args.action == "route":

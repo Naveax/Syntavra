@@ -1,5 +1,17 @@
 ## 0.0.1 - Pre-release
 
+### Complete competitive feature set
+
+- Added fail-closed pre-tool rewriting and expanded command-specific compaction to 70 surfaces.
+- Added six instant modes, host statusline, local savings ledger, transcript opportunity mining, and PWA dashboard.
+- Added safe prompt-cache layout, expiry, refresh, and amortization planning directly in the provider gateway.
+- Added incremental repository watching and code-graph analytics covering hierarchy, dead/untested code, PageRank, hotspots, cycles, coupling, provenance, risk, delete safety, refactoring, anti-patterns, and cross-repo contracts.
+- Added local hybrid memory intelligence, embedding backfill, ROI ranking, critical notifications, and JSONL export.
+- Added MCP secret redaction, lossless wire encoding, quota/rate-limit routing, complexity routing, and short-handoff delegation.
+- Expanded controlled host contracts to more than 30 and provider gateway presets to more than 40.
+- Added VS Code and dependency-free Rust companion sources plus publication-readiness manifests.
+- Kept registry publication, live provider certification, and competitor superiority fail-closed until external receipts exist.
+
 ### Token-saver product unification
 
 - Repositioned Syntavra as a token and context optimization Agent Skill/runtime middleware, not a replacement coding agent.

@@ -55,6 +55,22 @@ Normal daily work still happens in the existing coding agent. Syntavra is intend
 
 `tiny`, `optimized` and `full` remain compatibility aliases only. The installed profile, listed tools, callable tools and benchmark profile are derived from the same canonical registry.
 
+## Competitive feature set
+
+Syntavra 0.0.1 now includes a fail-closed pre-tool command rewriter, 70 command-specific compactors, six instant optimization modes, a live savings statusline, prompt-cache layout/expiry planning, transcript opportunity mining, incremental repository watching, local browser/PWA dashboard, agent-config auditing, secret redaction, lossless MCP wire encoding, hybrid memory search, deep code-graph analytics, adaptive provider fallback, short-handoff delegation, a VS Code extension, and a dependency-free Rust companion source.
+
+```bash
+syntavra run mode ultra
+syntavra run statusline
+syntavra run rewrite -- git status
+syntavra run dashboard --open
+syntavra run code-intel report
+syntavra run memory-search "cache decision"
+syntavra run provider-route "security migration" providers.json
+```
+
+The implementation registry currently covers at least 60 rewrite/compaction surfaces, more than 30 controlled host contracts, and more than 40 provider presets. Installation contracts are not described as live certifications. Registry publication and provider-billed competitor results remain external, credential-gated actions. See `docs/COMPLETE_COMPETITIVE_FEATURE_SET_001.md`.
+
 ## Exact-recovery rule
 
 Syntavra does not treat deletion as compression:

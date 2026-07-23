@@ -149,31 +149,93 @@ class CommandCompactorPlugin:
         return executable in self.executables and (self.argument_pattern is None or bool(self.argument_pattern.search(arguments)))
 
 
+
+
+def _head_tail_selector(lines: Sequence[str]) -> tuple[list[str], int]:
+    errors = _errors(lines)
+    return [*_head_tail([line for line in lines if line.strip()], 30, 20), *errors[:32]], len(errors)
+
+
 class CommandCompactorRegistry:
-    """Specific compactors for common coding-agent command output."""
+    """Specific compactors for common coding-agent command output.
+
+    The registry deliberately contains command-family plugins instead of one
+    universal truncator. Exact stdout/stderr is externalized before any plugin
+    view is returned by the host pipeline.
+    """
 
     def __init__(self) -> None:
         self.plugins: tuple[CommandCompactorPlugin, ...] = (
             CommandCompactorPlugin("git-status", ("git",), re.compile(r"^status\b"), _git_status),
             CommandCompactorPlugin("git-diff", ("git",), re.compile(r"^(?:diff|show)\b"), _git_diff),
             CommandCompactorPlugin("git-log", ("git",), re.compile(r"^log\b"), _git_log),
-            CommandCompactorPlugin("ripgrep", ("rg", "grep"), None, _search),
-            CommandCompactorPlugin("find", ("find", "fd", "tree", "ls"), None, _search),
+            CommandCompactorPlugin("git-branch", ("git",), re.compile(r"^branch\b"), _table),
+            CommandCompactorPlugin("git-stash", ("git",), re.compile(r"^stash\b"), _table),
+            CommandCompactorPlugin("git-worktree", ("git",), re.compile(r"^worktree\b"), _table),
+            CommandCompactorPlugin("git-fetch", ("git",), re.compile(r"^(?:fetch|pull|push)\b"), _table),
+            CommandCompactorPlugin("git-remote", ("git",), re.compile(r"^remote\b"), _table),
+            CommandCompactorPlugin("git-tag", ("git",), re.compile(r"^tag\b"), _table),
+            CommandCompactorPlugin("git-clean", ("git",), re.compile(r"^(?:clean|reset|restore|checkout|switch)\b"), _table),
+            CommandCompactorPlugin("ripgrep", ("rg",), None, _search),
+            CommandCompactorPlugin("grep", ("grep",), None, _search),
+            CommandCompactorPlugin("find", ("find", "fd"), None, _search),
+            CommandCompactorPlugin("tree", ("tree",), None, _search),
+            CommandCompactorPlugin("ls", ("ls", "dir"), None, _table),
             CommandCompactorPlugin("pytest", ("pytest", "py.test"), None, _test),
             CommandCompactorPlugin("cargo-test", ("cargo",), re.compile(r"\btest\b"), _test),
+            CommandCompactorPlugin("cargo-check", ("cargo",), re.compile(r"\b(?:check|clippy|build)\b"), _lint),
             CommandCompactorPlugin("go-test", ("go",), re.compile(r"^test\b"), _test),
+            CommandCompactorPlugin("go-build", ("go",), re.compile(r"^(?:build|vet|list)\b"), _lint),
             CommandCompactorPlugin("npm-test", ("npm",), re.compile(r"^(?:test|run test)\b"), _test),
+            CommandCompactorPlugin("npm-list", ("npm",), re.compile(r"^(?:list|ls|outdated|audit)\b"), _json_or_table),
             CommandCompactorPlugin("pnpm-test", ("pnpm",), re.compile(r"^(?:test|run test)\b"), _test),
+            CommandCompactorPlugin("pnpm-list", ("pnpm",), re.compile(r"^(?:list|ls|outdated|audit)\b"), _json_or_table),
             CommandCompactorPlugin("yarn-test", ("yarn",), re.compile(r"^(?:test|run test)\b"), _test),
+            CommandCompactorPlugin("yarn-list", ("yarn",), re.compile(r"^(?:list|info|audit)\b"), _json_or_table),
             CommandCompactorPlugin("jest", ("jest",), None, _test),
             CommandCompactorPlugin("vitest", ("vitest",), None, _test),
+            CommandCompactorPlugin("playwright", ("playwright",), re.compile(r"^test\b"), _test),
+            CommandCompactorPlugin("coverage", ("coverage",), None, _test),
             CommandCompactorPlugin("ruff", ("ruff",), None, _lint),
             CommandCompactorPlugin("mypy", ("mypy",), None, _lint),
             CommandCompactorPlugin("eslint", ("eslint",), None, _lint),
+            CommandCompactorPlugin("biome", ("biome",), None, _lint),
+            CommandCompactorPlugin("pylint", ("pylint",), None, _lint),
+            CommandCompactorPlugin("flake8", ("flake8",), None, _lint),
             CommandCompactorPlugin("docker-build", ("docker", "podman"), re.compile(r"^build\b"), _docker_build),
             CommandCompactorPlugin("docker-ps", ("docker", "podman"), re.compile(r"^(?:ps|images)\b"), _table),
+            CommandCompactorPlugin("docker-logs", ("docker", "podman"), re.compile(r"^logs\b"), _table),
+            CommandCompactorPlugin("docker-inspect", ("docker", "podman"), re.compile(r"^(?:inspect|stats|info)\b"), _json_or_table),
+            CommandCompactorPlugin("docker-compose", ("docker-compose",), None, _table),
             CommandCompactorPlugin("kubectl-get", ("kubectl",), re.compile(r"^(?:get|describe)\b"), _json_or_table),
-            CommandCompactorPlugin("gh-pr-checks", ("gh",), re.compile(r"^pr\s+(?:checks|view)\b"), _json_or_table),
+            CommandCompactorPlugin("kubectl-logs", ("kubectl",), re.compile(r"^logs\b"), _table),
+            CommandCompactorPlugin("kubectl-events", ("kubectl",), re.compile(r"^(?:events|top|api-resources)\b"), _json_or_table),
+            CommandCompactorPlugin("helm", ("helm",), None, _json_or_table),
+            CommandCompactorPlugin("terraform", ("terraform", "tofu"), None, _json_or_table),
+            CommandCompactorPlugin("ansible", ("ansible", "ansible-playbook"), None, _table),
+            CommandCompactorPlugin("gh-pr", ("gh",), re.compile(r"^pr\b"), _json_or_table),
+            CommandCompactorPlugin("gh-issue", ("gh",), re.compile(r"^issue\b"), _json_or_table),
+            CommandCompactorPlugin("gh-run", ("gh",), re.compile(r"^run\b"), _json_or_table),
+            CommandCompactorPlugin("gh-repo", ("gh",), re.compile(r"^(?:repo|api)\b"), _json_or_table),
+            CommandCompactorPlugin("pip", ("pip", "pip3"), None, _json_or_table),
+            CommandCompactorPlugin("uv", ("uv",), None, _json_or_table),
+            CommandCompactorPlugin("poetry", ("poetry",), None, _json_or_table),
+            CommandCompactorPlugin("aws", ("aws",), None, _json_or_table),
+            CommandCompactorPlugin("gcloud", ("gcloud",), None, _json_or_table),
+            CommandCompactorPlugin("azure-cli", ("az",), None, _json_or_table),
+            CommandCompactorPlugin("curl", ("curl", "wget"), None, _head_tail_selector),
+            CommandCompactorPlugin("systemctl", ("systemctl",), None, _table),
+            CommandCompactorPlugin("journalctl", ("journalctl",), None, _table),
+            CommandCompactorPlugin("process-list", ("ps", "tasklist"), None, _table),
+            CommandCompactorPlugin("disk-usage", ("du", "df"), None, _table),
+            CommandCompactorPlugin("dotnet", ("dotnet",), None, _test),
+            CommandCompactorPlugin("maven", ("mvn", "mvnw"), None, _test),
+            CommandCompactorPlugin("gradle", ("gradle", "gradlew"), None, _test),
+            CommandCompactorPlugin("cmake", ("cmake", "ctest", "ninja", "make"), None, _test),
+            CommandCompactorPlugin("java", ("java", "javac"), None, _table),
+            CommandCompactorPlugin("rustc", ("rustc",), None, _lint),
+            CommandCompactorPlugin("powershell", ("pwsh", "powershell"), None, _table),
+            CommandCompactorPlugin("package-manager", ("apt", "apt-get", "dnf", "yum", "brew", "winget", "choco", "scoop"), None, _table),
         )
 
     @staticmethod
@@ -199,4 +261,6 @@ class CommandCompactorRegistry:
             "plugins": [plugin.name for plugin in self.plugins],
             "count": len(self.plugins),
             "exact_output_required": True,
+            "target_minimum": 60,
+            "coverage_gate": len(self.plugins) >= 60,
         }

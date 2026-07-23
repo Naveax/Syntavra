@@ -9,6 +9,8 @@ from typing import Any, Mapping, Sequence
 from .mcp_policy import MCPToolPolicy
 from .product_surface import SessionAnalyticsStore
 from .tool_registry import ToolSchemaCompiler, normalize_profile
+from .secret_redaction import SecretRedactor
+from .wire_format import LosslessWireCodec
 
 
 class MCPApplicationPipeline:
@@ -23,6 +25,11 @@ class MCPApplicationPipeline:
         self.state_root = Path(state_root)
         self.analytics = SessionAnalyticsStore(self.state_root / "analytics" / "events.jsonl")
         self.compiler = ToolSchemaCompiler()
+        self.redactor = SecretRedactor()
+        self.wire = LosslessWireCodec()
+        self.wire_mode = os.environ.get("SYNTAVRA_WIRE_MODE", "off").strip().casefold() or "off"
+        if self.wire_mode not in {"off", "auto"}:
+            raise ValueError(f"unknown Syntavra wire mode: {self.wire_mode}")
         self.policy = MCPToolPolicy(self._requested_profile())
         self.schema_mode = os.environ.get("SYNTAVRA_SCHEMA_MODE", "compact").strip().casefold() or "compact"
         if self.schema_mode not in {"compact", "raw"}:
@@ -122,6 +129,9 @@ class MCPApplicationPipeline:
         try:
             value = server.call_tool(tool_name, arguments)
             value = server.output_pipeline.capture_mcp_result(tool_name, arguments, value)
+            value, redaction_receipt = self.redactor.redact(value)
+            wire_receipt = self.wire.encode(value) if self.wire_mode == "auto" else {"encoding": "json", "payload": value, "savings_ratio": 0.0}
+            rendered_value = wire_receipt if self.wire_mode == "auto" and wire_receipt.get("encoding") != "json" else value
         except KeyError:
             return {
                 "jsonrpc": "2.0",
@@ -144,13 +154,15 @@ class MCPApplicationPipeline:
             }
 
         result = {
-            "content": [{"type": "text", "text": json.dumps(value, ensure_ascii=False, default=str)}],
+            "content": [{"type": "text", "text": json.dumps(rendered_value, ensure_ascii=False, default=str)}],
             "_meta": {
                 "syntavra_route_receipt": decision.receipt_hash,
                 "syntavra_profile": decision.profile,
                 "syntavra_risk": decision.risk,
                 "syntavra_schema_mode": self.schema_mode,
                 "syntavra_schema_compilation": self.schema_status()["compilation"],
+                "syntavra_secret_redaction": redaction_receipt,
+                "syntavra_wire": {key: wire_receipt.get(key) for key in ("encoding", "original_bytes", "encoded_bytes", "savings_ratio", "original_hash") if key in wire_receipt},
             },
         }
         return {"jsonrpc": "2.0", "id": request_id, "result": result}
@@ -165,6 +177,8 @@ class MCPApplicationPipeline:
                 "argument-decoding",
                 "execution",
                 "exact-output-capture",
+                "secret-redaction",
+                "optional-lossless-wire-encoding",
                 "route-receipt",
             ],
             "policy": {

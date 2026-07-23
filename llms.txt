@@ -25,3 +25,5 @@ Measurement levels: PROVIDER_OBSERVED, LOCALLY_TOKENIZED, ESTIMATED, UNKNOWN.
 Primary benchmark metric: provider-observed cost per verified successful task.
 
 Important: internal fixtures and synthetic receipts do not prove competitor superiority, live integration, public adoption or production maturity.
+
+- Complete competitive feature set: docs/COMPLETE_COMPETITIVE_FEATURE_SET_001.md

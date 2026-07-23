@@ -23,3 +23,13 @@ syntavra signalbench compare --results results.json --baseline plain-host --cand
 ```
 
 The provided task and arm files are templates. A public claim requires provider-reported usage, equal verified work, no skipped verifier, no security regression, every declared competitor arm completed, at least ten paired repetitions and the configured confidence-interval gate.
+
+## Provider-billed evidence gate
+
+A SignalBench result is claimable only when every valid baseline/candidate pair carries provider-observed usage and a linked receipt hash. Locally tokenized, estimated, or synthetic usage can test the harness but cannot open a public superiority claim. Cache writes, cache reads, fresh input, output, reasoning, quota cost, wall time, retries, tool calls, verifier success, and security regressions must all remain in the paired receipt.
+
+```bash
+syntavra prove provider-billed results.json --baseline plain-host --candidate syntavra-minimal
+```
+
+No provider-billed competitor result is bundled with the repository.

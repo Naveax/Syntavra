@@ -1,0 +1,22 @@
+name: Validate Syntavra Native 0.0.1
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path native/syntavra-native/Cargo.toml
+      - run: cargo build --release --manifest-path native/syntavra-native/Cargo.toml
+      - run: cargo run --quiet --manifest-path native/syntavra-native/Cargo.toml -- version
+      - run: cargo run --quiet --manifest-path native/syntavra-native/Cargo.toml -- statusline

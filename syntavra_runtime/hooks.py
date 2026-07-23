@@ -4,11 +4,17 @@ import json
 import os
 import shlex
 import time
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
 
 from .competitive_fabric import CompetitiveContextFabric
 from .compression import ContentRouter
+from .command_rewriter import CommandRewriteEngine
+from .optimization_modes import OptimizationModeStore, SavingsLedger, render_statusline
+from .subtask_router import AutomaticSubtaskDelegator
+from .memory_intelligence import MemoryIntelligenceStore
+from .notifications import NotificationFeed
 from .evidence import EvidenceStore
 from .host_output_pipeline import HostOutputPipeline
 from .models import HookDecision
@@ -62,6 +68,12 @@ class HookEngine:
         self.compressor = compressor
         self.output_pipeline = output_pipeline
         active_state = Path(state_root).resolve(strict=False) if state_root else self.project_root / ".syntavra" / "runtime-v3"
+        self.state_root = active_state
+        self.mode_store = OptimizationModeStore(active_state)
+        self.savings = SavingsLedger(active_state)
+        self.rewriter = CommandRewriteEngine()
+        self.delegator = AutomaticSubtaskDelegator()
+        self.memory_intelligence = MemoryIntelligenceStore(active_state / "memory-intelligence.sqlite3", notification_feed=NotificationFeed(active_state))
         self.fabric = fabric or CompetitiveContextFabric(
             active_state / "competitive-fabric.sqlite3",
             project=self.project_root,
@@ -102,8 +114,15 @@ class HookEngine:
             return HookDecision(False, "blocked", command, ("cwd-outside-project",))
 
         explicit_sandbox = bool(payload.get("sandbox")) or bool(payload.get("untrusted"))
+        active_mode = self.mode_store.current()
+        rewrite = self.rewriter.rewrite(raw_command) if active_mode.rewrite_commands else None
+        routed_command: str | Iterable[str] = rewrite.rewritten if rewrite and rewrite.changed else raw_command
+        routed_argv = normalize_command(routed_command)
+        rewritten_joined = " ".join(routed_argv).casefold()
+        if any(pattern in rewritten_joined for pattern in DESTRUCTIVE_PATTERNS):
+            return HookDecision(False, "blocked", command, ("destructive-rewrite",))
         route = self.fabric.route(
-            raw_command,
+            routed_command,
             network_untrusted=bool(payload.get("network_untrusted")) or explicit_sandbox,
             repeated=bool(payload.get("repeated")),
         )
@@ -112,14 +131,17 @@ class HookEngine:
         if explicit_sandbox and route.mode != "sandbox-replace" and command[: len(self.sandbox_prefix)] != self.sandbox_prefix:
             replacement = {
                 "tool": tool,
-                "argv": [*self.sandbox_prefix, *command],
+                "argv": [*self.sandbox_prefix, *routed_argv],
                 "cwd": str(cwd),
                 "reason": "competitive-fabric-explicit-sandbox",
                 "family": route.family,
                 "repeat_key": route.repeat_key,
                 "recommended_tools": list(route.recommended_tools),
+                "optimization_mode": active_mode.name,
+                "rewrite": rewrite.to_dict() if rewrite else None,
             }
-            return HookDecision(True, "replace", command, ("explicit-sandbox", *route.reasons), replacement)
+            reasons = ("explicit-sandbox", *(('pretool-rewrite',) if rewrite and rewrite.changed else ()), *route.reasons)
+            return HookDecision(True, "replace", command, reasons, replacement)
         if route.replacement_argv:
             replacement = {
                 "tool": tool,
@@ -129,13 +151,39 @@ class HookEngine:
                 "family": route.family,
                 "repeat_key": route.repeat_key,
                 "recommended_tools": list(route.recommended_tools),
+                "optimization_mode": active_mode.name,
+                "rewrite": rewrite.to_dict() if rewrite else None,
             }
-            return HookDecision(True, "replace", command, route.reasons, replacement)
+            reasons = (*(('pretool-rewrite',) if rewrite and rewrite.changed else ()), *route.reasons)
+            return HookDecision(True, "replace", command, reasons, replacement)
+        if rewrite and rewrite.changed:
+            replacement = {
+                "tool": tool,
+                "argv": list(routed_argv),
+                "cwd": str(cwd),
+                "reason": "pretool-command-rewrite",
+                "optimization_mode": active_mode.name,
+                "rewrite": rewrite.to_dict(),
+            }
+            return HookDecision(True, "replace", command, ("pretool-rewrite",), replacement)
         return HookDecision(True, "allow", command, route.reasons)
 
     def post_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.output_pipeline is not None:
-            return self.output_pipeline.capture_hook_payload(payload)
+            value = self.output_pipeline.capture_hook_payload(payload)
+            captures = value.get("captures") if isinstance(value, dict) else None
+            if isinstance(captures, list):
+                original_bytes = sum(int(row.get("original_bytes", 0)) for row in captures if isinstance(row, dict))
+                visible_bytes = sum(int(row.get("visible_bytes", 0)) for row in captures if isinstance(row, dict))
+                if original_bytes > visible_bytes:
+                    receipt = self.savings.record(
+                        source="tool-output",
+                        original_tokens=(original_bytes + 3) // 4,
+                        visible_tokens=(visible_bytes + 3) // 4,
+                        metadata={"tool": str(payload.get("tool") or payload.get("name") or "tool"), "captures": len(captures)},
+                    )
+                    value["savings_receipt"] = receipt
+            return value
         result = payload.get("result") or {}
         if isinstance(result, str):
             if self.compressor and len(result.encode("utf-8")) > 4096:
@@ -164,19 +212,45 @@ class HookEngine:
         return {"mode": "pass-through", "result": result}
 
     def session_start(self, payload: dict[str, Any]) -> dict[str, Any]:
+        task = str(payload.get("task") or payload.get("prompt") or "")
+        active_mode = self.mode_store.current()
+        delegation = self.delegator.plan(task, context_paths=[str(self.project_root)], max_tasks=8) if active_mode.auto_delegate and task else None
         return {
             "mode": "activate-runtime",
             "project": str(self.project_root),
-            "task": payload.get("task") or payload.get("prompt") or "",
+            "task": task,
             "required_actions": ("runtime-status", "structural-index", "session-open", "competitive-fabric-profile"),
+            "optimization_mode": active_mode.name,
+            "statusline": render_statusline(self.state_root),
+            "delegation": asdict(delegation) if delegation else None,
             "timestamp": time.time(),
         }
 
-    @staticmethod
-    def prompt_submit(payload: dict[str, Any]) -> dict[str, Any]:
+    def prompt_submit(self, payload: dict[str, Any]) -> dict[str, Any]:
         prompt = str(payload.get("prompt") or payload.get("text") or "")
         risk = "security-critical" if any(word in prompt.casefold() for word in ("security", "auth", "permission", "secret", "crypto")) else "normal"
-        return {"mode": "classify-task", "risk": risk, "prompt_bytes": len(prompt.encode("utf-8"))}
+        active_mode = self.mode_store.current()
+        delegation = self.delegator.plan(
+            prompt,
+            context_paths=[str(path) for path in payload.get("context_paths", ())],
+            max_tasks=int(payload.get("max_tasks") or 8),
+        ) if active_mode.auto_delegate and prompt else None
+        extracted: list[dict[str, Any]] = []
+        extraction_error = ""
+        if active_mode.memory_extract and prompt:
+            try:
+                extracted = [asdict(row) for row in self.memory_intelligence.extract(prompt)]
+            except Exception as exc:
+                extraction_error = f"{type(exc).__name__}:{exc}"
+        return {
+            "mode": "classify-task",
+            "risk": risk,
+            "prompt_bytes": len(prompt.encode("utf-8")),
+            "optimization_mode": active_mode.name,
+            "delegation": asdict(delegation) if delegation else None,
+            "memory_observations": extracted,
+            "memory_extraction_error": extraction_error,
+        }
 
     @staticmethod
     def pre_compact(payload: dict[str, Any]) -> dict[str, Any]:
@@ -202,12 +276,21 @@ class HookEngine:
             "actions": ("flush-events", "checkpoint", "drain-completions", "flush-fabric-insights"),
         }
 
-    @staticmethod
-    def session_end(payload: dict[str, Any]) -> dict[str, Any]:
+    def session_end(self, payload: dict[str, Any]) -> dict[str, Any]:
+        summary = str(payload.get("summary") or payload.get("transcript") or "")
+        extracted: list[dict[str, Any]] = []
+        error = ""
+        if self.mode_store.current().memory_extract and summary:
+            try:
+                extracted = [asdict(row) for row in self.memory_intelligence.extract(summary)]
+            except Exception as exc:
+                error = f"{type(exc).__name__}:{exc}"
         return {
             "mode": "close-session",
             "session_id": payload.get("session_id"),
             "actions": ("final-checkpoint", "claim-boundary", "release-locks", "final-fabric-metrics"),
+            "memory_observations": extracted,
+            "memory_extraction_error": error,
         }
 
 

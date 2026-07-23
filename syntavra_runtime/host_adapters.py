@@ -170,6 +170,33 @@ KNOWN_HOSTS: dict[str, HostCapabilities] = {
 }
 
 
+# Additional installable host contracts.  These entries provide concrete project
+# config/skill destinations and executable aliases; ``verified`` remains false
+# until a live multi-OS certification receipt exists.
+KNOWN_HOSTS.update({
+    "amazon-q": HostCapabilities("amazon-q", "Amazon Q Developer", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, supports_native_skill=True, project_markers=(".amazonq",), user_markers=(".aws/amazonq",), config_path=".amazonq/mcp.json", skill_path=".amazonq/rules/syntavra.md", integration_notes=("mcp", "rules")),
+    "copilot-cli": HostCapabilities("copilot-cli", "GitHub Copilot CLI", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, supports_native_skill=True, project_markers=(".github",), user_markers=(".config/github-copilot",), config_path=".github/copilot/mcp.json", skill_path=".github/copilot-instructions.md", integration_notes=("mcp", "repository-instructions")),
+    "trae": HostCapabilities("trae", "Trae", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".trae",), user_markers=(".trae",), config_path=".trae/mcp.json", skill_path=".trae/rules/syntavra.md", integration_notes=("mcp", "rules")),
+    "void": HostCapabilities("void", "Void", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".void",), user_markers=(".config/void",), config_path=".void/mcp.json", skill_path=".void/rules/syntavra.md", integration_notes=("mcp", "rules")),
+    "warp": HostCapabilities("warp", "Warp Agent", supports_result_replacement=True, supports_mcp=True, supports_proxy=True, supports_session_events=True, supports_usage_telemetry=True, supports_background_jobs=True, project_markers=(".warp",), user_markers=(".warp",), config_path=".warp/mcp.json", skill_path="WARP.md", integration_notes=("mcp", "proxy", "rules")),
+    "openhands": HostCapabilities("openhands", "OpenHands", supports_result_replacement=True, supports_mcp=True, supports_proxy=True, supports_session_events=True, supports_background_jobs=True, supports_native_skill=True, project_markers=(".openhands",), user_markers=(".openhands",), config_path=".openhands/mcp.json", skill_path=".openhands/skills/syntavra", integration_notes=("mcp", "proxy", "native-skill")),
+    "swe-agent": HostCapabilities("swe-agent", "SWE-agent", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".swe-agent",), user_markers=(".config/swe-agent",), config_path=".swe-agent/mcp.json", skill_path=".swe-agent/instructions/syntavra.md", integration_notes=("mcp", "instructions")),
+    "mentat": HostCapabilities("mentat", "Mentat", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".mentat",), user_markers=(".mentat",), config_path=".mentat/mcp.json", skill_path=".mentat/rules/syntavra.md", integration_notes=("mcp", "rules")),
+    "plandex": HostCapabilities("plandex", "Plandex", supports_result_replacement=True, supports_mcp=True, supports_proxy=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".plandex",), user_markers=(".plandex",), config_path=".plandex/mcp.json", skill_path=".plandex/skills/syntavra", integration_notes=("mcp", "proxy", "skill")),
+    "tabby": HostCapabilities("tabby", "Tabby", supports_result_replacement=True, supports_mcp=True, supports_proxy=True, project_markers=(".tabby",), user_markers=(".tabby",), config_path=".tabby/mcp.json", skill_path=".tabby/instructions/syntavra.md", integration_notes=("mcp", "proxy")),
+    "pearai": HostCapabilities("pearai", "PearAI", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".pearai",), user_markers=(".pearai",), config_path=".pearai/mcp.json", skill_path=".pearai/rules/syntavra.md", integration_notes=("mcp", "rules")),
+    "replit-agent": HostCapabilities("replit-agent", "Replit Agent", supports_result_replacement=True, supports_mcp=True, supports_proxy=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".replit", "replit.nix"), user_markers=(), config_path=".replit/mcp.json", skill_path="replit.md", integration_notes=("mcp", "proxy", "instructions")),
+    "bolt": HostCapabilities("bolt", "Bolt", supports_result_replacement=True, supports_mcp=True, supports_proxy=True, project_markers=(".bolt",), user_markers=(".bolt",), config_path=".bolt/mcp.json", skill_path=".bolt/rules/syntavra.md", integration_notes=("mcp", "proxy")),
+    "devin": HostCapabilities("devin", "Devin", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".devin",), user_markers=(".devin",), config_path=".devin/mcp.json", skill_path=".devin/knowledge/syntavra.md", integration_notes=("mcp", "knowledge")),
+    "codeium-cli": HostCapabilities("codeium-cli", "Codeium CLI", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".codeium",), user_markers=(".codeium",), config_path=".codeium/mcp.json", skill_path=".codeium/rules/syntavra.md", integration_notes=("mcp", "rules")),
+    "aider-desk": HostCapabilities("aider-desk", "AiderDesk", supports_result_replacement=True, supports_mcp=True, supports_session_events=True, supports_background_jobs=True, project_markers=(".aider-desk",), user_markers=(".aider-desk",), config_path=".aider-desk/mcp.json", skill_path="AGENTS.md", integration_notes=("mcp", "agents-instructions")),
+    "neovim-avante": HostCapabilities("neovim-avante", "Neovim Avante", supports_result_replacement=True, supports_mcp=True, project_markers=(".nvim",), user_markers=(".config/nvim",), config_path=".nvim/syntavra-mcp.json", skill_path="AGENTS.md", integration_notes=("mcp", "agents-instructions")),
+    "emacs-copilot": HostCapabilities("emacs-copilot", "Emacs Copilot", supports_result_replacement=True, supports_mcp=True, project_markers=(".dir-locals.el",), user_markers=(".emacs.d",), config_path=".emacs.d/syntavra-mcp.json", skill_path="AGENTS.md", integration_notes=("mcp", "agents-instructions")),
+    "lapce": HostCapabilities("lapce", "Lapce", supports_result_replacement=True, supports_mcp=True, project_markers=(".lapce",), user_markers=(".config/lapce",), config_path=".lapce/mcp.json", skill_path=".lapce/rules/syntavra.md", integration_notes=("mcp", "rules")),
+    "helix-agent": HostCapabilities("helix-agent", "Helix Agent", supports_result_replacement=True, supports_mcp=True, project_markers=(".helix",), user_markers=(".config/helix",), config_path=".helix/mcp.json", skill_path="AGENTS.md", integration_notes=("mcp", "agents-instructions")),
+})
+
+
 def host_spec(host: str) -> HostCapabilities:
     return KNOWN_HOSTS.get(host.casefold(), HostCapabilities(host.casefold(), host))
 
@@ -262,6 +289,26 @@ def _find_executable(host: str) -> str | None:
         "sourcegraph-cody": ("cody",),
         "goose": ("goose",),
         "aider": ("aider",),
+        "amazon-q": ("q", "amazon-q"),
+        "copilot-cli": ("github-copilot", "copilot"),
+        "trae": ("trae",),
+        "void": ("void",),
+        "warp": ("warp",),
+        "openhands": ("openhands",),
+        "swe-agent": ("swe-agent",),
+        "mentat": ("mentat",),
+        "plandex": ("plandex",),
+        "tabby": ("tabby",),
+        "pearai": ("pearai",),
+        "replit-agent": ("replit",),
+        "bolt": ("bolt",),
+        "devin": ("devin",),
+        "codeium-cli": ("codeium",),
+        "aider-desk": ("aider-desk",),
+        "neovim-avante": ("nvim",),
+        "emacs-copilot": ("emacs",),
+        "lapce": ("lapce",),
+        "helix-agent": ("hx",),
     }
     for name in aliases.get(host, (host,)):
         if candidate := shutil.which(name):

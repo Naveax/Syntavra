@@ -77,6 +77,11 @@ class RunResult:
     cache_mode: str
     artifact_dir: str
     error: str = ""
+    provider_observed: bool = False
+    provider: str = ""
+    model: str = ""
+    request_id_hash: str = ""
+    provider_receipt_hash: str = ""
 
 
 TASK_FAMILIES = (
@@ -315,9 +320,17 @@ class SignalBenchRunner:
             verifier_success = False
         verifier_seconds = time.time() - verifier_started
 
-        success = exit_code == 0 and verifier_success and bool(arm_result.get("success", True))
-        verified_work = task.expected_work if success else 0.0
         raw_metrics = arm_result.get("metrics", {}) if isinstance(arm_result.get("metrics", {}), dict) else {}
+        provider_receipt = arm_result.get("provider_receipt") if isinstance(arm_result.get("provider_receipt"), dict) else {}
+        provider_observed = bool(
+            provider_receipt.get("provider") and provider_receipt.get("model")
+            and provider_receipt.get("request_id") and provider_receipt.get("response_hash")
+            and all(raw_metrics.get(key) is not None for key in ("fresh_input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "quota_cost"))
+        )
+        if not provider_observed:
+            error = error or "missing-provider-observed-receipt"
+        success = exit_code == 0 and verifier_success and bool(arm_result.get("success", True)) and provider_observed
+        verified_work = task.expected_work if success else 0.0
         result = RunResult(
             run_id,
             task.task_id,
@@ -346,6 +359,11 @@ class SignalBenchRunner:
             cache_mode,
             str(artifact_dir),
             error,
+            provider_observed,
+            str(provider_receipt.get("provider") or ""),
+            str(provider_receipt.get("model") or ""),
+            sha256_bytes(str(provider_receipt.get("request_id") or "").encode()) if provider_receipt.get("request_id") else "",
+            sha256_bytes(canonical_json(provider_receipt)) if provider_receipt else "",
         )
         atomic_write_json(artifact_dir / "result.json", asdict(result), mode=0o600)
         atomic_write_json(artifact_dir / "receipt.json", {
@@ -409,6 +427,7 @@ class SignalBenchRunner:
         results = list(results)
         keyed = {(row.task_id, row.repetition, row.cache_mode, row.arm_id): row for row in results}
         ratios: list[float] = []
+        observed_pairs: list[bool] = []
         invalid: list[dict[str, Any]] = []
         quality = {baseline_arm: 0, candidate_arm: 0}
         total = {baseline_arm: 0, candidate_arm: 0}
@@ -432,6 +451,7 @@ class SignalBenchRunner:
                 invalid.append({"task": task_id, "repetition": repetition, "cache": cache_mode, "reason": "quota-unavailable"})
                 continue
             ratios.append(base.quota_cost / candidate.quota_cost)
+            observed_pairs.append(bool(base.provider_observed and candidate.provider_observed))
         ratios.sort()
         ci = bootstrap_ci(ratios) if ratios else None
         median = ratios[len(ratios) // 2] if ratios else None
@@ -441,6 +461,7 @@ class SignalBenchRunner:
             and ci
             and ci[0] > 1.0
             and pass_rates[candidate_arm] >= pass_rates[baseline_arm]
+            and len(observed_pairs) == len(ratios) and all(observed_pairs)
             and not any(row.security_regressions or row.verifier_skips for row in results if row.arm_id == candidate_arm)
         )
         return {
@@ -448,6 +469,8 @@ class SignalBenchRunner:
             "candidate": candidate_arm,
             "valid_pairs": len(ratios),
             "invalid_pairs": invalid,
+            "provider_observed_pairs": sum(observed_pairs),
+            "provider_unobserved_pairs": len(observed_pairs) - sum(observed_pairs),
             "median_efficiency_ratio": median,
             "confidence_interval_95": ci,
             "pass_rates": pass_rates,

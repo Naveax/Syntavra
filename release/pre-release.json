@@ -3,8 +3,12 @@
   "claim_boundaries": {
     "competitor_superiority": "EXTERNAL_SUPERIORITY_NOT_PROVEN",
     "infinite_context": "UNBOUNDED_EXTERNAL_HISTORY_WITH_BOUNDED_ACTIVE_WINDOW",
-    "public_product_maturity": "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN"
+    "live_integration_certification": "LIVE_INTEGRATION_CERTIFICATION_NOT_PROVEN",
+    "provider_billed_benchmark": "MEASURED_AGENT_BENCHMARK_NOT_PROVEN",
+    "public_product_maturity": "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN",
+    "registry_publication": "REGISTRY_PUBLICATION_NOT_PERFORMED"
   },
+  "competitive_feature_manifest": "docs/COMPLETE_COMPETITIVE_FEATURE_SET_001.md",
   "development_status": "pre-alpha",
   "product": "Syntavra",
   "publish_as_prerelease": true,

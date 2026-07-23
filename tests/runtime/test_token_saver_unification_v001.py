@@ -114,7 +114,7 @@ class TokenSaverUnificationV001Tests(unittest.TestCase):
 
     def test_command_registry_has_specific_compactors_and_retains_failures(self) -> None:
         registry = CommandCompactorRegistry()
-        self.assertEqual(registry.manifest()["count"], 20)
+        self.assertGreaterEqual(registry.manifest()["count"], 60)
         result = CommandCompactor(registry).compact(
             ["pytest", "-q"],
             "test_auth.py:10: AssertionError: expected 200 got 401\n" + "\n".join(f"test_{i} passed" for i in range(200)) + "\n199 passed, 1 failed",

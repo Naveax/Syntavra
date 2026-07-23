@@ -593,6 +593,8 @@ class PlatformPlanBuilder:
         files: list[dict[str, Any]] = []
         if spec.config_path:
             config: dict[str, Any] = {"mcpServers": {"syntavra": self._mcp_entry()}}
+            if host == "claude-code":
+                config["statusLine"] = {"type": "command", "command": "syntavra run statusline"}
             if spec.supports_pre_tool_hook or spec.supports_post_tool_hook:
                 config["hooks"] = {
                     "PreToolUse": [{"type": "command", "command": "syntavra hook pre"}],
