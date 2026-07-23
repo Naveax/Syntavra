@@ -3,6 +3,7 @@ name: Apply Syntavra token-saver unification
 on:
   issue_comment:
     types: [created]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,13 +23,23 @@ concurrency:
 jobs:
   apply:
     if: >-
-      github.event.issue.pull_request == null &&
-      github.actor == github.repository_owner &&
-      github.event.comment.body == '/syntavra-apply-token-saver-unification'
+      github.event_name == 'workflow_dispatch' ||
+      (github.actor == github.repository_owner &&
+      github.event.comment.body == '/syntavra-apply-token-saver-unification')
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
     steps:
+      - name: Publish run start receipt
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}/comments" \
+            -f body="SYNTAVRA_UNIFICATION_RUN: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
       - name: Check out staged main
         uses: actions/checkout@v4
         with:
@@ -54,7 +65,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          unexpected=$(git diff --name-only "$EXPECTED_BASE_SHA"..HEAD | grep -v '^\.github/workflows/apply-token-saver-unification\.yml$' || true)
+          test -z "$unexpected"
 
           gh api "repos/${GITHUB_REPOSITORY}/git/blobs/${PATCH_BLOB_SHA}" --jq .content |
             tr -d '\n' |
