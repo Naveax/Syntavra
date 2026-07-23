@@ -14,7 +14,7 @@ permissions:
 env:
   EXPECTED_BASE_SHA: bb995d26a1894ed21af4f56680bfbd912c8187c4
   TRANSPORT_PATH: .syntavra-transport/token-saver.patch.gz.b64
-  EXPECTED_PATCH_B64_SHA256: 58e0016333f1d87deeedeeae20dfdeb87587eb6405fa3a56983eec64aa9ada8a
+  EXPECTED_TRANSPORT_BLOB_SHA: 3d6421ebe232ae9f4f452d35233e8d7f6e3967ff
   EXPECTED_PATCH_SHA256: b8118a775290f2b765c798857c2fb7fa5ed46c78548b9e259500e95dffb31c60
   EXPECTED_FINAL_TREE: ed41e2dcfef463a33a6dd4fb53d131a92012bb42
 
@@ -77,12 +77,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp "$TRANSPORT_PATH" /tmp/syntavra.patch.gz.b64
-          actual_b64=$(sha256sum /tmp/syntavra.patch.gz.b64 | awk '{print $1}')
-          echo "patch-b64-sha256=${actual_b64}"
-          test "$actual_b64" = "$EXPECTED_PATCH_B64_SHA256"
+          actual_blob=$(git hash-object "$TRANSPORT_PATH")
+          echo "transport-blob=${actual_blob}"
+          test "$actual_blob" = "$EXPECTED_TRANSPORT_BLOB_SHA"
 
-          base64 -d /tmp/syntavra.patch.gz.b64 | gzip -d > /tmp/syntavra.patch
+          base64 -d "$TRANSPORT_PATH" | gzip -d > /tmp/syntavra.patch
           actual_patch=$(sha256sum /tmp/syntavra.patch | awk '{print $1}')
           echo "patch-sha256=${actual_patch}"
           test "$actual_patch" = "$EXPECTED_PATCH_SHA256"
