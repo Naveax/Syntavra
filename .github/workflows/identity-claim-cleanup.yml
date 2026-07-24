@@ -47,14 +47,20 @@ jobs:
           python -m pip install -e '.[code-intelligence]' pytest build
       - name: Refresh deterministic repository manifest
         run: python -m tools.refresh_manifest
-      - name: Validate identity, claims, runtime and release
+      - name: Validate canonical identity and claims
+        run: python -m tools.validate_claim_integrity
+      - name: Validate repository contract
+        run: python -m tools.validate
+      - name: Validate runtime contract
+        run: python -m tools.validate_runtime
+      - name: Validate release contract
+        run: python -m tools.validate_release
+      - name: Validate competitive assessment contract
+        run: python -m tools.validate_competitive_gap_assessment
+      - name: Validate repository hygiene
+        run: python -m tools.check_repository_hygiene
+      - name: Validate compilation and diff integrity
         run: |
-          python -m tools.validate_claim_integrity
-          python -m tools.validate
-          python -m tools.validate_runtime
-          python -m tools.validate_release
-          python -m tools.validate_competitive_gap_assessment
-          python -m tools.check_repository_hygiene
           python -m compileall -q syntavra_runtime tools benchmarks tests
           git diff --check
       - name: Run Python test suite
