@@ -1,0 +1,31 @@
+name: Export final Syntavra manifest
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/export-clean-manifest.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: github.head_ref == 'agent/syntavra-identity-claim-cleanup'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Generate final-tree manifest
+        run: |
+          rm .github/workflows/export-clean-manifest.yml
+          python -m tools.refresh_manifest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-final-manifest
+          path: MANIFEST.sha256
+          if-no-files-found: error
+          retention-days: 1
