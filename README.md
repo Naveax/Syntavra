@@ -1,8 +1,8 @@
 # Syntavra 0.0.1 — Pre-Release Token & Context Optimization Skill
 
-Syntavra is a local-first **Agent Skill and runtime middleware** that reduces the token and context overhead of existing AI coding agents. It does not replace Codex, Claude Code, Cursor, OpenCode or another agent/model.
+Syntavra is a local-first **Agent Skill and runtime middleware** designed to reduce token and context overhead in existing AI coding agents. It does not replace Codex, Claude Code, Cursor, OpenCode or another agent/model.
 
-Syntavra optimizes five cost surfaces while preserving exact recovery:
+Syntavra targets five cost surfaces while preserving exact recovery:
 
 | Surface | What Syntavra does |
 |---|---|
@@ -55,21 +55,20 @@ Normal daily work still happens in the existing coding agent. Syntavra is intend
 
 `tiny`, `optimized` and `full` remain compatibility aliases only. The installed profile, listed tools, callable tools and benchmark profile are derived from the same canonical registry.
 
-## Competitive feature set
+## Implemented surfaces and evidence boundary
 
-Syntavra 0.0.1 now includes a fail-closed pre-tool command rewriter, 131 command-specific compactors, six instant optimization modes, a live savings statusline, prompt-cache layout/expiry planning, transcript opportunity mining, a single SQLite-backed structural index shared by context compilation, code intelligence and incremental repository watching, local browser/PWA dashboard, agent-config auditing, secret redaction, lossless MCP wire encoding, hybrid memory search, deep code-graph analytics, adaptive provider fallback, short-handoff delegation, a VS Code extension, and a dependency-free Rust companion source.
+The repository contains implementations for command rewriting and output compaction, structural repository indexing, bounded session memory, host/MCP integration, provider-usage receipts, and optional local UI or editor integrations.
+
+Implementation presence is not evidence of real-world savings, integration certification, adoption, reliability, or superiority. Registry counts are treated as internal inventory only and are intentionally omitted from the public overview because they can drift and do not measure task success.
 
 ```bash
-syntavra run mode codex-ultra
-syntavra run statusline
 syntavra run rewrite -- git status
-syntavra run dashboard --open
 syntavra run code-intel report
 syntavra run memory-search "cache decision"
-syntavra run provider-route "security migration" providers.json
+syntavra prove plan
 ```
 
-The implementation registry currently exposes 118 fail-closed rewrite rules, 131 command-specific compactors, 44 controlled host contracts, 48 provider presets, a credential-reference-only provider account pool, and a 30-language parser registry with optional tree-sitter support. Installation contracts are not described as live certifications. Registry publication and provider-billed competitor results remain external, credential-gated actions. See `docs/COMPLETE_COMPETITIVE_FEATURE_SET_001.md`.
+Evidence rules are defined in `docs/CLAIMS_POLICY.md`; the detailed implementation inventory is in `docs/IMPLEMENTATION_STATUS_001.md`.
 
 ## Exact-recovery rule
 
@@ -126,6 +125,8 @@ Missing competitors, provider usage or verifier output fail closed; they are nev
 - `docs/ADAPTER_PLATFORM.md`
 - `docs/SIGNALBENCH.md`
 - `docs/OPERATIONS.md`
+- `docs/CLAIMS_POLICY.md`
+- `docs/IMPLEMENTATION_STATUS_001.md`
 
 ## Current claim boundary
 

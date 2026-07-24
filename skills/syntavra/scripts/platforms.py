@@ -13,8 +13,8 @@ from common import DATA, PUBLIC_VERSION, atomic_write_text, dump_json, load_json
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = DATA / "platforms.json"
-BEGIN = "<!-- SIGNALCORE:BEGIN -->"
-END = "<!-- SIGNALCORE:END -->"
+BEGIN = "<!-- SYNTAVRA:BEGIN -->"
+END = "<!-- SYNTAVRA:END -->"
 
 
 def registry() -> dict[str, Any]:

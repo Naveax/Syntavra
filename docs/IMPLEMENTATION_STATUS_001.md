@@ -1,8 +1,8 @@
-# Syntavra 0.0.1 — Complete Competitive Feature Set
+# Syntavra 0.0.1 — Implementation Status
 
-Status: **implemented and internally gated**. Release channel: **pre-release**.
+Status: **repository implementation inventory**. Release channel: **pre-release**.
 
-This document records technical implementation evidence. It does not convert internal validation into external superiority, adoption, registry-publication, live-provider, or production-maturity claims.
+This document records repository-level implementation and internal checks. It does not establish real-world effectiveness, external integration certification, adoption, registry publication, provider-billed savings, or production maturity. Numeric counts below are inventory snapshots, not performance metrics.
 
 ## Execution-time optimization
 
@@ -81,7 +81,7 @@ Provider presets and credential references are installation/runtime contracts, n
 - 44 controlled host contracts and 48 provider presets.
 - npm, PyPI/uvx, VS Code Marketplace, and native publication workflows are prepared but not claimed as published.
 
-## Benchmark and claim boundary
+## Evidence and claim boundary
 
 SignalBench requires equal verified work, real provider-observed receipts, no skipped verifier, no security regression, all declared competitor arms, and the configured paired confidence gate. Missing external execution cannot be replaced with synthetic evidence.
 
