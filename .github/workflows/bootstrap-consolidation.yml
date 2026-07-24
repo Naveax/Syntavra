@@ -70,7 +70,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Python build dependencies
-        run: python -m pip install --upgrade pip build cryptography
+        run: python -m pip install --upgrade pip build cryptography pytest
 
       - name: Validate repository and runtime
         shell: bash
@@ -86,14 +86,37 @@ jobs:
           git diff --check HEAD^
 
       - name: Run complete Python suite in deterministic shards
+        id: python_tests
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p /tmp/syntavra-test-logs
           find tests -name 'test_*.py' -type f | sort > /tmp/test-files
           split -n l/5 -d /tmp/test-files /tmp/test-shard-
+          status=0
           for shard in /tmp/test-shard-0{0,1,2,3,4}; do
-            python -m pytest -q $(cat "${shard}")
+            name="$(basename "${shard}")"
+            log="/tmp/syntavra-test-logs/${name}.log"
+            echo "Running ${name}: $(wc -l < "${shard}") files"
+            if ! python -m pytest -q $(cat "${shard}") >"${log}" 2>&1; then
+              status=$?
+              echo "::group::Failure output for ${name}"
+              tail -n 250 "${log}"
+              echo "::endgroup::"
+              break
+            fi
+            cat "${log}"
           done
+          exit "${status}"
+
+      - name: Upload Python test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-python-shard-logs-${{ github.run_id }}
+          path: /tmp/syntavra-test-logs/*.log
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Validate npm installer
         shell: bash
@@ -107,8 +130,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm --prefix sdk/typescript ci --ignore-scripts
-          npm --prefix sdk/typescript run ci
+          cd sdk/typescript
+          npm ci --ignore-scripts
+          npm run ci
 
       - name: Validate VS Code extension
         run: npm --prefix integrations/vscode-syntavra test
@@ -149,4 +173,7 @@ jobs:
             encoded="$(python -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${branch}")"
             gh api -X DELETE "repos/${REPOSITORY}/git/refs/heads/${encoded}" || true
           done
+          remaining="$(gh api --paginate "repos/${REPOSITORY}/branches?per_page=100" --jq '.[].name' | sort)"
+          printf 'Remaining branches:\n%s\n' "${remaining}"
+          test "${remaining}" = "main"
           test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"
