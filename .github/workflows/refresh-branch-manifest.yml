@@ -123,15 +123,14 @@ jobs:
         run: rm -rf sdk/typescript/node_modules
       - name: Generate deterministic root SHA-256 manifest
         run: python tools/refresh_manifest.py
-      - name: Commit prepared integrity outputs to source branch
+      - name: Materialize prepared integrity tree
         id: prepared
         shell: bash
         env:
-          PR_HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           allowed='^(MANIFEST\.sha256|docs/claims/claims\.json|benchmarks/results/roblox-profile/(profile-tests|simulated-50)\.json|sdk/typescript/dist/(index\.js|index\.d\.ts|receipts\.js|receipts\.d\.ts)|skills/syntavra/profiles/roblox_studio/MANIFEST\.sha256)$'
           changed="$(git diff --name-only)"
           if [ -n "$changed" ]; then
@@ -145,16 +144,60 @@ jobs:
               benchmarks/results/roblox-profile/simulated-50.json \
               sdk/typescript/dist \
               skills/syntavra/profiles/roblox_studio/MANIFEST.sha256
-            git commit -m "prepare Syntavra generated integrity outputs"
-            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-              target_branch="$PR_HEAD_REF"
-            else
-              target_branch="$GITHUB_REF_NAME"
-            fi
-            git push origin "HEAD:refs/heads/${target_branch}"
+            python - <<'PY'
+          import base64
+          import json
+          import os
+          import stat
+          import subprocess
+          import urllib.request
+          from pathlib import Path
+
+          repo=os.environ['REPOSITORY']
+          token=os.environ['GH_TOKEN']
+
+          def api(path: str, payload: dict) -> dict:
+              request=urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}{path}',
+                  data=json.dumps(payload).encode('utf-8'),
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'syntavra-manifest-preparer',
+                  },
+                  method='POST',
+              )
+              with urllib.request.urlopen(request) as response:
+                  return json.load(response)
+
+          staged=subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z']).decode().split('\0')
+          staged=[path for path in staged if path]
+          entries=[]
+          for relative in staged:
+              path=Path(relative)
+              blob=api('/git/blobs', {
+                  'content': base64.b64encode(path.read_bytes()).decode('ascii'),
+                  'encoding': 'base64',
+              })
+              mode='100755' if path.stat().st_mode & stat.S_IXUSR else '100644'
+              entries.append({'path': relative, 'mode': mode, 'type': 'blob', 'sha': blob['sha']})
+
+          parent=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          base_tree=subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          tree=api('/git/trees', {'base_tree': base_tree, 'tree': entries})
+          commit=api('/git/commits', {
+              'message': 'prepare Syntavra generated integrity outputs',
+              'tree': tree['sha'],
+              'parents': [parent],
+          })
+          Path('prepared-tree.txt').write_text(tree['sha'] + '\n', encoding='utf-8')
+          Path('prepared-commit.txt').write_text(commit['sha'] + '\n', encoding='utf-8')
+          PY
+          else
+            git rev-parse 'HEAD^{tree}' > prepared-tree.txt
+            git rev-parse HEAD > prepared-commit.txt
           fi
-          git rev-parse 'HEAD^{tree}' > prepared-tree.txt
-          git rev-parse HEAD > prepared-commit.txt
           cp MANIFEST.sha256 prepared-MANIFEST.sha256
       - name: Upload prepared integrity tree metadata
         uses: actions/upload-artifact@v4
