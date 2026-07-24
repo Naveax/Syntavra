@@ -63,7 +63,7 @@ jobs:
             re.S,
           )
           found = {}
-          diagnostics = []
+          observed = {}
           for row in comments:
             body = row.get('body') or ''
             for match in pattern.finditer(body):
@@ -73,13 +73,18 @@ jobs:
               length, wanted = expected[index]
               candidate = match.group(3)[:length]
               actual = hashlib.sha256(candidate.encode()).hexdigest()
-              diagnostics.append({'comment': row.get('id'), 'index': index, 'actual': actual, 'wanted': wanted})
+              observed.setdefault(index, []).append(actual)
               if actual == wanted:
                 found[index] = candidate
 
           missing = sorted(set(expected) - set(found))
-          result = {'found': sorted(found), 'missing': missing, 'diagnostics': diagnostics, 'comment_count': len(comments)}
-          print(json.dumps(result, indent=2))
+          compact = {
+            'found': sorted(found),
+            'missing': missing,
+            'observed_for_missing': {str(i): observed.get(i, []) for i in missing},
+            'comment_count': len(comments),
+          }
+          print(json.dumps(compact, indent=2))
           if missing:
             raise SystemExit(f'missing trimmed V4 chunks: {missing}')
           transport = ''.join(found[index] for index in sorted(found))
