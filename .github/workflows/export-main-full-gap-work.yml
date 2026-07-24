@@ -1,0 +1,50 @@
+name: Export main for complete gap closure
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: >-
+      github.actor == github.repository_owner &&
+      github.head_ref == 'agent/export-main-full-gap-work'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact base main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Verify and export exact source
+        shell: bash
+        env:
+          EXPECTED_MAIN_SHA: 0dad1718e228191abc0135aaaea8929c453f90c9
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          git archive --format=tar.gz --prefix=Syntavra/ --output=syntavra-main.tar.gz "$EXPECTED_MAIN_SHA"
+          git branch --force export-current-main "$EXPECTED_MAIN_SHA"
+          git bundle create syntavra-main.bundle export-current-main
+          git bundle verify syntavra-main.bundle
+          sha256sum syntavra-main.tar.gz syntavra-main.bundle > SHA256SUMS
+          printf '%s\n' "$EXPECTED_MAIN_SHA" > MAIN_SHA.txt
+          git rev-parse "${EXPECTED_MAIN_SHA}^{tree}" > MAIN_TREE.txt
+
+      - name: Upload exact source bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-main-full-gap-source
+          path: |
+            syntavra-main.tar.gz
+            syntavra-main.bundle
+            SHA256SUMS
+            MAIN_SHA.txt
+            MAIN_TREE.txt
+          if-no-files-found: error
+          retention-days: 7
