@@ -40,6 +40,15 @@ jobs:
           path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
           PY
           python tools/_identity_claim_cleanup.py
+          git mv tools/signalcore.py tools/syntavra.py
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('CHANGELOG.md', 'llms.txt'):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('Complete competitive feature set', 'Implemented feature inventory')
+              path.write_text(text, encoding='utf-8', newline='\n')
+          PY
           git rm -f .github/workflows/identity-claim-cleanup.yml tools/_identity_claim_cleanup.py
       - name: Install Python validation dependencies
         run: |
