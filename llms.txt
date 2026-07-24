@@ -2,7 +2,7 @@
 
 Syntavra is a local-first token and context optimization Agent Skill for existing AI coding agents. It is not a replacement coding agent, model or IDE.
 
-It reduces five cost surfaces while preserving exact recovery:
+It targets five cost surfaces while preserving exact recovery:
 
 1. MCP/tool discovery schemas
 2. repository context and broad file reads
@@ -26,4 +26,5 @@ Primary benchmark metric: provider-observed cost per verified successful task.
 
 Important: internal fixtures and synthetic receipts do not prove competitor superiority, live integration, public adoption or production maturity.
 
-- Complete competitive feature set: docs/IMPLEMENTATION_STATUS_001.md
+- Implementation status: docs/IMPLEMENTATION_STATUS_001.md
+- Claims policy: docs/CLAIMS_POLICY.md
