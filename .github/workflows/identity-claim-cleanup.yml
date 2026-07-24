@@ -56,29 +56,48 @@ jobs:
           python -m pip install -e '.[code-intelligence]' pytest build
       - name: Refresh deterministic repository manifest
         run: python -m tools.refresh_manifest
-      - name: Capture canonical identity and claim report
-        run: python -m tools.validate_claim_integrity > claim-integrity-report.json || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: claim-integrity-report
-          path: claim-integrity-report.json
-          if-no-files-found: error
       - name: Validate canonical identity and claims
         run: python -m tools.validate_claim_integrity
-      - name: Validate repository contract
-        run: python -m tools.validate
-      - name: Validate runtime contract
-        run: python -m tools.validate_runtime
-      - name: Validate release contract
-        run: python -m tools.validate_release
-      - name: Validate competitive assessment contract
-        run: python -m tools.validate_competitive_gap_assessment
-      - name: Validate repository hygiene
-        run: python -m tools.check_repository_hygiene
-      - name: Validate compilation and diff integrity
+      - name: Capture repository contract reports
+        shell: bash
         run: |
-          python -m compileall -q syntavra_runtime tools benchmarks tests
-          git diff --check
+          mkdir -p validation-reports
+          capture() {
+            local name="$1"
+            shift
+            set +e
+            "$@" >"validation-reports/${name}.json" 2>&1
+            local status=$?
+            set -e
+            printf '%s\n' "$status" >"validation-reports/${name}.exit"
+          }
+          capture repository python -m tools.validate
+          capture runtime python -m tools.validate_runtime
+          capture release python -m tools.validate_release
+          capture competitive python -m tools.validate_competitive_gap_assessment
+          capture hygiene python -m tools.check_repository_hygiene
+          set +e
+          python -m compileall -q syntavra_runtime tools benchmarks tests >validation-reports/compile.txt 2>&1
+          printf '%s\n' "$?" >validation-reports/compile.exit
+          git diff --check >validation-reports/diff.txt 2>&1
+          printf '%s\n' "$?" >validation-reports/diff.exit
+          set -e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repository-contract-reports
+          path: validation-reports
+          if-no-files-found: error
+      - name: Enforce repository contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          failed = []
+          for path in sorted(Path('validation-reports').glob('*.exit')):
+              if path.read_text(encoding='utf-8').strip() != '0':
+                  failed.append(path.stem)
+          if failed:
+              raise SystemExit('failed contracts: ' + ', '.join(failed))
+          PY
       - name: Run Python test suite
         run: python -m pytest -q
       - name: Validate npm installer
