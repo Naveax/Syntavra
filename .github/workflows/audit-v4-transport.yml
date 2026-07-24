@@ -53,13 +53,12 @@ jobs:
             if len(rows)<100: break
             page+=1
           found={}; bad=[]
-          pattern=re.compile(r'^<!-- SYNTAVRA_V4_PART index=(\d+) sha256=([0-9a-f]{64}) -->\n(.*)\n<!-- SYNTAVRA_V4_END -->$',re.S)
+          pattern=re.compile(r'<!-- SYNTAVRA_V4_PART index=(\d+) sha256=([0-9a-f]{64}) -->\n(.*?)\n<!-- SYNTAVRA_V4_END -->',re.S)
           for row in comments:
-            m=pattern.match(row.get('body') or '')
-            if not m: continue
-            i=int(m.group(1)); declared=m.group(2); text=m.group(3); actual=hashlib.sha256(text.encode()).hexdigest()
-            if i in expected and declared==expected[i] and actual==expected[i]: found[i]=text
-            else: bad.append({'id':row.get('id'),'index':i,'declared':declared,'actual':actual})
+            for m in pattern.finditer(row.get('body') or ''):
+              i=int(m.group(1)); declared=m.group(2); text=m.group(3); actual=hashlib.sha256(text.encode()).hexdigest()
+              if i in expected and declared==expected[i] and actual==expected[i]: found[i]=text
+              else: bad.append({'id':row.get('id'),'index':i,'declared':declared,'actual':actual})
           missing=sorted(set(expected)-set(found))
           result={'found':sorted(found),'missing':missing,'bad':bad,'comment_count':len(comments)}
           print(json.dumps(result,indent=2))
@@ -73,4 +72,4 @@ jobs:
           path: transport-audit.json
           if-no-files-found: error
 
-# synchronization trigger 2
+# synchronization trigger 3
