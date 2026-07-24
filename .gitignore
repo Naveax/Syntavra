@@ -15,7 +15,6 @@ venv/
 .env.*
 !.env.example
 .syntavra/
-.signalcore/
 *.db
 *.db-shm
 *.db-wal

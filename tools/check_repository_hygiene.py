@@ -16,6 +16,22 @@ def load_json(path: str) -> dict:
 
 def check_repository() -> dict:
     failures: list[str] = []
+    legacy_identity = ("signal" + "core").casefold()
+    skipped_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".zip", ".gz", ".xz", ".db", ".sqlite3", ".pyc"}
+    for candidate in ROOT.rglob("*"):
+        relative = candidate.relative_to(ROOT)
+        if any(part == ".git" for part in relative.parts):
+            continue
+        if legacy_identity in relative.as_posix().casefold():
+            failures.append(f"legacy-identity-path:{relative.as_posix()}")
+        if not candidate.is_file() or candidate.suffix.casefold() in skipped_suffixes:
+            continue
+        try:
+            candidate_text = candidate.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if legacy_identity in candidate_text.casefold():
+            failures.append(f"legacy-identity-content:{relative.as_posix()}")
 
     root_package = load_json("package.json")
     root_lock = load_json("package-lock.json")
@@ -119,7 +135,6 @@ def check_repository() -> dict:
         ROOT / "docs" / "OPERATIONS.md",
     ]
     forbidden = {
-        "legacy-product-name": re.compile(r"\bSignalCore\b", re.IGNORECASE),
         "competitive-runtime-version": re.compile(r"Competitive Runtime V\d+", re.IGNORECASE),
         "component-version-suffix": re.compile(r"\b(?:Context Compiler|Memory DAG|Capability Security|Reference Agent) V\d+\b", re.IGNORECASE),
         "milestone-version-range": re.compile(r"\bV8\s*[–-]\s*V20\b", re.IGNORECASE),

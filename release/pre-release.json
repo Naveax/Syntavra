@@ -8,7 +8,7 @@
     "public_product_maturity": "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN",
     "registry_publication": "REGISTRY_PUBLICATION_NOT_PERFORMED"
   },
-  "competitive_feature_manifest": "docs/COMPLETE_COMPETITIVE_FEATURE_SET_001.md",
+  "competitive_feature_manifest": "docs/IMPLEMENTATION_STATUS_001.md",
   "development_status": "pre-alpha",
   "product": "Syntavra",
   "publish_as_prerelease": true,

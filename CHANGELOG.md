@@ -1,6 +1,6 @@
 ## 0.0.1 - Pre-release
 
-### Complete competitive feature set
+### Implemented feature inventory
 
 - Consolidated context compilation, repository watching, and code intelligence onto one SQLite structural graph; removed the duplicate JSON graph cache.
 - Added path-scoped incremental reindexing, natural-language symbol seeding, and a hard 1,500-token context-pack ceiling.

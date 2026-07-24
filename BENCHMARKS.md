@@ -9,7 +9,7 @@ python benchmarks/runtime_v03_benchmark.py \
   --output benchmarks/results/runtime-v03/internal.json
 ```
 
-This verifies structural retrieval, token-budgeted repository context, reversible tool-output compaction, exact session recovery, profile enforcement, installer idempotency and SignalBench contracts. It is **not** a competitor benchmark and must retain a fail-closed claim such as `5X_NOT_PROVEN`.
+This verifies structural retrieval, token-budgeted repository context, reversible tool-output compaction, exact session recovery, profile enforcement, installer idempotency and SignalBench contracts. It is **not** a competitor benchmark and must remain labelled `INTERNAL_FUNCTIONAL_MEASUREMENT_ONLY`.
 
 ## SignalBench external-arm benchmark
 

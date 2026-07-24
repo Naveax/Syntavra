@@ -28,8 +28,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install runtime and test dependencies
         run: python -m pip install --disable-pip-version-check -e . pytest
-      - name: Compile canonical and compatibility packages
-        run: python -m compileall -q syntavra_runtime signalcore_runtime skills/syntavra/scripts tools tests benchmarks
+      - name: Compile canonical package
+        run: python -m compileall -q syntavra_runtime skills/syntavra/scripts tools tests benchmarks
       - name: Validate package and locked identity
         run: |
           python -m tools.validate
