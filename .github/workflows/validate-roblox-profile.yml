@@ -41,7 +41,7 @@ jobs:
         run: |
           from pathlib import Path
           root=Path('.')
-          forbidden=list(root.rglob('payload-*.b64')) + [path for path in root.rglob('.signalcore-direct')]
+          forbidden=list(root.rglob('payload-*.b64')) + [path for path in root.rglob('.syntavra-direct')]
           if forbidden:
               raise SystemExit(f"forbidden encoded source transport: {forbidden}")
       - name: Compile profile
