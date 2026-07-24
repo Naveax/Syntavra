@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,10 +123,13 @@ jobs:
         run: rm -rf sdk/typescript/node_modules
       - name: Generate deterministic root SHA-256 manifest
         run: python tools/refresh_manifest.py
-      - name: Materialize prepared integrity tree
+      - name: Commit prepared integrity outputs to source branch
         id: prepared
         shell: bash
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           allowed='^(MANIFEST\.sha256|docs/claims/claims\.json|benchmarks/results/roblox-profile/(profile-tests|simulated-50)\.json|sdk/typescript/dist/(index\.js|index\.d\.ts|receipts\.js|receipts\.d\.ts)|skills/syntavra/profiles/roblox_studio/MANIFEST\.sha256)$'
@@ -143,11 +146,12 @@ jobs:
               sdk/typescript/dist \
               skills/syntavra/profiles/roblox_studio/MANIFEST.sha256
             git commit -m "prepare Syntavra generated integrity outputs"
-            temporary_branch="prepared-manifest/${GITHUB_SHA}"
-            git push --force origin "HEAD:refs/heads/${temporary_branch}"
-            printf '%s\n' "$temporary_branch" > prepared-branch.txt
-          else
-            printf '%s\n' "" > prepared-branch.txt
+            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+              target_branch="$PR_HEAD_REF"
+            else
+              target_branch="$GITHUB_REF_NAME"
+            fi
+            git push origin "HEAD:refs/heads/${target_branch}"
           fi
           git rev-parse 'HEAD^{tree}' > prepared-tree.txt
           git rev-parse HEAD > prepared-commit.txt
@@ -160,6 +164,5 @@ jobs:
             prepared-MANIFEST.sha256
             prepared-tree.txt
             prepared-commit.txt
-            prepared-branch.txt
           if-no-files-found: error
           retention-days: 7
