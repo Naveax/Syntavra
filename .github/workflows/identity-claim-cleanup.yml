@@ -47,6 +47,13 @@ jobs:
           python -m pip install -e '.[code-intelligence]' pytest build
       - name: Refresh deterministic repository manifest
         run: python -m tools.refresh_manifest
+      - name: Capture canonical identity and claim report
+        run: python -m tools.validate_claim_integrity > claim-integrity-report.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claim-integrity-report
+          path: claim-integrity-report.json
+          if-no-files-found: error
       - name: Validate canonical identity and claims
         run: python -m tools.validate_claim_integrity
       - name: Validate repository contract
