@@ -6,8 +6,8 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
+  issues: read
   pull-requests: read
 
 jobs:
@@ -15,9 +15,11 @@ jobs:
     if: github.actor == github.repository_owner && github.head_ref == 'agent/consolidate-remaining-systems'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Recover and audit the previous exact V4 transport
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-        run: python tools/_bootstrap_v4_audit.py
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" "https://raw.githubusercontent.com/${REPOSITORY}/${HEAD_SHA}/tools/_bootstrap_v4_audit.py" --output /tmp/audit.py
+          python /tmp/audit.py
