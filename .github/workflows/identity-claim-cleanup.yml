@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 jobs:
@@ -71,46 +71,15 @@ jobs:
         run: python -m tools.refresh_manifest
       - name: Validate canonical identity and claims
         run: python -m tools.validate_claim_integrity
-      - name: Capture repository contract reports
-        shell: bash
+      - name: Validate repository contracts
         run: |
-          reports=/tmp/syntavra-validation-reports
-          rm -rf "$reports"
-          mkdir -p "$reports"
-          capture() {
-            local name="$1"
-            shift
-            set +e
-            "$@" >"${reports}/${name}.json" 2>&1
-            local status=$?
-            set -e
-            printf '%s\n' "$status" >"${reports}/${name}.exit"
-          }
-          capture repository python -m tools.validate
-          capture runtime python -m tools.validate_runtime
-          capture release python -m tools.validate_release
-          capture competitive python -m tools.validate_competitive_gap_assessment
-          capture hygiene python -m tools.check_repository_hygiene
-          set +e
-          python -m compileall -q syntavra_runtime tools benchmarks tests >"${reports}/compile.txt" 2>&1
-          printf '%s\n' "$?" >"${reports}/compile.exit"
-          git diff --check >"${reports}/diff.txt" 2>&1
-          printf '%s\n' "$?" >"${reports}/diff.exit"
-          set -e
-      - uses: actions/upload-artifact@v4
-        with:
-          name: repository-contract-reports
-          path: /tmp/syntavra-validation-reports
-          if-no-files-found: error
-      - name: Enforce repository contracts
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          root = Path('/tmp/syntavra-validation-reports')
-          failed = [path.stem for path in sorted(root.glob('*.exit')) if path.read_text(encoding='utf-8').strip() != '0']
-          if failed:
-              raise SystemExit('failed contracts: ' + ', '.join(failed))
-          PY
+          python -m tools.validate
+          python -m tools.validate_runtime
+          python -m tools.validate_release
+          python -m tools.validate_competitive_gap_assessment
+          python -m tools.check_repository_hygiene
+          python -m compileall -q syntavra_runtime tools benchmarks tests
+          git diff --check
       - name: Run Python test suite
         run: python -m pytest -q
       - name: Validate npm installer
@@ -133,12 +102,70 @@ jobs:
           cargo build --locked --release
       - name: Build Python distribution
         run: python -m build
-      - name: Commit validated canonical product tree
-        env:
-          HEAD_BRANCH: ${{ github.head_ref }}
+      - name: Export validated final product tree
         run: |
-          git config user.name 'syntavra-validation-bot'
-          git config user.email 'actions@users.noreply.github.com'
           git add -A
-          git commit -m 'Canonicalize Syntavra identity and evidence claims'
-          git push origin "HEAD:${HEAD_BRANCH}"
+          python - <<'PY'
+          from __future__ import annotations
+          import json
+          import shutil
+          import subprocess
+          from pathlib import Path
+
+          root = Path.cwd()
+          output = Path('/tmp/syntavra-final-product')
+          shutil.rmtree(output, ignore_errors=True)
+          (output / 'files').mkdir(parents=True)
+
+          def run(*args: str) -> str:
+              return subprocess.check_output(args, cwd=root, text=True).strip()
+
+          raw = subprocess.check_output(['git', 'diff', '--cached', '--name-status', '-z'], cwd=root)
+          fields = raw.decode('utf-8').split('\0')
+          changes = []
+          index = 0
+          while index < len(fields) and fields[index]:
+              status = fields[index]
+              index += 1
+              if status.startswith(('R', 'C')):
+                  old_path = fields[index]
+                  new_path = fields[index + 1]
+                  index += 2
+                  changes.append({'status': status[0], 'old_path': old_path, 'path': new_path})
+              else:
+                  path = fields[index]
+                  index += 1
+                  changes.append({'status': status[0], 'path': path})
+
+          for change in changes:
+              if change['status'] == 'D':
+                  change['mode'] = None
+                  continue
+              path = change['path']
+              stage = run('git', 'ls-files', '--stage', '--', path).split()
+              change['mode'] = stage[0]
+              source = root / path
+              destination = output / 'files' / path
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              if source.is_symlink():
+                  destination.write_text(source.readlink().as_posix(), encoding='utf-8')
+                  change['symlink'] = True
+              else:
+                  shutil.copy2(source, destination)
+                  change['symlink'] = False
+
+          metadata = {
+              'base_commit': run('git', 'rev-parse', 'HEAD'),
+              'base_tree': run('git', 'rev-parse', 'HEAD^{tree}'),
+              'final_tree': run('git', 'write-tree'),
+              'changes': changes,
+          }
+          (output / 'metadata.json').write_text(json.dumps(metadata, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          (output / 'cached.diff').write_bytes(subprocess.check_output(['git', 'diff', '--cached', '--binary'], cwd=root))
+          print(json.dumps(metadata, indent=2, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-final-product
+          path: /tmp/syntavra-final-product
+          if-no-files-found: error
