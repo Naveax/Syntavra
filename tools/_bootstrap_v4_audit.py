@@ -27,7 +27,18 @@ EXPECTED = {
 }
 
 
+def request_json(url: str, headers: dict[str, str], *, payload: dict[str, object] | None = None) -> object:
+    data = None if payload is None else json.dumps(payload).encode()
+    request = urllib.request.Request(url, headers=headers, data=data)
+    if payload is not None:
+        request.method = "POST"
+        request.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+
 def main() -> None:
+    repository = os.environ["REPOSITORY"]
     headers = {
         "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
         "Accept": "application/vnd.github+json",
@@ -36,9 +47,11 @@ def main() -> None:
     comments: list[dict[str, object]] = []
     page = 1
     while True:
-        url = f"https://api.github.com/repos/{os.environ['REPOSITORY']}/issues/62/comments?per_page=100&page={page}"
-        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
-            rows = json.load(response)
+        rows = request_json(
+            f"https://api.github.com/repos/{repository}/issues/62/comments?per_page=100&page={page}",
+            headers,
+        )
+        assert isinstance(rows, list)
         comments.extend(rows)
         if len(rows) < 100:
             break
@@ -63,12 +76,15 @@ def main() -> None:
                 found[index] = candidate
 
     missing = sorted(set(EXPECTED) - set(found))
-    print(json.dumps({
+    result = {
         "found": sorted(found),
         "missing": missing,
         "observed_for_missing": {str(i): observed.get(i, []) for i in missing},
         "comment_count": len(comments),
-    }, indent=2))
+    }
+    body = "<!-- SYNTAVRA_BOOTSTRAP_AUDIT -->\n```json\n" + json.dumps(result, indent=2) + "\n```"
+    request_json(f"https://api.github.com/repos/{repository}/issues/63/comments", headers, payload={"body": body})
+    print(json.dumps(result))
     if missing:
         raise SystemExit(1)
     transport = "".join(found[index] for index in sorted(found))
