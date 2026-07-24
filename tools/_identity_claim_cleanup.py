@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -16,21 +15,18 @@ TEXT_SUFFIXES = {
     ".java", ".js", ".json", ".jsonl", ".md", ".mjs", ".py", ".rs", ".sh",
     ".toml", ".ts", ".tsx", ".txt", ".yaml", ".yml",
 }
-
 BRAND_REPLACEMENTS = (
     ("SIGNALCORE", "SYNTAVRA"),
     ("SignalCore", "Syntavra"),
     ("signalcore", "syntavra"),
     ("Signal Core", "Syntavra"),
 )
-
 PATH_RENAMES = {
     "docs/COMPLETE_COMPETITIVE_FEATURE_SET_001.md": "docs/IMPLEMENTED_FEATURE_INVENTORY_001.md",
     "docs/COMPETITIVE_GAP_CLOSURE_001.md": "docs/COMPETITIVE_GAP_ASSESSMENT_001.md",
     "docs/P0_P2_CLOSURE_001.md": "docs/P0_P2_IMPLEMENTATION_STATUS_001.md",
     "tools/validate_competitive_gap_closure.py": "tools/validate_competitive_gap_assessment.py",
 }
-
 TEXT_REPLACEMENTS = (
     ("COMPLETE_COMPETITIVE_FEATURE_SET_001", "IMPLEMENTED_FEATURE_INVENTORY_001"),
     ("COMPETITIVE_GAP_CLOSURE_001", "COMPETITIVE_GAP_ASSESSMENT_001"),
@@ -48,6 +44,127 @@ TEXT_REPLACEMENTS = (
     ("closed technical competitive gaps", "implemented tracked technical gap work"),
     ("close technical competitive gaps", "implement tracked technical gap work"),
 )
+CLAIM_POLICY = """# Syntavra claim policy
+
+Syntavra 0.0.1 is a pre-release project. Public statements must distinguish code inventory, internal verification, provider-observed measurement, independent verification, and real-world adoption.
+
+## Evidence tiers
+
+1. `DECLARED`: configuration or contract exists in source.
+2. `INTERNAL_VERIFIED`: deterministic tests passed in the project repository.
+3. `PROVIDER_OBSERVED`: provider receipts record usage and cost for verified work.
+4. `INDEPENDENT_VERIFIED`: an unaffiliated party reproduced the result.
+5. `ADOPTION_OBSERVED`: real users and sustained workloads produced public evidence.
+
+Code counts may be published only as generated inventory and must never be presented as live certification, quality, savings, market rank, or maturity. Forecasts, synthetic fixtures, local tokenization, and unpaired runs cannot support competitor claims.
+
+Absolute completion, market-leadership, and production-maturity wording is prohibited unless the corresponding external evidence is linked and machine-verifiable.
+
+## Current boundary
+
+```text
+EXTERNAL_SUPERIORITY_NOT_PROVEN
+MEASURED_AGENT_BENCHMARK_NOT_PROVEN
+LIVE_INTEGRATION_CERTIFICATION_NOT_PROVEN
+PUBLIC_PRODUCT_MATURITY_NOT_PROVEN
+REGISTRY_PUBLICATION_NOT_PERFORMED
+```
+"""
+CLAIM_VALIDATOR = r'''#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+TEXT_SUFFIXES = {"", ".json", ".md", ".mjs", ".py", ".rs", ".sh", ".toml", ".ts", ".txt", ".yaml", ".yml"}
+CLAIM_SURFACES = {"README.md", "BENCHMARKS.md", "CHANGELOG.md", "llms.txt"}
+LEGACY = re.compile(r"(?i)\bsignal[\s_-]*core\b")
+INFLATED = {
+    "absolute-feature-completion": re.compile(r"(?i)\bcomplete competitive feature set\b"),
+    "absolute-gap-closure": re.compile(r"(?i)\bcompetitive gap closure\b|\ball (?:competitive )?gaps (?:are )?closed\b"),
+    "unsupported-production-maturity": re.compile(r"(?i)\bproduction[- ]ready\b"),
+    "unsupported-market-rank": re.compile(r"(?i)\bbest[- ]in[- ]class\b|\bindustry[- ]leading\b"),
+    "unsupported-savings-percent": re.compile(r"(?i)\b(?:99|100)%\s+(?:token|cost|context)\s+(?:saving|savings|reduction)\b"),
+}
+INFLATED_PATH = re.compile(r"(?i)(complete_competitive_feature_set|competitive_gap_closure|p0_p2_closure)")
+SKIP = {"tools/validate_claim_integrity.py"}
+
+
+def tracked() -> list[Path]:
+    try:
+        raw = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True)
+        return [Path(row) for row in raw.splitlines() if row]
+    except (OSError, subprocess.CalledProcessError):
+        return [path.relative_to(ROOT) for path in ROOT.rglob("*") if path.is_file()]
+
+
+def is_claim_surface(path: Path) -> bool:
+    return path.as_posix() in CLAIM_SURFACES or (path.parts and path.parts[0] in {"docs", "release", "skills"})
+
+
+def audit_repository() -> dict[str, object]:
+    failures: list[str] = []
+    scanned = 0
+    for relative in tracked():
+        name = relative.as_posix()
+        if LEGACY.search(name):
+            failures.append(f"legacy-path:{name}")
+        if INFLATED_PATH.search(name):
+            failures.append(f"inflated-path:{name}")
+        if name in SKIP or relative.suffix.casefold() not in TEXT_SUFFIXES:
+            continue
+        absolute = ROOT / relative
+        if not absolute.is_file():
+            continue
+        try:
+            text = absolute.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        scanned += 1
+        if LEGACY.search(text):
+            failures.append(f"legacy-identity:{name}")
+        if is_claim_surface(relative):
+            for label, pattern in INFLATED.items():
+                if pattern.search(text):
+                    failures.append(f"{label}:{name}")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    if "code-inventory counts, not live certification" not in readme:
+        failures.append("readme-missing-inventory-boundary")
+    if not (ROOT / "docs" / "CLAIM_POLICY.md").is_file():
+        failures.append("missing-claim-policy")
+    legacy_dir = ROOT / ("signal" + "core_runtime")
+    if legacy_dir.exists():
+        failures.append("legacy-namespace-directory")
+    return {"ok": not failures, "scanned_text_files": scanned, "failures": sorted(set(failures))}
+
+
+def main() -> int:
+    result = audit_repository()
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if result["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+CLAIM_TEST = '''from pathlib import Path
+
+from tools.validate_claim_integrity import audit_repository
+
+
+def test_repository_claim_integrity() -> None:
+    result = audit_repository()
+    assert result["ok"], result
+
+
+def test_only_canonical_runtime_namespace_exists() -> None:
+    legacy = Path("signal" + "core_runtime")
+    assert not legacy.exists()
+    assert Path("syntavra_runtime").is_dir()
+'''
 
 
 def run(*args: str) -> str:
@@ -84,20 +201,16 @@ def rewrite_text(path: Path) -> None:
         absolute.write_text(updated, encoding="utf-8", newline="\n")
 
 
+def remove_legacy_namespace() -> None:
+    legacy = "signal" + "core_runtime"
+    subprocess.run(["git", "rm", "-r", "--ignore-unmatch", legacy], cwd=ROOT, check=True)
+
+
 def rename_paths() -> None:
     for source, destination in PATH_RENAMES.items():
-        src = ROOT / source
-        dst = ROOT / destination
-        if src.exists():
-            dst.parent.mkdir(parents=True, exist_ok=True)
+        if (ROOT / source).exists():
+            (ROOT / destination).parent.mkdir(parents=True, exist_ok=True)
             subprocess.check_call(["git", "mv", source, destination], cwd=ROOT)
-
-
-def remove_legacy_namespace() -> None:
-    legacy = ROOT / ("signal" + "core_runtime")
-    if legacy.exists():
-        shutil.rmtree(legacy)
-    subprocess.run(["git", "rm", "-r", "--ignore-unmatch", "signal" + "core_runtime"], cwd=ROOT, check=False)
 
 
 def normalize_pyproject() -> None:
@@ -120,12 +233,9 @@ def normalize_validate() -> None:
             seen = True
         lines.append(line)
     text = "\n".join(lines) + "\n"
-    text = text.replace(
-        'ROOT / "syntavra_runtime", ROOT / "syntavra_runtime",',
-        'ROOT / "syntavra_runtime",',
-    )
+    text = text.replace('ROOT / "syntavra_runtime", ROOT / "syntavra_runtime",', 'ROOT / "syntavra_runtime",')
+    anchor = '    ROOT / "tools" / "check_repository_hygiene.py",\n'
     if 'ROOT / "tools" / "validate_claim_integrity.py"' not in text:
-        anchor = '    ROOT / "tools" / "check_repository_hygiene.py",\n'
         text = text.replace(anchor, anchor + '    ROOT / "tools" / "validate_claim_integrity.py",\n')
     path.write_text(text, encoding="utf-8", newline="\n")
 
@@ -145,10 +255,7 @@ def normalize_readme() -> None:
     path = ROOT / "README.md"
     text = path.read_text(encoding="utf-8")
     text = text.replace("## Competitive feature set", "## Implemented code surfaces")
-    text = text.replace(
-        "Syntavra 0.0.1 now includes a fail-closed",
-        "The Syntavra 0.0.1 codebase implements a fail-closed",
-    )
+    text = text.replace("Syntavra 0.0.1 now includes a fail-closed", "The Syntavra 0.0.1 codebase implements a fail-closed")
     inventory = (
         "The configured registry currently contains 118 fail-closed rewrite rules, 131 command-specific "
         "compactors, 44 controlled host contracts, 48 provider presets, a credential-reference-only "
@@ -168,68 +275,16 @@ def normalize_readme() -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def write_claim_policy() -> None:
-    path = ROOT / "docs" / "CLAIM_POLICY.md"
-    path.write_text(
-        """# Syntavra claim policy\n\n"
-        "Syntavra 0.0.1 is a pre-release project. Public statements must distinguish code inventory, "
-        "internal verification, provider-observed measurement, independent verification, and real-world "
-        "adoption.\n\n"
-        "## Evidence tiers\n\n"
-        "1. `DECLARED`: configuration or contract exists in source.\n"
-        "2. `INTERNAL_VERIFIED`: deterministic tests passed in the project repository.\n"
-        "3. `PROVIDER_OBSERVED`: provider receipts record usage and cost for verified work.\n"
-        "4. `INDEPENDENT_VERIFIED`: an unaffiliated party reproduced the result.\n"
-        "5. `ADOPTION_OBSERVED`: real users and sustained workloads produced public evidence.\n\n"
-        "Code counts may be published only as generated inventory and must never be presented as live "
-        "certification, quality, savings, market rank, or maturity. Forecasts, synthetic fixtures, local "
-        "tokenization, and unpaired runs cannot support competitor claims.\n\n"
-        "Absolute completion, market-leadership, and production-maturity wording is prohibited unless the "
-        "corresponding external evidence is linked and machine-verifiable.\n\n"
-        "## Current boundary\n\n"
-        "```text\n"
-        "EXTERNAL_SUPERIORITY_NOT_PROVEN\n"
-        "MEASURED_AGENT_BENCHMARK_NOT_PROVEN\n"
-        "LIVE_INTEGRATION_CERTIFICATION_NOT_PROVEN\n"
-        "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN\n"
-        "REGISTRY_PUBLICATION_NOT_PERFORMED\n"
-        "```\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
-def write_claim_validator() -> None:
-    path = ROOT / "tools" / "validate_claim_integrity.py"
-    path.write_text(
-        '''#!/usr/bin/env python3\nfrom __future__ import annotations\n\nimport json\nimport re\nimport subprocess\nfrom pathlib import Path\n\nROOT = Path(__file__).resolve().parents[1]\nTEXT_SUFFIXES = {"", ".json", ".md", ".mjs", ".py", ".rs", ".sh", ".toml", ".ts", ".txt", ".yaml", ".yml"}\nCLAIM_SURFACES = {"README.md", "BENCHMARKS.md", "CHANGELOG.md", "llms.txt"}\nLEGACY = re.compile(r"(?i)\\bsignal[\\s_-]*core\\b")\nINFLATED = {\n    "absolute-feature-completion": re.compile(r"(?i)\\bcomplete competitive feature set\\b"),\n    "absolute-gap-closure": re.compile(r"(?i)\\bcompetitive gap closure\\b|\\ball (?:competitive )?gaps (?:are )?closed\\b"),\n    "unsupported-production-maturity": re.compile(r"(?i)\\bproduction[- ]ready\\b"),\n    "unsupported-market-rank": re.compile(r"(?i)\\bbest[- ]in[- ]class\\b|\\bindustry[- ]leading\\b"),\n    "unsupported-savings-percent": re.compile(r"(?i)\\b(?:99|100)%\\s+(?:token|cost|context)\\s+(?:saving|savings|reduction)\\b"),\n}\nSKIP = {"tools/validate_claim_integrity.py"}\n\ndef tracked() -> list[Path]:\n    try:\n        raw = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True)\n        return [Path(row) for row in raw.splitlines() if row]\n    except (OSError, subprocess.CalledProcessError):\n        return [path.relative_to(ROOT) for path in ROOT.rglob("*") if path.is_file()]\n\ndef is_claim_surface(path: Path) -> bool:\n    return path.as_posix() in CLAIM_SURFACES or (path.parts and path.parts[0] in {"docs", "release", "skills"})\n\ndef audit_repository() -> dict[str, object]:\n    failures: list[str] = []\n    scanned = 0\n    for relative in tracked():\n        if relative.as_posix() in SKIP or relative.suffix.casefold() not in TEXT_SUFFIXES:\n            continue\n        absolute = ROOT / relative\n        if not absolute.is_file():\n            continue\n        try:\n            text = absolute.read_text(encoding="utf-8")\n        except UnicodeDecodeError:\n            continue\n        scanned += 1\n        if LEGACY.search(text):\n            failures.append(f"legacy-identity:{relative.as_posix()}")\n        if is_claim_surface(relative):\n            for label, pattern in INFLATED.items():\n                if pattern.search(text):\n                    failures.append(f"{label}:{relative.as_posix()}")\n    readme = (ROOT / "README.md").read_text(encoding="utf-8")\n    if "code-inventory counts, not live certification" not in readme:\n        failures.append("readme-missing-inventory-boundary")\n    if not (ROOT / "docs" / "CLAIM_POLICY.md").is_file():\n        failures.append("missing-claim-policy")\n    legacy_dir = ROOT / ("signal" + "core_runtime")\n    if legacy_dir.exists():\n        failures.append("legacy-namespace-directory")\n    return {"ok": not failures, "scanned_text_files": scanned, "failures": failures}\n\ndef main() -> int:\n    result = audit_repository()\n    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))\n    return 0 if result["ok"] else 1\n\nif __name__ == "__main__":\n    raise SystemExit(main())\n''',
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
-def write_claim_test() -> None:
-    path = ROOT / "tests" / "runtime" / "test_claim_integrity_v001.py"
-    path.write_text(
-        '''from pathlib import Path\n\nfrom tools.validate_claim_integrity import audit_repository\n\n\ndef test_repository_claim_integrity() -> None:\n    result = audit_repository()\n    assert result["ok"], result\n\n\ndef test_only_canonical_runtime_namespace_exists() -> None:\n    legacy = Path("signal" + "core_runtime")\n    assert not legacy.exists()\n    assert Path("syntavra_runtime").is_dir()\n''',
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
 def append_changelog() -> None:
     path = ROOT / "CHANGELOG.md"
     text = path.read_text(encoding="utf-8")
-    note = (
-        "\n### Identity and claim integrity\n\n"
-        "- Removed the pre-rename compatibility namespace and converted all managed markers, tests, "
-        "installer paths, workflows, and package discovery to the canonical Syntavra identity.\n"
-        "- Replaced absolute completion/closure language with evidence-gated implementation inventory "
-        "and assessment terminology.\n"
-        "- Added repository-wide claim-integrity validation and an explicit public claim policy.\n"
-    )
     if "### Identity and claim integrity" not in text:
-        text = text.rstrip() + "\n" + note
+        text = text.rstrip() + (
+            "\n\n### Identity and claim integrity\n\n"
+            "- Removed the pre-rename compatibility namespace and converted managed markers, tests, installer paths, workflows, and package discovery to the canonical Syntavra identity.\n"
+            "- Replaced absolute completion/closure language with evidence-gated implementation inventory and assessment terminology.\n"
+            "- Added repository-wide claim-integrity validation and an explicit public claim policy.\n"
+        )
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
@@ -242,12 +297,10 @@ def main() -> None:
     normalize_validate()
     normalize_hygiene()
     normalize_readme()
-    write_claim_policy()
-    write_claim_validator()
-    write_claim_test()
     append_changelog()
-    for path in tracked_paths():
-        rewrite_text(path)
+    (ROOT / "docs" / "CLAIM_POLICY.md").write_text(CLAIM_POLICY, encoding="utf-8", newline="\n")
+    (ROOT / "tools" / "validate_claim_integrity.py").write_text(CLAIM_VALIDATOR, encoding="utf-8", newline="\n")
+    (ROOT / "tests" / "runtime" / "test_claim_integrity_v001.py").write_text(CLAIM_TEST, encoding="utf-8", newline="\n")
     print(json.dumps({"ok": True, "renames": PATH_RENAMES}, indent=2, sort_keys=True))
 
 
