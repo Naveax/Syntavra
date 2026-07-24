@@ -35,6 +35,7 @@ jobs:
           import time
           import urllib.parse
           import urllib.request
+          from datetime import datetime, timezone
           from pathlib import Path
 
           repository = os.environ["GITHUB_REPOSITORY"]
@@ -52,7 +53,7 @@ jobs:
               with urllib.request.urlopen(request, timeout=30) as response:
                   return json.load(response)
 
-          required = {
+          required_push_workflows = {
               "CodeQL",
               "Validate Syntavra Package",
               "Validate Syntavra 0.0.1 Pre-Release",
@@ -61,10 +62,10 @@ jobs:
               "Build Syntavra Portable Runtime",
               "Validate Syntavra Repository Manifest",
               "Syntavra Repository Hardening",
-              "Syntavra Security Alert Triage",
           }
 
-          selected = {}
+          selected: dict[str, dict[str, object]] = {}
+          codeql_created_at = ""
           for attempt in range(90):
               query = urllib.parse.urlencode({"head_sha": target_sha, "per_page": 100})
               payload = get_json(
@@ -74,16 +75,20 @@ jobs:
               selected = {}
               for run in runs:
                   name = str(run.get("name") or "")
-                  if name not in required:
+                  if name not in required_push_workflows:
                       continue
                   previous = selected.get(name)
                   if previous is None or str(run.get("created_at") or "") > str(previous.get("created_at") or ""):
                       selected[name] = run
 
-              missing = sorted(required - set(selected))
+              missing = sorted(required_push_workflows - set(selected))
               pending = sorted(
                   name for name, run in selected.items()
                   if run.get("status") != "completed"
+              )
+              print(
+                  f"push-workflow poll {attempt + 1}: missing={missing}, pending={pending}",
+                  flush=True,
               )
               if not missing and not pending:
                   break
@@ -91,7 +96,7 @@ jobs:
                   time.sleep(10)
           else:
               raise SystemExit(
-                  f"timed out waiting for final-main workflows; missing={missing}, pending={pending}"
+                  f"timed out waiting for final-main push workflows; missing={missing}, pending={pending}"
               )
 
           failed = {
@@ -101,6 +106,45 @@ jobs:
           }
           if failed:
               raise SystemExit(f"final-main workflows failed: {failed}")
+
+          codeql_run = selected["CodeQL"]
+          codeql_created_at = str(codeql_run.get("created_at") or "")
+          if not codeql_created_at:
+              raise SystemExit("final-main CodeQL run has no created_at timestamp")
+
+          security_triage = None
+          for attempt in range(60):
+              payload = get_json(
+                  f"https://api.github.com/repos/{repository}/actions/workflows/security-alert-triage.yml/runs?per_page=100"
+              )
+              candidates = []
+              for run in payload.get("workflow_runs") or []:
+                  if run.get("event") != "workflow_run":
+                      continue
+                  if str(run.get("created_at") or "") < codeql_created_at:
+                      continue
+                  candidates.append(run)
+              candidates.sort(key=lambda run: str(run.get("created_at") or ""), reverse=True)
+              security_triage = candidates[0] if candidates else None
+              status = security_triage.get("status") if security_triage else None
+              conclusion = security_triage.get("conclusion") if security_triage else None
+              print(
+                  f"security-triage poll {attempt + 1}: id={security_triage.get('id') if security_triage else None}, "
+                  f"status={status}, conclusion={conclusion}",
+                  flush=True,
+              )
+              if security_triage and status == "completed":
+                  break
+              if attempt < 59:
+                  time.sleep(10)
+          else:
+              raise SystemExit("timed out waiting for security-alert-triage workflow_run")
+
+          if not security_triage or security_triage.get("conclusion") != "success":
+              raise SystemExit(
+                  f"security-alert-triage did not succeed: "
+                  f"{security_triage.get('conclusion') if security_triage else 'missing'}"
+              )
 
           alert = get_json(
               f"https://api.github.com/repos/{repository}/code-scanning/alerts/6"
@@ -132,7 +176,8 @@ jobs:
               "channel": "pre-release",
               "target_main_sha": target_sha,
               "verification_round": 3,
-              "workflows": {
+              "verified_at": datetime.now(timezone.utc).isoformat(),
+              "push_workflows": {
                   name: {
                       "id": run.get("id"),
                       "event": run.get("event"),
@@ -141,6 +186,14 @@ jobs:
                       "html_url": run.get("html_url"),
                   }
                   for name, run in sorted(selected.items())
+              },
+              "security_triage_workflow": {
+                  "id": security_triage.get("id"),
+                  "event": security_triage.get("event"),
+                  "status": security_triage.get("status"),
+                  "conclusion": security_triage.get("conclusion"),
+                  "created_at": security_triage.get("created_at"),
+                  "html_url": security_triage.get("html_url"),
               },
               "code_scanning_alert_6": {
                   "state": alert.get("state"),
