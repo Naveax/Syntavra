@@ -24,9 +24,12 @@ jobs:
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       EXPECTED_BASE: 0dad1718e228191abc0135aaaea8929c453f90c9
-      EXPECTED_TREE: dedb0abaa568e08410749486838d24cdad6c997b
+      EXPECTED_PRODUCT_TREE: dedb0abaa568e08410749486838d24cdad6c997b
+      EXPECTED_TREE: 7e737abd2ecacec0b834a5bb9cd9e34dc1161532
       EXPECTED_B64_SHA256: e12d386ff80f705456cff50b33a2ecb5a407c26bbe54bff3f74b61d7c7322ef6
       EXPECTED_PATCH_SHA256: f17ca899cd7ac2d1d2ba67e67c7c4f09276f19f66ebe57549e8f98f53662b266
+      EXPECTED_LOCK_B64_SHA256: c1f8775fbf19b20e1a5f8a189e2ca05c366d10aadfce402040893b619a9bda91
+      EXPECTED_LOCK_PATCH_SHA256: 1c4b73cb43b139e467ad9b6bf0db27a4d6fa8db7341014a9fd936375843a0d3d
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout canonical main
@@ -35,7 +38,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Verify base and recover exact patch
+      - name: Verify base and recover exact product
         shell: bash
         run: |
           set -euo pipefail
@@ -51,6 +54,15 @@ jobs:
           git config user.name "Naveax"
           git config user.email "79841922+Naveax@users.noreply.github.com"
           git am /tmp/final.patch
+          test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_PRODUCT_TREE}"
+
+          url="https://raw.githubusercontent.com/${REPOSITORY}/${HEAD_SHA}/.syntavra-transport/final-lock.b64"
+          curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" "${url}" --output /tmp/final-lock.patch.gz.b64
+          test "$(sha256sum /tmp/final-lock.patch.gz.b64 | cut -d' ' -f1)" = "${EXPECTED_LOCK_B64_SHA256}"
+          base64 --decode /tmp/final-lock.patch.gz.b64 | gzip --decompress > /tmp/final-lock.patch
+          test "$(sha256sum /tmp/final-lock.patch | cut -d' ' -f1)" = "${EXPECTED_LOCK_PATCH_SHA256}"
+          git apply --index /tmp/final-lock.patch
+          git commit --amend --no-edit
           test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"
           test -z "$(git status --porcelain)"
 
@@ -86,28 +98,23 @@ jobs:
           git diff --check HEAD^
 
       - name: Run complete Python suite in deterministic shards
-        id: python_tests
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/syntavra-test-logs
           find tests -name 'test_*.py' -type f | sort > /tmp/test-files
           split -n l/5 -d /tmp/test-files /tmp/test-shard-
-          status=0
           for shard in /tmp/test-shard-0{0,1,2,3,4}; do
             name="$(basename "${shard}")"
             log="/tmp/syntavra-test-logs/${name}.log"
             echo "Running ${name}: $(wc -l < "${shard}") files"
-            if ! python -m pytest -q $(cat "${shard}") >"${log}" 2>&1; then
-              status=$?
-              echo "::group::Failure output for ${name}"
-              tail -n 250 "${log}"
-              echo "::endgroup::"
-              break
-            fi
+            set +e
+            python -m pytest -q $(cat "${shard}") >"${log}" 2>&1
+            rc=$?
+            set -e
             cat "${log}"
+            test "${rc}" -eq 0
           done
-          exit "${status}"
 
       - name: Upload Python test logs
         if: always()
@@ -137,8 +144,27 @@ jobs:
       - name: Validate VS Code extension
         run: npm --prefix integrations/vscode-syntavra test
 
-      - name: Validate native companion
-        run: cargo test --manifest-path native/syntavra-native/Cargo.toml --locked
+      - name: Validate native companion with lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/syntavra-native-logs
+          set +e
+          cargo test --manifest-path native/syntavra-native/Cargo.toml --locked > /tmp/syntavra-native-logs/cargo-test.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/syntavra-native-logs/cargo-test.log
+          test "${rc}" -eq 0
+          test -z "$(git status --porcelain)"
+
+      - name: Upload native test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-native-log-${{ github.run_id }}
+          path: /tmp/syntavra-native-logs/cargo-test.log
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Build and smoke-test wheel
         shell: bash
