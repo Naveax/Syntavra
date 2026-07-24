@@ -29,6 +29,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Apply canonical identity and claim policy
         run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/_identity_claim_cleanup.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''        '"legacy-product-name": re.compile(r"\\\\bsignal[\\\\s_-]*core\\\\b", re.IGNORECASE),',\n        text,\n'''
+          new = '''        lambda _: '"legacy-product-name": re.compile(r"\\\\bsignal[\\\\s_-]*core\\\\b", re.IGNORECASE),',\n        text,\n'''
+          if old not in text:
+              raise SystemExit('expected hygiene replacement block not found')
+          path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
+          PY
           python tools/_identity_claim_cleanup.py
           git rm -f .github/workflows/identity-claim-cleanup.yml tools/_identity_claim_cleanup.py
       - name: Install Python validation dependencies
