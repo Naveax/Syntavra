@@ -84,7 +84,6 @@ jobs:
           import tomllib
           from pathlib import Path
           import syntavra_runtime
-          import signalcore_runtime
           project=tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']
           npm=json.loads(Path('package.json').read_text(encoding='utf-8'))
           sdk=json.loads(Path('sdk/typescript/package.json').read_text(encoding='utf-8'))
@@ -94,7 +93,6 @@ jobs:
           assert npm['name'] == '@syntavra/install' and npm['version'] == '0.0.1'
           assert sdk['name'] == '@syntavra/sdk' and sdk['version'] == '0.0.1'
           assert syntavra_runtime.__version__ == '0.0.1'
-          assert signalcore_runtime.__version__ == '0.0.1'
           assert release['version'] == '0.0.1'
           assert release['channel'] == 'pre-release'
           PY
