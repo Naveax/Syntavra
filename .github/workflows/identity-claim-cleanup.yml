@@ -1,0 +1,171 @@
+name: Identity and claim cleanup
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  cleanup-and-validate:
+    if: github.actor == github.repository_owner && github.head_ref == 'agent/syntavra-identity-claim-cleanup-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply canonical identity and claim policy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/_identity_claim_cleanup.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''        '"legacy-product-name": re.compile(r"\\\\bsignal[\\\\s_-]*core\\\\b", re.IGNORECASE),',\n        text,\n'''
+          new = '''        lambda _: '"legacy-product-name": re.compile(r"\\\\bsignal[\\\\s_-]*core\\\\b", re.IGNORECASE),',\n        text,\n'''
+          if old not in text:
+              raise SystemExit('expected hygiene replacement block not found')
+          path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
+          PY
+          python tools/_identity_claim_cleanup.py
+          git mv tools/signalcore.py tools/syntavra.py
+          python - <<'PY'
+          from pathlib import Path
+          replacements = {
+              'Complete competitive feature set': 'Implemented feature inventory',
+              'Technical gap closure is internally verified; external superiority remains unproven.':
+                  'Tracked technical implementation checks are internally verified; external superiority remains unproven.',
+          }
+          suffixes = {'', '.json', '.md', '.mjs', '.py', '.rs', '.sh', '.toml', '.ts', '.txt', '.yaml', '.yml'}
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or '.git' in path.parts or path.suffix.casefold() not in suffixes:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              updated = text
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8', newline='\n')
+          PY
+          git rm -f .github/workflows/identity-claim-cleanup.yml tools/_identity_claim_cleanup.py
+      - name: Install Python validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[code-intelligence]' pytest build
+      - name: Refresh deterministic repository manifest
+        run: python -m tools.refresh_manifest
+      - name: Validate canonical identity and claims
+        run: python -m tools.validate_claim_integrity
+      - name: Validate repository contracts
+        run: |
+          python -m tools.validate
+          python -m tools.validate_runtime
+          python -m tools.validate_release
+          python -m tools.validate_competitive_gap_assessment
+          python -m tools.check_repository_hygiene
+          python -m compileall -q syntavra_runtime tools benchmarks tests
+          git diff --check
+      - name: Run Python test suite
+        run: python -m pytest -q
+      - name: Validate npm installer
+        run: |
+          npm ci
+          npm test
+          npm run pack:check
+      - name: Validate TypeScript SDK
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm run ci
+      - name: Validate VS Code integration
+        working-directory: integrations/vscode-syntavra
+        run: npm test
+      - name: Validate native companion
+        working-directory: native/syntavra-native
+        run: |
+          cargo test --locked
+          cargo build --locked --release
+      - name: Build Python distribution
+        run: python -m build
+      - name: Export validated final product tree
+        run: |
+          git add -A
+          python - <<'PY'
+          from __future__ import annotations
+          import json
+          import shutil
+          import subprocess
+          from pathlib import Path
+
+          root = Path.cwd()
+          output = Path('/tmp/syntavra-final-product')
+          shutil.rmtree(output, ignore_errors=True)
+          (output / 'files').mkdir(parents=True)
+
+          def run(*args: str) -> str:
+              return subprocess.check_output(args, cwd=root, text=True).strip()
+
+          raw = subprocess.check_output(['git', 'diff', '--cached', '--name-status', '-z'], cwd=root)
+          fields = raw.decode('utf-8').split('\0')
+          changes = []
+          index = 0
+          while index < len(fields) and fields[index]:
+              status = fields[index]
+              index += 1
+              if status.startswith(('R', 'C')):
+                  old_path = fields[index]
+                  new_path = fields[index + 1]
+                  index += 2
+                  changes.append({'status': status[0], 'old_path': old_path, 'path': new_path})
+              else:
+                  path = fields[index]
+                  index += 1
+                  changes.append({'status': status[0], 'path': path})
+
+          for change in changes:
+              if change['status'] == 'D':
+                  change['mode'] = None
+                  continue
+              path = change['path']
+              stage = run('git', 'ls-files', '--stage', '--', path).split()
+              change['mode'] = stage[0]
+              source = root / path
+              destination = output / 'files' / path
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              if source.is_symlink():
+                  destination.write_text(source.readlink().as_posix(), encoding='utf-8')
+                  change['symlink'] = True
+              else:
+                  shutil.copy2(source, destination)
+                  change['symlink'] = False
+
+          metadata = {
+              'base_commit': run('git', 'rev-parse', 'HEAD'),
+              'base_tree': run('git', 'rev-parse', 'HEAD^{tree}'),
+              'final_tree': run('git', 'write-tree'),
+              'changes': changes,
+          }
+          (output / 'metadata.json').write_text(json.dumps(metadata, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          (output / 'cached.diff').write_bytes(subprocess.check_output(['git', 'diff', '--cached', '--binary'], cwd=root))
+          print(json.dumps(metadata, indent=2, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-final-product
+          path: /tmp/syntavra-final-product
+          if-no-files-found: error
