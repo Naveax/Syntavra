@@ -43,11 +43,24 @@ jobs:
           git mv tools/signalcore.py tools/syntavra.py
           python - <<'PY'
           from pathlib import Path
-          for name in ('CHANGELOG.md', 'llms.txt'):
-              path = Path(name)
-              text = path.read_text(encoding='utf-8')
-              text = text.replace('Complete competitive feature set', 'Implemented feature inventory')
-              path.write_text(text, encoding='utf-8', newline='\n')
+          replacements = {
+              'Complete competitive feature set': 'Implemented feature inventory',
+              'Technical gap closure is internally verified; external superiority remains unproven.':
+                  'Tracked technical implementation checks are internally verified; external superiority remains unproven.',
+          }
+          suffixes = {'', '.json', '.md', '.mjs', '.py', '.rs', '.sh', '.toml', '.ts', '.txt', '.yaml', '.yml'}
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or '.git' in path.parts or path.suffix.casefold() not in suffixes:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              updated = text
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8', newline='\n')
           PY
           git rm -f .github/workflows/identity-claim-cleanup.yml tools/_identity_claim_cleanup.py
       - name: Install Python validation dependencies
@@ -61,15 +74,17 @@ jobs:
       - name: Capture repository contract reports
         shell: bash
         run: |
-          mkdir -p validation-reports
+          reports=/tmp/syntavra-validation-reports
+          rm -rf "$reports"
+          mkdir -p "$reports"
           capture() {
             local name="$1"
             shift
             set +e
-            "$@" >"validation-reports/${name}.json" 2>&1
+            "$@" >"${reports}/${name}.json" 2>&1
             local status=$?
             set -e
-            printf '%s\n' "$status" >"validation-reports/${name}.exit"
+            printf '%s\n' "$status" >"${reports}/${name}.exit"
           }
           capture repository python -m tools.validate
           capture runtime python -m tools.validate_runtime
@@ -77,24 +92,22 @@ jobs:
           capture competitive python -m tools.validate_competitive_gap_assessment
           capture hygiene python -m tools.check_repository_hygiene
           set +e
-          python -m compileall -q syntavra_runtime tools benchmarks tests >validation-reports/compile.txt 2>&1
-          printf '%s\n' "$?" >validation-reports/compile.exit
-          git diff --check >validation-reports/diff.txt 2>&1
-          printf '%s\n' "$?" >validation-reports/diff.exit
+          python -m compileall -q syntavra_runtime tools benchmarks tests >"${reports}/compile.txt" 2>&1
+          printf '%s\n' "$?" >"${reports}/compile.exit"
+          git diff --check >"${reports}/diff.txt" 2>&1
+          printf '%s\n' "$?" >"${reports}/diff.exit"
           set -e
       - uses: actions/upload-artifact@v4
         with:
           name: repository-contract-reports
-          path: validation-reports
+          path: /tmp/syntavra-validation-reports
           if-no-files-found: error
       - name: Enforce repository contracts
         run: |
           python - <<'PY'
           from pathlib import Path
-          failed = []
-          for path in sorted(Path('validation-reports').glob('*.exit')):
-              if path.read_text(encoding='utf-8').strip() != '0':
-                  failed.append(path.stem)
+          root = Path('/tmp/syntavra-validation-reports')
+          failed = [path.stem for path in sorted(root.glob('*.exit')) if path.read_text(encoding='utf-8').strip() != '0']
           if failed:
               raise SystemExit('failed contracts: ' + ', '.join(failed))
           PY
