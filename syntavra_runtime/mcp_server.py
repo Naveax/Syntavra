@@ -362,7 +362,7 @@ class MCPServer:
         if name == "syntavra.wire":
             return self.wire_codec.encode(arguments["value"], min_savings_ratio=float(arguments.get("minimum_savings", .08))) if str(arguments["action"]) == "encode" else self.wire_codec.decode(arguments["value"])
         if name == "syntavra.code.intelligence":
-            index=CodeIntelligenceIndex(self.project); index.build_incremental(self.state_root / "code-intelligence-index.json"); action=str(arguments["action"]); query=str(arguments.get("query", "")); paths=list(arguments.get("paths") or [])
+            index=CodeIntelligenceIndex(self.project, state_path=self.state_root / "structural.sqlite3"); index.build_incremental(self.state_root / "structural.sqlite3"); action=str(arguments["action"]); query=str(arguments.get("query", "")); paths=list(arguments.get("paths") or [])
             methods={"report":index.report,"dead":index.dead_code,"untested":index.untested_symbols,"pagerank":index.pagerank,"hotspots":index.hotspots,"cycles":index.cycles,"coupling":index.coupling,"boundaries":index.module_boundaries,"duplicates":index.duplicates,"anti-patterns":index.anti_patterns}
             if action in methods: return methods[action]()
             if action == "call": return index.call_hierarchy(query)
@@ -401,7 +401,7 @@ class MCPServer:
         if name == "syntavra.subtask.plan":
             return asdict(AutomaticSubtaskDelegator().plan(str(arguments["objective"]),context_paths=list(arguments.get("context_paths") or []),max_tasks=int(arguments.get("max_tasks",8))))
         if name == "syntavra.repository.watch":
-            watcher=RepositoryWatcher(self.project,self.state_root); rows=watcher.watch(iterations=int(arguments.get("iterations",1)),interval_seconds=float(arguments.get("interval",1)),callback=lambda changes:{"index":CodeIntelligenceIndex(self.project).build_incremental(self.state_root / "code-intelligence-index.json"),"changed":list(changes.changed)}); return {"changes":[asdict(row) for row in rows],"status":watcher.status()}
+            watcher=RepositoryWatcher(self.project,self.state_root); rows=watcher.watch(iterations=int(arguments.get("iterations",1)),interval_seconds=float(arguments.get("interval",1)),callback=lambda changes:{"index":CodeIntelligenceIndex(self.project, state_path=self.state_root / "structural.sqlite3").refresh_paths((*changes.added, *changes.modified), deleted_paths=changes.deleted),"changed":list(changes.changed)}); return {"changes":[asdict(row) for row in rows],"status":watcher.status()}
         if name == "syntavra.dashboard.snapshot":
             return LocalDashboard(project=self.project,state_root=self.state_root).snapshot()
         if name == "syntavra.status":

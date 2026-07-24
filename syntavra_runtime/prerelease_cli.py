@@ -15,7 +15,7 @@ from .command_rewriter import CommandRewriteEngine
 from .dashboard import LocalDashboard
 from .memory_intelligence import MemoryIntelligenceStore
 from .notifications import NotificationFeed
-from .optimization_modes import MODES, OptimizationModeStore, SavingsLedger, render_statusline
+from .optimization_modes import ALIASES, MODES, OptimizationModeStore, SavingsLedger, render_statusline
 from .prompt_cache_optimizer import PromptCacheOptimizer
 from .provider_account_pool import ProviderAccountPool
 from .repository_watcher import RepositoryWatcher
@@ -175,7 +175,7 @@ def _parser() -> argparse.ArgumentParser:
     run_sub.add_parser("session-status")
 
     mode = run_sub.add_parser("mode")
-    mode.add_argument("mode", nargs="?", choices=tuple(MODES))
+    mode.add_argument("mode", nargs="?", choices=tuple((*MODES, *ALIASES)))
     mode.add_argument("--source", default="user")
     statusline = run_sub.add_parser("statusline")
     statusline.add_argument("--verbose", action="store_true")
@@ -412,7 +412,7 @@ def _handle_competitive_run(args: argparse.Namespace, *, project: Path, state: P
         return True, TranscriptOpportunityMiner().analyze(Path(args.source) if Path(args.source).is_file() else args.source), 0
     if action == "watch":
         watcher = RepositoryWatcher(project, state)
-        callback = None if args.no_index else lambda changes: {"index": CodeIntelligenceIndex(project).build_incremental(state / "code-intelligence-index.json"), "changed": list(changes.changed)}
+        callback = None if args.no_index else lambda changes: {"index": CodeIntelligenceIndex(project, state_path=state / "structural.sqlite3").refresh_paths((*changes.added, *changes.modified), deleted_paths=changes.deleted), "changed": list(changes.changed)}
         rows = watcher.watch(interval_seconds=args.interval, iterations=args.iterations, callback=callback)
         return True, {"changes": [asdict(row) for row in rows], "status": watcher.status()}, 0
     if action == "dashboard":
@@ -486,7 +486,7 @@ def _handle_competitive_run(args: argparse.Namespace, *, project: Path, state: P
         codec=LosslessWireCodec()
         return True, codec.encode(value,min_savings_ratio=args.minimum_savings) if args.wire_action=="encode" else codec.decode(value),0
     if action == "code-intel":
-        index=CodeIntelligenceIndex(project); index.build_incremental(state / "code-intelligence-index.json"); name=args.intel_action
+        index=CodeIntelligenceIndex(project, state_path=state / "structural.sqlite3"); index.build_incremental(state / "structural.sqlite3"); name=args.intel_action
         if name=="report": value=index.report()
         elif name=="call": value=index.call_hierarchy(args.query)
         elif name=="class": value=index.class_hierarchy(args.query)

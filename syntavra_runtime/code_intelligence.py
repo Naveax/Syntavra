@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from .language_parsers import LANGUAGE_BY_SUFFIX, TreeSitterLanguageBackend
-from .util import atomic_write_json, canonical_json, read_json, sha256_bytes
+from .structural import StructuralIndex
+from .util import canonical_json, sha256_bytes, stable_project_id
 
 
 _CODE_SUFFIXES = set(LANGUAGE_BY_SUFFIX)
@@ -146,11 +147,93 @@ _CLASS_EXTENDS = re.compile(r"\b(?:extends|implements|:)\s+([A-Za-z_$][A-Za-z0-9
 
 
 class CodeIntelligenceIndex:
-    def __init__(self, project: Path):
+    def __init__(self, project: Path, *, state_path: Path | None = None):
         self.project = Path(project).resolve(strict=True)
         self.graph = CodeGraph()
         self.tree_sitter = TreeSitterLanguageBackend()
-        self.last_build_stats: dict[str, Any] = {"mode": "none", "parsed_files": 0, "reused_files": 0}
+        self.state_path = Path(state_path) if state_path is not None else self.project / ".syntavra" / "structural.sqlite3"
+        self.last_build_stats: dict[str, Any] = {"mode": "none", "parsed_files": 0, "reused_files": 0, "backend": "sqlite-structural-index"}
+
+    def _structural(self, cache_path: Path | None = None) -> StructuralIndex:
+        path = self.state_path
+        if cache_path is not None:
+            candidate = Path(cache_path)
+            path = candidate if candidate.suffix in {".sqlite", ".sqlite3", ".db"} else candidate.with_name("structural.sqlite3")
+        return StructuralIndex(path, repository_root=self.project, repository_id=stable_project_id(self.project))
+
+    @staticmethod
+    def _edge_kind(value: str) -> str:
+        if value in {"calls", "calls-short", "instantiates"}:
+            return "call"
+        if value in {"inherits", "implements", "overrides"}:
+            return "inherits"
+        if value == "imports":
+            return "import"
+        return value
+
+    def _graph_from_structural(self, index: StructuralIndex) -> CodeGraph:
+        snapshot = index.snapshot()
+        graph = CodeGraph()
+        file_rows = {str(row["path"]): row for row in snapshot["files"]}
+        edges_by_source: dict[tuple[str, str], list[dict[str, Any]]] = collections.defaultdict(list)
+        for edge in snapshot["edges"]:
+            edges_by_source[(str(edge["source_path"]), str(edge["source_symbol"]))].append(edge)
+
+        identifiers: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
+        identifiers_short: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
+        for row in snapshot["symbols"]:
+            path = str(row["path"]); qualified = str(row["qualified_name"] or row["name"]); name = str(row["name"]); line = int(row["line"] or 1)
+            symbol_id = f"{path}:{qualified}:{line}"
+            identifiers[(path, qualified)].append(symbol_id); identifiers[(path, name)].append(symbol_id)
+            identifiers_short[(path, qualified.rsplit(".", 1)[-1])].append(symbol_id)
+
+        for row in snapshot["symbols"]:
+            path = str(row["path"]); name = str(row["name"]); qualified = str(row["qualified_name"] or name); line = int(row["line"] or 1); end_line = max(line, int(row["end_line"] or line))
+            source_path = self.project / path
+            raw = source_path.read_bytes() if source_path.is_file() else b""
+            lines = raw.decode("utf-8", errors="replace").splitlines()
+            snippet = "\n".join(lines[line - 1:end_line])
+            source_edges = edges_by_source.get((path, qualified), []) + edges_by_source.get((path, name), [])
+            calls = tuple(sorted({str(edge["target"]) for edge in source_edges if self._edge_kind(str(edge["edge_type"])) == "call"}))
+            bases = tuple(sorted({str(edge["target"]) for edge in source_edges if self._edge_kind(str(edge["edge_type"])) == "inherits"}))
+            imports = tuple(sorted({str(edge["target"]) for edge in source_edges if self._edge_kind(str(edge["edge_type"])) == "import"}))
+            kind = str(row["kind"]); language = str(file_rows.get(path, {}).get("language") or self._language(source_path))
+            node = SymbolNode(
+                id=f"{path}:{qualified}:{line}", name=name, qualified_name=qualified, kind=kind, path=path, line=line, end_line=end_line, language=language,
+                bases=bases, calls=calls, imports=imports, body_hash=sha256_bytes(re.sub(r"\s+", " ", snippet).strip().encode("utf-8")),
+                complexity=1 + len(re.findall(r"\b(?:if|for|while|switch|match|catch|except|and|or)\b|&&|\|\|", snippet)),
+                exported=not name.startswith("_"), parser_backend=str(row.get("parser") or "structural"), parse_confidence=float(row.get("confidence") or 0.0),
+            )
+            graph.symbols[node.id] = node
+            info = graph.files.setdefault(path, {
+                "language": language, "bytes": len(raw), "sha256": str(file_rows.get(path, {}).get("content_hash") or sha256_bytes(raw)), "symbols": []
+            })
+            info["symbols"].append(node.id)
+
+        by_path_name: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
+        global_name: dict[str, list[str]] = collections.defaultdict(list)
+        for node in graph.symbols.values():
+            by_path_name[(node.path, node.name)].append(node.id); by_path_name[(node.path, node.qualified_name)].append(node.id)
+            global_name[node.name].append(node.id); global_name[node.qualified_name].append(node.id)
+        seen: set[tuple[str, str, str]] = set()
+        for edge in snapshot["edges"]:
+            kind = self._edge_kind(str(edge["edge_type"]))
+            if kind not in {"call", "import", "inherits"}:
+                continue
+            source_candidates = by_path_name.get((str(edge["source_path"]), str(edge["source_symbol"])), [])
+            if not source_candidates:
+                source_candidates = by_path_name.get((str(edge["source_path"]), str(edge["source_symbol"]).rsplit(".", 1)[-1]), [])
+            target_path = str(edge.get("target_path") or "")
+            target = str(edge["target"]); target_short = target.replace("::", ".").rsplit(".", 1)[-1]
+            target_candidates = (by_path_name.get((target_path, target), []) or by_path_name.get((target_path, target_short), [])) if target_path else []
+            if not target_candidates:
+                target_candidates = global_name.get(target, []) or global_name.get(target_short, [])
+            for source_id in source_candidates:
+                for target_id in target_candidates:
+                    record = (source_id, target_id, kind)
+                    if source_id != target_id and record not in seen:
+                        graph.edges.append(GraphEdge(*record)); seen.add(record)
+        return graph
 
     @staticmethod
     def _language(path: Path) -> str:
@@ -270,63 +353,43 @@ class CodeIntelligenceIndex:
                                 graph.edges.append(GraphEdge(*edge)); seen_edges.add(edge)
 
     def build(self) -> CodeGraph:
-        graph = CodeGraph()
-        parsed = 0
-        for path in self._files():
-            relative, language, size, source_hash, symbols = self._parse_file(path)
-            graph.files[relative] = {"language": language, "bytes": size, "sha256": source_hash, "symbols": [item.id for item in symbols]}
-            for item in symbols:
-                graph.symbols[item.id] = item
-            parsed += 1
-        self._link(graph)
-        self.graph = graph
-        self.last_build_stats = {"mode": "full", "parsed_files": parsed, "reused_files": 0, "removed_files": 0}
-        return graph
+        index = self._structural()
+        stats = index.index()
+        self.graph = self._graph_from_structural(index)
+        self.last_build_stats = {
+            "mode": "full", "parsed_files": int(stats["changed"]), "reused_files": int(stats["reused"]),
+            "removed_files": int(stats["removed"]), "backend": "sqlite-structural-index", "state_path": str(index.state.path),
+        }
+        return self.graph
 
-    def build_incremental(self, cache_path: Path) -> CodeGraph:
-        cache = read_json(cache_path, {}) or {}
-        cached_files = cache.get("files") if isinstance(cache, Mapping) else {}
-        if not isinstance(cached_files, Mapping):
-            cached_files = {}
-        graph = CodeGraph()
-        parsed = 0
-        reused = 0
-        current_paths: set[str] = set()
-        rendered_cache: dict[str, Any] = {}
-        for path in self._files():
-            relative = path.relative_to(self.project).as_posix()
-            current_paths.add(relative)
-            raw = path.read_bytes()
-            source_hash = sha256_bytes(raw)
-            cached = cached_files.get(relative) if isinstance(cached_files, Mapping) else None
-            symbols: list[SymbolNode]
-            if isinstance(cached, Mapping) and cached.get("sha256") == source_hash and isinstance(cached.get("symbols"), list):
-                try:
-                    symbols = [SymbolNode(**dict(row)) for row in cached["symbols"] if isinstance(row, Mapping)]
-                    language = str(cached.get("language") or self._language(path))
-                    size = int(cached.get("bytes") or len(raw))
-                    reused += 1
-                except (TypeError, ValueError):
-                    relative, language, size, source_hash, symbols = self._parse_file(path)
-                    parsed += 1
-            else:
-                relative, language, size, source_hash, symbols = self._parse_file(path)
-                parsed += 1
-            graph.files[relative] = {"language": language, "bytes": size, "sha256": source_hash, "symbols": [item.id for item in symbols]}
-            for item in symbols:
-                graph.symbols[item.id] = item
-            rendered_cache[relative] = {
-                "language": language,
-                "bytes": size,
-                "sha256": source_hash,
-                "symbols": [asdict(item) for item in symbols],
-            }
-        removed = len(set(cached_files) - current_paths)
-        self._link(graph)
-        atomic_write_json(cache_path, {"schema_version": 1, "files": rendered_cache}, mode=0o600)
-        self.graph = graph
-        self.last_build_stats = {"mode": "incremental", "parsed_files": parsed, "reused_files": reused, "removed_files": removed}
-        return graph
+    def build_incremental(self, cache_path: Path | None = None) -> CodeGraph:
+        index = self._structural(cache_path)
+        stats = index.index()
+        self.graph = self._graph_from_structural(index)
+        self.last_build_stats = {
+            "mode": "incremental", "parsed_files": int(stats["changed"]), "reused_files": int(stats["reused"]),
+            "removed_files": int(stats["removed"]), "backend": "sqlite-structural-index", "state_path": str(index.state.path),
+        }
+        legacy = Path(cache_path) if cache_path is not None else None
+        if legacy is not None and legacy.suffix == ".json" and legacy.exists():
+            legacy.unlink()
+        return self.graph
+
+    def refresh_paths(
+        self,
+        changed_paths: Iterable[str | Path],
+        *,
+        deleted_paths: Iterable[str | Path] = (),
+        cache_path: Path | None = None,
+    ) -> CodeGraph:
+        index = self._structural(cache_path)
+        stats = index.update_paths(changed_paths, deleted_paths=deleted_paths)
+        self.graph = self._graph_from_structural(index)
+        self.last_build_stats = {
+            "mode": "path-incremental", "parsed_files": int(stats["changed"]), "reused_files": int(stats["reused"]),
+            "removed_files": int(stats["removed"]), "backend": "sqlite-structural-index", "state_path": str(index.state.path),
+        }
+        return self.graph
 
     def _ensure(self) -> CodeGraph:
         return self.graph if self.graph.symbols else self.build()

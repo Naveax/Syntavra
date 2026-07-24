@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, Iterable
 
 from .competitive_fabric import StructuralNavigator
@@ -28,6 +28,7 @@ class TaskContextPack:
     query: str
     budget_tokens: int
     used_tokens: int
+    seed_symbols: tuple[str, ...]
     items: tuple[ContextPackItem, ...]
     affected_paths: tuple[str, ...]
     affected_tests: tuple[str, ...]
@@ -62,6 +63,32 @@ class TaskContextAssembler:
             reason=reason,
         )
 
+    @staticmethod
+    def _fit_item(item: ContextPackItem, remaining_tokens: int) -> ContextPackItem | None:
+        if remaining_tokens <= 0:
+            return None
+        if item.tokens <= remaining_tokens:
+            return item
+        text = item.text
+        if not text:
+            return None
+        low, high = 1, len(text)
+        best = ""
+        best_tokens = 0
+        best_confidence = item.token_confidence
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = text[:middle].rstrip()
+            tokens, confidence = TokenEstimator.text(candidate)
+            if tokens <= remaining_tokens:
+                best, best_tokens, best_confidence = candidate, tokens, confidence
+                low = middle + 1
+            else:
+                high = middle - 1
+        if not best:
+            return None
+        return replace(item, text=best, tokens=best_tokens, token_confidence=best_confidence, reason=item.reason + " (budget-clipped)")
+
     def assemble(
         self,
         query: str,
@@ -74,13 +101,22 @@ class TaskContextAssembler:
             raise ValueError("context query is required")
         if token_budget < 256:
             raise ValueError("token_budget must be at least 256")
+        effective_budget = min(int(token_budget), 1_500)
         self.index.index()
-        impact = self.index.inspect_impact(query, max_depth=max_depth)
+        seeds = self.index.task_seeds(query, limit=8)
+        seed_names = tuple(dict.fromkeys(str(row.get("qualified_name") or row.get("name")) for row in seeds if row.get("qualified_name") or row.get("name")))
+        impacts = [self.index.inspect_impact(seed, max_depth=max_depth) for seed in (seed_names or (query,))]
+        impact = {
+            "definitions": [row for value in impacts for row in value.get("definitions", [])],
+            "affected_paths": sorted({row for value in impacts for row in value.get("affected_paths", [])}),
+            "affected_tests": sorted({row for value in impacts for row in value.get("affected_tests", [])}),
+            "required_verifiers": sorted({row for value in impacts for row in value.get("required_verifiers", [])}),
+        }
         changed = tuple(dict.fromkeys(str(path) for path in changed_paths))
         path_impact = self.index.impacted_by_paths(changed, max_depth=max_depth) if changed else {
             "affected_paths": [], "affected_tests": [], "required_verifiers": []
         }
-        repository_map = self.index.repository_map(query, token_budget=max(256, token_budget // 3), max_depth=max_depth)
+        repository_map = self.index.repository_map(seed_names[0] if seed_names else query, token_budget=max(256, effective_budget // 3), max_depth=max_depth)
 
         candidates: list[ContextPackItem] = []
         seen_ranges: set[tuple[str, int, int]] = set()
@@ -114,12 +150,16 @@ class TaskContextAssembler:
         selected: list[ContextPackItem] = []
         used = 0
         for item in candidates:
-            if used + item.tokens > token_budget and item.tier != "mandatory":
+            remaining = effective_budget - used
+            if remaining <= 0:
+                break
+            if item.tokens > remaining and item.tier != "mandatory":
                 continue
-            if used + item.tokens > token_budget and selected:
+            fitted = self._fit_item(item, remaining) if item.tokens > remaining else item
+            if fitted is None:
                 continue
-            selected.append(item)
-            used += item.tokens
+            selected.append(fitted)
+            used += fitted.tokens
 
         affected_paths = tuple(sorted(set(impact.get("affected_paths", [])) | set(path_impact.get("affected_paths", []))))
         affected_tests = tuple(sorted(set(impact.get("affected_tests", [])) | set(path_impact.get("affected_tests", []))))
@@ -128,8 +168,9 @@ class TaskContextAssembler:
         recoverable = tuple(path for path in affected_paths if path not in included_paths)
         body = {
             "query": query,
-            "budget_tokens": token_budget,
+            "budget_tokens": effective_budget,
             "used_tokens": used,
+            "seed_symbols": seed_names,
             "items": [asdict(item) for item in selected],
             "affected_paths": affected_paths,
             "affected_tests": affected_tests,
@@ -138,8 +179,9 @@ class TaskContextAssembler:
         }
         return TaskContextPack(
             query=query,
-            budget_tokens=token_budget,
+            budget_tokens=effective_budget,
             used_tokens=used,
+            seed_symbols=seed_names,
             items=tuple(selected),
             affected_paths=affected_paths,
             affected_tests=affected_tests,

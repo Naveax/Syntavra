@@ -11,11 +11,11 @@ This document records technical implementation evidence. It does not convert int
 - Safe wrapper handling for environment assignments, `env`, bare `sudo`, bare `time`, and `command`; ambiguous wrapper options fail closed.
 - Destructive-command policy is evaluated against both original and rewritten commands.
 - User-selected output formats, shell composition, redirection, and ambiguous commands disable rewriting rather than guessing.
-- Optimization modes: `full`, `lite`, `ultra`, `commit`, `review`, and `compress`.
+- Optimization modes: `full`, `lite`, `ultra`, `commit`, `review`, and `compress`; `codex-ultra` selects the real `ultra` profile with a 1,500-token task-context ceiling.
 - Live local statusline, source-attributed savings ledger, and transcript opportunity mining.
 
 ```bash
-syntavra run mode ultra
+syntavra run mode codex-ultra
 syntavra run statusline
 syntavra run rewrite -- env CI=1 git status
 syntavra run transcript-mine transcript.jsonl
@@ -31,7 +31,9 @@ syntavra run transcript-mine transcript.jsonl
 
 ## Repository intelligence
 
-- Portable watcher and deterministic incremental index cache.
+- Portable watcher, context compiler, and code-intelligence analytics share one deterministic SQLite `StructuralIndex`; the duplicate JSON graph cache is retired.
+- Path-scoped incremental updates hash and reparse only changed supported files, remove deleted rows, and resolve graph edges in the same database.
+- Natural-language task text is deterministically mapped to symbol seeds, and emitted context packs are hard-capped at 1,500 estimated tokens.
 - Python AST backend with confidence `1.0`.
 - Optional `tree-sitter-language-pack` backend with confidence `0.9`.
 - Explicit deterministic lexical fallback with confidence `0.45`; fallback output is not labelled exact AST.

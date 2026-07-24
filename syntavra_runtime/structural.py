@@ -190,6 +190,99 @@ class StructuralIndex:
             "capabilities": self.parsers.capabilities(),
         }
 
+
+    def update_paths(
+        self,
+        changed_paths: Iterable[str | Path],
+        *,
+        deleted_paths: Iterable[str | Path] = (),
+    ) -> dict[str, Any]:
+        """Incrementally refresh an explicit path set in the canonical SQLite graph."""
+        changed = 0
+        reused = 0
+        failed = 0
+        semantic = 0
+        parser_counts: dict[str, int] = defaultdict(int)
+        normalized_deleted = {str(Path(path)).replace("\\", "/") for path in deleted_paths}
+        with self.state.read() as db:
+            known = {row["path"]: row["content_hash"] for row in db.execute("SELECT path,content_hash FROM structural_files")}
+        for raw in changed_paths:
+            candidate = Path(raw)
+            path = candidate if candidate.is_absolute() else self.root / candidate
+            try:
+                relative = self._normalized(path.resolve().relative_to(self.root))
+            except (OSError, ValueError):
+                continue
+            if not path.is_file() or path.suffix.casefold() not in self.parsers.suffixes or any(part in IGNORE_PARTS for part in Path(relative).parts):
+                normalized_deleted.add(relative)
+                continue
+            digest = sha256_file(path)
+            if known.get(relative) == digest:
+                reused += 1
+                continue
+            result = self._index_file(relative, path, digest)
+            parser_counts[result.parser] += 1
+            semantic += int(result.semantic)
+            failed += int(bool(result.diagnostics and not result.symbols))
+            changed += 1
+        if normalized_deleted:
+            with self.state.transaction(immediate=True) as db:
+                for relative in sorted(normalized_deleted):
+                    db.execute("DELETE FROM structural_edges WHERE source_path=? OR target_path=?", (relative, relative))
+                    db.execute("DELETE FROM structural_symbols WHERE path=?", (relative,))
+                    db.execute("DELETE FROM structural_files WHERE path=?", (relative,))
+        self.resolve_edges()
+        return {
+            "changed": changed,
+            "reused": reused,
+            "removed": len(normalized_deleted),
+            "total": self.stats()["files"],
+            "semantic_files": semantic,
+            "failed_files": failed,
+            "parsers": dict(sorted(parser_counts.items())),
+            "capabilities": self.parsers.capabilities(),
+            "backend": "sqlite-structural-index",
+        }
+
+    def snapshot(self) -> dict[str, list[dict[str, Any]]]:
+        """Return a deterministic read-only snapshot for higher-level analyses."""
+        with self.state.read() as db:
+            files = [dict(row) for row in db.execute("SELECT * FROM structural_files ORDER BY path")]
+            symbols = [dict(row) for row in db.execute("SELECT * FROM structural_symbols ORDER BY path,line,qualified_name,kind")]
+            edges = [dict(row) for row in db.execute("SELECT * FROM structural_edges ORDER BY source_path,line,source_symbol,edge_type,target")]
+        for row in files:
+            row["diagnostics"] = json.loads(row.pop("diagnostics_json", "[]") or "[]")
+        for row in edges:
+            row["metadata"] = json.loads(row.pop("metadata_json", "{}") or "{}")
+        return {"files": files, "symbols": symbols, "edges": edges}
+
+    def task_seeds(self, query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+        """Resolve exact and natural-language task text to deterministic symbol seeds."""
+        text = query.strip()
+        if not text:
+            return []
+        tokens = [token.casefold() for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", text)]
+        stop = {"the","and","for","with","from","into","that","this","fix","add","remove","update","change","make","use","using","system","feature","code","file","test","tests"}
+        wanted = [token for token in tokens if token not in stop]
+        with self.state.read() as db:
+            rows = [dict(row) for row in db.execute(
+                "SELECT path,name,qualified_name,kind,line,end_line,signature,confidence,parser FROM structural_symbols"
+            )]
+        scored: list[tuple[float, dict[str, Any]]] = []
+        query_cf = text.casefold()
+        for row in rows:
+            name = str(row["name"]).casefold()
+            qualified = str(row["qualified_name"]).casefold()
+            haystack = f"{row['path']} {row['name']} {row['qualified_name']} {row['signature']}".casefold()
+            exact = 20.0 if query_cf in {name, qualified} else 0.0
+            contained = 8.0 if query_cf in haystack else 0.0
+            lexical = sum(3.0 if token in {name, self._short(qualified).casefold()} else 1.0 for token in wanted if token in haystack)
+            score = exact + contained + lexical + float(row.get("confidence", 0.0))
+            if score > 0:
+                scored.append((score, row))
+        scored.sort(key=lambda item: (-item[0], item[1]["path"], item[1]["line"], item[1]["qualified_name"]))
+        return [{**row, "seed_score": score} for score, row in scored[:max(1, limit)]]
+
     def _index_file(self, relative: str, path: Path, digest: str) -> ParseResult:
         text = path.read_text(encoding="utf-8", errors="replace")
         result = self.parsers.parse(relative, text)

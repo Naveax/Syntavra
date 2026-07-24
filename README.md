@@ -57,10 +57,10 @@ Normal daily work still happens in the existing coding agent. Syntavra is intend
 
 ## Competitive feature set
 
-Syntavra 0.0.1 now includes a fail-closed pre-tool command rewriter, 131 command-specific compactors, six instant optimization modes, a live savings statusline, prompt-cache layout/expiry planning, transcript opportunity mining, incremental repository watching, local browser/PWA dashboard, agent-config auditing, secret redaction, lossless MCP wire encoding, hybrid memory search, deep code-graph analytics, adaptive provider fallback, short-handoff delegation, a VS Code extension, and a dependency-free Rust companion source.
+Syntavra 0.0.1 now includes a fail-closed pre-tool command rewriter, 131 command-specific compactors, six instant optimization modes, a live savings statusline, prompt-cache layout/expiry planning, transcript opportunity mining, a single SQLite-backed structural index shared by context compilation, code intelligence and incremental repository watching, local browser/PWA dashboard, agent-config auditing, secret redaction, lossless MCP wire encoding, hybrid memory search, deep code-graph analytics, adaptive provider fallback, short-handoff delegation, a VS Code extension, and a dependency-free Rust companion source.
 
 ```bash
-syntavra run mode ultra
+syntavra run mode codex-ultra
 syntavra run statusline
 syntavra run rewrite -- git status
 syntavra run dashboard --open

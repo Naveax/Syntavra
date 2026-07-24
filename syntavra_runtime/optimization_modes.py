@@ -14,6 +14,7 @@ class OptimizationMode:
     name: str
     description: str
     output_budget_bytes: int
+    context_budget_tokens: int
     schema_profile: str
     rewrite_commands: bool
     cache_optimize: bool
@@ -23,14 +24,14 @@ class OptimizationMode:
 
 
 MODES: dict[str, OptimizationMode] = {
-    "full": OptimizationMode("full", "Balanced default with every exact-preserving optimizer enabled.", 24_000, "balanced", True, True, True, True, "normal"),
-    "lite": OptimizationMode("lite", "Conservative compression with minimal behavior change.", 48_000, "balanced", True, True, False, False, "normal"),
-    "ultra": OptimizationMode("ultra", "Maximum context economy while retaining exact recovery handles.", 8_000, "minimal", True, True, True, True, "terse"),
-    "commit": OptimizationMode("commit", "Small diff/status surface for commit preparation.", 12_000, "minimal", True, True, False, False, "commit"),
-    "review": OptimizationMode("review", "Evidence-rich code review with bounded output.", 32_000, "balanced", True, True, True, True, "review"),
-    "compress": OptimizationMode("compress", "Output-only compression; routing and delegation disabled.", 10_000, "minimal", False, False, False, False, "terse"),
+    "full": OptimizationMode("full", "Balanced default with every exact-preserving optimizer enabled.", 24_000, 8_000, "balanced", True, True, True, True, "normal"),
+    "lite": OptimizationMode("lite", "Conservative compression with minimal behavior change.", 48_000, 4_000, "balanced", True, True, False, False, "normal"),
+    "ultra": OptimizationMode("ultra", "Codex-oriented maximum context economy with exact recovery handles.", 8_000, 1_500, "minimal", True, True, True, True, "terse"),
+    "commit": OptimizationMode("commit", "Small diff/status surface for commit preparation.", 12_000, 1_500, "minimal", True, True, False, False, "commit"),
+    "review": OptimizationMode("review", "Evidence-rich code review with bounded output.", 32_000, 3_000, "balanced", True, True, True, True, "review"),
+    "compress": OptimizationMode("compress", "Output-only compression; routing and delegation disabled.", 10_000, 1_500, "minimal", False, False, False, False, "terse"),
 }
-ALIASES = {"default": "full", "balanced": "full", "tiny": "ultra", "off": "lite"}
+ALIASES = {"default": "full", "balanced": "full", "tiny": "ultra", "codex-ultra": "ultra", "codex_ultra": "ultra", "off": "lite"}
 
 
 def normalize_mode(value: str) -> str:

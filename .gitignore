@@ -22,3 +22,8 @@ venv/
 *.log
 .DS_Store
 Thumbs.db
+
+target/
+node_modules/
+build/
+dist/

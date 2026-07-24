@@ -30,8 +30,8 @@ class BackgroundIntelligenceWorker:
 
     def _cycle(self) -> dict[str, Any]:
         def index_callback(changes):
-            index = CodeIntelligenceIndex(self.project)
-            graph = index.build_incremental(self.state_root / "code-intelligence-index.json")
+            index = CodeIntelligenceIndex(self.project, state_path=self.state_root / "structural.sqlite3")
+            graph = index.refresh_paths((*changes.added, *changes.modified), deleted_paths=changes.deleted)
             return {"changed": list(changes.changed), "files": len(graph.files), "symbols": len(graph.symbols), "edges": len(graph.edges), "build_stats": index.last_build_stats}
         changes = self.watcher.poll(callback=index_callback)
         embeddings = self.memory.backfill_embeddings(limit=500)

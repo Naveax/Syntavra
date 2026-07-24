@@ -82,7 +82,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as directory:
         project = Path(directory)
         _small_project(project)
-        cache = project / ".syntavra" / "code-index.json"
+        cache = project / ".syntavra" / "structural.sqlite3"
         first = CodeIntelligenceIndex(project)
         first.build_incremental(cache)
         second = CodeIntelligenceIndex(project)

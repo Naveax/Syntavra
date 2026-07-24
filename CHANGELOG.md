@@ -2,6 +2,9 @@
 
 ### Complete competitive feature set
 
+- Consolidated context compilation, repository watching, and code intelligence onto one SQLite structural graph; removed the duplicate JSON graph cache.
+- Added path-scoped incremental reindexing, natural-language symbol seeding, and a hard 1,500-token context-pack ceiling.
+- Added the `codex-ultra` mode alias backed by the real ultra profile and explicit 1,500-token context budget.
 - Added fail-closed pre-tool rewriting and expanded command-specific compaction to 70 surfaces.
 - Added six instant modes, host statusline, local savings ledger, transcript opportunity mining, and PWA dashboard.
 - Added safe prompt-cache layout, expiry, refresh, and amortization planning directly in the provider gateway.
