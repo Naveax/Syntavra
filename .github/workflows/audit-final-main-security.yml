@@ -1,0 +1,191 @@
+name: Audit Final Main Security Closure
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  security-events: read
+
+concurrency:
+  group: syntavra-final-main-security-audit
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.head_ref == 'audit/final-main-security-verification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_MAIN_SHA: 0dad1718e228191abc0135aaaea8929c453f90c9
+    steps:
+      - name: Wait for and verify final-main workflows
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GITHUB_TOKEN"]
+          target_sha = os.environ["TARGET_MAIN_SHA"]
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "syntavra-final-main-audit",
+          }
+
+          def get_json(url: str):
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          required = {
+              "CodeQL",
+              "Validate Syntavra Package",
+              "Validate Syntavra 0.0.1 Pre-Release",
+              "Build Syntavra 0.0.1 Pre-Release Artifacts",
+              "Validate Syntavra Native 0.0.1",
+              "Build Syntavra Portable Runtime",
+              "Validate Syntavra Repository Manifest",
+              "Syntavra Repository Hardening",
+              "Syntavra Security Alert Triage",
+          }
+
+          selected = {}
+          for attempt in range(90):
+              query = urllib.parse.urlencode({"head_sha": target_sha, "per_page": 100})
+              payload = get_json(
+                  f"https://api.github.com/repos/{repository}/actions/runs?{query}"
+              )
+              runs = payload.get("workflow_runs") or []
+              selected = {}
+              for run in runs:
+                  name = str(run.get("name") or "")
+                  if name not in required:
+                      continue
+                  previous = selected.get(name)
+                  if previous is None or str(run.get("created_at") or "") > str(previous.get("created_at") or ""):
+                      selected[name] = run
+
+              missing = sorted(required - set(selected))
+              pending = sorted(
+                  name for name, run in selected.items()
+                  if run.get("status") != "completed"
+              )
+              if not missing and not pending:
+                  break
+              if attempt < 89:
+                  time.sleep(10)
+          else:
+              raise SystemExit(
+                  f"timed out waiting for final-main workflows; missing={missing}, pending={pending}"
+              )
+
+          failed = {
+              name: run.get("conclusion")
+              for name, run in selected.items()
+              if run.get("conclusion") != "success"
+          }
+          if failed:
+              raise SystemExit(f"final-main workflows failed: {failed}")
+
+          alert = get_json(
+              f"https://api.github.com/repos/{repository}/code-scanning/alerts/6"
+          )
+          rule = alert.get("rule") or {}
+          instance = alert.get("most_recent_instance") or {}
+          location = instance.get("location") or {}
+          if alert.get("state") != "fixed":
+              raise SystemExit(f"CodeQL alert 6 is not fixed: {alert.get('state')!r}")
+          if rule.get("id") != "py/redos":
+              raise SystemExit(f"unexpected alert 6 rule: {rule.get('id')!r}")
+          if location.get("path") != "syntavra_runtime/agent_config_auditor.py":
+              raise SystemExit(f"unexpected alert 6 path: {location.get('path')!r}")
+
+          branches = []
+          page = 1
+          while True:
+              rows = get_json(
+                  f"https://api.github.com/repos/{repository}/branches?per_page=100&page={page}"
+              )
+              branches.extend(str(row.get("name") or "") for row in rows)
+              if len(rows) < 100:
+                  break
+              page += 1
+
+          receipt = {
+              "product": "Syntavra",
+              "version": "0.0.1",
+              "channel": "pre-release",
+              "target_main_sha": target_sha,
+              "verification_round": 3,
+              "workflows": {
+                  name: {
+                      "id": run.get("id"),
+                      "event": run.get("event"),
+                      "status": run.get("status"),
+                      "conclusion": run.get("conclusion"),
+                      "html_url": run.get("html_url"),
+                  }
+                  for name, run in sorted(selected.items())
+              },
+              "code_scanning_alert_6": {
+                  "state": alert.get("state"),
+                  "rule_id": rule.get("id"),
+                  "fixed_at": alert.get("fixed_at"),
+                  "path": location.get("path"),
+                  "ref": instance.get("ref"),
+                  "commit_sha": instance.get("commit_sha"),
+              },
+              "branches_before_cleanup": sorted(branches),
+              "claim": "THREE_ROUND_TECHNICAL_VERIFICATION_COMPLETE",
+              "external_claim_boundary": {
+                  "registry_publication": "NOT_PERFORMED",
+                  "provider_billed_signalbench": "NOT_EXECUTED",
+                  "independent_validation": "NOT_AVAILABLE",
+                  "public_maturity": "NOT_PROVEN",
+              },
+          }
+          Path("final-main-security-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload final-main verification receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-final-main-security-receipt
+          path: final-main-security-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Close audit PR and remove every non-main branch
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" -f state=closed
+          mapfile -t branches < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/branches?per_page=100" --slurp |
+              jq -r 'add | .[].name | select(. != "main")'
+          )
+          for branch in "${branches[@]}"; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"
+          done
