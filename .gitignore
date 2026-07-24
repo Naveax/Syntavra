@@ -15,7 +15,6 @@ venv/
 .env.*
 !.env.example
 .syntavra/
-.syntavra/
 *.db
 *.db-shm
 *.db-wal
