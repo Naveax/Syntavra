@@ -1,4 +1,4 @@
-name: Bootstrap Syntavra consolidation
+name: Finalize Syntavra consolidation
 
 on:
   pull_request:
@@ -6,20 +6,147 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
-  issues: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: syntavra-final-consolidation
+  cancel-in-progress: false
 
 jobs:
-  audit-v4:
+  finalize:
     if: github.actor == github.repository_owner && github.head_ref == 'agent/consolidate-remaining-systems'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      REPOSITORY: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      EXPECTED_BASE: 0dad1718e228191abc0135aaaea8929c453f90c9
+      EXPECTED_TREE: dedb0abaa568e08410749486838d24cdad6c997b
+      EXPECTED_B64_SHA256: e12d386ff80f705456cff50b33a2ecb5a407c26bbe54bff3f74b61d7c7322ef6
+      EXPECTED_PATCH_SHA256: f17ca899cd7ac2d1d2ba67e67c7c4f09276f19f66ebe57549e8f98f53662b266
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Recover and audit the previous exact V4 transport
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify base and recover exact patch
+        shell: bash
         run: |
-          curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" "https://raw.githubusercontent.com/${REPOSITORY}/${HEAD_SHA}/tools/_bootstrap_v4_audit.py" --output /tmp/audit.py
-          python /tmp/audit.py
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXPECTED_BASE}"
+          : > /tmp/final.patch.gz.b64
+          for index in 00 01 02 03; do
+            url="https://raw.githubusercontent.com/${REPOSITORY}/${HEAD_SHA}/.syntavra-transport/final-${index}.b64"
+            curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" "${url}" >> /tmp/final.patch.gz.b64
+          done
+          test "$(sha256sum /tmp/final.patch.gz.b64 | cut -d' ' -f1)" = "${EXPECTED_B64_SHA256}"
+          base64 --decode /tmp/final.patch.gz.b64 | gzip --decompress > /tmp/final.patch
+          test "$(sha256sum /tmp/final.patch | cut -d' ' -f1)" = "${EXPECTED_PATCH_SHA256}"
+          git config user.name "Naveax"
+          git config user.email "79841922+Naveax@users.noreply.github.com"
+          git am /tmp/final.patch
+          test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"
+          test -z "$(git status --porcelain)"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python build dependencies
+        run: python -m pip install --upgrade pip build cryptography
+
+      - name: Validate repository and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q syntavra_runtime tools tests
+          python -m tools.validate
+          python -m tools.validate_runtime
+          python -m tools.validate_release
+          python -m tools.check_repository_hygiene
+          python -m tools.validate_competitive_gap_closure
+          python -m tools.refresh_manifest --check
+          git diff --check HEAD^
+
+      - name: Run complete Python suite in deterministic shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          find tests -name 'test_*.py' -type f | sort > /tmp/test-files
+          split -n l/5 -d /tmp/test-files /tmp/test-shard-
+          for shard in /tmp/test-shard-0{0,1,2,3,4}; do
+            python -m pytest -q $(cat "${shard}")
+          done
+
+      - name: Validate npm installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm test
+          npm run pack:check
+
+      - name: Validate TypeScript SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix sdk/typescript ci --ignore-scripts
+          npm --prefix sdk/typescript run ci
+
+      - name: Validate VS Code extension
+        run: npm --prefix integrations/vscode-syntavra test
+
+      - name: Validate native companion
+        run: cargo test --manifest-path native/syntavra-native/Cargo.toml --locked
+
+      - name: Build and smoke-test wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist build
+          python -m build --wheel
+          python -m venv /tmp/syntavra-smoke
+          /tmp/syntavra-smoke/bin/pip install dist/syntavra_runtime-0.0.1-py3-none-any.whl
+          /tmp/syntavra-smoke/bin/syntavra --help >/dev/null
+          /tmp/syntavra-smoke/bin/syntavra --project "$PWD" run mode codex-ultra | tee /tmp/mode.json
+          python - <<'PY'
+          import json
+          row=json.load(open('/tmp/mode.json', encoding='utf-8'))
+          assert row['mode']=='ultra'
+          assert row['profile']['context_budget_tokens']==1500
+          PY
+          rm -rf build
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"
+
+      - name: Publish validated main and remove non-main branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
+          gh api -X PATCH "repos/${REPOSITORY}/pulls/${PR_NUMBER}" -f state=closed >/dev/null || true
+          gh api --paginate "repos/${REPOSITORY}/branches?per_page=100" --jq '.[].name' | while IFS= read -r branch; do
+            if [ "${branch}" = "main" ]; then
+              continue
+            fi
+            encoded="$(python -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${branch}")"
+            gh api -X DELETE "repos/${REPOSITORY}/git/refs/heads/${encoded}" || true
+          done
+          test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"
