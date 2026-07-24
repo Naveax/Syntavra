@@ -25,11 +25,11 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       EXPECTED_BASE: 0dad1718e228191abc0135aaaea8929c453f90c9
       EXPECTED_PRODUCT_TREE: dedb0abaa568e08410749486838d24cdad6c997b
-      EXPECTED_TREE: a47c334afd85cf9c63c6ff1a466a0e083a9eab32
+      EXPECTED_TREE: f31be8a57c8e94fea378e19dd025a184846cfc77
       EXPECTED_B64_SHA256: e12d386ff80f705456cff50b33a2ecb5a407c26bbe54bff3f74b61d7c7322ef6
       EXPECTED_PATCH_SHA256: f17ca899cd7ac2d1d2ba67e67c7c4f09276f19f66ebe57549e8f98f53662b266
-      EXPECTED_LOCK_B64_SHA256: 9fbeae378f5d7624d467ba7f3dadb897e049e1bf1e415cb2727aa1fd2da8ba0f
-      EXPECTED_LOCK_PATCH_SHA256: c9aa5de233b9072b57581c8c5cd0c86978703393467ac9912dc466b52780f75e
+      EXPECTED_LOCK_B64_SHA256: dd367df6bde45ec60f2d4035e363d508c6bc7f3b765aa06d9c61a4dae9df39d2
+      EXPECTED_LOCK_PATCH_SHA256: 858bc6d30e223e9217f8d3d80390e0b6081b56a0ced846aa7bb661d94dca4808
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout canonical main
@@ -182,7 +182,6 @@ jobs:
           assert row['mode']=='ultra'
           assert row['profile']['context_budget_tokens']==1500
           PY
-          rm -rf build
           test -z "$(git status --porcelain)"
           test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"
 
