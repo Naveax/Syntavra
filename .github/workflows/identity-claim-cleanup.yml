@@ -1,0 +1,80 @@
+name: Identity and claim cleanup
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup-and-validate:
+    if: github.actor == github.repository_owner && github.head_ref == 'agent/syntavra-identity-claim-cleanup-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply canonical identity and claim policy
+        run: |
+          python tools/_identity_claim_cleanup.py
+          git rm -f .github/workflows/identity-claim-cleanup.yml tools/_identity_claim_cleanup.py
+      - name: Install Python validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[code-intelligence]' pytest build
+      - name: Refresh deterministic repository manifest
+        run: python -m tools.refresh_manifest
+      - name: Validate identity, claims, runtime and release
+        run: |
+          python -m tools.validate_claim_integrity
+          python -m tools.validate
+          python -m tools.validate_runtime
+          python -m tools.validate_release
+          python -m tools.validate_competitive_gap_assessment
+          python -m tools.check_repository_hygiene
+          python -m compileall -q syntavra_runtime tools benchmarks tests
+          git diff --check
+      - name: Run Python test suite
+        run: python -m pytest -q
+      - name: Validate npm installer
+        run: |
+          npm ci
+          npm test
+          npm run pack:check
+      - name: Validate TypeScript SDK
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm run ci
+      - name: Validate VS Code integration
+        working-directory: integrations/vscode-syntavra
+        run: npm test
+      - name: Validate native companion
+        working-directory: native/syntavra-native
+        run: |
+          cargo test --locked
+          cargo build --locked --release
+      - name: Build Python distribution
+        run: python -m build
+      - name: Commit validated canonical product tree
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          git config user.name 'syntavra-validation-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Canonicalize Syntavra identity and evidence claims'
+          git push origin "HEAD:${HEAD_BRANCH}"
