@@ -14,21 +14,38 @@ CONFIG_CANDIDATES = (
     ".cursor/rules", ".roo/rules", ".kilocode/rules", ".qwen/rules",
 )
 
+# Agent instruction files are untrusted text. Keep candidate materialization bounded
+# even when one line contains millions of otherwise valid path characters.
+MAX_PATH_CANDIDATE_CHARS = 4_096
+
 
 def _iter_path_candidates(line: str) -> Iterator[str]:
-    """Yield relative POSIX-style path tokens in linear time.
+    """Yield relative POSIX-style path tokens in linear time and bounded space.
 
-    This deliberately avoids nested regular-expression quantifiers because agent
-    instructions are untrusted text and may contain adversarial repetition.
+    The scanner deliberately avoids nested regular-expression quantifiers. It also
+    refuses to materialize path-like tokens larger than
+    ``MAX_PATH_CANDIDATE_CHARS`` so adversarial single-line input cannot cause a
+    second large allocation during slicing or ``split``.
     """
     start: int | None = None
-    for index, character in enumerate(line + "\0"):
+    overflowed = False
+    line_length = len(line)
+
+    for index in range(line_length + 1):
+        character = line[index] if index < line_length else "\0"
         allowed = character.isalnum() or character in "_./-"
         if allowed:
             if start is None:
                 start = index
+                overflowed = False
+            elif index - start + 1 > MAX_PATH_CANDIDATE_CHARS:
+                overflowed = True
             continue
         if start is None:
+            continue
+        if overflowed:
+            start = None
+            overflowed = False
             continue
         candidate = line[start:index].rstrip(".")
         start = None

@@ -9,7 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from syntavra_runtime.agent_config_auditor import AgentConfigAuditor
+from syntavra_runtime.agent_config_auditor import (
+    MAX_PATH_CANDIDATE_CHARS,
+    AgentConfigAuditor,
+    _iter_path_candidates,
+)
 from syntavra_runtime.code_intelligence import CodeIntelligenceIndex
 from syntavra_runtime.command_compactors import CommandCompactorRegistry
 from syntavra_runtime.command_rewriter import CommandRewriteEngine
@@ -52,10 +56,25 @@ def main() -> int:
     workflow = (ROOT / ".github/workflows/security-alert-triage.yml").read_text(encoding="utf-8")
     check("dynamic_code_scanning_enumeration", "/code-scanning/alerts?" in workflow and 'for state in ("open", "fixed", "dismissed")' in workflow)
     check("no_hardcoded_alert_ceiling", "range(1, 7)" not in workflow and "range(1, 6)" not in workflow)
+    check(
+        "codeql_alert_6_main_closure_gate",
+        "Enforce CodeQL alert 6 closure on main" in workflow
+        and 'rule.get("id") != "py/redos"' in workflow
+        and "CODEQL_ALERT_6_FIXED_ON_MAIN" in workflow,
+    )
+
+    check("redos_scanner_materialization_bound", 0 < MAX_PATH_CANDIDATE_CHARS <= 4_096, MAX_PATH_CANDIDATE_CHARS)
+    oversized = "root/" + "x" * (MAX_PATH_CANDIDATE_CHARS + 1)
+    check("redos_oversized_candidate_rejected", list(_iter_path_candidates(oversized)) == [])
 
     with tempfile.TemporaryDirectory() as directory:
         project = Path(directory)
-        (project / "AGENTS.md").write_text("Read missing/file.py.\n" + ".-/" * 50_000 + "\n", encoding="utf-8")
+        (project / "AGENTS.md").write_text(
+            "Read missing/file.py.\n"
+            + ("segment/" + "x" * 64) * 14_000
+            + "\n",
+            encoding="utf-8",
+        )
         audit = AgentConfigAuditor(project).audit()
         stale = [row for row in audit["findings"] if row["kind"] == "stale-path"]
         check("redos_safe_agent_config_scan", len(stale) == 1 and stale[0]["message"].endswith("missing/file.py"))
