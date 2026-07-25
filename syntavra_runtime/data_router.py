@@ -287,50 +287,87 @@ class DataRouter:
         policy: DataRoutePolicy | None = None,
     ) -> DataRouteResult:
         policy = policy or DataRoutePolicy()
-        reservoir: list[Mapping[str, Any]] = []
         sketches: dict[str, _ColumnSketch] = {}
         count = 0
+        raw_bytes = 0
         digest = __import__("hashlib").sha256()
-        exact_chunks: list[bytes] = []
-        for row in rows:
-            if not isinstance(row, Mapping):
-                raise TypeError("streaming table rows must be mappings")
-            encoded = _json_bytes(row) + b"\n"
-            digest.update(encoded)
-            exact_chunks.append(encoded)
-            count += 1
-            for key, value in row.items():
-                sketches.setdefault(str(key), _ColumnSketch(policy.distinct_registers)).add(value)
-            if len(reservoir) < policy.reservoir_size:
-                reservoir.append(dict(row))
-            else:
-                index = random.randrange(count)
-                if index < policy.reservoir_size:
-                    reservoir[index] = dict(row)
-        raw = b"".join(exact_chunks)
-        handle = ""
-        if self.evidence is not None:
-            handle = str(self.evidence.put_stream(exact_chunks, kind="data-route-row-stream", reference=f"data-route-stream:{digest.hexdigest()}"))
+        sample_candidates: list[tuple[int, int, dict[str, Any]]] = []
+        spool = __import__("tempfile").SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
+        try:
+            for row in rows:
+                if not isinstance(row, Mapping):
+                    raise TypeError("streaming table rows must be mappings")
+                materialized = dict(row)
+                encoded = _json_bytes(materialized) + b"\n"
+                digest.update(encoded)
+                spool.write(encoded)
+                raw_bytes += len(encoded)
+                count += 1
+                for key, value in materialized.items():
+                    sketches.setdefault(str(key), _ColumnSketch(policy.distinct_registers)).add(value)
+                score = int.from_bytes(__import__("hashlib").sha256(encoded).digest()[:8], "big")
+                sample_candidates.append((score, count, materialized))
+                if len(sample_candidates) > policy.reservoir_size * 2:
+                    sample_candidates.sort(key=lambda item: (item[0], item[1]))
+                    del sample_candidates[policy.reservoir_size :]
+            sample_candidates.sort(key=lambda item: (item[0], item[1]))
+            del sample_candidates[policy.reservoir_size :]
+            reservoir = [row for _, _, row in sorted(sample_candidates, key=lambda item: item[1])]
+            exact_hash = digest.hexdigest()
+            handle = ""
+            if self.evidence is not None:
+                spool.seek(0)
+                handle = str(
+                    self.evidence.put_stream(
+                        iter(lambda: spool.read(1024 * 1024), b""),
+                        kind="data-route-row-stream",
+                        reference=f"data-route-stream:{exact_hash}",
+                    )
+                )
+        finally:
+            spool.close()
         query_tokens = _tokens(query)
-        columns = sorted(sketches, key=lambda name: (name.casefold() not in _PRIORITY_KEYS, not bool(_tokens(name) & query_tokens), name))
+        columns = sorted(
+            sketches,
+            key=lambda name: (
+                name.casefold() not in _PRIORITY_KEYS,
+                not bool(_tokens(name) & query_tokens),
+                name,
+            ),
+        )
         compact = {
             "family": "table",
             "intent": self.intent(query),
             "row_count": count,
             "streaming": True,
+            "deterministic_sampling": "sha256-bottom-k",
             "columns": {name: sketches[name].summary() for name in columns[: policy.max_columns]},
             "sample_rows": [self._bounded(row, policy, 1) for row in reservoir[: policy.max_rows]],
         }
-        exact_hash = digest.hexdigest()
         visible, limitations, truncated = self._fit_envelope(
-            family="table", data=compact, exact_hash=exact_hash, exact_handle=handle,
-            query=query, policy=policy, records_seen=count, records_visible=min(count, policy.max_rows),
+            family="table",
+            data=compact,
+            exact_hash=exact_hash,
+            exact_handle=handle,
+            query=query,
+            policy=policy,
+            records_seen=count,
+            records_visible=min(count, policy.max_rows),
         )
         visible_bytes = len(visible.encode("utf-8"))
         return DataRouteResult(
-            "table", "streaming-table", exact_hash, handle, len(raw), visible_bytes,
-            max(0.0, 1.0 - visible_bytes / max(1, len(raw))), count, min(count, policy.max_rows),
-            visible, limitations, f"sc-cont://sha256/{exact_hash}" if truncated or count > policy.max_rows else "",
+            "table",
+            "streaming-table",
+            exact_hash,
+            handle,
+            raw_bytes,
+            visible_bytes,
+            max(0.0, 1.0 - visible_bytes / max(1, raw_bytes)),
+            count,
+            min(count, policy.max_rows),
+            visible,
+            limitations,
+            f"sc-cont://sha256/{exact_hash}" if truncated or count > policy.max_rows else "",
         )
 
     @staticmethod

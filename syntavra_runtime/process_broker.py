@@ -184,8 +184,17 @@ class ProcessBroker:
         env: dict[str, str] | None = None,
     ) -> ProcessResult:
         cwd = self._validate_cwd(cwd)
-        job = self._new_job(argv, cwd=cwd, timeout=timeout, repository_tree=repository_tree, env=env)
-        return self._execute(job.job_id, env=env, cancel_file=cancel_file)
+        effective_env = dict(os.environ)
+        if env:
+            effective_env.update(env)
+        job = self._new_job(
+            argv,
+            cwd=cwd,
+            timeout=timeout,
+            repository_tree=repository_tree,
+            env=effective_env,
+        )
+        return self._execute(job.job_id, env=effective_env, cancel_file=cancel_file)
 
     def _execute(self, job_id: str, *, env=None, cancel_file: Path | None = None) -> ProcessResult:
         row = self.db.job(job_id)

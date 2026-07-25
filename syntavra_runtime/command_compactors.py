@@ -336,10 +336,15 @@ class CommandCompactorRegistry:
         return None, [], 0
 
     def manifest(self) -> dict[str, object]:
+        strategies = sorted({plugin.selector.__name__ for plugin in self.plugins})
         return {
             "plugins": [plugin.name for plugin in self.plugins],
             "count": len(self.plugins),
+            "selector_strategies": strategies,
+            "strategy_count": len(strategies),
             "exact_output_required": True,
             "target_minimum": 120,
-            "coverage_gate": len(self.plugins) >= 120,
+            "inventory_gate": len(self.plugins) >= 120,
+            "coverage_gate": len(self.plugins) >= 120 and len(strategies) >= 8,
+            "claim_boundary": "command registrations are routing inventory, not independent parser implementations",
         }

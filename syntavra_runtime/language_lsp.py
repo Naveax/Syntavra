@@ -110,9 +110,6 @@ class GenericLSPAdapter:
     language_ids: tuple[str, ...]
     capabilities = (
         "syntax",
-        "semantic",
-        "definitions",
-        "types",
         "document-symbols",
     )
 
@@ -173,8 +170,9 @@ class GenericLSPAdapter:
                     "source": f"lsp:{manifest.service_id}",
                     "lsp_manifest_sha256": manifest.manifest_hash,
                     "lsp_server_sha256": manifest.server_executable_sha256,
-                    "exact_semantic": True,
-                    "capability_level": "semantic",
+                    "exact_semantic": False,
+                    "exact_syntax": True,
+                    "capability_level": "syntax",
                 }
             )
             nodes.append(
@@ -216,7 +214,8 @@ class GenericLSPAdapter:
                     "metadata": {
                         "source": f"lsp:{manifest.service_id}",
                         "lsp_manifest_sha256": manifest.manifest_hash,
-                        "exact_semantic": True,
+                        "exact_semantic": False,
+                        "exact_syntax": True,
                     },
                 }
             )
@@ -276,7 +275,7 @@ class GenericLSPAdapter:
         return LanguageParseResult(
             nodes=nodes,
             edges=edges,
-            capability_level="semantic",
+            capability_level="syntax",
             evidence_source=f"lsp:{self.manifest.service_id}:{self.manifest.manifest_hash}",
             diagnostics=tuple(str(item)[:4096] for item in diagnostics_raw),
         )

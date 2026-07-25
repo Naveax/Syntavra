@@ -115,7 +115,7 @@ REQUIRED = [
     ROOT / "tools" / "check_repository_hygiene.py",
 ]
 
-ACTUAL_SECRET = re.compile(r"(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,})")
+ACTUAL_SECRET = re.compile(r"(?<![A-Za-z0-9_])(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,})")
 GENERATED_FILES = {
     "fusion-release-smoke.json", "release-smoke.json", "platform-registry.json",
     "native-dry-run.json", "syntavra-component-measurement.json",

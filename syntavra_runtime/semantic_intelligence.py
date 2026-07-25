@@ -471,9 +471,14 @@ class IncrementalCodeIntelligenceGraph:
                     service_diagnostics.append(f"service:{manifest.service_id}: {type(error).__name__}: {error}")
         if os.environ.get("SYNTAVRA_ALLOW_LSP_SERVICES", "").casefold() in {"1", "true", "yes"}:
             for manifest in sorted(self.lsp_services.manifests.values(), key=lambda item: item.service_id):
-                occupied = [language for language in manifest.language_ids if self.languages.adapter_for(language) is not None]
+                occupied = []
+                for language in manifest.language_ids:
+                    current = self.languages.adapter_for(language)
+                    capabilities = {str(item).casefold() for item in getattr(current, "capabilities", ())} if current is not None else set()
+                    if "semantic" in capabilities:
+                        occupied.append(language)
                 if occupied:
-                    lsp_diagnostics.append(f"lsp:{manifest.service_id}: shadowed-by-higher-priority-adapter:{','.join(sorted(occupied))}")
+                    lsp_diagnostics.append(f"lsp:{manifest.service_id}: shadowed-by-semantic-adapter:{','.join(sorted(occupied))}")
                     continue
                 try:
                     adapter = GenericLSPAdapter(

@@ -314,6 +314,9 @@ class OutputFirewall:
             f"Exact output: artifact://{record.artifact_id}\n"
         )
         view = header + compact
+        sanitized_raw = _redact(text.replace("\r", ""))
+        if len(view.encode("utf-8")) >= len(sanitized_raw.encode("utf-8")):
+            view = sanitized_raw
         original_tokens = _estimate_tokens(text)
         visible_tokens = _estimate_tokens(view)
         ratio = 1.0 - (len(view.encode("utf-8")) / max(1, len(data)))

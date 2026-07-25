@@ -1,5 +1,7 @@
 ## 0.0.1 - Pre-release
 
+- Completed the verified coding-agent product surface with bounded repository tools, exact structured edits, event streaming, and explicit diff/worktree/apply/commit/draft-PR delivery modes.
+
 ### Implemented feature inventory
 
 - Consolidated context compilation, repository watching, and code intelligence onto one SQLite structural graph; removed the duplicate JSON graph cache.
@@ -26,6 +28,15 @@
 - Added manual, provenance-aware npm/PyPI pre-release publication workflow; no registry publication or external result is claimed.
 
 # Changelog
+
+## Unreleased — P0–P4 runtime consolidation
+
+- Added one canonical repository graph with Tree-sitter syntax evidence and indexed FTS5 query.
+- Added one canonical streaming terminal engine with exact recovery and a never-worse guard.
+- Added deterministic bounded-memory table streaming and repaired process environment inheritance.
+- Added project-aware verifier discovery, provider model gateways and a model-backed agent run surface.
+- Reclassified document-symbol-only LSP evidence as syntax rather than exact cross-file semantics.
+
 
 ## 0.0.1 — Current pre-release
 

@@ -17,10 +17,14 @@ from .observability import Observability
 from .plugin_sdk import PluginRegistry
 from .prerelease_cli import PRE_RELEASE_COMMANDS, main as prerelease_main
 from .runtime_pipeline import UnifiedRuntimePipeline
+from .platform import SyntavraPlatform
+from .autonomous_agent import AgentMode, AgentTask, PatchProposal
+from .model_gateway import GatewayConfig, create_gateway
+from .agent_runtime import AgentDeliveryMode
 from .util import stable_project_id
 
 
-CORE_COMMANDS = {"config", "backup", "maintenance", "pipeline", "plugins", "scheduler", "telemetry", "migrate"}
+CORE_COMMANDS = {"config", "backup", "maintenance", "pipeline", "plugins", "scheduler", "telemetry", "migrate", "agent"}
 EXTERNAL_PROOF_ACTIONS = {"suites", "external-suite", "integrations"}
 
 
@@ -111,6 +115,39 @@ def _core_parser() -> argparse.ArgumentParser:
     plan = mgs.add_parser("plan"); plan.add_argument("database")
     apply = mgs.add_parser("apply"); apply.add_argument("database"); apply.add_argument("--dry-run", action="store_true")
     rollback = mgs.add_parser("rollback"); rollback.add_argument("database"); rollback.add_argument("backup")
+
+    agent = sub.add_parser("agent")
+    agent_sub = agent.add_subparsers(dest="action", required=True)
+    agent_run = agent_sub.add_parser("run")
+    agent_run.add_argument("task")
+    agent_run.add_argument("--provider", default="openai-compatible")
+    agent_run.add_argument("--model", required=True)
+    agent_run.add_argument("--endpoint", default="")
+    agent_run.add_argument("--api-key-env", default="")
+    agent_run.add_argument("--api-mode", choices=("auto", "responses", "chat"), default="auto")
+    agent_run.add_argument("--mode", choices=tuple(item.value for item in AgentMode), default=AgentMode.REVIEW_REQUIRED.value)
+    agent_run.add_argument("--attempts", type=int, default=3)
+    agent_run.add_argument("--timeout", type=float, default=900.0)
+    agent_run.add_argument("--token-budget", type=int)
+    agent_run.add_argument("--cost-budget", type=float)
+    agent_run.add_argument("--authorized", action="store_true")
+    agent_run.add_argument("--session-id")
+    agent_run.add_argument("--no-post-verifiers", action="store_true")
+    agent_run.add_argument("--delivery", choices=tuple(item.value for item in AgentDeliveryMode), default=AgentDeliveryMode.DIFF.value)
+    agent_run.add_argument("--branch-name", default="")
+    agent_run.add_argument("--commit-message", default="")
+    agent_run.add_argument("--pr-title", default="")
+    agent_run.add_argument("--pr-body", default="")
+    agent_run.add_argument("--events-jsonl", nargs="?", const="-", default="")
+
+    replay = agent_sub.add_parser("replay")
+    replay.add_argument("task")
+    replay.add_argument("patches", help="JSON patch list or path")
+    replay.add_argument("verifier", help="JSON argv or path")
+    replay.add_argument("--mode", choices=tuple(item.value for item in AgentMode), default=AgentMode.REVIEW_REQUIRED.value)
+    replay.add_argument("--attempts", type=int, default=3)
+    replay.add_argument("--timeout", type=float, default=900.0)
+    replay.add_argument("--authorized", action="store_true")
     return parser
 
 
@@ -185,6 +222,79 @@ def _core_main(argv: list[str]) -> int:
         elif args.action == "apply": _emit(manager.apply(dry_run=args.dry_run))
         else: manager.rollback(Path(args.backup)); _emit({"ok": True})
         return 0
+    if args.command == "agent":
+        runtime = SyntavraPlatform(project, state / "unified")
+        if args.action == "run":
+            gateway = create_gateway(GatewayConfig(
+                provider=args.provider,
+                model=args.model,
+                endpoint=args.endpoint,
+                api_key_env=args.api_key_env,
+                timeout_seconds=args.timeout,
+                api_mode=args.api_mode,
+            ))
+            event_stream = None
+            try:
+                if args.events_jsonl:
+                    event_stream = sys.stderr if args.events_jsonl == "-" else Path(args.events_jsonl).open("a", encoding="utf-8")
+                def emit_event(event):
+                    if event_stream is not None:
+                        print(json.dumps(asdict(event), ensure_ascii=False, sort_keys=True), file=event_stream, flush=True)
+                receipt = runtime.agent_runtime.run(
+                    args.task,
+                    gateway,
+                    mode=AgentMode(args.mode),
+                    max_attempts=args.attempts,
+                    timeout_seconds=args.timeout,
+                    token_budget=args.token_budget,
+                    cost_budget=args.cost_budget,
+                    authorized=args.authorized,
+                    session_id=args.session_id,
+                    run_post_verifiers=not args.no_post_verifiers,
+                    delivery_mode=AgentDeliveryMode(args.delivery),
+                    branch_name=args.branch_name,
+                    commit_message=args.commit_message,
+                    pr_title=args.pr_title,
+                    pr_body=args.pr_body,
+                    event_sink=emit_event if event_stream is not None else None,
+                )
+            finally:
+                if event_stream is not None and event_stream is not sys.stderr:
+                    event_stream.close()
+            _emit(asdict(receipt) | {"ok": receipt.ok})
+            return 0 if receipt.ok else 4
+        def load_json(value: str):
+            candidate = Path(value)
+            return json.loads(candidate.read_text(encoding="utf-8")) if candidate.is_file() else json.loads(value)
+        rows = load_json(args.patches)
+        verifier = load_json(args.verifier)
+        if not isinstance(rows, list) or not isinstance(verifier, list) or not verifier:
+            raise ValueError("agent replay requires a patch list and non-empty verifier argv")
+        class ReplayProvider:
+            def __init__(self, values):
+                self.values = list(values)
+                self.index = 0
+            def propose(self, task, context, previous_failure):
+                del task, context, previous_failure
+                if self.index >= len(self.values):
+                    return PatchProposal("")
+                value = self.values[self.index]
+                self.index += 1
+                return PatchProposal(**value) if isinstance(value, dict) else PatchProposal(str(value))
+        receipt = runtime.autonomous_agent.execute(
+            AgentTask(
+                instruction=args.task,
+                verifier=tuple(str(item) for item in verifier),
+                mode=AgentMode(args.mode),
+                max_attempts=args.attempts,
+                timeout_seconds=args.timeout,
+                retain_workspace=True,
+            ),
+            ReplayProvider(rows),
+            authorized=args.authorized,
+        )
+        _emit(asdict(receipt) | {"ok": receipt.ok, "surface": "agent-replay"})
+        return 0 if receipt.ok else 4
     raise RuntimeError(args.command)
 
 

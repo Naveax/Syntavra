@@ -147,7 +147,23 @@ class HostOutputPipeline:
         depth: int = 0,
     ) -> tuple[Any, list[CapturedField]]:
         if depth > 8:
-            return value, []
+            try:
+                bounded = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+            except (TypeError, ValueError):
+                bounded = repr(value)
+            rendered, capture = self._capture_value(
+                bounded,
+                payload=payload,
+                field_path=(field_path or "result") + ".<bounded-subtree>",
+                command=command,
+                tool_name=tool_name,
+                file_path=file_path,
+                scope_key=scope_key,
+            )
+            return {
+                "syntavra_bounded_subtree": rendered,
+                "original_type": type(value).__name__,
+            }, ([capture] if capture else [])
         if isinstance(value, (str, bytes)):
             rendered, capture = self._capture_value(
                 value,

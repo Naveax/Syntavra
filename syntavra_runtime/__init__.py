@@ -80,6 +80,17 @@ else:
         manifest as platform_manifest,
     )
     from .data_router import DataRoutePolicy, DataRouteResult, DataRouter
+    from .agent_runtime import (
+        AgentContextAssembler, AgentDeliveryManager, AgentDeliveryMode, AgentDeliveryReceipt,
+        AgentEvent, AgentEventJournal, AgentProductReceipt, AgentRuntime, GatewayPatchProvider,
+        StructuredEditCompiler,
+    )
+    from .canonical_graph import CanonicalRepositoryGraph
+    from .model_gateway import GatewayConfig, GatewayError, ModelResult, SequenceModelGateway, create_gateway
+    from .project_model import ProjectModel, VerifierSpec
+    from .repository_query import RepositoryQueryEngine
+    from .terminal_engine import TerminalCaptureSession, TerminalOutputEngine, TerminalSnapshot
+    from .tree_sitter_adapter import TreeSitterLanguageAdapter
     from .evidence import EvidenceStore
     from .execution_sandbox import ExecutionReceipt, SandboxBackend, SandboxPolicy
     from .external_benchmarks import (
@@ -150,18 +161,18 @@ else:
     __all__ = [
         "__version__", "__release_channel__", "ADAPTERS", "ActiveContextPlan",
         "AdapterContract", "AdapterMaturity", "AdapterPlatformRuntime", "AdapterReceipt",
-        "AdapterRegistry", "AdaptivePolicyTuner", "AdaptiveProviderRouter", "AgentAttempt", "AgentMode", "AgentRunReceipt",
+        "AdapterRegistry", "AdaptivePolicyTuner", "AdaptiveProviderRouter", "AgentAttempt", "AgentContextAssembler", "AgentDeliveryManager", "AgentDeliveryMode", "AgentDeliveryReceipt", "AgentEvent", "AgentEventJournal", "AgentMode", "AgentProductReceipt", "AgentRunReceipt", "AgentRuntime",
         "AgentState", "AgentTask", "ArmExecutionPolicy", "ArmRunReceipt", "ArtifactStore",
         "Authorizer", "AutonomousCodingAgent", "BackupResult", "BetaReceipt",
         "CallablePatchProvider", "CanonicalRequestEnvelope", "CapabilityDecision",
-        "CapabilitySecurity", "CapabilityTokenIssuer", "CodeIntelligenceIndex", "CodingAgent", "CodingCorpusPlanner",
+        "CapabilitySecurity", "CapabilityTokenIssuer", "CanonicalRepositoryGraph", "CodeIntelligenceIndex", "CodingAgent", "CodingCorpusPlanner",
         "ConfigManager", "ConfigSnapshot", "ConsoleSnapshot", "ContextCompiler", "ContextIRItem",
         "ContextPack", "ContextPlanPolicy", "DataRoutePolicy", "DataRouteResult", "DataRouter",
         "DistributionManager", "DistributionReceipt", "DurableJobScheduler", "EvidenceEdge",
         "EvidenceNode", "EvidenceStore", "ExecutionReceipt", "ExternalBenchmarkGate",
         "ExternalBenchmarkReceipt", "ExternalSuiteRegistry", "ExternalSuiteRunner",
         "ExternalSuiteSpec", "FaultInjector", "FaultResult", "FirewallReceipt", "FuzzResult",
-        "GenericLSPAdapter", "GraphEdge", "GraphNode", "HeadlessJob", "HeadlessRuntime",
+        "GatewayConfig", "GatewayError", "GatewayPatchProvider", "GenericLSPAdapter", "GraphEdge", "GraphNode", "HeadlessJob", "HeadlessRuntime",
         "IncrementalCodeIntelligenceGraph", "IntegrationMatrix", "IntegrationSpec",
         "InteractiveConsole", "JobSpec", "JobState", "LSIFImporter", "LSPClient",
         "LSPProtocolError", "LSPServiceManifest", "LSPServiceRegistry", "LanguageAdapter",
@@ -169,25 +180,25 @@ else:
         "LanguageServiceManifest", "LanguageServiceRegistry", "LanguageServiceSpec",
         "LanguageServiceStatus", "LongContextQualityGate", "LongContextReceipt",
         "LongSessionPlanner", "MCPAuthorizationDecision", "MCPProfile", "MCPToolPolicy",
-        "MeasuredBenchmarkGate", "NativeSandboxBroker", "OnboardingReceipt", "OutputFirewall",
+        "MeasuredBenchmarkGate", "ModelResult", "NativeSandboxBroker", "OnboardingReceipt", "OutputFirewall",
         "PairedSchedule", "PatchProposal", "PatchProvider", "PlatformAdapter",
         "PlatformAdapterRegistry", "PolicyObservation", "PolicyRecommendation",
         "PolicyRolloutManager", "Principal", "ProductMaturityGate", "ProductSurface",
         "ProviderAccount", "ProviderAccountPool", "ProviderCandidate", "ProviderProxyServiceManager", "ProviderRoute", "ProviderUsageReceipt", "ProxyPreset", "ProxyProductRegistry",
-        "PublicProofGate", "ReceiptValidator", "RecursiveExecutionEngine", "RecursiveTask",
+        "ProjectModel", "PublicProofGate", "ReceiptValidator", "RecursiveExecutionEngine", "RecursiveTask", "RepositoryQueryEngine",
         "ReleaseIdentity", "ReleaseReceipt", "ReliabilityLaboratory", "ReliabilityReport",
         "RuntimeEvidenceGraph", "SCIPJSONImporter", "SDKInvocation", "SandboxBackend",
         "SandboxPolicy", "SandboxedLanguageServiceAdapter", "SecureArmRunner", "SemanticGraph",
         "SemanticIndexBundle", "SemanticIndexEdge", "SemanticIndexImporter", "SemanticIndexNode",
         "SecretlessProviderGateway", "ServicePlan", "ServiceSpec", "SessionAnalyticsStore",
         "SessionContinuityController", "SessionMemory", "StateBackupManager", "SuperiorityGate",
-        "SyntavraClient", "SyntavraPlatform", "TokenPanel", "ToolRouteDecision",
+        "SequenceModelGateway", "StructuredEditCompiler", "SyntavraClient", "SyntavraPlatform", "TerminalCaptureSession", "TerminalOutputEngine", "TerminalSnapshot", "TokenPanel", "ToolRouteDecision",
         "ToolRoutingEnforcer", "ToolSchemaCompiler", "MCP_PROFILES",
-        "TokenAttributionLedger", "TokenAttributionReceipt", "TokenEstimator", "TreeSitterLanguageBackend",
+        "TokenAttributionLedger", "TokenAttributionReceipt", "TokenEstimator", "TreeSitterLanguageAdapter", "TreeSitterLanguageBackend", "VerifierSpec",
         "CommandCompactorRegistry", "TaskContextAssembler", "TaskContextPack",
         "UnifiedRuntimePipeline", "UnboundedContextCoordinator",
         "UpdateArtifact", "UpdateManifest", "UpdateReceipt", "VerifiedPolicyObservation",
-        "VersionLockError", "WorkloadSpec", "ZeroFrictionManager", "platform_manifest",
+        "VersionLockError", "WorkloadSpec", "ZeroFrictionManager", "create_gateway", "platform_manifest",
     ]
 
 del _os

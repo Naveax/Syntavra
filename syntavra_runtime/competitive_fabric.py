@@ -466,6 +466,12 @@ class CommandCompactor:
         visible = self._bounded(header + "\n" + "\n".join(self._dedup(selected)), budget_bytes)
         original_bytes = len(combined.encode("utf-8"))
         visible_bytes = len(visible.encode("utf-8"))
+        raw_visible = security.redacted_text
+        raw_visible_bytes = len(raw_visible.encode("utf-8"))
+        if raw_visible_bytes <= budget_bytes and visible_bytes >= raw_visible_bytes:
+            visible = raw_visible
+            visible_bytes = raw_visible_bytes
+            self.last_compactor = f"{self.last_compactor}:never-worse-passthrough"
         return CompactionResult(
             family=family,
             visible_text=visible,
