@@ -123,11 +123,19 @@ jobs:
         run: rm -rf sdk/typescript/node_modules
       - name: Generate deterministic root SHA-256 manifest
         run: python tools/refresh_manifest.py
+      - name: Capture source tree metadata
+        shell: bash
+        run: |
+          git rev-parse 'HEAD^{tree}' > source-tree.txt
+          git rev-parse HEAD > source-commit.txt
       - name: Upload generated root manifest candidate
         uses: actions/upload-artifact@v4
         with:
           name: syntavra-generated-root-manifest-${{ github.sha }}
-          path: MANIFEST.sha256
+          path: |
+            MANIFEST.sha256
+            source-tree.txt
+            source-commit.txt
           if-no-files-found: error
           retention-days: 7
       - name: Materialize prepared integrity tree
