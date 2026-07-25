@@ -39,17 +39,8 @@ jobs:
         with:
           toolchain: 1.82.0
           components: rustfmt
-      - name: Materialize rustfmt output
-        run: cargo fmt --all
-      - name: Upload rustfmt output
-        uses: actions/upload-artifact@v4
-        with:
-          name: syntavra-rustfmt-${{ github.sha }}
-          path: crates
-          if-no-files-found: error
-          retention-days: 7
       - name: Verify committed formatting
-        run: git diff --exit-code -- crates
+        run: cargo fmt --all -- --check
 
   rust:
     name: ${{ matrix.os }} / Rust 1.82
@@ -64,12 +55,23 @@ jobs:
         with:
           toolchain: 1.82.0
           components: rustfmt, clippy
-      - name: Format workspace for validation
-        run: cargo fmt --all
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
       - name: Test workspace
         run: cargo test --workspace --all-targets --locked
       - name: Lint workspace
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
+      - name: Upload clippy diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-clippy-${{ matrix.os }}-${{ github.sha }}
+          path: clippy.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Exercise native bootstrap commands
         shell: bash
         run: |
