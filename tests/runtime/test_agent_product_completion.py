@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from syntavra_runtime.agent_runtime import (
 from syntavra_runtime.autonomous_agent import AgentMode, AgentTask
 from syntavra_runtime.model_gateway import SequenceModelGateway
 from syntavra_runtime.project_model import ProjectModel
+from syntavra_runtime.repository_query import RepositoryQueryEngine
 
 
 def test_structured_edit_compiler_is_exact_and_git_apply_compatible(tmp_path: Path) -> None:
@@ -38,7 +40,36 @@ def test_structured_edit_compiler_is_exact_and_git_apply_compatible(tmp_path: Pa
         capture_output=True,
         check=False,
     )
+    assert "\r" not in patch
     assert checked.returncode == 0, checked.stderr
+
+
+def test_repository_query_connection_is_closed(tmp_path: Path) -> None:
+    database = tmp_path / "graph.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.executescript(
+            """
+            CREATE TABLE nodes (
+                node_id TEXT PRIMARY KEY, path TEXT NOT NULL, kind TEXT NOT NULL,
+                name TEXT NOT NULL, qualified_name TEXT NOT NULL, start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL, language TEXT NOT NULL, evidence_ref TEXT NOT NULL,
+                metadata_json TEXT NOT NULL
+            );
+            CREATE TABLE edges (
+                source TEXT NOT NULL, target TEXT NOT NULL, edge_type TEXT NOT NULL,
+                confidence REAL NOT NULL, evidence_ref TEXT NOT NULL, metadata_json TEXT NOT NULL
+            );
+            """
+        )
+    engine = RepositoryQueryEngine(database)
+    with engine._connect() as connection:
+        connection.execute("SELECT 1").fetchone()
+    try:
+        connection.execute("SELECT 1")
+    except sqlite3.ProgrammingError:
+        pass
+    else:
+        raise AssertionError("repository query connection remained open")
 
 
 def test_gateway_structured_edit_and_event_stream(tmp_path: Path) -> None:

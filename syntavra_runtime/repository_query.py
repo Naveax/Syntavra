@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 
 _QUERY_TOKEN_RE = re.compile(r"[^\W_]+|[A-Za-z0-9_./:-]+", re.UNICODE)
@@ -27,11 +28,16 @@ class RepositoryQueryEngine:
         self.backend = "sqlite-like"
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.database_path, timeout=30.0)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA journal_mode=WAL")
-        return db
+        try:
+            yield db
+            db.commit()
+        finally:
+            db.close()
 
     def _initialize(self) -> None:
         with self._connect() as db:

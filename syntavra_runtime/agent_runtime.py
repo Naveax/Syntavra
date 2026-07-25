@@ -306,10 +306,12 @@ class StructuredEditCompiler:
                 fromfile, tofile = f"a/{relative}", "/dev/null"
             else:
                 fromfile, tofile = f"a/{relative}", f"b/{relative}"
+            before_diff = before.replace("\r\n", "\n").replace("\r", "\n")
+            after_diff = after.replace("\r\n", "\n").replace("\r", "\n")
             body = list(
                 difflib.unified_diff(
-                    before.splitlines(keepends=True),
-                    after.splitlines(keepends=True),
+                    before_diff.splitlines(keepends=True),
+                    after_diff.splitlines(keepends=True),
                     fromfile=fromfile,
                     tofile=tofile,
                     lineterm="",
