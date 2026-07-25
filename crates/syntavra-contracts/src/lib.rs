@@ -16,17 +16,17 @@ pub struct Capability {
 
 pub const ENGINE_CAPABILITIES: &[Capability] = &[
     Capability {
-        name: "version",
-        maturity: "preview",
-        mutation: "read-only",
-    },
-    Capability {
         name: "engine.capabilities",
         maturity: "preview",
         mutation: "read-only",
     },
     Capability {
         name: "engine.contract-hash",
+        maturity: "preview",
+        mutation: "read-only",
+    },
+    Capability {
+        name: "version",
         maturity: "preview",
         mutation: "read-only",
     },
