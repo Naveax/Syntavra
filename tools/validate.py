@@ -12,6 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from tools.refresh_manifest import canonical_manifest_bytes
 SKILL = ROOT / "skills" / "syntavra"
 EXPECTED_VERSION = "0.0.1"
 EXPECTED_CHANNEL = "pre-release"
@@ -202,7 +203,7 @@ def _verify_manifest() -> tuple[bool, str]:
         if not path.is_file():
             failures.append(f"missing:{relative}")
             continue
-        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+        if hashlib.sha256(canonical_manifest_bytes(Path(relative), path.read_bytes())).hexdigest() != digest:
             failures.append(f"hash-mismatch:{relative}")
     expected = {path.relative_to(ROOT).as_posix() for path in _manifest_candidates()}
     present = set(entries)
