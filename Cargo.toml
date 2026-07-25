@@ -4,6 +4,7 @@ members = [
   "crates/syntavra-core",
   "crates/syntavra-cli",
 ]
+exclude = ["native/syntavra-native"]
 resolver = "2"
 
 [workspace.package]
