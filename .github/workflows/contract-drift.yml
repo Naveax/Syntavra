@@ -45,8 +45,20 @@ jobs:
       - name: Export Python reference inventory
         run: python tools/export_python_contract.py --output python-reference.json
       - name: Run initial Python-Rust parity gate
-        run: python tools/run_engine_parity.py
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/run_engine_parity.py 2>&1 | tee parity.log
+      - name: Upload parity diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-parity-diagnostics-${{ github.sha }}
+          path: parity.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload Python reference inventory
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: syntavra-python-reference-${{ github.sha }}
