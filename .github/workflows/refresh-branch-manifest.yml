@@ -123,6 +123,13 @@ jobs:
         run: rm -rf sdk/typescript/node_modules
       - name: Generate deterministic root SHA-256 manifest
         run: python tools/refresh_manifest.py
+      - name: Upload generated root manifest candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-generated-root-manifest-${{ github.sha }}
+          path: MANIFEST.sha256
+          if-no-files-found: error
+          retention-days: 7
       - name: Materialize prepared integrity tree
         id: prepared
         shell: bash
@@ -153,6 +160,7 @@ jobs:
           git rev-parse HEAD > prepared-commit.txt
           cp MANIFEST.sha256 prepared-MANIFEST.sha256
       - name: Upload prepared integrity tree metadata
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: syntavra-prepared-manifest-tree-${{ github.sha }}
@@ -161,5 +169,5 @@ jobs:
             prepared-tree.txt
             prepared-commit.txt
             prepared-branch.txt
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
