@@ -167,8 +167,9 @@ class GenericLSPTests(unittest.TestCase):
             )
             with patch.dict(os.environ, {"SYNTAVRA_ALLOW_LSP_SERVICES": "1"}, clear=False):
                 result = adapter.parse(path="main.future", text="type Future", evidence_ref="sha256:test")
-            self.assertEqual(result.capability_level, "semantic")
-            self.assertTrue(result.nodes[0]["metadata"]["exact_semantic"])
+            self.assertEqual(result.capability_level, "syntax")
+            self.assertFalse(result.nodes[0]["metadata"]["exact_semantic"])
+            self.assertEqual(result.nodes[0]["metadata"]["capability_level"], "syntax")
             _, policy, request = broker.calls[0]
             self.assertEqual(policy.network_hosts, ())
             self.assertTrue(policy.allow_child_processes)

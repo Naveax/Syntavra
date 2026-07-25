@@ -314,6 +314,15 @@ class AutonomousCodingAgent:
         stop_reason = "attempt limit reached"
 
         for number in range(1, task.max_attempts + 1):
+            current_diff, current_changed_files = self._diff(workspace)
+            context = {
+                **context,
+                "workspace": str(workspace),
+                "attempt": number,
+                "current_diff": current_diff[-120_000:],
+                "changed_files": current_changed_files,
+                "previous_failure": previous_failure,
+            }
             proposal = provider.propose(task, context, previous_failure)
             patch_hash = _digest(proposal.patch)
             if not proposal.patch.strip():

@@ -14,6 +14,7 @@ from .artifacts import (
     OutputFirewall,
 )
 from .semantic_intelligence import IncrementalCodeIntelligenceGraph
+from .canonical_graph import CanonicalRepositoryGraph
 from .python_semantic_resolution import install as _install_python_semantic_resolution
 from .semantic_services import (
     LanguageServiceRegistry as CompatibilityLanguageServiceRegistry,
@@ -27,6 +28,8 @@ from .adapter_platform import ADAPTERS, AdapterContract, CodingAgent, AdapterReg
 from .adapter_runtime import AdapterPlatformRuntime
 from .sandbox_runtime import HardenedSandboxBroker
 from .autonomous_agent import AutonomousCodingAgent
+from .agent_runtime import AgentRuntime
+from .terminal_engine import TerminalOutputEngine
 from .headless_runtime import HeadlessRuntime
 from .interactive_console import InteractiveConsole
 from .reliability_lab import ReliabilityLaboratory
@@ -92,9 +95,9 @@ class SyntavraPlatform:
         self.state_root = state_root.resolve(strict=False)
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.artifacts = ArtifactStore(self.state_root / "artifacts")
-        self.firewall = OutputFirewall(self.artifacts)
+        self.firewall = TerminalOutputEngine(self.artifacts)
         self.context = ContextCompiler(self.artifacts)
-        self.graph = IncrementalCodeIntelligenceGraph(self.state_root / "semantic-graph.sqlite3")
+        self.graph = CanonicalRepositoryGraph(self.state_root / "semantic-graph.sqlite3")
         self.runtime_evidence = RuntimeEvidenceGraph(self.state_root / "runtime-evidence.sqlite3")
 
         # Backward-compatible public attributes. They are façades over the same
@@ -110,6 +113,13 @@ class SyntavraPlatform:
         self.autonomous_agent = AutonomousCodingAgent(
             self.project,
             self.state_root,
+            graph=self.graph,
+            memory=self.memory,
+            sandbox=self.sandbox,
+        )
+        self.agent_runtime = AgentRuntime(
+            project=self.project,
+            state_root=self.state_root / "agent-product",
             graph=self.graph,
             memory=self.memory,
             sandbox=self.sandbox,
@@ -138,8 +148,13 @@ class SyntavraPlatform:
             "capabilities": {
                 "typed_context_compiler": True,
                 "pre_context_output_firewall": True,
+                "streaming_terminal_output_engine": True,
+                "terminal_never_worse_guard": True,
                 "content_addressed_exact_recovery": True,
                 "incremental_semantic_graph": True,
+                "canonical_repository_graph": True,
+                "indexed_fts_repository_query": True,
+                "default_tree_sitter_syntax": True,
                 "universal_future_language_fallback": True,
                 "sandboxed_language_analyzers": True,
                 "generic_hash_pinned_lsp": True,
@@ -150,6 +165,11 @@ class SyntavraPlatform:
                 "secretless_provider_gateway": True,
                 "cli_and_non_cli_adapters": True,
                 "bounded_autonomous_agent": True,
+                "model_backed_agent_runtime": True,
+                "project_aware_verifier_discovery": True,
+                "structured_agent_edits": True,
+                "agent_event_stream": True,
+                "verified_agent_delivery_modes": True,
                 "probed_native_sandbox": True,
                 "headless_job_runtime": True,
                 "interactive_token_console": True,
@@ -187,8 +207,12 @@ def manifest() -> dict[str, Any]:
         "runtime": "unified",
         "components": [
             "context-compiler",
+            "terminal-output-engine",
             "output-firewall",
             "artifact-store",
+            "canonical-repository-graph",
+            "indexed-repository-query",
+            "tree-sitter-syntax-adapter",
             "semantic-intelligence",
             "runtime-evidence",
             "universal-language-platform",
@@ -200,6 +224,8 @@ def manifest() -> dict[str, Any]:
             "execution-sandbox",
             "provider-gateway",
             "adapter-platform",
+            "model-gateway",
+            "agent-runtime",
             "coding-agent",
             "headless-runtime",
             "interactive-console",
@@ -219,6 +245,8 @@ __all__ = [
     "AdapterRegistry",
     "ArtifactRecord",
     "ArtifactStore",
+    "AgentRuntime",
+    "CanonicalRepositoryGraph",
     "AutonomousCodingAgent",
     "CapabilityDecision",
     "CapabilitySecurity",
@@ -235,6 +263,7 @@ __all__ = [
     "LanguageServiceRegistry",
     "NativeSandboxBroker",
     "OutputFirewall",
+    "TerminalOutputEngine",
     "ReliabilityLaboratory",
     "RuntimeEvidenceGraph",
     "SecretlessProviderGateway",

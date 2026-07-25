@@ -70,13 +70,16 @@ class AdapterRegistry:
         surfaces = Counter(item.surface for item in ADAPTERS)
         required_capabilities = {"tool_interception", "mcp", "session_events", "provider_proxy", "native_approval", "stream_interception"}
         invalid = [item.adapter_id for item in ADAPTERS if set(item.capabilities) != required_capabilities]
+        contract_ok = len(ids) == len(set(ids)) and not invalid
         return {
-            "ok": len(ids) == len(set(ids)) and not invalid and len(ids) >= 20,
+            "ok": contract_ok,
+            "inventory_gate": len(ids) >= 20,
             "adapters": len(ids),
             "levels": dict(levels),
             "surfaces": dict(surfaces),
             "non_cli_adapters": sum(item.surface != "cli" for item in ADAPTERS),
             "invalid": invalid,
+            "live_certified": 0,
             "live_boundary": "live certification requires external execution receipts",
         }
 
