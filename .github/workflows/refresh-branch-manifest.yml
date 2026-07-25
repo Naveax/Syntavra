@@ -123,13 +123,13 @@ jobs:
         run: rm -rf sdk/typescript/node_modules
       - name: Generate deterministic root SHA-256 manifest
         run: python tools/refresh_manifest.py
-      - name: Capture source tree metadata
+      - name: Capture generated integrity diagnostics
         shell: bash
         run: |
           git rev-parse 'HEAD^{tree}' > source-tree.txt
           git rev-parse HEAD > source-commit.txt
           git diff --name-only > generated-changes.txt
-      - name: Upload generated root manifest candidate
+      - name: Upload generated integrity candidate
         uses: actions/upload-artifact@v4
         with:
           name: syntavra-generated-root-manifest-${{ github.sha }}
@@ -140,34 +140,72 @@ jobs:
             generated-changes.txt
           if-no-files-found: error
           retention-days: 7
-      - name: Materialize prepared integrity tree
-        id: prepared
+      - name: Commit generated outputs to source branch
+        if: github.event_name == 'push'
         shell: bash
         env:
-          SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set -euo pipefail
+
           allowed='^(MANIFEST\.sha256|docs/claims/claims\.json|benchmarks/results/roblox-profile/(profile-tests|simulated-50)\.json|sdk/typescript/dist/(index\.js|index\.d\.ts|receipts\.js|receipts\.d\.ts)|skills/syntavra/profiles/roblox_studio/MANIFEST\.sha256)$'
-          changed="$(git diff --name-only)"
-          if [ -n "$changed" ]; then
-            while IFS= read -r path; do
-              echo "$path" | grep -Eq "$allowed" || { echo "unexpected generated change: $path"; exit 1; }
-            done <<< "$changed"
-            git add -- \
-              MANIFEST.sha256 \
-              docs/claims/claims.json \
-              benchmarks/results/roblox-profile/profile-tests.json \
-              benchmarks/results/roblox-profile/simulated-50.json \
-              sdk/typescript/dist \
-              skills/syntavra/profiles/roblox_studio/MANIFEST.sha256
-            git commit -m "prepare Syntavra generated integrity outputs"
-            test -n "$SOURCE_BRANCH" || { echo "source branch is unavailable"; exit 1; }
-            git push origin "HEAD:refs/heads/${SOURCE_BRANCH}"
-            printf '%s\n' "$SOURCE_BRANCH" > prepared-branch.txt
-          else
-            printf '%s\n' "$SOURCE_BRANCH" > prepared-branch.txt
+          mapfile -t changed < <(git diff --name-only)
+
+          if [ "${#changed[@]}" -eq 0 ]; then
+            echo "Generated integrity outputs are already current."
+            exit 0
           fi
+
+          for path in "${changed[@]}"; do
+            echo "$path" | grep -Eq "$allowed" || {
+              echo "unexpected generated change: $path"
+              exit 1
+            }
+          done
+
+          remote_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${SOURCE_BRANCH}" --jq '.object.sha')"
+          if [ "$remote_head" != "$GITHUB_SHA" ]; then
+            echo "Branch advanced from $GITHUB_SHA to $remote_head; stale generated output will not be written."
+            exit 0
+          fi
+
+          update_path() {
+            local path="$1"
+            local encoded current_sha
+            encoded="$(base64 -w0 "$path")"
+            current_sha="$(git rev-parse "HEAD:${path}" 2>/dev/null || true)"
+
+            args=(
+              --method PUT
+              -H "Accept: application/vnd.github+json"
+              "repos/${GITHUB_REPOSITORY}/contents/${path}"
+              -f "message=prepare Syntavra generated integrity output: ${path}"
+              -f "content=${encoded}"
+              -f "branch=${SOURCE_BRANCH}"
+            )
+            if [ -n "$current_sha" ]; then
+              args+=( -f "sha=${current_sha}" )
+            fi
+            gh api "${args[@]}" --silent
+          }
+
+          for path in "${changed[@]}"; do
+            if [ "$path" != "MANIFEST.sha256" ]; then
+              update_path "$path"
+            fi
+          done
+
+          for path in "${changed[@]}"; do
+            if [ "$path" = "MANIFEST.sha256" ]; then
+              update_path "$path"
+            fi
+          done
+      - name: Confirm prepared source metadata
+        if: always()
+        shell: bash
+        run: |
+          printf '%s\n' "${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}" > prepared-branch.txt
           git rev-parse 'HEAD^{tree}' > prepared-tree.txt
           git rev-parse HEAD > prepared-commit.txt
           cp MANIFEST.sha256 prepared-MANIFEST.sha256
