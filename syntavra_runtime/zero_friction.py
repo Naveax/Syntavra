@@ -67,7 +67,14 @@ class ZeroFrictionManager:
         )
 
     def detected_hosts(self) -> tuple[str, ...]:
-        return tuple(sorted({row["host"] for row in detect_hosts(self.project_root)}))
+        # Project-scoped installation must not select every globally installed
+        # executable. Only hosts with concrete markers in this project are
+        # eligible unless all_hosts=True is explicitly requested.
+        return tuple(sorted({
+            row["host"]
+            for row in detect_hosts(self.project_root)
+            if row.get("project_markers")
+        }))
 
     @staticmethod
     def _matrix_hosts() -> tuple[str, ...]:

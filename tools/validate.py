@@ -131,10 +131,26 @@ def _skill_version(text: str) -> str | None:
     return match.group(1) if match else None
 
 
+TRANSIENT_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    "node_modules",
+    ".venv",
+    "venv",
+    ".tox",
+    ".nox",
+    ".mypy_cache",
+    ".ruff_cache",
+}
+
+
 def _is_generated_path(relative: Path) -> bool:
     return (
         bool(relative.parts) and relative.parts[0] in {".git", ".syntavra", "build", "dist"}
-    ) or any(part in {"__pycache__", ".pytest_cache"} or part.endswith(".egg-info") for part in relative.parts)
+    ) or any(
+        part in TRANSIENT_PARTS or part.endswith(".egg-info")
+        for part in relative.parts
+    )
 
 
 def _source_files() -> list[Path]:
