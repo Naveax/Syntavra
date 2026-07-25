@@ -143,6 +143,8 @@ jobs:
       - name: Materialize prepared integrity tree
         id: prepared
         shell: bash
+        env:
+          SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -160,11 +162,11 @@ jobs:
               sdk/typescript/dist \
               skills/syntavra/profiles/roblox_studio/MANIFEST.sha256
             git commit -m "prepare Syntavra generated integrity outputs"
-            temporary_branch="prepared-manifest/${GITHUB_SHA}"
-            git push --force origin "HEAD:refs/heads/${temporary_branch}"
-            printf '%s\n' "$temporary_branch" > prepared-branch.txt
+            test -n "$SOURCE_BRANCH" || { echo "source branch is unavailable"; exit 1; }
+            git push origin "HEAD:refs/heads/${SOURCE_BRANCH}"
+            printf '%s\n' "$SOURCE_BRANCH" > prepared-branch.txt
           else
-            printf '%s\n' "" > prepared-branch.txt
+            printf '%s\n' "$SOURCE_BRANCH" > prepared-branch.txt
           fi
           git rev-parse 'HEAD^{tree}' > prepared-tree.txt
           git rev-parse HEAD > prepared-commit.txt
