@@ -1,0 +1,23 @@
+{
+  "after": [
+    "main"
+  ],
+  "before": [
+    "agent/p0-p4-runtime-consolidation",
+    "agent/syntavra-identity-claim-cleanup",
+    "agent/syntavra-identity-claim-cleanup-v2",
+    "diagnostics/p4-validation",
+    "generated/syntavra-identity-cleanup",
+    "generated/syntavra-identity-cleanup-ready",
+    "main"
+  ],
+  "deleted": [
+    "agent/p0-p4-runtime-consolidation",
+    "agent/syntavra-identity-claim-cleanup",
+    "agent/syntavra-identity-claim-cleanup-v2",
+    "diagnostics/p4-validation",
+    "generated/syntavra-identity-cleanup",
+    "generated/syntavra-identity-cleanup-ready"
+  ],
+  "only_main": true
+}
