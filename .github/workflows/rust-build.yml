@@ -1,0 +1,58 @@
+name: Rust Dual-Engine Bootstrap
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "crates/**"
+      - "contracts/**"
+      - "parity/**"
+      - "tools/run_engine_parity.py"
+      - "tools/verify_dual_engine_contract.py"
+      - ".github/workflows/rust-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "crates/**"
+      - "contracts/**"
+      - "parity/**"
+      - "tools/run_engine_parity.py"
+      - "tools/verify_dual_engine_contract.py"
+      - ".github/workflows/rust-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: ${{ matrix.os }} / Rust 1.82
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+      - name: Test workspace
+        run: cargo test --workspace --all-targets --locked
+      - name: Lint workspace
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Exercise native bootstrap commands
+        shell: bash
+        run: |
+          cargo run --quiet --locked -p syntavra-cli -- version
+          cargo run --quiet --locked -p syntavra-cli -- engine capabilities
+          cargo run --quiet --locked -p syntavra-cli -- engine contract-hash
