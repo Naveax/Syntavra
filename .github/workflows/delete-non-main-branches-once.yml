@@ -1,0 +1,90 @@
+name: Delete Non-Main Branches Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/delete-non-main-branches-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: syntavra-delete-non-main-branches
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Delete every remote branch except main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t before < <(
+            git ls-remote --heads origin \
+              | awk '{sub("refs/heads/", "", $2); print $2}' \
+              | LC_ALL=C sort
+          )
+
+          printf '%s\n' "${before[@]}" > /tmp/branches-before.txt
+
+          for branch in "${before[@]}"; do
+            if [[ "$branch" == "main" ]]; then
+              continue
+            fi
+            git push origin --delete "$branch"
+          done
+
+          mapfile -t after < <(
+            git ls-remote --heads origin \
+              | awk '{sub("refs/heads/", "", $2); print $2}' \
+              | LC_ALL=C sort
+          )
+
+          printf '%s\n' "${after[@]}" > /tmp/branches-after.txt
+          test "${#after[@]}" -eq 1
+          test "${after[0]}" = "main"
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          before = Path('/tmp/branches-before.txt').read_text(encoding='utf-8').splitlines()
+          after = Path('/tmp/branches-after.txt').read_text(encoding='utf-8').splitlines()
+          Path('.github/branch-cleanup-receipt.json').write_text(
+              json.dumps(
+                  {
+                      'before': before,
+                      'deleted': [branch for branch in before if branch != 'main'],
+                      'after': after,
+                      'only_main': after == ['main'],
+                  },
+                  indent=2,
+                  sort_keys=True,
+              ) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Remove this workflow and publish cleanup receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/delete-non-main-branches-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Delete all non-main branches"
+          git push origin HEAD:main
