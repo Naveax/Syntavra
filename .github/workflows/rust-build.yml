@@ -31,6 +31,26 @@ permissions:
   contents: read
 
 jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt
+      - name: Materialize rustfmt output
+        run: cargo fmt --all
+      - name: Upload rustfmt output
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-rustfmt-${{ github.sha }}
+          path: crates
+          if-no-files-found: error
+          retention-days: 7
+      - name: Verify committed formatting
+        run: git diff --exit-code -- crates
+
   rust:
     name: ${{ matrix.os }} / Rust 1.82
     runs-on: ${{ matrix.os }}
@@ -44,8 +64,8 @@ jobs:
         with:
           toolchain: 1.82.0
           components: rustfmt, clippy
-      - name: Verify formatting
-        run: cargo fmt --all -- --check
+      - name: Format workspace for validation
+        run: cargo fmt --all
       - name: Test workspace
         run: cargo test --workspace --all-targets --locked
       - name: Lint workspace
