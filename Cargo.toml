@@ -1,0 +1,22 @@
+[workspace]
+members = [
+  "crates/syntavra-contracts",
+  "crates/syntavra-core",
+  "crates/syntavra-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+authors = ["Naveax"]
+repository = "https://github.com/Naveax/Syntavra"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
