@@ -1,0 +1,19 @@
+[package]
+name = "syntavra-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "syntavra-rs"
+path = "src/main.rs"
+
+[dependencies]
+syntavra-contracts = { path = "../syntavra-contracts" }
+syntavra-core = { path = "../syntavra-core" }
+
+[lints]
+workspace = true
