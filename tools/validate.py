@@ -38,7 +38,8 @@ REQUIRED = [
     ROOT / "docs" / "SIGNALBENCH.md",
     ROOT / "docs" / "OPERATIONS.md",
     ROOT / "docs" / "TOKEN_SAVER_PLAN_001.md",
-    ROOT / "docs" / "COMPLETE_COMPETITIVE_FEATURE_SET_001.md",
+    ROOT / "docs" / "IMPLEMENTATION_STATUS_001.md",
+    ROOT / "docs" / "CLAIMS_POLICY.md",
     ROOT / "docs" / "COMPETITIVE_GAP_CLOSURE_001.md",
     ROOT / "benchmarks" / "syntavra_component_benchmark.py",
     ROOT / "benchmarks" / "signalbench" / "README.md",
@@ -101,7 +102,6 @@ REQUIRED = [
     ROOT / "syntavra_runtime" / "release_identity.py",
     ROOT / "syntavra_runtime" / "bundled_skill" / "SKILL.md",
     ROOT / "syntavra_runtime" / "bundled_skill" / "hosts.json",
-    ROOT / "signalcore_runtime" / "__init__.py",
     ROOT / "tests" / "runtime" / "test_syntavra_unified_platform.py",
     ROOT / "tests" / "runtime" / "test_token_saver_unification_v001.py",
     ROOT / "tests" / "runtime" / "test_complete_competitive_features_v001.py",
@@ -138,7 +138,7 @@ def _is_generated_path(relative: Path) -> bool:
 
 
 def _source_files() -> list[Path]:
-    roots = [SKILL / "scripts", SKILL / "profiles", ROOT / "syntavra_runtime", ROOT / "signalcore_runtime", ROOT / "tools", ROOT / "benchmarks"]
+    roots = [SKILL / "scripts", SKILL / "profiles", ROOT / "syntavra_runtime", ROOT / "tools", ROOT / "benchmarks"]
     return sorted({path for base in roots if base.exists() for path in base.rglob("*.py")})
 
 

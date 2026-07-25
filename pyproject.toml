@@ -25,7 +25,7 @@ Repository = "https://github.com/Naveax/Syntavra"
 Issues = "https://github.com/Naveax/Syntavra/issues"
 
 [tool.setuptools.packages.find]
-include = ["syntavra_runtime*", "signalcore_runtime*"]
+include = ["syntavra_runtime*"]
 
 [tool.setuptools.package-data]
 syntavra_runtime = ["bundled_skill/*.md", "bundled_skill/*.json"]

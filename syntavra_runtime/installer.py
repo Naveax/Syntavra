@@ -136,8 +136,8 @@ class HostInstaller:
         destination = base / spec.skill_path
         backup = self._backup(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        marker_start = "<!-- SIGNALCORE-MANAGED-START -->"
-        marker_end = "<!-- SIGNALCORE-MANAGED-END -->"
+        marker_start = "<!-- SYNTAVRA-MANAGED-START -->"
+        marker_end = "<!-- SYNTAVRA-MANAGED-END -->"
         block = (
             f"{marker_start}\n"
             "# Syntavra\n"

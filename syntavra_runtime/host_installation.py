@@ -16,8 +16,8 @@ from .state import StateDB
 from .util import canonical_json, sha256_bytes
 
 
-_TEXT_BEGIN = "<!-- SIGNALCORE:BEGIN managed-host-integration -->"
-_TEXT_END = "<!-- SIGNALCORE:END managed-host-integration -->"
+_TEXT_BEGIN = "<!-- SYNTAVRA:BEGIN managed-host-integration -->"
+_TEXT_END = "<!-- SYNTAVRA:END managed-host-integration -->"
 
 
 @dataclass(frozen=True)

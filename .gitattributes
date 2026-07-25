@@ -19,4 +19,5 @@ VERSION text eol=lf
 *.tsx text eol=lf
 *.xml text eol=lf
 *.rs text eol=lf
+*.lock text eol=lf
 benchmarks/results/real-tasks/** -text
