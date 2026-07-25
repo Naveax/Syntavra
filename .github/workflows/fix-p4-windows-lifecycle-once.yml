@@ -28,11 +28,11 @@ jobs:
 
           query = Path("syntavra_runtime/repository_query.py")
           text = query.read_text(encoding="utf-8")
-          text = text.replace(
-              "import sqlite3\nfrom pathlib import Path\nfrom typing import Any, Iterable\n",
-              "import sqlite3\nfrom contextlib import contextmanager\nfrom pathlib import Path\nfrom typing import Any, Iterable, Iterator\n",
-              1,
-          )
+          old_imports = "import sqlite3\nfrom pathlib import Path\nfrom typing import Any, Iterable\n"
+          new_imports = "import sqlite3\nfrom contextlib import contextmanager\nfrom pathlib import Path\nfrom typing import Any, Iterable, Iterator\n"
+          if text.count(old_imports) != 1:
+              raise SystemExit("repository query import anchor mismatch")
+          text = text.replace(old_imports, new_imports)
           old_connect = '''    def _connect(self) -> sqlite3.Connection:\n        db = sqlite3.connect(self.database_path, timeout=30.0)\n        db.row_factory = sqlite3.Row\n        db.execute("PRAGMA journal_mode=WAL")\n        return db\n'''
           new_connect = '''    @contextmanager\n    def _connect(self) -> Iterator[sqlite3.Connection]:\n        db = sqlite3.connect(self.database_path, timeout=30.0)\n        db.row_factory = sqlite3.Row\n        db.execute("PRAGMA journal_mode=WAL")\n        try:\n            yield db\n            db.commit()\n        finally:\n            db.close()\n'''
           if text.count(old_connect) != 1:
@@ -55,11 +55,10 @@ jobs:
               "from syntavra_runtime.project_model import ProjectModel\nfrom syntavra_runtime.repository_query import RepositoryQueryEngine\n",
               1,
           )
-          text = text.replace(
-              '(project / "module.py").write_text("VALUE = 1\\n", encoding="utf-8")',
-              '(project / "module.py").write_bytes(b"VALUE = 1\\r\\n")',
-              1,
-          )
+          assertion = "    assert checked.returncode == 0, checked.stderr\n"
+          if text.count(assertion) != 1:
+              raise SystemExit("structured patch assertion anchor mismatch")
+          text = text.replace(assertion, '    assert "\\r" not in patch\n' + assertion)
           marker = "\n\ndef test_gateway_structured_edit_and_event_stream"
           regression = '''\n\ndef test_repository_query_connection_is_closed(tmp_path: Path) -> None:\n    database = tmp_path / "graph.sqlite3"\n    with sqlite3.connect(database) as db:\n        db.executescript(\n            """\n            CREATE TABLE nodes (\n                node_id TEXT PRIMARY KEY, path TEXT NOT NULL, kind TEXT NOT NULL,\n                name TEXT NOT NULL, qualified_name TEXT NOT NULL, start_line INTEGER NOT NULL,\n                end_line INTEGER NOT NULL, language TEXT NOT NULL, evidence_ref TEXT NOT NULL,\n                metadata_json TEXT NOT NULL\n            );\n            CREATE TABLE edges (\n                source TEXT NOT NULL, target TEXT NOT NULL, edge_type TEXT NOT NULL,\n                confidence REAL NOT NULL, evidence_ref TEXT NOT NULL, metadata_json TEXT NOT NULL\n            );\n            """\n        )\n    engine = RepositoryQueryEngine(database)\n    with engine._connect() as connection:\n        connection.execute("SELECT 1").fetchone()\n    try:\n        connection.execute("SELECT 1")\n    except sqlite3.ProgrammingError:\n        pass\n    else:\n        raise AssertionError("repository query connection remained open")\n'''
           if text.count(marker) != 1:
