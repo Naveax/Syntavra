@@ -1,0 +1,9 @@
+product=Syntavra
+product_version=0.0.1
+release_channel=pre-release
+contract_version=1
+engine=rust
+engine_stability=experimental
+capability=engine.capabilities|preview|read-only
+capability=engine.contract-hash|preview|read-only
+capability=version|preview|read-only
