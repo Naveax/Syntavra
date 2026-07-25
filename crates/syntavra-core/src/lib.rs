@@ -108,6 +108,9 @@ fn small_sigma_one(value: u32) -> u32 {
     value.rotate_right(17) ^ value.rotate_right(19) ^ (value >> 10)
 }
 
+// SHA-256 specifies the working variables as a through h. Keeping those names
+// makes the round function directly auditable against the standard.
+#[allow(clippy::many_single_char_names)]
 #[must_use]
 pub fn sha256(input: &[u8]) -> [u8; 32] {
     let bit_length = (input.len() as u64).wrapping_mul(8);
