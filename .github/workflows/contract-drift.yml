@@ -40,6 +40,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.82.0
+          components: rustfmt, clippy
       - name: Install Python reference runtime
         run: python -m pip install -e .
       - name: Verify static dual-engine contracts
