@@ -1,0 +1,67 @@
+name: Assemble R7 State Receipt Parity
+
+on:
+  push:
+    branches: ["feature/dual-engine-r7-state-receipts"]
+    paths:
+      - ".github/workflows/r7-assembly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r7-state-receipt-assembly
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r7-state-receipts
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+      - name: Extract R7 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/r7/chunk-{0..6}.b64 | base64 -d > /tmp/r7.tar.gz
+          test "$(sha256sum /tmp/r7.tar.gz | cut -d' ' -f1)" = "cc22695a1d965a08269927464b3df5f37717e19a6e9e08a9d0522d97340a7347"
+          tar -xzf /tmp/r7.tar.gz -C .
+      - name: Validate assembled R7 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          python -m pip install -e .
+          python -m pytest -q tests/runtime/test_state_receipt_contract_r7.py
+          python tools/verify_dual_engine_contract.py
+          python tools/verify_engine_selector.py
+          python tools/verify_primitive_parity.py
+          python tools/verify_config_status_parity.py
+          python tools/verify_state_receipt_parity.py
+          python tools/run_engine_parity.py
+          python tools/refresh_manifest.py
+      - name: Commit R7 implementation and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/r7-assembly.yml
+          git rm -r .github/r7
+          git add -A
+          git diff --cached --check
+          git commit -m "Add R7 state layout and receipt parity"
+          git push origin HEAD:feature/dual-engine-r7-state-receipts
