@@ -78,11 +78,7 @@ fn scalar_json(value: &ConfigScalar) -> String {
     }
 }
 
-fn insert_parts(
-    node: &mut JsonNode,
-    parts: &[&str],
-    value: ConfigScalar,
-) -> Result<(), String> {
+fn insert_parts(node: &mut JsonNode, parts: &[&str], value: ConfigScalar) -> Result<(), String> {
     let Some((head, tail)) = parts.split_first() else {
         return Err("CONFIG_PATH_EMPTY".to_owned());
     };
@@ -140,13 +136,31 @@ fn canonical_values_json(values: &BTreeMap<String, ConfigScalar>) -> Result<Stri
 fn default_entries() -> Vec<ConfigValue> {
     let rows = [
         ("schema_version", ConfigScalar::Number("1".to_owned())),
-        ("runtime.profile", ConfigScalar::String("balanced".to_owned())),
+        (
+            "runtime.profile",
+            ConfigScalar::String("balanced".to_owned()),
+        ),
         ("runtime.fail_closed", ConfigScalar::Bool(true)),
-        ("provider.cache_policy", ConfigScalar::String("auto".to_owned())),
-        ("provider.timeout_seconds", ConfigScalar::Number("180.0".to_owned())),
-        ("routing.budget_bytes", ConfigScalar::Number("8192".to_owned())),
-        ("routing.table.max_rows", ConfigScalar::Number("8".to_owned())),
-        ("routing.table.max_columns", ConfigScalar::Number("12".to_owned())),
+        (
+            "provider.cache_policy",
+            ConfigScalar::String("auto".to_owned()),
+        ),
+        (
+            "provider.timeout_seconds",
+            ConfigScalar::Number("180.0".to_owned()),
+        ),
+        (
+            "routing.budget_bytes",
+            ConfigScalar::Number("8192".to_owned()),
+        ),
+        (
+            "routing.table.max_rows",
+            ConfigScalar::Number("8".to_owned()),
+        ),
+        (
+            "routing.table.max_columns",
+            ConfigScalar::Number("12".to_owned()),
+        ),
         (
             "security.evidence_encryption",
             ConfigScalar::String("required".to_owned()),
@@ -311,10 +325,7 @@ fn parse_wire(input: &[u8]) -> Result<Vec<Vec<Assignment>>, String> {
     Ok(phases)
 }
 
-fn scalar_string<'a>(
-    values: &'a BTreeMap<String, ConfigScalar>,
-    path: &str,
-) -> Option<&'a str> {
+fn scalar_string<'a>(values: &'a BTreeMap<String, ConfigScalar>, path: &str) -> Option<&'a str> {
     match values.get(path) {
         Some(ConfigScalar::String(value)) => Some(value),
         _ => None,
@@ -345,7 +356,10 @@ fn validate(values: &BTreeMap<String, ConfigScalar>) -> Result<(), String> {
 
     let profile = scalar_string(values, "runtime.profile")
         .ok_or_else(|| "CONFIG_RUNTIME_PROFILE_INVALID".to_owned())?;
-    if !matches!(profile, "compact" | "balanced" | "detailed" | "audit" | "terse") {
+    if !matches!(
+        profile,
+        "compact" | "balanced" | "detailed" | "audit" | "terse"
+    ) {
         return Err("CONFIG_RUNTIME_PROFILE_INVALID".to_owned());
     }
 
@@ -355,8 +369,8 @@ fn validate(values: &BTreeMap<String, ConfigScalar>) -> Result<(), String> {
         "security.remote_tls",
         "security.dlp",
     ] {
-        let value = scalar_string(values, path)
-            .ok_or_else(|| "CONFIG_SECURITY_MODE_INVALID".to_owned())?;
+        let value =
+            scalar_string(values, path).ok_or_else(|| "CONFIG_SECURITY_MODE_INVALID".to_owned())?;
         if !matches!(value, "required" | "preferred" | "off") {
             return Err("CONFIG_SECURITY_MODE_INVALID".to_owned());
         }

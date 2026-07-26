@@ -1,12 +1,27 @@
 {
   "schema_version": 1,
   "contract_version": 1,
+  "layout_id": "syntavra-state-layout-v1",
   "root": ".syntavra",
+  "project_binding": {
+    "algorithm": "sha256-normalized-absolute-path-v1",
+    "field": "project_id",
+    "required_for": [
+      "receipt-envelope"
+    ],
+    "mismatch_policy": "fail-closed"
+  },
   "engine_policy": {
     "single_writer": true,
     "fallback_after_mutation": false,
     "lock_root": ".syntavra/locks",
-    "selection_precedence": ["command", "environment", "project", "user", "builtin"],
+    "selection_precedence": [
+      "command",
+      "environment",
+      "project",
+      "user",
+      "builtin"
+    ],
     "environment_override": "SYNTAVRA_ENGINE",
     "builtin_default": "python",
     "auto_policy_r4": "python",
@@ -14,32 +29,77 @@
   },
   "shared_paths": [
     {
+      "id": "project-config",
       "path": ".syntavra/config.toml",
       "kind": "configuration",
-      "writers": ["python", "rust"]
+      "readers": [
+        "python",
+        "rust"
+      ],
+      "writers": [
+        "python"
+      ],
+      "rust_r7_access": "contract-metadata-only"
     },
     {
+      "id": "engine-selection",
       "path": ".syntavra/engine.json",
       "kind": "engine-selection",
-      "readers": ["python", "rust"],
-      "writers": ["python"]
+      "readers": [
+        "python",
+        "rust"
+      ],
+      "writers": [
+        "python"
+      ],
+      "rust_r7_access": "contract-metadata-only"
     },
     {
+      "id": "pre-release-state",
       "path": ".syntavra/pre-release",
       "kind": "product-state",
-      "writers": ["python", "rust"]
+      "readers": [
+        "python"
+      ],
+      "writers": [
+        "python"
+      ],
+      "rust_r7_access": "not-proven"
     },
     {
+      "id": "runtime-v3-state",
       "path": ".syntavra/runtime-v3",
       "kind": "runtime-state",
-      "writers": ["python", "rust"]
+      "readers": [
+        "python"
+      ],
+      "writers": [
+        "python"
+      ],
+      "rust_r7_access": "not-proven"
     }
   ],
+  "receipt_envelope": {
+    "wire_header": "R7RCPT1",
+    "schema_version": 1,
+    "hash_algorithm": "sha256",
+    "hash_scope": "canonical-wire-excluding-receipt-hash",
+    "project_binding_required": true,
+    "unknown_fields": "fail-closed",
+    "unknown_schema": "fail-closed"
+  },
+  "r7_access": {
+    "rust": "contract-metadata-and-receipt-parse-only",
+    "filesystem_state_reads": false,
+    "filesystem_mutation": false,
+    "database_access": false
+  },
   "compatibility_rules": [
     "A mutating operation selects one engine before the first state write.",
-    "An engine may fall back only after a capability preflight reports unsupported and before mutation.",
-    "Unknown schema versions and engine values fail closed.",
+    "An engine may fall back only after capability preflight reports unsupported and before mutation.",
+    "Unknown schema versions, fields, paths, and engine values fail closed.",
     "R4 auto mode resolves to Python.",
-    "Logical SQLite records, not physical page layout, define parity."
+    "Logical SQLite records, not physical page layout, define future database parity.",
+    "R7 proves only state-layout metadata and receipt-envelope parsing."
   ]
 }

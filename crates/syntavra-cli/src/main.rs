@@ -1,14 +1,14 @@
 #![forbid(unsafe_code)]
 
 mod config_contract;
+mod state_receipt_contract;
 
 use std::env;
 use std::fmt::Write as _;
 use std::process::ExitCode;
 
-use config_contract::{
-    default_config_wire, resolve_config_wire, snapshot_json, status_json,
-};
+use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
+use state_receipt_contract::{inspect_receipt_json, state_layout_json};
 use syntavra_contracts::{
     capabilities_json, CONTRACT_DESCRIPTOR, CONTRACT_VERSION, ENGINE_NAME, ENGINE_STABILITY,
     PRODUCT_NAME, PRODUCT_VERSION, RELEASE_CHANNEL,
@@ -24,6 +24,8 @@ const USAGE: &str = concat!(
     "  syntavra-rs version\n",
     "  syntavra-rs status [config-wire-hex]\n",
     "  syntavra-rs config resolve <config-wire-hex>\n",
+    "  syntavra-rs state layout\n",
+    "  syntavra-rs receipt inspect <expected-project-id> <receipt-wire-hex>\n",
     "  syntavra-rs engine capabilities\n",
     "  syntavra-rs engine contract-hash\n",
     "  syntavra-rs primitive sha256 <input-hex>\n",
@@ -37,11 +39,22 @@ enum Command {
     Version,
     Status(Option<String>),
     ConfigResolve(String),
+    StateLayout,
+    ReceiptInspect {
+        expected_project_id: String,
+        wire_hex: String,
+    },
     Capabilities,
     ContractHash,
     PrimitiveSha256(String),
-    PrimitiveCanonicalize { path: String, input_hex: String },
-    PrimitiveManifestDigest { path: String, input_hex: String },
+    PrimitiveCanonicalize {
+        path: String,
+        input_hex: String,
+    },
+    PrimitiveManifestDigest {
+        path: String,
+        input_hex: String,
+    },
     PrimitiveNormalizePath(String),
     Help,
 }
@@ -55,6 +68,15 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [config, action, wire] if config == "config" && action == "resolve" => {
             Ok(Command::ConfigResolve(wire.clone()))
         }
+        [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
+        [receipt, action, expected_project_id, wire_hex]
+            if receipt == "receipt" && action == "inspect" =>
+        {
+            Ok(Command::ReceiptInspect {
+                expected_project_id: expected_project_id.clone(),
+                wire_hex: wire_hex.clone(),
+            })
+        }
         [value] if value == "help" || value == "--help" || value == "-h" => Ok(Command::Help),
         [engine, action] if engine == "engine" && action == "capabilities" => {
             Ok(Command::Capabilities)
@@ -65,9 +87,7 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [primitive, action, input_hex] if primitive == "primitive" && action == "sha256" => {
             Ok(Command::PrimitiveSha256(input_hex.clone()))
         }
-        [primitive, action, path]
-            if primitive == "primitive" && action == "normalize-path" =>
-        {
+        [primitive, action, path] if primitive == "primitive" && action == "normalize-path" => {
             Ok(Command::PrimitiveNormalizePath(path.clone()))
         }
         [primitive, action, path, input_hex]
@@ -184,6 +204,14 @@ fn run(command: Command) -> Result<(), String> {
             let snapshot = resolve_config_wire(&wire)?;
             println!("{}", snapshot_json(&snapshot)?);
         }
+        Command::StateLayout => println!("{}", state_layout_json()),
+        Command::ReceiptInspect {
+            expected_project_id,
+            wire_hex,
+        } => {
+            let wire = decode_hex(&wire_hex)?;
+            println!("{}", inspect_receipt_json(&wire, &expected_project_id)?);
+        }
         Command::Capabilities => println!("{}", capabilities_json()),
         Command::ContractHash => println!("{}", contract_hash_json()),
         Command::PrimitiveSha256(input_hex) => {
@@ -246,9 +274,7 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        contract_hash_json, decode_hex, parse_command, version_json, Command,
-    };
+    use super::{contract_hash_json, decode_hex, parse_command, version_json, Command};
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -298,6 +324,21 @@ mod tests {
         assert_eq!(
             parse_command(&args(&["config", "resolve", "00"])),
             Ok(Command::ConfigResolve("00".to_owned()))
+        );
+    }
+
+    #[test]
+    fn parses_r7_state_and_receipt_commands() {
+        assert_eq!(
+            parse_command(&args(&["state", "layout"])),
+            Ok(Command::StateLayout)
+        );
+        assert_eq!(
+            parse_command(&args(&["receipt", "inspect", "aa", "00"])),
+            Ok(Command::ReceiptInspect {
+                expected_project_id: "aa".to_owned(),
+                wire_hex: "00".to_owned(),
+            })
         );
     }
 
