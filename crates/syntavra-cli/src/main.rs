@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod config_contract;
+mod state_layout_contract;
 mod state_receipt_contract;
 mod state_snapshot_contract;
 
@@ -9,7 +10,8 @@ use std::fmt::Write as _;
 use std::process::ExitCode;
 
 use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
-use state_receipt_contract::{inspect_receipt_json, state_layout_json};
+use state_layout_contract::state_layout_json;
+use state_receipt_contract::inspect_receipt_json;
 use state_snapshot_contract::inspect_state_root_json;
 use syntavra_contracts::{
     capabilities_json, CONTRACT_DESCRIPTOR, CONTRACT_VERSION, ENGINE_NAME, ENGINE_STABILITY,
