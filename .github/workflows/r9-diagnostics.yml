@@ -1,0 +1,84 @@
+name: Diagnose R9 Broker Snapshot Parity
+
+on:
+  pull_request:
+    branches: ["feature/dual-engine-r8-state-inspection"]
+    paths:
+      - ".github/workflows/r9-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r9-broker-snapshot
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Extract and run the R9 wiring program
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/r9-assembly.yml').read_text(encoding='utf-8').splitlines()
+          start = next(
+              index for index, line in enumerate(source)
+              if line.strip() == "python - <<'PY'"
+          ) + 1
+          end = next(
+              index for index in range(start, len(source))
+              if source[index].strip() == 'PY'
+          )
+          program = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in source[start:end]
+          ) + '\n'
+          Path('/tmp/r9-wire.py').write_text(program, encoding='utf-8')
+          PY
+          python /tmp/r9-wire.py
+      - name: Diagnose R9 validation
+        id: validation
+        shell: bash
+        run: |
+          set +e
+          (
+            set -euo pipefail
+            cargo check --workspace
+            cargo fmt --all
+            cargo fmt --all -- --check
+            cargo test --workspace --all-targets --locked
+            cargo clippy --workspace --all-targets --locked -- -D warnings
+            python -m pip install -e . pytest
+            python -m pytest -q tests/runtime/test_broker_snapshot_contract_r9.py
+            python tools/verify_dual_engine_contract.py
+            python tools/verify_broker_snapshot_parity.py
+            python tools/run_engine_parity.py
+          ) > /tmp/r9-diagnostics.txt 2>&1
+          status=$?
+          cat /tmp/r9-diagnostics.txt
+          exit "$status"
+      - name: Upload R9 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r9-diagnostics-${{ github.sha }}
+          path: |
+            /tmp/r9-diagnostics.txt
+            /tmp/r9-wire.py
+            Cargo.lock
+          if-no-files-found: warn
+          retention-days: 7
