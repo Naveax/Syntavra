@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
+from syntavra_runtime.engine_entry import SELECTOR_COMMANDS
 from syntavra_runtime.mcp_server import MCPServer
 from syntavra_runtime.prerelease_cli import COMPATIBILITY_COMMANDS, PRIMARY_COMMANDS
 from syntavra_runtime.release_identity import CHANNEL, VERSION
@@ -26,6 +27,7 @@ def inventory() -> dict[str, object]:
             "primary": sorted(PRIMARY_COMMANDS),
             "compatibility": sorted(COMPATIBILITY_COMMANDS),
             "core": sorted(CORE_COMMANDS),
+            "selector": sorted(SELECTOR_COMMANDS),
         },
         "mcp_tools": tools,
         "mcp_tool_count": len(tools),

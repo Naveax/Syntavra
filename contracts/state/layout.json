@@ -5,13 +5,24 @@
   "engine_policy": {
     "single_writer": true,
     "fallback_after_mutation": false,
-    "lock_root": ".syntavra/locks"
+    "lock_root": ".syntavra/locks",
+    "selection_precedence": ["command", "environment", "project", "user", "builtin"],
+    "environment_override": "SYNTAVRA_ENGINE",
+    "builtin_default": "python",
+    "auto_policy_r4": "python",
+    "unknown_selection": "fail-closed"
   },
   "shared_paths": [
     {
       "path": ".syntavra/config.toml",
       "kind": "configuration",
       "writers": ["python", "rust"]
+    },
+    {
+      "path": ".syntavra/engine.json",
+      "kind": "engine-selection",
+      "readers": ["python", "rust"],
+      "writers": ["python"]
     },
     {
       "path": ".syntavra/pre-release",
@@ -27,7 +38,8 @@
   "compatibility_rules": [
     "A mutating operation selects one engine before the first state write.",
     "An engine may fall back only after a capability preflight reports unsupported and before mutation.",
-    "Unknown schema versions fail closed.",
+    "Unknown schema versions and engine values fail closed.",
+    "R4 auto mode resolves to Python.",
     "Logical SQLite records, not physical page layout, define parity."
   ]
 }
