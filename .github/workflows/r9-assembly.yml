@@ -1,0 +1,379 @@
+name: Assemble R9 Broker Snapshot Parity
+
+on:
+  push:
+    branches: ["feature/dual-engine-r9-broker-snapshot"]
+    paths:
+      - ".github/workflows/r9-assembly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r9-broker-snapshot-assembly
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r9-broker-snapshot
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Wire R9 canonicalization and CLI surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one {label} marker, found {count}")
+              return text.replace(old, new, 1)
+
+          python_path = Path("syntavra_runtime/broker_snapshot_contract.py")
+          source = python_path.read_text(encoding="utf-8")
+          source = replace_once(source, "import stat\n", "import stat\nimport struct\n", "struct import")
+          source = replace_once(
+              source,
+              '''def _json_value(value: str) -> Any:
+              def reject_constant(_: str) -> None:
+                  raise ValueError("non-finite JSON constant")
+
+              try:
+                  return json.loads(value, parse_constant=reject_constant)
+              except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                  raise BrokerSnapshotError("BROKER_JSON_INVALID") from exc
+              ''',
+              '''def _float_tag(value: float) -> dict[str, str]:
+                  if not math.isfinite(value):
+                      raise BrokerSnapshotError("BROKER_ROW_TYPE_INVALID")
+                  bits = struct.unpack(">Q", struct.pack(">d", value))[0]
+                  return {"$f64": f"{bits:016x}"}
+
+
+              def _normalize_json_value(value: Any) -> Any:
+                  if value is None or isinstance(value, (bool, str)):
+                      return value
+                  if isinstance(value, int):
+                      if -(2**63) <= value <= 2**64 - 1:
+                          return value
+                      raise BrokerSnapshotError("BROKER_JSON_INVALID")
+                  if isinstance(value, float):
+                      return _float_tag(value)
+                  if isinstance(value, list):
+                      return [_normalize_json_value(item) for item in value]
+                  if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+                      return {
+                          key: _normalize_json_value(item)
+                          for key, item in value.items()
+                      }
+                  raise BrokerSnapshotError("BROKER_JSON_INVALID")
+
+
+              def _json_value(value: str) -> Any:
+                  def reject_constant(_: str) -> None:
+                      raise ValueError("non-finite JSON constant")
+
+                  try:
+                      parsed = json.loads(value, parse_constant=reject_constant)
+                  except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                      raise BrokerSnapshotError("BROKER_JSON_INVALID") from exc
+                  return _normalize_json_value(parsed)
+              ''',
+              "Python typed JSON canonicalization",
+          )
+          source = replace_once(
+              source,
+              '''        normalized = float(value)
+                      if not math.isfinite(normalized):
+                          raise BrokerSnapshotError("BROKER_ROW_TYPE_INVALID")
+                      return normalized
+              ''',
+              '''        normalized = float(value)
+                      return _float_tag(normalized)
+              ''',
+              "Python REAL canonicalization",
+          )
+          python_path.write_text(source, encoding="utf-8")
+
+          test_path = Path("tests/runtime/test_broker_snapshot_contract_r9.py")
+          tests = test_path.read_text(encoding="utf-8")
+          tests = replace_once(tests, "import sqlite3\n", "import sqlite3\nimport struct\n", "test struct import")
+          tests = replace_once(
+              tests,
+              'CONTRACT = ROOT / "contracts" / "state" / "broker-snapshot-v1.json"\n\n\n',
+              'CONTRACT = ROOT / "contracts" / "state" / "broker-snapshot-v1.json"\n\n\ndef _f64(value: float) -> dict[str, str]:\n    bits = struct.unpack(">Q", struct.pack(">d", value))[0]\n    return {"$f64": f"{bits:016x}"}\n\n\n',
+              "test float helper",
+          )
+          tests = replace_once(
+              tests,
+              "'{\"state\":\"COMPLETED\",\"job_id\":\"job-1\"}',",
+              "'{\"completed_at\":12.25,\"job_id\":\"job-1\",\"state\":\"COMPLETED\"}',",
+              "completion float fixture",
+          )
+          tests = replace_once(
+              tests,
+              '''    assert value["tables"]["completion_events"][0]["payload_json"] == {
+                  "job_id": "job-1",
+                  "state": "COMPLETED",
+              }
+              ''',
+              '''    assert value["tables"]["completion_events"][0]["payload_json"] == {
+                  "completed_at": _f64(12.25),
+                  "job_id": "job-1",
+                  "state": "COMPLETED",
+              }
+              ''',
+              "completion float assertion",
+          )
+          test_path.write_text(tests, encoding="utf-8")
+
+          contract_path = Path("contracts/state/broker-snapshot-v1.json")
+          contract = json.loads(contract_path.read_text(encoding="utf-8"))
+          contract["canonicalization"]["real_values"] = "ieee754-binary64-lowerhex-tag-v1"
+          contract["canonicalization"]["real_tag"] = "$f64"
+          contract_path.write_text(
+              json.dumps(contract, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          rust_path = Path("crates/syntavra-cli/src/broker_snapshot_contract.rs")
+          rust = rust_path.read_text(encoding="utf-8")
+          rust = replace_once(
+              rust,
+              "use std::fs;\n",
+              "use std::fmt::Write as _;\nuse std::fs;\n",
+              "Rust fmt import",
+          )
+          rust = replace_once(
+              rust,
+              "use rusqlite::{Connection, OpenFlags};\n",
+              "use rusqlite::{Connection, OpenFlags, OptionalExtension};\n",
+              "Rust optional extension import",
+          )
+          old_percent = '''fn percent_encode_path(path: &Path) -> Result<String, String> {
+                  let normalized = path
+                      .to_str()
+                      .ok_or_else(|| error("BROKER_DATABASE_PATH_UTF8_INVALID"))?
+                      .replace('\\\\', "/");
+                  let mut output = String::with_capacity(normalized.len());
+                  for byte in normalized.bytes() {
+                      match byte {
+                          b'%' => output.push_str("%25"),
+                          b'#' => output.push_str("%23"),
+                          b'?' => output.push_str("%3F"),
+                          _ => output.push(char::from(byte)),
+                      }
+                  }
+                  Ok(output)
+              }
+              '''
+          new_percent = '''fn percent_encode_path(path: &Path) -> Result<String, String> {
+                  let normalized = path
+                      .to_str()
+                      .ok_or_else(|| error("BROKER_DATABASE_PATH_UTF8_INVALID"))?
+                      .replace('\\\\', "/");
+                  let mut output = String::with_capacity(normalized.len());
+                  for byte in normalized.bytes() {
+                      match byte {
+                          b'A'..=b'Z'
+                          | b'a'..=b'z'
+                          | b'0'..=b'9'
+                          | b'-'
+                          | b'.'
+                          | b'/'
+                          | b':'
+                          | b'_'
+                          | b'~' => output.push(char::from(byte)),
+                          _ => write!(&mut output, "%{byte:02X}")
+                              .expect("writing to a String cannot fail"),
+                      }
+                  }
+                  Ok(output)
+              }
+              '''
+          rust = replace_once(rust, old_percent, new_percent, "Rust SQLite URI encoder")
+          rust = replace_once(
+              rust,
+              '''        ("REAL", ValueRef::Real(number)) => float_tag(number),
+                      ("REAL", ValueRef::Integer(number)) => float_tag(number as f64),
+              ''',
+              '''        ("REAL", ValueRef::Real(number)) => float_tag(number),
+              ''',
+              "Rust REAL strict typing",
+          )
+          rust_path.write_text(rust, encoding="utf-8")
+
+          main_path = Path("crates/syntavra-cli/src/main.rs")
+          main = main_path.read_text(encoding="utf-8")
+          main = replace_once(main, "mod config_contract;\n", "mod broker_snapshot_contract;\nmod config_contract;\n", "R9 module")
+          main = replace_once(
+              main,
+              "use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};\n",
+              "use broker_snapshot_contract::snapshot_broker_database_json;\nuse config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};\n",
+              "R9 import",
+          )
+          main = replace_once(
+              main,
+              '    "  syntavra-rs state inspect <expected-project-id> <project-root>\\n",\n',
+              '    "  syntavra-rs state inspect <expected-project-id> <project-root>\\n",\n    "  syntavra-rs state broker-snapshot <expected-project-id> <project-root> <database-path>\\n",\n',
+              "R9 usage",
+          )
+          main = replace_once(
+              main,
+              "    StateLayout,\n    StateInspect {\n",
+              "    StateLayout,\n    BrokerSnapshot {\n        expected_project_id: String,\n        project_root: String,\n        database_path: String,\n    },\n    StateInspect {\n",
+              "R9 command variant",
+          )
+          main = replace_once(
+              main,
+              '        [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),\n',
+              '        [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),\n        [state, action, expected_project_id, project_root, database_path]\n            if state == "state" && action == "broker-snapshot" =>\n        {\n            Ok(Command::BrokerSnapshot {\n                expected_project_id: expected_project_id.clone(),\n                project_root: project_root.clone(),\n                database_path: database_path.clone(),\n            })\n        }\n',
+              "R9 parser",
+          )
+          main = replace_once(
+              main,
+              '        Command::StateLayout => println!("{}", state_layout_json()),\n',
+              '        Command::StateLayout => println!("{}", state_layout_json()),\n        Command::BrokerSnapshot {\n            expected_project_id,\n            project_root,\n            database_path,\n        } => println!(\n            "{}",\n            snapshot_broker_database_json(\n                &project_root,\n                &database_path,\n                &expected_project_id,\n            )?\n        ),\n',
+              "R9 runner",
+          )
+          main = replace_once(
+              main,
+              '''        assert_eq!(
+                      parse_command(&args(&["state", "inspect", "aa", "."])),
+                      Ok(Command::StateInspect {
+                          expected_project_id: "aa".to_owned(),
+                          project_root: ".".to_owned(),
+                      })
+                  );
+              ''',
+              '''        assert_eq!(
+                      parse_command(&args(&["state", "inspect", "aa", "."])),
+                      Ok(Command::StateInspect {
+                          expected_project_id: "aa".to_owned(),
+                          project_root: ".".to_owned(),
+                      })
+                  );
+                  assert_eq!(
+                      parse_command(&args(&[
+                          "state",
+                          "broker-snapshot",
+                          "aa",
+                          ".",
+                          ".syntavra/runtime-v3/broker.sqlite3",
+                      ])),
+                      Ok(Command::BrokerSnapshot {
+                          expected_project_id: "aa".to_owned(),
+                          project_root: ".".to_owned(),
+                          database_path: ".syntavra/runtime-v3/broker.sqlite3".to_owned(),
+                      })
+                  );
+              ''',
+              "R9 parser test",
+          )
+          main_path.write_text(main, encoding="utf-8")
+
+          parity_path = Path("tools/run_engine_parity.py")
+          parity = parity_path.read_text(encoding="utf-8")
+          parity = replace_once(
+              parity,
+              '        "receipt.inspect",\n        "state.inspect",\n',
+              '        "receipt.inspect",\n        "state.broker-snapshot",\n        "state.inspect",\n',
+              "R9 aggregate capability",
+          )
+          parity = replace_once(parity, '        "phase": "R0-R8",\n', '        "phase": "R0-R9",\n', "R9 aggregate phase")
+          parity_path.write_text(parity, encoding="utf-8")
+          PY
+      - name: Resolve the pinned R9 dependency lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --workspace
+      - name: Validate assembled R9 package
+        id: validate
+        shell: bash
+        run: |
+          set +e
+          (
+            set -euo pipefail
+            cargo fmt --all
+            cargo fmt --all -- --check
+            cargo test --workspace --all-targets --locked
+            cargo clippy --workspace --all-targets --locked -- -D warnings
+            python -m pip install -e . pytest
+            python -m pytest -q tests/runtime/test_broker_snapshot_contract_r9.py
+            python tools/verify_dual_engine_contract.py
+            python tools/verify_broker_snapshot_parity.py
+            python tools/run_engine_parity.py
+          ) > /tmp/r9-validation.txt 2>&1
+          status=$?
+          cat /tmp/r9-validation.txt
+          exit "$status"
+      - name: Upload R9 validation diagnostics
+        if: failure() && steps.validate.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r9-validation-diagnostics-${{ github.sha }}
+          path: /tmp/r9-validation.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Commit verified R9 source and dependency lock
+        id: commit_source
+        if: success()
+        shell: bash
+        run: |
+          set +e
+          (
+            set -euo pipefail
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git restore MANIFEST.sha256
+            git add \
+              Cargo.lock \
+              contracts/state/broker-snapshot-v1.json \
+              crates/syntavra-cli/src/broker_snapshot_contract.rs \
+              crates/syntavra-cli/src/main.rs \
+              syntavra_runtime/broker_snapshot_contract.py \
+              tests/runtime/test_broker_snapshot_contract_r9.py \
+              tools/run_engine_parity.py
+            git diff --cached --check
+            git commit -m "Wire R9 logical broker snapshot parity"
+            for attempt in 1 2 3 4 5 6 7 8; do
+              git fetch origin feature/dual-engine-r9-broker-snapshot
+              git rebase origin/feature/dual-engine-r9-broker-snapshot
+              if git push origin HEAD:feature/dual-engine-r9-broker-snapshot; then
+                exit 0
+              fi
+              sleep $((attempt * 2))
+            done
+            exit 1
+          ) > /tmp/r9-commit.txt 2>&1
+          status=$?
+          cat /tmp/r9-commit.txt
+          exit "$status"
+      - name: Upload R9 commit diagnostics
+        if: failure() && steps.validate.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r9-commit-diagnostics-${{ github.sha }}
+          path: /tmp/r9-commit.txt
+          if-no-files-found: error
+          retention-days: 7
