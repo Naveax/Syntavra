@@ -13,6 +13,7 @@ on:
       - "tools/verify_dual_engine_contract.py"
       - "tools/verify_engine_selector.py"
       - "tools/verify_primitive_parity.py"
+      - "tools/verify_config_status_parity.py"
       - ".github/workflows/contract-drift.yml"
   pull_request:
     branches: [main, "feature/**"]
@@ -26,6 +27,7 @@ on:
       - "tools/verify_dual_engine_contract.py"
       - "tools/verify_engine_selector.py"
       - "tools/verify_primitive_parity.py"
+      - "tools/verify_config_status_parity.py"
       - ".github/workflows/contract-drift.yml"
   workflow_dispatch:
 
@@ -48,12 +50,12 @@ jobs:
           toolchain: 1.82.0
       - name: Install Python reference runtime
         run: python -m pip install -e .
-      - name: Generate R5 root manifest candidate
+      - name: Generate root manifest candidate
         run: python tools/refresh_manifest.py
-      - name: Upload R5 root manifest candidate
+      - name: Upload root manifest candidate
         uses: actions/upload-artifact@v4
         with:
-          name: syntavra-r5-root-manifest-${{ github.sha }}
+          name: syntavra-root-manifest-${{ github.sha }}
           path: MANIFEST.sha256
           if-no-files-found: error
           retention-days: 7
@@ -76,7 +78,20 @@ jobs:
           path: primitive-parity.log
           if-no-files-found: warn
           retention-days: 7
-      - name: Run initial Python-Rust parity gate
+      - name: Verify R6 config identity and status parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_config_status_parity.py 2>&1 | tee config-status-parity.log
+      - name: Upload R6 config/status diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r6-config-status-diagnostics-${{ github.sha }}
+          path: config-status-parity.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Run Python-Rust parity gate
         shell: bash
         run: |
           set -o pipefail
