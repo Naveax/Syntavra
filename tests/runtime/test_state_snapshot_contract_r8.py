@@ -12,12 +12,15 @@ from syntavra_runtime.state_snapshot_contract import (
     project_id_for_root,
 )
 
+_CONFIG_BYTES = b'mode = "safe"\n'
+_ENGINE_BYTES = b'{"engine":"python"}\n'
+
 
 def _populate(root: Path) -> None:
     state = root / ".syntavra"
     state.mkdir()
-    (state / "config.toml").write_text("mode = \"safe\"\n", encoding="utf-8")
-    (state / "engine.json").write_text('{"engine":"python"}\n', encoding="utf-8")
+    (state / "config.toml").write_bytes(_CONFIG_BYTES)
+    (state / "engine.json").write_bytes(_ENGINE_BYTES)
     (state / "pre-release").mkdir()
     (state / "runtime-v3").mkdir()
 
@@ -62,12 +65,10 @@ def test_populated_project_has_deterministic_inventory(tmp_path: Path) -> None:
     assert rows["state-root"]["observed_kind"] == "directory"
     assert rows["pre-release-state"]["observed_kind"] == "directory"
     assert rows["runtime-v3-state"]["observed_kind"] == "directory"
-    config = b'mode = "safe"\n'
-    engine = b'{"engine":"python"}\n'
-    assert rows["project-config"]["size_bytes"] == len(config)
-    assert rows["project-config"]["sha256"] == hashlib.sha256(config).hexdigest()
-    assert rows["engine-selection"]["size_bytes"] == len(engine)
-    assert rows["engine-selection"]["sha256"] == hashlib.sha256(engine).hexdigest()
+    assert rows["project-config"]["size_bytes"] == len(_CONFIG_BYTES)
+    assert rows["project-config"]["sha256"] == hashlib.sha256(_CONFIG_BYTES).hexdigest()
+    assert rows["engine-selection"]["size_bytes"] == len(_ENGINE_BYTES)
+    assert rows["engine-selection"]["sha256"] == hashlib.sha256(_ENGINE_BYTES).hexdigest()
     assert _tree_snapshot(tmp_path) == before
 
 
