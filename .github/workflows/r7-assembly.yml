@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: r7-state-receipt-assembly
@@ -147,41 +147,38 @@ jobs:
           path: .github/r7/last-error.txt
           if-no-files-found: error
           retention-days: 7
-      - name: Commit verified R7 source and self-remove
-        id: commit_source
+      - name: Package verified R7 source tree
         if: success()
         shell: bash
         run: |
-          set +e
-          (
-            set -euo pipefail
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            rm -f .github/r7/last-error.txt
-            git rm .github/workflows/r7-assembly.yml
-            git rm -r .github/r7
-            git restore MANIFEST.sha256
-            git add -A
-            git diff --cached --check
-            git commit -m "Add R7 state layout and receipt parity"
-            for attempt in 1 2 3 4 5 6 7 8; do
-              git fetch origin feature/dual-engine-r7-state-receipts
-              git rebase origin/feature/dual-engine-r7-state-receipts
-              if git push origin HEAD:feature/dual-engine-r7-state-receipts; then
-                exit 0
-              fi
-              sleep $((attempt * 2))
-            done
-            exit 1
-          ) > /tmp/r7-commit.txt 2>&1
-          status=$?
-          cat /tmp/r7-commit.txt
-          exit "$status"
-      - name: Upload R7 commit diagnostics
-        if: failure() && steps.validate.outcome == 'success'
+          set -euo pipefail
+          cat > /tmp/r7-verified-files.txt <<'EOF'
+          .github/workflows/contract-drift.yml
+          contracts/engine/descriptor.txt
+          contracts/receipts/common.schema.json
+          contracts/state/layout.json
+          crates/syntavra-cli/src/config_contract.rs
+          crates/syntavra-cli/src/main.rs
+          crates/syntavra-cli/src/state_receipt_contract.rs
+          crates/syntavra-contracts/src/lib.rs
+          crates/syntavra-core/src/lib.rs
+          docs/adr/0007-state-layout-receipt-parity.md
+          parity/fixtures/state-receipts-v1.json
+          syntavra_runtime/state_receipt_contract.py
+          tests/runtime/test_state_receipt_contract_r7.py
+          tools/run_engine_parity.py
+          tools/verify_state_receipt_parity.py
+          EOF
+          tar -czf /tmp/r7-verified-source.tar.gz -T /tmp/r7-verified-files.txt
+          sha256sum /tmp/r7-verified-source.tar.gz > /tmp/r7-verified-source.sha256
+      - name: Upload verified R7 source tree
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: syntavra-r7-commit-diagnostics-${{ github.sha }}
-          path: /tmp/r7-commit.txt
+          name: syntavra-r7-verified-source-${{ github.sha }}
+          path: |
+            /tmp/r7-verified-source.tar.gz
+            /tmp/r7-verified-source.sha256
+            /tmp/r7-verified-files.txt
           if-no-files-found: error
           retention-days: 7
