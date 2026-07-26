@@ -5,6 +5,11 @@ on:
     branches: ["feature/dual-engine-r7-state-receipts"]
     paths:
       - ".github/workflows/r7-assembly.yml"
+  pull_request:
+    branches: ["feature/dual-engine-r6-config-status"]
+    paths:
+      - ".github/workflows/r7-assembly.yml"
+      - ".github/r7/**"
   workflow_dispatch:
 
 permissions:
