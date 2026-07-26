@@ -36,6 +36,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.82.0
+          components: rustfmt, clippy
       - name: Extract R7 implementation
         shell: bash
         run: |
@@ -52,6 +53,7 @@ jobs:
             set -euo pipefail
             cargo fmt --all -- --check
             cargo test --workspace --all-targets --locked
+            cargo clippy --workspace --all-targets --locked -- -D warnings
             python -m pip install -e .
             python -m pytest -q tests/runtime/test_state_receipt_contract_r7.py
             python tools/verify_dual_engine_contract.py
