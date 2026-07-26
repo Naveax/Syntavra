@@ -28,9 +28,10 @@ jobs:
           toolchain: 1.82.0
           components: rustfmt, clippy
       - name: Extract and run the R9 wiring program
+        id: wiring
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
           python - <<'PY'
           from pathlib import Path
 
@@ -49,9 +50,18 @@ jobs:
           ) + '\n'
           Path('/tmp/r9-wire.py').write_text(program, encoding='utf-8')
           PY
-          python /tmp/r9-wire.py
+          extract_status=$?
+          if [ "$extract_status" -ne 0 ]; then
+            echo "wiring extraction failed" > /tmp/r9-wire-output.txt
+            exit "$extract_status"
+          fi
+          python /tmp/r9-wire.py > /tmp/r9-wire-output.txt 2>&1
+          status=$?
+          cat /tmp/r9-wire-output.txt
+          exit "$status"
       - name: Diagnose R9 validation
         id: validation
+        if: success()
         shell: bash
         run: |
           set +e
@@ -77,6 +87,7 @@ jobs:
         with:
           name: syntavra-r9-diagnostics-${{ github.sha }}
           path: |
+            /tmp/r9-wire-output.txt
             /tmp/r9-diagnostics.txt
             /tmp/r9-wire.py
             Cargo.lock
