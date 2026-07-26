@@ -147,21 +147,41 @@ jobs:
           path: .github/r7/last-error.txt
           if-no-files-found: error
           retention-days: 7
-      - name: Commit R7 implementation and self-remove
+      - name: Commit verified R7 source and self-remove
+        id: commit_source
         if: success()
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/r7-assembly.yml
-          git rm -r .github/r7
-          git restore MANIFEST.sha256
-          git add -A
-          git diff --cached --check
-          git commit -m "Add R7 state layout and receipt parity"
-          git pull --rebase origin feature/dual-engine-r7-state-receipts
-          python tools/refresh_manifest.py
-          git add MANIFEST.sha256
-          git commit -m "Refresh R7 repository manifest"
-          git push origin HEAD:feature/dual-engine-r7-state-receipts
+          set +e
+          (
+            set -euo pipefail
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            rm -f .github/r7/last-error.txt
+            git rm .github/workflows/r7-assembly.yml
+            git rm -r .github/r7
+            git restore MANIFEST.sha256
+            git add -A
+            git diff --cached --check
+            git commit -m "Add R7 state layout and receipt parity"
+            for attempt in 1 2 3 4 5 6 7 8; do
+              git fetch origin feature/dual-engine-r7-state-receipts
+              git rebase origin/feature/dual-engine-r7-state-receipts
+              if git push origin HEAD:feature/dual-engine-r7-state-receipts; then
+                exit 0
+              fi
+              sleep $((attempt * 2))
+            done
+            exit 1
+          ) > /tmp/r7-commit.txt 2>&1
+          status=$?
+          cat /tmp/r7-commit.txt
+          exit "$status"
+      - name: Upload R7 commit diagnostics
+        if: failure() && steps.validate.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r7-commit-diagnostics-${{ github.sha }}
+          path: /tmp/r7-commit.txt
+          if-no-files-found: error
+          retention-days: 7
