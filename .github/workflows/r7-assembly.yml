@@ -47,9 +47,9 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("crates/syntavra-core/src/lib.rs")
-          text = path.read_text(encoding="utf-8")
-          replacements = {
+          core_path = Path("crates/syntavra-core/src/lib.rs")
+          core = core_path.read_text(encoding="utf-8")
+          core_replacements = {
               "pub fn normalize_repository_path(input: &str) -> Result<String, CanonicalPathError> {": """/// Normalizes a repository-relative path without consulting the filesystem.
           ///
           /// # Errors
@@ -78,11 +78,28 @@ jobs:
               input: &[u8],
           ) -> Result<String, CanonicalPathError> {""",
           }
-          for old, new in replacements.items():
-              if old not in text:
+          for old, new in core_replacements.items():
+              if old not in core:
                   raise SystemExit(f"missing Rust documentation insertion marker: {old!r}")
-              text = text.replace(old, new, 1)
-          path.write_text(text, encoding="utf-8")
+              core = core.replace(old, new, 1)
+          core_path.write_text(core, encoding="utf-8")
+
+          receipt_path = Path("crates/syntavra-cli/src/state_receipt_contract.rs")
+          receipt = receipt_path.read_text(encoding="utf-8")
+          receipt_replacements = {
+              "#[derive(Debug, Clone)]\nstruct Receipt {": """#[derive(Debug, Clone)]
+          // The field names intentionally mirror the public receipt wire contract.
+          #[allow(clippy::struct_field_names)]
+          struct Receipt {""",
+              "fn parse_receipt(data: &[u8], expected_project_id: &str) -> Result<Receipt, String> {": """// Keeping the ordered parser in one function makes the fail-closed field sequence auditable.
+          #[allow(clippy::too_many_lines)]
+          fn parse_receipt(data: &[u8], expected_project_id: &str) -> Result<Receipt, String> {""",
+          }
+          for old, new in receipt_replacements.items():
+              if old not in receipt:
+                  raise SystemExit(f"missing R7 lint-boundary insertion marker: {old!r}")
+              receipt = receipt.replace(old, new, 1)
+          receipt_path.write_text(receipt, encoding="utf-8")
           PY
       - name: Validate assembled R7 package
         id: validate
