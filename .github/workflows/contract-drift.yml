@@ -14,6 +14,7 @@ on:
       - "tools/verify_engine_selector.py"
       - "tools/verify_primitive_parity.py"
       - "tools/verify_config_status_parity.py"
+      - "tools/verify_state_receipt_parity.py"
       - ".github/workflows/contract-drift.yml"
   pull_request:
     branches: [main, "feature/**"]
@@ -28,6 +29,7 @@ on:
       - "tools/verify_engine_selector.py"
       - "tools/verify_primitive_parity.py"
       - "tools/verify_config_status_parity.py"
+      - "tools/verify_state_receipt_parity.py"
       - ".github/workflows/contract-drift.yml"
   workflow_dispatch:
 
@@ -89,6 +91,19 @@ jobs:
         with:
           name: syntavra-r6-config-status-diagnostics-${{ github.sha }}
           path: config-status-parity.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify R7 state layout and receipt parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_state_receipt_parity.py 2>&1 | tee state-receipt-parity.log
+      - name: Upload R7 state/receipt diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r7-state-receipt-diagnostics-${{ github.sha }}
+          path: state-receipt-parity.log
           if-no-files-found: warn
           retention-days: 7
       - name: Run Python-Rust parity gate
