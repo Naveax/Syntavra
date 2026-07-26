@@ -2,17 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import sys
+import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-
-from syntavra_runtime.canonical_primitives import (  # noqa: E402
-    canonical_manifest_bytes,
-    manifest_digest_hex,
-)
-
+PRIMITIVES_PATH = ROOT / "syntavra_runtime" / "canonical_primitives.py"
 MANIFEST = ROOT / "MANIFEST.sha256"
 GENERATED_FILES = {
     "fusion-release-smoke.json",
@@ -31,6 +26,25 @@ TRANSIENT_PARTS = {
     ".mypy_cache",
     ".ruff_cache",
 }
+
+
+def _load_primitives() -> ModuleType:
+    """Load the stdlib-only primitive module without importing the package initializer."""
+
+    spec = importlib.util.spec_from_file_location(
+        "_syntavra_manifest_primitives",
+        PRIMITIVES_PATH,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load canonical primitives: {PRIMITIVES_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_PRIMITIVES = _load_primitives()
+canonical_manifest_bytes = _PRIMITIVES.canonical_manifest_bytes
+manifest_digest_hex = _PRIMITIVES.manifest_digest_hex
 
 
 def is_generated_path(relative: Path) -> bool:
