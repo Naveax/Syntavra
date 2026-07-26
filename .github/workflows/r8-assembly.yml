@@ -1,0 +1,209 @@
+name: Assemble R8 State Inspection Parity
+
+on:
+  push:
+    branches: ["feature/dual-engine-r8-state-inspection"]
+    paths:
+      - ".github/workflows/r8-assembly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r8-state-inspection-assembly
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r8-state-inspection
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Wire R8 command and synchronized layout contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import re
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one {label} marker, found {count}")
+              return text.replace(old, new, 1)
+
+          layout = json.loads(Path("contracts/state/layout.json").read_text(encoding="utf-8"))
+
+          main_path = Path("crates/syntavra-cli/src/main.rs")
+          main = main_path.read_text(encoding="utf-8")
+          main = replace_once(
+              main,
+              "mod state_receipt_contract;\n",
+              "mod state_receipt_contract;\nmod state_snapshot_contract;\n",
+              "state snapshot module",
+          )
+          main = replace_once(
+              main,
+              "use state_receipt_contract::{inspect_receipt_json, state_layout_json};\n",
+              "use state_receipt_contract::{inspect_receipt_json, state_layout_json};\nuse state_snapshot_contract::inspect_state_root_json;\n",
+              "state snapshot import",
+          )
+          main = replace_once(
+              main,
+              '    "  syntavra-rs state layout\\n",\n',
+              '    "  syntavra-rs state layout\\n",\n    "  syntavra-rs state inspect <expected-project-id> <project-root>\\n",\n',
+              "state inspect usage",
+          )
+          main = replace_once(
+              main,
+              "    StateLayout,\n    ReceiptInspect {\n",
+              "    StateLayout,\n    StateInspect {\n        expected_project_id: String,\n        project_root: String,\n    },\n    ReceiptInspect {\n",
+              "state inspect command variant",
+          )
+          main = replace_once(
+              main,
+              '        [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),\n        [receipt, action, expected_project_id, wire_hex]\n',
+              '        [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),\n        [state, action, expected_project_id, project_root]\n            if state == "state" && action == "inspect" =>\n        {\n            Ok(Command::StateInspect {\n                expected_project_id: expected_project_id.clone(),\n                project_root: project_root.clone(),\n            })\n        }\n        [receipt, action, expected_project_id, wire_hex]\n',
+              "state inspect parser",
+          )
+          main = replace_once(
+              main,
+              '        Command::StateLayout => println!("{}", state_layout_json()),\n        Command::ReceiptInspect {\n',
+              '        Command::StateLayout => println!("{}", state_layout_json()),\n        Command::StateInspect {\n            expected_project_id,\n            project_root,\n        } => println!(\n            "{}",\n            inspect_state_root_json(&project_root, &expected_project_id)?\n        ),\n        Command::ReceiptInspect {\n',
+              "state inspect runner",
+          )
+          main = replace_once(
+              main,
+              '        assert_eq!(\n            parse_command(&args(&["state", "layout"])),\n            Ok(Command::StateLayout)\n        );\n        assert_eq!(\n            parse_command(&args(&["receipt", "inspect", "aa", "00"])),\n',
+              '        assert_eq!(\n            parse_command(&args(&["state", "layout"])),\n            Ok(Command::StateLayout)\n        );\n        assert_eq!(\n            parse_command(&args(&["state", "inspect", "aa", "."])),\n            Ok(Command::StateInspect {\n                expected_project_id: "aa".to_owned(),\n                project_root: ".".to_owned(),\n            })\n        );\n        assert_eq!(\n            parse_command(&args(&["receipt", "inspect", "aa", "00"])),\n',
+              "state inspect parser test",
+          )
+          main_path.write_text(main, encoding="utf-8")
+
+          python_path = Path("syntavra_runtime/state_receipt_contract.py")
+          python_source = python_path.read_text(encoding="utf-8")
+          python_source, count = re.subn(
+              r"STATE_LAYOUT: dict\[str, Any\] = .*?\n\nclass ReceiptContractError",
+              f"STATE_LAYOUT: dict[str, Any] = {layout!r}\\n\\nclass ReceiptContractError",
+              python_source,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("failed to synchronize Python state layout")
+          python_path.write_text(python_source, encoding="utf-8")
+
+          rust_path = Path("crates/syntavra-cli/src/state_receipt_contract.rs")
+          rust_source = rust_path.read_text(encoding="utf-8")
+          compact = json.dumps(layout, ensure_ascii=False, separators=(",", ":"))
+          rust_source, count = re.subn(
+              r'pub const STATE_LAYOUT_JSON: &str = r#".*?"#;',
+              f'pub const STATE_LAYOUT_JSON: &str = r#"{compact}"#;',
+              rust_source,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("failed to synchronize Rust state layout")
+          rust_path.write_text(rust_source, encoding="utf-8")
+
+          fixture_path = Path("parity/fixtures/state-receipts-v1.json")
+          fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+          fixture["layout_expected"] = layout
+          fixture_path.write_text(
+              json.dumps(fixture, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          parity_path = Path("tools/run_engine_parity.py")
+          parity = parity_path.read_text(encoding="utf-8")
+          parity = replace_once(
+              parity,
+              "from syntavra_runtime.state_receipt_contract import state_layout\n",
+              "from syntavra_runtime.state_receipt_contract import state_layout\nfrom syntavra_runtime.state_snapshot_contract import inspect_state_root, project_id_for_root\n",
+              "aggregate state inspection imports",
+          )
+          parity = replace_once(
+              parity,
+              '    layout = _rust_json("state", "layout")\n    reference_status = status_projection(resolve_config_phases([{}]))\n',
+              '    layout = _rust_json("state", "layout")\n    project_id = project_id_for_root(ROOT)\n    state_inspection = _rust_json("state", "inspect", project_id, str(ROOT))\n    reference_state_inspection = inspect_state_root(\n        ROOT, expected_project_id=project_id\n    )\n    reference_status = status_projection(resolve_config_phases([{}]))\n',
+              "aggregate state inspection execution",
+          )
+          parity = replace_once(
+              parity,
+              '        "state_layout": layout == state_layout(),\n',
+              '        "state_layout": layout == state_layout(),\n        "state_inspection": state_inspection == reference_state_inspection,\n',
+              "aggregate state inspection check",
+          )
+          parity = replace_once(
+              parity,
+              '        "state.layout",\n        "status",\n',
+              '        "state.inspect",\n        "state.layout",\n        "status",\n',
+              "aggregate state inspection capability",
+          )
+          parity = replace_once(
+              parity,
+              '        "phase": "R0-R7",\n',
+              '        "phase": "R0-R8",\n',
+              "aggregate phase",
+          )
+          parity_path.write_text(parity, encoding="utf-8")
+          PY
+      - name: Validate assembled R8 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          python -m pip install -e . pytest
+          python -m pytest -q tests/runtime/test_state_receipt_contract_r7.py tests/runtime/test_state_snapshot_contract_r8.py
+          python tools/verify_dual_engine_contract.py
+          python tools/verify_engine_selector.py
+          python tools/verify_primitive_parity.py
+          python tools/verify_config_status_parity.py
+          python tools/verify_state_receipt_parity.py
+          python tools/verify_state_snapshot_parity.py
+          python tools/run_engine_parity.py
+      - name: Commit verified R8 source wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git restore MANIFEST.sha256
+          git add \
+            crates/syntavra-cli/src/main.rs \
+            crates/syntavra-cli/src/state_receipt_contract.rs \
+            parity/fixtures/state-receipts-v1.json \
+            syntavra_runtime/state_receipt_contract.py \
+            tools/run_engine_parity.py
+          git diff --cached --check
+          git commit -m "Wire R8 state inspection parity"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            git fetch origin feature/dual-engine-r8-state-inspection
+            git rebase origin/feature/dual-engine-r8-state-inspection
+            if git push origin HEAD:feature/dual-engine-r8-state-inspection; then
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          exit 1
