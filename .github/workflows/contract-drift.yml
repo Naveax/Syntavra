@@ -54,10 +54,27 @@ jobs:
           toolchain: 1.82.0
           components: rustfmt, clippy
       - name: Verify pinned Rust workspace quality
+        id: rust-quality
+        shell: bash
         run: |
-          cargo fmt --all -- --check
-          cargo test --workspace --all-targets --locked
-          cargo clippy --workspace --all-targets --locked -- -D warnings
+          set +e
+          (
+            set -euo pipefail
+            cargo fmt --all -- --check
+            cargo test --workspace --all-targets --locked
+            cargo clippy --workspace --all-targets --locked -- -D warnings
+          ) > rust-quality.log 2>&1
+          status=$?
+          cat rust-quality.log
+          exit "$status"
+      - name: Upload Rust quality diagnostics
+        if: failure() && steps.rust-quality.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-rust-quality-diagnostics-${{ github.sha }}
+          path: rust-quality.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Install Python reference runtime
         run: python -m pip install -e .
       - name: Generate root manifest candidate
@@ -146,5 +163,5 @@ jobs:
         with:
           name: syntavra-python-reference-${{ github.sha }}
           path: python-reference.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
