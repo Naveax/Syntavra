@@ -33,6 +33,22 @@ jobs:
         shell: bash
         run: |
           set +e
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tools/r9_wire_source.py")
+          source = path.read_text(encoding="utf-8")
+          old = "updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)"
+          new = "updated, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=flags)"
+          if source.count(old) != 1:
+              raise SystemExit("R9 literal regex replacement marker drifted")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8", newline="\n")
+          PY
+          patch_status=$?
+          if [ "$patch_status" -ne 0 ]; then
+            echo "literal replacement patch failed" > /tmp/r9-wire-output.txt
+            exit "$patch_status"
+          fi
           python tools/r9_wire_source.py > /tmp/r9-wire-output.txt 2>&1
           status=$?
           cat /tmp/r9-wire-output.txt
