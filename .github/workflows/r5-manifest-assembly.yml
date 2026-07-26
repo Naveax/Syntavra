@@ -1,0 +1,50 @@
+name: Assemble Final R5 Manifest
+
+on:
+  push:
+    branches: ["feature/dual-engine-r5-primitives"]
+    paths:
+      - ".github/workflows/r5-manifest-assembly.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: final-r5-manifest-assembly
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r5-primitives
+          fetch-depth: 0
+
+      - name: Download exact final manifest artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/8635170415/zip" \
+            > /tmp/r5-root-manifest.zip
+          unzip -o /tmp/r5-root-manifest.zip -d /tmp/r5-root-manifest
+          test "$(sha256sum /tmp/r5-root-manifest/MANIFEST.sha256 | cut -d' ' -f1)" = "3bcc011a61770566c4540ca2a7d797169103306d9ffd3648b0f6abbd1423d7c6"
+          cp /tmp/r5-root-manifest/MANIFEST.sha256 MANIFEST.sha256
+
+      - name: Commit exact manifest and self-remove
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/r5-manifest-assembly.yml
+          git add MANIFEST.sha256
+          git diff --cached --check
+          git commit -m "Refresh final R5 repository manifest"
+          git push origin HEAD:feature/dual-engine-r5-primitives
