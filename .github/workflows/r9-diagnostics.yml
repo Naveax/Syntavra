@@ -5,6 +5,7 @@ on:
     branches: ["feature/dual-engine-r8-state-inspection"]
     paths:
       - ".github/workflows/r9-diagnostics.yml"
+      - "tools/r9_wire_source.py"
   workflow_dispatch:
 
 permissions:
@@ -27,35 +28,12 @@ jobs:
         with:
           toolchain: 1.82.0
           components: rustfmt, clippy
-      - name: Extract and run the R9 wiring program
+      - name: Wire the R9 source tree
         id: wiring
         shell: bash
         run: |
           set +e
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path('.github/workflows/r9-assembly.yml').read_text(encoding='utf-8').splitlines()
-          start = next(
-              index for index, line in enumerate(source)
-              if line.strip() == "python - <<'PY'"
-          ) + 1
-          end = next(
-              index for index in range(start, len(source))
-              if source[index].strip() == 'PY'
-          )
-          program = '\n'.join(
-              line[10:] if line.startswith('          ') else line
-              for line in source[start:end]
-          ) + '\n'
-          Path('/tmp/r9-wire.py').write_text(program, encoding='utf-8')
-          PY
-          extract_status=$?
-          if [ "$extract_status" -ne 0 ]; then
-            echo "wiring extraction failed" > /tmp/r9-wire-output.txt
-            exit "$extract_status"
-          fi
-          python /tmp/r9-wire.py > /tmp/r9-wire-output.txt 2>&1
+          python tools/r9_wire_source.py > /tmp/r9-wire-output.txt 2>&1
           status=$?
           cat /tmp/r9-wire-output.txt
           exit "$status"
@@ -81,7 +59,21 @@ jobs:
           status=$?
           cat /tmp/r9-diagnostics.txt
           exit "$status"
-      - name: Upload R9 diagnostics
+      - name: Package validated R9 candidate
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf /tmp/r9-validated-source.tar.gz \
+            Cargo.lock \
+            contracts/state/broker-snapshot-v1.json \
+            crates/syntavra-cli/src/broker_snapshot_contract.rs \
+            crates/syntavra-cli/src/main.rs \
+            syntavra_runtime/broker_snapshot_contract.py \
+            tests/runtime/test_broker_snapshot_contract_r9.py \
+            tools/run_engine_parity.py
+          sha256sum /tmp/r9-validated-source.tar.gz > /tmp/r9-validated-source.sha256
+      - name: Upload R9 diagnostics and candidate
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -89,7 +81,8 @@ jobs:
           path: |
             /tmp/r9-wire-output.txt
             /tmp/r9-diagnostics.txt
-            /tmp/r9-wire.py
+            /tmp/r9-validated-source.tar.gz
+            /tmp/r9-validated-source.sha256
             Cargo.lock
           if-no-files-found: warn
           retention-days: 7
