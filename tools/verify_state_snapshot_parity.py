@@ -15,6 +15,8 @@ from syntavra_runtime.state_snapshot_contract import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+_CONFIG_BYTES = b'mode = "safe"\n'
+_ENGINE_BYTES = b'{"engine":"python"}\n'
 
 
 def _rust_json(*arguments: str) -> dict[str, Any]:
@@ -87,8 +89,8 @@ def _tree_snapshot(root: Path) -> list[tuple[str, int, int, bytes | None]]:
 def _populate(root: Path) -> None:
     state = root / ".syntavra"
     state.mkdir()
-    (state / "config.toml").write_text("mode = \"safe\"\n", encoding="utf-8")
-    (state / "engine.json").write_text('{"engine":"python"}\n', encoding="utf-8")
+    (state / "config.toml").write_bytes(_CONFIG_BYTES)
+    (state / "engine.json").write_bytes(_ENGINE_BYTES)
     (state / "pre-release").mkdir()
     (state / "runtime-v3").mkdir()
 
