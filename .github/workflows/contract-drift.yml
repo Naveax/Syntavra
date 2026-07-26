@@ -48,6 +48,15 @@ jobs:
           toolchain: 1.82.0
       - name: Install Python reference runtime
         run: python -m pip install -e .
+      - name: Generate R5 root manifest candidate
+        run: python tools/refresh_manifest.py
+      - name: Upload R5 root manifest candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r5-root-manifest-${{ github.sha }}
+          path: MANIFEST.sha256
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify static dual-engine contracts
         run: python tools/verify_dual_engine_contract.py
       - name: Verify R4 engine selector contract
