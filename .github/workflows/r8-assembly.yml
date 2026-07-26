@@ -167,43 +167,74 @@ jobs:
           parity_path.write_text(parity, encoding="utf-8")
           PY
       - name: Validate assembled R8 package
+        id: validate
         shell: bash
         run: |
-          set -euo pipefail
-          cargo fmt --all
-          cargo fmt --all -- --check
-          cargo test --workspace --all-targets --locked
-          cargo clippy --workspace --all-targets --locked -- -D warnings
-          python -m pip install -e . pytest
-          python -m pytest -q tests/runtime/test_state_receipt_contract_r7.py tests/runtime/test_state_snapshot_contract_r8.py
-          python tools/verify_dual_engine_contract.py
-          python tools/verify_engine_selector.py
-          python tools/verify_primitive_parity.py
-          python tools/verify_config_status_parity.py
-          python tools/verify_state_receipt_parity.py
-          python tools/verify_state_snapshot_parity.py
-          python tools/run_engine_parity.py
+          set +e
+          (
+            set -euo pipefail
+            cargo fmt --all
+            cargo fmt --all -- --check
+            cargo test --workspace --all-targets --locked
+            cargo clippy --workspace --all-targets --locked -- -D warnings
+            python -m pip install -e . pytest
+            python -m pytest -q tests/runtime/test_state_receipt_contract_r7.py tests/runtime/test_state_snapshot_contract_r8.py
+            python tools/verify_dual_engine_contract.py
+            python tools/verify_engine_selector.py
+            python tools/verify_primitive_parity.py
+            python tools/verify_config_status_parity.py
+            python tools/verify_state_receipt_parity.py
+            python tools/verify_state_snapshot_parity.py
+            python tools/run_engine_parity.py
+          ) > /tmp/r8-validation.txt 2>&1
+          status=$?
+          cat /tmp/r8-validation.txt
+          exit "$status"
+      - name: Upload R8 validation diagnostics
+        if: failure() && steps.validate.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r8-validation-diagnostics-${{ github.sha }}
+          path: /tmp/r8-validation.txt
+          if-no-files-found: error
+          retention-days: 7
       - name: Commit verified R8 source wiring
+        id: commit_source
+        if: success()
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git restore MANIFEST.sha256
-          git add \
-            crates/syntavra-cli/src/main.rs \
-            crates/syntavra-cli/src/state_receipt_contract.rs \
-            parity/fixtures/state-receipts-v1.json \
-            syntavra_runtime/state_receipt_contract.py \
-            tools/run_engine_parity.py
-          git diff --cached --check
-          git commit -m "Wire R8 state inspection parity"
-          for attempt in 1 2 3 4 5 6 7 8; do
-            git fetch origin feature/dual-engine-r8-state-inspection
-            git rebase origin/feature/dual-engine-r8-state-inspection
-            if git push origin HEAD:feature/dual-engine-r8-state-inspection; then
-              exit 0
-            fi
-            sleep $((attempt * 2))
-          done
-          exit 1
+          set +e
+          (
+            set -euo pipefail
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git restore MANIFEST.sha256
+            git add \
+              crates/syntavra-cli/src/main.rs \
+              crates/syntavra-cli/src/state_receipt_contract.rs \
+              parity/fixtures/state-receipts-v1.json \
+              syntavra_runtime/state_receipt_contract.py \
+              tools/run_engine_parity.py
+            git diff --cached --check
+            git commit -m "Wire R8 state inspection parity"
+            for attempt in 1 2 3 4 5 6 7 8; do
+              git fetch origin feature/dual-engine-r8-state-inspection
+              git rebase origin/feature/dual-engine-r8-state-inspection
+              if git push origin HEAD:feature/dual-engine-r8-state-inspection; then
+                exit 0
+              fi
+              sleep $((attempt * 2))
+            done
+            exit 1
+          ) > /tmp/r8-commit.txt 2>&1
+          status=$?
+          cat /tmp/r8-commit.txt
+          exit "$status"
+      - name: Upload R8 commit diagnostics
+        if: failure() && steps.validate.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r8-commit-diagnostics-${{ github.sha }}
+          path: /tmp/r8-commit.txt
+          if-no-files-found: error
+          retention-days: 7
