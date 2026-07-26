@@ -1,5 +1,11 @@
 #![forbid(unsafe_code)]
 
+// Keep the historical R7 embedded layout symbols linked until the receipt module
+// is split in a later cleanup. The public command output below always uses the
+// canonical R8 contract file.
+const _: &str = crate::state_receipt_contract::STATE_LAYOUT_JSON;
+const _: fn() -> &'static str = crate::state_receipt_contract::state_layout_json;
+
 pub const STATE_LAYOUT_JSON: &str = include_str!("../../../contracts/state/layout.json");
 
 #[must_use]
