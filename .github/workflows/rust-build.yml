@@ -35,6 +35,8 @@ permissions:
 jobs:
   format:
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -47,6 +49,8 @@ jobs:
   rust:
     name: ${{ matrix.os }} / Rust 1.82
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
     strategy:
       fail-fast: false
       matrix:

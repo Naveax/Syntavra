@@ -35,6 +35,8 @@ permissions:
 jobs:
   contract:
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
