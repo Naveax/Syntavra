@@ -84,8 +84,7 @@ fn normalize_absolute_path(path: &Path) -> Result<String, String> {
         normalized = rest.to_owned();
     }
     let bytes = normalized.as_bytes();
-    if bytes.len() >= 3 && bytes[1] == b':' && bytes[2] == b'/' && bytes[0].is_ascii_uppercase()
-    {
+    if bytes.len() >= 3 && bytes[1] == b':' && bytes[2] == b'/' && bytes[0].is_ascii_uppercase() {
         normalized.replace_range(0..1, &char::from(bytes[0]).to_ascii_lowercase().to_string());
     }
     Ok(normalized)
@@ -103,8 +102,8 @@ fn canonical_root(project_root: &str) -> Result<(PathBuf, String), String> {
     if !metadata.is_dir() {
         return Err("STATE_PROJECT_ROOT_NOT_DIRECTORY".to_owned());
     }
-    let canonical = fs::canonicalize(input)
-        .map_err(|_| "STATE_PROJECT_ROOT_RESOLVE_FAILED".to_owned())?;
+    let canonical =
+        fs::canonicalize(input).map_err(|_| "STATE_PROJECT_ROOT_RESOLVE_FAILED".to_owned())?;
     let normalized = normalize_absolute_path(&canonical)?;
     Ok((canonical, normalized))
 }
@@ -166,8 +165,8 @@ fn inspect_path(root: &Path, spec: PathSpec) -> Result<String, String> {
         }
         let before_modified = metadata.modified().ok();
         let payload = fs::read(&current).map_err(|_| "STATE_FILE_READ_FAILED".to_owned())?;
-        let after = fs::symlink_metadata(&current)
-            .map_err(|_| "STATE_FILE_READ_FAILED".to_owned())?;
+        let after =
+            fs::symlink_metadata(&current).map_err(|_| "STATE_FILE_READ_FAILED".to_owned())?;
         if after.file_type().is_symlink() {
             return Err("STATE_PATH_SYMLINK".to_owned());
         }
@@ -178,7 +177,10 @@ fn inspect_path(root: &Path, spec: PathSpec) -> Result<String, String> {
         {
             return Err("STATE_PATH_CHANGED_DURING_READ".to_owned());
         }
-        (payload.len().to_string(), json_string(&sha256_hex(&payload)))
+        (
+            payload.len().to_string(),
+            json_string(&sha256_hex(&payload)),
+        )
     } else {
         ("null".to_owned(), "null".to_owned())
     };
