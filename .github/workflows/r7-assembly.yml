@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          {
+          (
             set -euo pipefail
             cargo fmt --all -- --check
             cargo test --workspace --all-targets --locked
@@ -60,7 +60,7 @@ jobs:
             python tools/verify_config_status_parity.py
             python tools/verify_state_receipt_parity.py
             python tools/run_engine_parity.py
-          } > /tmp/r7-assembly.txt 2>&1
+          ) > /tmp/r7-assembly.txt 2>&1
           status=$?
           cat /tmp/r7-assembly.txt
           cp /tmp/r7-assembly.txt .github/r7/last-error.txt
