@@ -60,14 +60,14 @@ jobs:
             python tools/verify_state_receipt_parity.py
             python tools/run_engine_parity.py
             python tools/refresh_manifest.py
-          } > /tmp/r7-assembly.log 2>&1
+          } > /tmp/r7-assembly.txt 2>&1
           status=$?
-          cat /tmp/r7-assembly.log
+          cat /tmp/r7-assembly.txt
           if [ "$status" -ne 0 ]; then
-            cp /tmp/r7-assembly.log .github/r7/last-error.log
+            cp /tmp/r7-assembly.txt .github/r7/last-error.txt
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .github/r7/last-error.log
+            git add -f .github/r7/last-error.txt
             git commit -m "Capture R7 assembly diagnostics"
             git push origin HEAD:feature/dual-engine-r7-state-receipts
             exit "$status"
