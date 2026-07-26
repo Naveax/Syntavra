@@ -126,7 +126,7 @@ jobs:
             cargo fmt --all -- --check
             cargo test --workspace --all-targets --locked
             cargo clippy --workspace --all-targets --locked -- -D warnings
-            python -m pip install -e .
+            python -m pip install -e . pytest
             python -m pytest -q tests/runtime/test_state_receipt_contract_r7.py
             python tools/verify_dual_engine_contract.py
             python tools/verify_engine_selector.py
