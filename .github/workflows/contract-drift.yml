@@ -30,6 +30,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -89,6 +90,23 @@ jobs:
           path: parity.log
           if-no-files-found: warn
           retention-days: 7
+      - name: Export failed manifest verifier log
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/jobs/89823223458/logs" \
+            > failed-manifest-verifier.log
+      - name: Upload failed manifest verifier log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-failed-manifest-verifier-${{ github.sha }}
+          path: failed-manifest-verifier.log
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload Python reference inventory
         if: always()
         uses: actions/upload-artifact@v4
