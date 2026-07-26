@@ -50,10 +50,21 @@ jobs:
         run: python tools/verify_dual_engine_contract.py
       - name: Verify R4 engine selector contract
         run: python tools/verify_engine_selector.py
-      - name: Verify R5 canonical primitive parity
-        run: python tools/verify_primitive_parity.py
       - name: Export Python reference inventory
         run: python tools/export_python_contract.py --output python-reference.json
+      - name: Verify R5 canonical primitive parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_primitive_parity.py 2>&1 | tee primitive-parity.log
+      - name: Upload R5 primitive diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r5-primitive-diagnostics-${{ github.sha }}
+          path: primitive-parity.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Run initial Python-Rust parity gate
         shell: bash
         run: |
