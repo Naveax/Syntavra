@@ -3,6 +3,7 @@
 pub const STATE_LAYOUT_JSON: &str = include_str!("../../../contracts/state/layout.json");
 
 #[must_use]
+#[allow(clippy::no_effect_underscore_binding)]
 pub fn state_layout_json() -> &'static str {
     // Keep transitional symbols live until the receipt and path modules are split.
     // The command output itself always comes from the canonical R8 contract.
