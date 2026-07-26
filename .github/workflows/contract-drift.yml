@@ -7,10 +7,12 @@ on:
       - "syntavra_runtime/**"
       - "contracts/**"
       - "crates/**"
+      - "parity/**"
       - "tools/export_python_contract.py"
       - "tools/run_engine_parity.py"
       - "tools/verify_dual_engine_contract.py"
       - "tools/verify_engine_selector.py"
+      - "tools/verify_primitive_parity.py"
       - ".github/workflows/contract-drift.yml"
   pull_request:
     branches: [main, "feature/**"]
@@ -18,10 +20,12 @@ on:
       - "syntavra_runtime/**"
       - "contracts/**"
       - "crates/**"
+      - "parity/**"
       - "tools/export_python_contract.py"
       - "tools/run_engine_parity.py"
       - "tools/verify_dual_engine_contract.py"
       - "tools/verify_engine_selector.py"
+      - "tools/verify_primitive_parity.py"
       - ".github/workflows/contract-drift.yml"
   workflow_dispatch:
 
@@ -40,13 +44,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.82.0
-          components: rustfmt, clippy
       - name: Install Python reference runtime
         run: python -m pip install -e .
       - name: Verify static dual-engine contracts
         run: python tools/verify_dual_engine_contract.py
       - name: Verify R4 engine selector contract
         run: python tools/verify_engine_selector.py
+      - name: Verify R5 canonical primitive parity
+        run: python tools/verify_primitive_parity.py
       - name: Export Python reference inventory
         run: python tools/export_python_contract.py --output python-reference.json
       - name: Run initial Python-Rust parity gate

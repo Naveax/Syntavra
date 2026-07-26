@@ -1,12 +1,16 @@
 #![forbid(unsafe_code)]
 
 use std::env;
+use std::fmt::Write as _;
 use std::process::ExitCode;
 use syntavra_contracts::{
     capabilities_json, CONTRACT_DESCRIPTOR, CONTRACT_VERSION, ENGINE_NAME, ENGINE_STABILITY,
     PRODUCT_NAME, PRODUCT_VERSION, RELEASE_CHANNEL,
 };
-use syntavra_core::sha256_hex;
+use syntavra_core::{
+    bytes_to_hex, canonical_manifest_bytes, manifest_digest_hex, normalize_repository_path,
+    sha256_hex,
+};
 
 const USAGE: &str = concat!(
     "Syntavra native Rust engine (experimental)\n\n",
@@ -14,13 +18,21 @@ const USAGE: &str = concat!(
     "  syntavra-rs version\n",
     "  syntavra-rs engine capabilities\n",
     "  syntavra-rs engine contract-hash\n",
+    "  syntavra-rs primitive sha256 <input-hex>\n",
+    "  syntavra-rs primitive canonicalize <repository-path> <input-hex>\n",
+    "  syntavra-rs primitive manifest-digest <repository-path> <input-hex>\n",
+    "  syntavra-rs primitive normalize-path <repository-path>\n",
 );
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Command {
     Version,
     Capabilities,
     ContractHash,
+    PrimitiveSha256(String),
+    PrimitiveCanonicalize { path: String, input_hex: String },
+    PrimitiveManifestDigest { path: String, input_hex: String },
+    PrimitiveNormalizePath(String),
     Help,
 }
 
@@ -34,6 +46,30 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         }
         [engine, action] if engine == "engine" && action == "contract-hash" => {
             Ok(Command::ContractHash)
+        }
+        [primitive, action, input_hex] if primitive == "primitive" && action == "sha256" => {
+            Ok(Command::PrimitiveSha256(input_hex.clone()))
+        }
+        [primitive, action, path]
+            if primitive == "primitive" && action == "normalize-path" =>
+        {
+            Ok(Command::PrimitiveNormalizePath(path.clone()))
+        }
+        [primitive, action, path, input_hex]
+            if primitive == "primitive" && action == "canonicalize" =>
+        {
+            Ok(Command::PrimitiveCanonicalize {
+                path: path.clone(),
+                input_hex: input_hex.clone(),
+            })
+        }
+        [primitive, action, path, input_hex]
+            if primitive == "primitive" && action == "manifest-digest" =>
+        {
+            Ok(Command::PrimitiveManifestDigest {
+                path: path.clone(),
+                input_hex: input_hex.clone(),
+            })
         }
         _ => Err(format!("unsupported arguments: {}", arguments.join(" "))),
     }
@@ -72,20 +108,99 @@ fn contract_hash_json() -> String {
     )
 }
 
-fn run(command: Command) -> ExitCode {
+fn json_string(value: &str) -> String {
+    let mut output = String::with_capacity(value.len() + 2);
+    output.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            value if value.is_control() => {
+                write!(&mut output, "\\u{:04x}", u32::from(value))
+                    .expect("writing to a String cannot fail");
+            }
+            value => output.push(value),
+        }
+    }
+    output.push('"');
+    output
+}
+
+fn hex_nibble(value: u8) -> Result<u8, String> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        b'A'..=b'F' => Ok(value - b'A' + 10),
+        _ => Err("HEX_INVALID".to_owned()),
+    }
+}
+
+fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
+    if (value.len() & 1) == 1 {
+        return Err("HEX_ODD_LENGTH".to_owned());
+    }
+    let mut output = Vec::with_capacity(value.len() / 2);
+    for pair in value.as_bytes().chunks_exact(2) {
+        output.push((hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?);
+    }
+    Ok(output)
+}
+
+fn run(command: Command) -> Result<(), String> {
     match command {
         Command::Version => println!("{}", version_json()),
         Command::Capabilities => println!("{}", capabilities_json()),
         Command::ContractHash => println!("{}", contract_hash_json()),
+        Command::PrimitiveSha256(input_hex) => {
+            let input = decode_hex(&input_hex)?;
+            println!(
+                "{{\"algorithm\":\"sha256\",\"digest\":\"{}\",\"input_hex\":\"{}\"}}",
+                sha256_hex(&input),
+                bytes_to_hex(&input)
+            );
+        }
+        Command::PrimitiveCanonicalize { path, input_hex } => {
+            let input = decode_hex(&input_hex)?;
+            let normalized = normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
+            let canonical = canonical_manifest_bytes(&normalized, &input)
+                .map_err(|error| error.code().to_owned())?;
+            println!(
+                concat!(
+                    "{{\"path\":{},",
+                    "\"canonical_hex\":\"{}\",",
+                    "\"digest\":\"{}\"}}"
+                ),
+                json_string(&normalized),
+                bytes_to_hex(&canonical),
+                sha256_hex(&canonical)
+            );
+        }
+        Command::PrimitiveManifestDigest { path, input_hex } => {
+            let input = decode_hex(&input_hex)?;
+            let normalized = normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
+            let digest = manifest_digest_hex(&normalized, &input).map_err(|error| error.code().to_owned())?;
+            println!(
+                "{{\"path\":{},\"algorithm\":\"sha256\",\"digest\":\"{}\"}}",
+                json_string(&normalized),
+                digest
+            );
+        }
+        Command::PrimitiveNormalizePath(path) => {
+            let normalized = normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
+            println!("{{\"path\":{}}}", json_string(&normalized));
+        }
         Command::Help => print!("{USAGE}"),
     }
-    ExitCode::SUCCESS
+    Ok(())
 }
 
 fn main() -> ExitCode {
     let arguments = env::args().skip(1).collect::<Vec<_>>();
-    match parse_command(&arguments) {
-        Ok(command) => run(command),
+    match parse_command(&arguments).and_then(run) {
+        Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}\n\n{USAGE}");
             ExitCode::from(2)
@@ -95,7 +210,7 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{contract_hash_json, parse_command, version_json, Command};
+    use super::{contract_hash_json, decode_hex, parse_command, version_json, Command};
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -112,6 +227,27 @@ mod tests {
             parse_command(&args(&["engine", "contract-hash"])),
             Ok(Command::ContractHash)
         );
+    }
+
+    #[test]
+    fn parses_r5_primitive_commands() {
+        assert_eq!(
+            parse_command(&args(&["primitive", "sha256", "616263"])),
+            Ok(Command::PrimitiveSha256("616263".to_owned()))
+        );
+        assert_eq!(
+            parse_command(&args(&["primitive", "normalize-path", r"src\main.py"])),
+            Ok(Command::PrimitiveNormalizePath(r"src\main.py".to_owned()))
+        );
+        assert!(matches!(
+            parse_command(&args(&[
+                "primitive",
+                "canonicalize",
+                "docs/readme.md",
+                "610d0a"
+            ])),
+            Ok(Command::PrimitiveCanonicalize { .. })
+        ));
     }
 
     #[test]
@@ -133,5 +269,12 @@ mod tests {
         let start = value.find(marker).expect("hash marker") + marker.len();
         let end = value[start..].find('"').expect("hash terminator") + start;
         assert_eq!(value[start..end].len(), 64);
+    }
+
+    #[test]
+    fn decodes_hex_case_insensitively() {
+        assert_eq!(decode_hex("00aF"), Ok(vec![0x00, 0xaf]));
+        assert_eq!(decode_hex("0"), Err("HEX_ODD_LENGTH".to_owned()));
+        assert_eq!(decode_hex("zz"), Err("HEX_INVALID".to_owned()));
     }
 }

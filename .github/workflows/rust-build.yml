@@ -12,6 +12,7 @@ on:
       - "parity/**"
       - "tools/run_engine_parity.py"
       - "tools/verify_dual_engine_contract.py"
+      - "tools/verify_primitive_parity.py"
       - ".github/workflows/rust-build.yml"
   pull_request:
     branches: [main]
@@ -24,6 +25,7 @@ on:
       - "parity/**"
       - "tools/run_engine_parity.py"
       - "tools/verify_dual_engine_contract.py"
+      - "tools/verify_primitive_parity.py"
       - ".github/workflows/rust-build.yml"
   workflow_dispatch:
 
@@ -72,9 +74,13 @@ jobs:
           path: clippy.log
           if-no-files-found: warn
           retention-days: 7
-      - name: Exercise native bootstrap commands
+      - name: Exercise native bootstrap and R5 primitive commands
         shell: bash
         run: |
           cargo run --quiet --locked -p syntavra-cli -- version
           cargo run --quiet --locked -p syntavra-cli -- engine capabilities
           cargo run --quiet --locked -p syntavra-cli -- engine contract-hash
+          cargo run --quiet --locked -p syntavra-cli -- primitive sha256 616263
+          cargo run --quiet --locked -p syntavra-cli -- primitive canonicalize syntavra_runtime/example.py 610d0a
+          cargo run --quiet --locked -p syntavra-cli -- primitive manifest-digest syntavra_runtime/example.py 610d0a
+          cargo run --quiet --locked -p syntavra-cli -- primitive normalize-path 'src\main.py'
