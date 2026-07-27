@@ -18,7 +18,7 @@ classifiers = ["Development Status :: 2 - Pre-Alpha", "Programming Language :: P
 code-intelligence = ["tree-sitter-language-pack>=0.9"]
 
 [project.scripts]
-syntavra = "syntavra_runtime.unified_cli:main"
+syntavra = "syntavra_runtime.engine_entry:main"
 
 [project.urls]
 Repository = "https://github.com/Naveax/Syntavra"

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntavra.dev/contracts/engine/selection.schema.json",
+  "title": "Syntavra Engine Selection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "engine"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "engine": {"enum": ["auto", "python", "rust"]}
+  }
+}
