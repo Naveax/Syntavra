@@ -1,0 +1,120 @@
+{
+  "canonical_manifest": [
+    {
+      "canonical_hex": "6669727374206c696e650a7365636f6e64206c696e650a",
+      "digest": "c2097f55f01fc297fc7f4acf21438123e06e4d409a818524428534e850642f4f",
+      "id": "lf-text",
+      "input_hex": "6669727374206c696e650a7365636f6e64206c696e650a",
+      "path": "syntavra_runtime/example.py"
+    },
+    {
+      "canonical_hex": "6669727374206c696e650a7365636f6e64206c696e650a",
+      "digest": "c2097f55f01fc297fc7f4acf21438123e06e4d409a818524428534e850642f4f",
+      "id": "crlf-text",
+      "input_hex": "6669727374206c696e650d0a7365636f6e64206c696e650d0a",
+      "path": "syntavra_runtime/example.py"
+    },
+    {
+      "canonical_hex": "66697273740a7365636f6e640a",
+      "digest": "dbea9325179efe46ea2add94f7b6b745ca983fabb208dc6d34aa064623d7ee23",
+      "id": "lone-cr",
+      "input_hex": "66697273740d7365636f6e640d",
+      "path": "docs/example.md"
+    },
+    {
+      "canonical_hex": "616c7068610d0a006f6d6567610d0a",
+      "digest": "e85fc4e4de856179844d033cd22e33a9ac89760f31ea25b16fd654ed8b3fd84f",
+      "id": "nul-binary",
+      "input_hex": "616c7068610d0a006f6d6567610d0a",
+      "path": "assets/example.bin"
+    },
+    {
+      "canonical_hex": "ff0d0afe",
+      "digest": "edf533aa423d149b4fd4f2a524d3a055f00f29c4b33a0b9d0188fe1553b88d82",
+      "id": "invalid-utf8",
+      "input_hex": "ff0d0afe",
+      "path": "assets/example.dat"
+    },
+    {
+      "canonical_hex": "726563656970740d0a7061796c6f61640d0a",
+      "digest": "26a1be5fdcc8c1e6ff5f08167e36f38cf9386229506fca5be5ac3f40e825b29c",
+      "id": "real-task-byte-preserved",
+      "input_hex": "726563656970740d0a7061796c6f61640d0a",
+      "path": "benchmarks/results/real-tasks/raw-receipt.txt"
+    }
+  ],
+  "paths": [
+    {
+      "id": "simple",
+      "input": "src/main.py",
+      "normalized": "src/main.py"
+    },
+    {
+      "id": "windows-separators",
+      "input": "src\\nested\\main.py",
+      "normalized": "src/nested/main.py"
+    },
+    {
+      "id": "dot-and-duplicate",
+      "input": "./src//./nested///main.py",
+      "normalized": "src/nested/main.py"
+    },
+    {
+      "id": "unicode-preserved",
+      "input": "Müşteri/Özet.md",
+      "normalized": "Müşteri/Özet.md"
+    },
+    {
+      "error": "PATH_PARENT_TRAVERSAL",
+      "id": "parent-traversal",
+      "input": "src/../secret.txt"
+    },
+    {
+      "error": "PATH_ABSOLUTE",
+      "id": "absolute-posix",
+      "input": "/etc/passwd"
+    },
+    {
+      "error": "PATH_DRIVE_PREFIX",
+      "id": "drive-prefix",
+      "input": "C:\\repo\\file.txt"
+    },
+    {
+      "error": "PATH_EMPTY",
+      "id": "empty-after-normalization",
+      "input": "./"
+    }
+  ],
+  "policy": {
+    "case_folding": "none",
+    "opaque_prefixes": [
+      "benchmarks/results/real-tasks"
+    ],
+    "path_scope": "lexical-repository-relative",
+    "text_line_endings": "LF",
+    "unicode_normalization": "none"
+  },
+  "schema_version": 1,
+  "sha256": [
+    {
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "id": "empty",
+      "input_hex": ""
+    },
+    {
+      "digest": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "id": "abc",
+      "input_hex": "616263"
+    },
+    {
+      "digest": "5544695275d15e42b0d346c1dc0461fb08ace7af831dda8714ab0cb8cec8105b",
+      "id": "turkish-utf8",
+      "input_hex": "53796e74617672613a20c3a7c4b1c49f20c3b6c59fc3bc20c4b0"
+    },
+    {
+      "digest": "05dc8649f64c31a3d968556fefc33b9e38feaec343af8329aa716b70db0f7282",
+      "id": "binary",
+      "input_hex": "00ff10207f80"
+    }
+  ]
+}

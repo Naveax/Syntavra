@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
+import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
+PRIMITIVES_PATH = ROOT / "syntavra_runtime" / "canonical_primitives.py"
 MANIFEST = ROOT / "MANIFEST.sha256"
 GENERATED_FILES = {
     "fusion-release-smoke.json",
@@ -24,7 +26,25 @@ TRANSIENT_PARTS = {
     ".mypy_cache",
     ".ruff_cache",
 }
-NON_TEXT_PREFIX = ("benchmarks", "results", "real-tasks")
+
+
+def _load_primitives() -> ModuleType:
+    """Load the stdlib-only primitive module without importing the package initializer."""
+
+    spec = importlib.util.spec_from_file_location(
+        "_syntavra_manifest_primitives",
+        PRIMITIVES_PATH,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load canonical primitives: {PRIMITIVES_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_PRIMITIVES = _load_primitives()
+canonical_manifest_bytes = _PRIMITIVES.canonical_manifest_bytes
+manifest_digest_hex = _PRIMITIVES.manifest_digest_hex
 
 
 def is_generated_path(relative: Path) -> bool:
@@ -37,32 +57,9 @@ def is_generated_path(relative: Path) -> bool:
     )
 
 
-def canonical_manifest_bytes(relative: Path, data: bytes) -> bytes:
-    """Return repository-canonical bytes for deterministic hashing.
-
-    Git stores normal text files with LF according to .gitattributes.
-    Normalize UTF-8 text before hashing so a Windows CRLF working tree
-    produces the same manifest as Linux and macOS clean checkouts.
-    """
-
-    if tuple(relative.parts[:3]) == NON_TEXT_PREFIX:
-        return data
-
-    if b"\0" in data:
-        return data
-
-    try:
-        data.decode("utf-8")
-    except UnicodeDecodeError:
-        return data
-
-    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-
-
 def canonical_digest(path: Path) -> str:
     relative = path.relative_to(ROOT)
-    canonical = canonical_manifest_bytes(relative, path.read_bytes())
-    return hashlib.sha256(canonical).hexdigest()
+    return manifest_digest_hex(relative, path.read_bytes())
 
 
 def candidates() -> list[Path]:
