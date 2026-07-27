@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/r9-diagnostics.yml"
       - "tools/r9_wire_source.py"
+      - "tools/r9_wire_source_final.py"
   workflow_dispatch:
 
 permissions:
@@ -33,25 +34,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          (
-            set -euo pipefail
-            python tools/r9_wire_source.py
-            python - <<'PY'
-            from pathlib import Path
-
-            path = Path("crates/syntavra-cli/src/broker_snapshot_contract.rs")
-            source = path.read_text(encoding="utf-8")
-            old = "            | b'~' => output.push(char::from(byte)),\n"
-            new = (
-                "            | b'~' => {\n"
-                "                output.push(char::from(byte));\n"
-                "            }\n"
-            )
-            if source.count(old) != 1:
-                raise SystemExit("R9 percent encoder semicolon marker drifted")
-            path.write_text(source.replace(old, new, 1), encoding="utf-8", newline="\n")
-            PY
-          ) > /tmp/r9-wire-output.txt 2>&1
+          python tools/r9_wire_source_final.py > /tmp/r9-wire-output.txt 2>&1
           status=$?
           cat /tmp/r9-wire-output.txt
           exit "$status"
