@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/r10-diagnostics.yml"
       - "tools/r10_wire_source.py"
+      - "tools/r10_wire_source_final.py"
       - "syntavra_runtime/broker_live_snapshot_contract.py"
       - "crates/syntavra-cli/src/broker_live_snapshot_contract.rs"
       - "contracts/state/broker-live-snapshot-v1.json"
@@ -38,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python tools/r10_wire_source.py > /tmp/r10-wire-output.txt 2>&1
+          python tools/r10_wire_source_final.py > /tmp/r10-wire-output.txt 2>&1
           status=$?
           cat /tmp/r10-wire-output.txt
           exit "$status"
