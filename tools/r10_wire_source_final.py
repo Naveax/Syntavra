@@ -28,6 +28,12 @@ def main() -> int:
         "",
         "generic contract_array wiring entry",
     )
+    wiring = replace_once(
+        wiring,
+        'descriptor = ROOT / "contracts" / "engine" / "rust-contract-v1.txt"',
+        'descriptor = ROOT / "contracts" / "engine" / "descriptor.txt"',
+        "engine descriptor path",
+    )
     wiring_path.write_text(wiring, encoding="utf-8", newline="\n")
 
     rust_path = ROOT / "crates" / "syntavra-cli" / "src" / "broker_snapshot_contract.rs"
