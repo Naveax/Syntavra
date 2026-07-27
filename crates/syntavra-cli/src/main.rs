@@ -50,9 +50,7 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [primitive, action, input_hex] if primitive == "primitive" && action == "sha256" => {
             Ok(Command::PrimitiveSha256(input_hex.clone()))
         }
-        [primitive, action, path]
-            if primitive == "primitive" && action == "normalize-path" =>
-        {
+        [primitive, action, path] if primitive == "primitive" && action == "normalize-path" => {
             Ok(Command::PrimitiveNormalizePath(path.clone()))
         }
         [primitive, action, path, input_hex]
@@ -164,7 +162,8 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::PrimitiveCanonicalize { path, input_hex } => {
             let input = decode_hex(&input_hex)?;
-            let normalized = normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
+            let normalized =
+                normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
             let canonical = canonical_manifest_bytes(&normalized, &input)
                 .map_err(|error| error.code().to_owned())?;
             println!(
@@ -180,8 +179,10 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::PrimitiveManifestDigest { path, input_hex } => {
             let input = decode_hex(&input_hex)?;
-            let normalized = normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
-            let digest = manifest_digest_hex(&normalized, &input).map_err(|error| error.code().to_owned())?;
+            let normalized =
+                normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
+            let digest = manifest_digest_hex(&normalized, &input)
+                .map_err(|error| error.code().to_owned())?;
             println!(
                 "{{\"path\":{},\"algorithm\":\"sha256\",\"digest\":\"{}\"}}",
                 json_string(&normalized),
@@ -189,7 +190,8 @@ fn run(command: Command) -> Result<(), String> {
             );
         }
         Command::PrimitiveNormalizePath(path) => {
-            let normalized = normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
+            let normalized =
+                normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
             println!("{{\"path\":{}}}", json_string(&normalized));
         }
         Command::Help => print!("{USAGE}"),
