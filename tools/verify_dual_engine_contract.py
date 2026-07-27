@@ -11,6 +11,7 @@ DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
 RUST_CONTRACTS = ROOT / "crates" / "syntavra-contracts" / "src" / "lib.rs"
 CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "capabilities.schema.json",
+    ROOT / "contracts" / "engine" / "selection.schema.json",
     ROOT / "contracts" / "cli" / "result-envelope.schema.json",
     ROOT / "contracts" / "mcp" / "tool-catalog.schema.json",
     ROOT / "contracts" / "state" / "layout.json",
@@ -77,11 +78,17 @@ def verify() -> dict[str, object]:
             raise RuntimeError(f"contract must be a JSON object: {path}")
         parsed_contracts.append(path.relative_to(ROOT).as_posix())
 
+    selection = json.loads((ROOT / "contracts" / "engine" / "selection.schema.json").read_text(encoding="utf-8"))
+    engine_enum = selection.get("properties", {}).get("engine", {}).get("enum")
+    if engine_enum != ["auto", "python", "rust"]:
+        raise RuntimeError("engine selection enum or order drifted")
+
     return {
         "ok": True,
         "contract_version": int(fields["contract_version"]),
         "descriptor_sha256": hashlib.sha256(descriptor.encode("utf-8")).hexdigest(),
         "capabilities": capability_rows,
+        "engine_modes": engine_enum,
         "json_contracts": parsed_contracts,
     }
 
