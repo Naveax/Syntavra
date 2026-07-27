@@ -1,0 +1,44 @@
+name: Format rebased R5 with pinned Rust
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/format-rebased-r5.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  format-r5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r5-primitives
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt
+      - name: Apply pinned formatting and push only Rust sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          mapfile -t changed < <(git diff --name-only)
+          if [ "${#changed[@]}" -eq 0 ]; then
+            echo "R5 Rust sources are already formatted."
+            exit 0
+          fi
+          for path in "${changed[@]}"; do
+            echo "$path" | grep -Eq '^crates/.+\.rs$' || {
+              echo "unexpected formatter change: $path"
+              exit 1
+            }
+          done
+          git config user.name "Syntavra Rust Formatter"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- crates
+          git commit -m "Format rebased R5 Rust sources with Rust 1.82"
+          git push origin HEAD:feature/dual-engine-r5-primitives
