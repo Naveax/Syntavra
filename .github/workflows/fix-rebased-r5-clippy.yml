@@ -1,0 +1,88 @@
+name: Fix rebased R5 Clippy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-rebased-r5-clippy.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix-r5-clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r5-primitives
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Add exact error documentation
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path("crates/syntavra-core/src/lib.rs")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "pub fn normalize_repository_path(input: &str) -> Result<String, CanonicalPathError> {": """/// Normalize a repository-relative path without consulting the filesystem.
+          ///
+          /// # Errors
+          ///
+          /// Returns [`CanonicalPathError`] when the path is empty after normalization,
+          /// absolute, drive-prefixed, contains parent traversal, or contains a NUL byte.
+          pub fn normalize_repository_path(input: &str) -> Result<String, CanonicalPathError> {""",
+              """pub fn canonical_manifest_bytes(
+              relative_path: &str,
+              input: &[u8],
+          ) -> Result<Vec<u8>, CanonicalPathError> {""": """/// Canonicalize bytes for repository-manifest hashing.
+          ///
+          /// # Errors
+          ///
+          /// Returns [`CanonicalPathError`] when `relative_path` violates the repository-
+          /// relative path contract enforced by [`normalize_repository_path`].
+          pub fn canonical_manifest_bytes(
+              relative_path: &str,
+              input: &[u8],
+          ) -> Result<Vec<u8>, CanonicalPathError> {""",
+              """pub fn manifest_digest_hex(
+              relative_path: &str,
+              input: &[u8],
+          ) -> Result<String, CanonicalPathError> {""": """/// Return the SHA-256 digest of canonical repository-manifest bytes.
+          ///
+          /// # Errors
+          ///
+          /// Returns [`CanonicalPathError`] when `relative_path` violates the repository-
+          /// relative path contract enforced by [`normalize_repository_path`].
+          pub fn manifest_digest_hex(
+              relative_path: &str,
+              input: &[u8],
+          ) -> Result<String, CanonicalPathError> {""",
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one marker, found {count}: {old[:60]!r}")
+              text = text.replace(old, new)
+          path.write_text(text, encoding="utf-8", newline="\n")
+      - name: Validate pinned Rust quality
+        run: |
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Commit only documented core source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "crates/syntavra-core/src/lib.rs"
+          git config user.name "Syntavra Rust Quality"
+          git config user.email "actions@users.noreply.github.com"
+          git add crates/syntavra-core/src/lib.rs
+          git commit -m "Document R5 canonical primitive error contracts"
+          git push origin HEAD:feature/dual-engine-r5-primitives
