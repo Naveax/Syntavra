@@ -7,7 +7,8 @@
     "algorithm": "sha256-normalized-absolute-path-v1",
     "field": "project_id",
     "required_for": [
-      "receipt-envelope"
+      "receipt-envelope",
+      "state-inspection"
     ],
     "mismatch_policy": "fail-closed"
   },
@@ -39,7 +40,8 @@
       "writers": [
         "python"
       ],
-      "rust_r7_access": "contract-metadata-only"
+      "rust_r7_access": "contract-metadata-only",
+      "rust_r8_access": "bounded-file-metadata-and-hash"
     },
     {
       "id": "engine-selection",
@@ -52,31 +54,36 @@
       "writers": [
         "python"
       ],
-      "rust_r7_access": "contract-metadata-only"
+      "rust_r7_access": "contract-metadata-only",
+      "rust_r8_access": "bounded-file-metadata-and-hash"
     },
     {
       "id": "pre-release-state",
       "path": ".syntavra/pre-release",
       "kind": "product-state",
       "readers": [
-        "python"
+        "python",
+        "rust"
       ],
       "writers": [
         "python"
       ],
-      "rust_r7_access": "not-proven"
+      "rust_r7_access": "not-proven",
+      "rust_r8_access": "directory-metadata-only"
     },
     {
       "id": "runtime-v3-state",
       "path": ".syntavra/runtime-v3",
       "kind": "runtime-state",
       "readers": [
-        "python"
+        "python",
+        "rust"
       ],
       "writers": [
         "python"
       ],
-      "rust_r7_access": "not-proven"
+      "rust_r7_access": "not-proven",
+      "rust_r8_access": "directory-metadata-only"
     }
   ],
   "receipt_envelope": {
@@ -94,12 +101,24 @@
     "filesystem_mutation": false,
     "database_access": false
   },
+  "r8_access": {
+    "rust": "contract-declared-state-root-inspection",
+    "command": "state.inspect",
+    "filesystem_state_reads": true,
+    "filesystem_mutation": false,
+    "database_access": false,
+    "recursive_directory_read": false,
+    "symlink_policy": "fail-closed",
+    "unsupported_file_type_policy": "fail-closed",
+    "max_file_bytes": 1048576
+  },
   "compatibility_rules": [
     "A mutating operation selects one engine before the first state write.",
     "An engine may fall back only after capability preflight reports unsupported and before mutation.",
     "Unknown schema versions, fields, paths, and engine values fail closed.",
     "R4 auto mode resolves to Python.",
     "Logical SQLite records, not physical page layout, define future database parity.",
-    "R7 proves only state-layout metadata and receipt-envelope parsing."
+    "R7 proves only state-layout metadata and receipt-envelope parsing.",
+    "R8 permits only declared state-root metadata reads and bounded hashes; databases remain unopened."
   ]
 }

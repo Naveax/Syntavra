@@ -13,7 +13,108 @@ RECEIPT_SCHEMA_VERSION = 1
 _LOWER_HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 
-STATE_LAYOUT: dict[str, Any] = {'schema_version': 1, 'contract_version': 1, 'layout_id': 'syntavra-state-layout-v1', 'root': '.syntavra', 'project_binding': {'algorithm': 'sha256-normalized-absolute-path-v1', 'field': 'project_id', 'required_for': ['receipt-envelope'], 'mismatch_policy': 'fail-closed'}, 'engine_policy': {'single_writer': True, 'fallback_after_mutation': False, 'lock_root': '.syntavra/locks', 'selection_precedence': ['command', 'environment', 'project', 'user', 'builtin'], 'environment_override': 'SYNTAVRA_ENGINE', 'builtin_default': 'python', 'auto_policy_r4': 'python', 'unknown_selection': 'fail-closed'}, 'shared_paths': [{'id': 'project-config', 'path': '.syntavra/config.toml', 'kind': 'configuration', 'readers': ['python', 'rust'], 'writers': ['python'], 'rust_r7_access': 'contract-metadata-only'}, {'id': 'engine-selection', 'path': '.syntavra/engine.json', 'kind': 'engine-selection', 'readers': ['python', 'rust'], 'writers': ['python'], 'rust_r7_access': 'contract-metadata-only'}, {'id': 'pre-release-state', 'path': '.syntavra/pre-release', 'kind': 'product-state', 'readers': ['python'], 'writers': ['python'], 'rust_r7_access': 'not-proven'}, {'id': 'runtime-v3-state', 'path': '.syntavra/runtime-v3', 'kind': 'runtime-state', 'readers': ['python'], 'writers': ['python'], 'rust_r7_access': 'not-proven'}], 'receipt_envelope': {'wire_header': 'R7RCPT1', 'schema_version': 1, 'hash_algorithm': 'sha256', 'hash_scope': 'canonical-wire-excluding-receipt-hash', 'project_binding_required': True, 'unknown_fields': 'fail-closed', 'unknown_schema': 'fail-closed'}, 'r7_access': {'rust': 'contract-metadata-and-receipt-parse-only', 'filesystem_state_reads': False, 'filesystem_mutation': False, 'database_access': False}, 'compatibility_rules': ['A mutating operation selects one engine before the first state write.', 'An engine may fall back only after capability preflight reports unsupported and before mutation.', 'Unknown schema versions, fields, paths, and engine values fail closed.', 'R4 auto mode resolves to Python.', 'Logical SQLite records, not physical page layout, define future database parity.', 'R7 proves only state-layout metadata and receipt-envelope parsing.']}
+STATE_LAYOUT: dict[str, Any] = {
+    "schema_version": 1,
+    "contract_version": 1,
+    "layout_id": "syntavra-state-layout-v1",
+    "root": ".syntavra",
+    "project_binding": {
+        "algorithm": "sha256-normalized-absolute-path-v1",
+        "field": "project_id",
+        "required_for": ["receipt-envelope", "state-inspection"],
+        "mismatch_policy": "fail-closed",
+    },
+    "engine_policy": {
+        "single_writer": True,
+        "fallback_after_mutation": False,
+        "lock_root": ".syntavra/locks",
+        "selection_precedence": [
+            "command",
+            "environment",
+            "project",
+            "user",
+            "builtin",
+        ],
+        "environment_override": "SYNTAVRA_ENGINE",
+        "builtin_default": "python",
+        "auto_policy_r4": "python",
+        "unknown_selection": "fail-closed",
+    },
+    "shared_paths": [
+        {
+            "id": "project-config",
+            "path": ".syntavra/config.toml",
+            "kind": "configuration",
+            "readers": ["python", "rust"],
+            "writers": ["python"],
+            "rust_r7_access": "contract-metadata-only",
+            "rust_r8_access": "bounded-file-metadata-and-hash",
+        },
+        {
+            "id": "engine-selection",
+            "path": ".syntavra/engine.json",
+            "kind": "engine-selection",
+            "readers": ["python", "rust"],
+            "writers": ["python"],
+            "rust_r7_access": "contract-metadata-only",
+            "rust_r8_access": "bounded-file-metadata-and-hash",
+        },
+        {
+            "id": "pre-release-state",
+            "path": ".syntavra/pre-release",
+            "kind": "product-state",
+            "readers": ["python", "rust"],
+            "writers": ["python"],
+            "rust_r7_access": "not-proven",
+            "rust_r8_access": "directory-metadata-only",
+        },
+        {
+            "id": "runtime-v3-state",
+            "path": ".syntavra/runtime-v3",
+            "kind": "runtime-state",
+            "readers": ["python", "rust"],
+            "writers": ["python"],
+            "rust_r7_access": "not-proven",
+            "rust_r8_access": "directory-metadata-only",
+        },
+    ],
+    "receipt_envelope": {
+        "wire_header": "R7RCPT1",
+        "schema_version": 1,
+        "hash_algorithm": "sha256",
+        "hash_scope": "canonical-wire-excluding-receipt-hash",
+        "project_binding_required": True,
+        "unknown_fields": "fail-closed",
+        "unknown_schema": "fail-closed",
+    },
+    "r7_access": {
+        "rust": "contract-metadata-and-receipt-parse-only",
+        "filesystem_state_reads": False,
+        "filesystem_mutation": False,
+        "database_access": False,
+    },
+    "r8_access": {
+        "rust": "contract-declared-state-root-inspection",
+        "command": "state.inspect",
+        "filesystem_state_reads": True,
+        "filesystem_mutation": False,
+        "database_access": False,
+        "recursive_directory_read": False,
+        "symlink_policy": "fail-closed",
+        "unsupported_file_type_policy": "fail-closed",
+        "max_file_bytes": 1048576,
+    },
+    "compatibility_rules": [
+        "A mutating operation selects one engine before the first state write.",
+        "An engine may fall back only after capability preflight reports unsupported and before mutation.",
+        "Unknown schema versions, fields, paths, and engine values fail closed.",
+        "R4 auto mode resolves to Python.",
+        "Logical SQLite records, not physical page layout, define future database parity.",
+        "R7 proves only state-layout metadata and receipt-envelope parsing.",
+        "R8 permits only declared state-root metadata reads and bounded hashes; databases remain unopened.",
+    ],
+}
+
 
 class ReceiptContractError(ValueError):
     def __init__(self, code: str):
