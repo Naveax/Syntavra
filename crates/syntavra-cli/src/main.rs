@@ -6,9 +6,7 @@ use std::env;
 use std::fmt::Write as _;
 use std::process::ExitCode;
 
-use config_contract::{
-    default_config_wire, resolve_config_wire, snapshot_json, status_json,
-};
+use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
 use syntavra_contracts::{
     capabilities_json, CONTRACT_DESCRIPTOR, CONTRACT_VERSION, ENGINE_NAME, ENGINE_STABILITY,
     PRODUCT_NAME, PRODUCT_VERSION, RELEASE_CHANNEL,
@@ -65,9 +63,7 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [primitive, action, input_hex] if primitive == "primitive" && action == "sha256" => {
             Ok(Command::PrimitiveSha256(input_hex.clone()))
         }
-        [primitive, action, path]
-            if primitive == "primitive" && action == "normalize-path" =>
-        {
+        [primitive, action, path] if primitive == "primitive" && action == "normalize-path" => {
             Ok(Command::PrimitiveNormalizePath(path.clone()))
         }
         [primitive, action, path, input_hex]
@@ -246,9 +242,7 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        contract_hash_json, decode_hex, parse_command, version_json, Command,
-    };
+    use super::{contract_hash_json, decode_hex, parse_command, version_json, Command};
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
