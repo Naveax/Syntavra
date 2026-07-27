@@ -8,6 +8,7 @@ capability=config.resolve|preview|read-only
 capability=engine.capabilities|preview|read-only
 capability=engine.contract-hash|preview|read-only
 capability=receipt.inspect|preview|read-only
+capability=state.broker-snapshot|preview|read-only
 capability=state.inspect|preview|read-only
 capability=state.layout|preview|read-only
 capability=status|preview|read-only
