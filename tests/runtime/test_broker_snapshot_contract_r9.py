@@ -172,6 +172,19 @@ def _fixture(tmp_path: Path, *, populated: bool = True) -> tuple[Path, str]:
     return database, project_id
 
 
+def _execute_mutation(
+    database: Path,
+    sql: str,
+    parameters: tuple[object, ...] = (),
+) -> None:
+    db = sqlite3.connect(database)
+    try:
+        db.execute(sql, parameters)
+        db.commit()
+    finally:
+        db.close()
+
+
 def _tree_snapshot(root: Path) -> list[tuple[str, int, int, int, bytes | None]]:
     rows: list[tuple[str, int, int, int, bytes | None]] = []
     for path in sorted(root.rglob("*")):
@@ -341,8 +354,10 @@ def test_quiescent_sidecar_policy_fails_closed(tmp_path: Path) -> None:
 
 def test_schema_version_and_object_drift_fail_closed(tmp_path: Path) -> None:
     database, project_id = _fixture(tmp_path)
-    with sqlite3.connect(database) as db:
-        db.execute("UPDATE metadata SET value='3' WHERE key='schema_version'")
+    _execute_mutation(
+        database,
+        "UPDATE metadata SET value='3' WHERE key='schema_version'",
+    )
     _assert_error(
         "BROKER_SCHEMA_VERSION_UNSUPPORTED",
         tmp_path,
@@ -352,33 +367,38 @@ def test_schema_version_and_object_drift_fail_closed(tmp_path: Path) -> None:
 
     database.unlink()
     _create_schema(database, project_id)
-    with sqlite3.connect(database) as db:
-        db.execute("CREATE TABLE unexpected(value TEXT)")
+    _execute_mutation(database, "CREATE TABLE unexpected(value TEXT)")
     _assert_error("BROKER_SCHEMA_OBJECT_MISMATCH", tmp_path, database, project_id)
 
     database.unlink()
     _create_schema(database, project_id)
-    with sqlite3.connect(database) as db:
-        db.execute("ALTER TABLE jobs ADD COLUMN unexpected TEXT")
+    _execute_mutation(database, "ALTER TABLE jobs ADD COLUMN unexpected TEXT")
     _assert_error("BROKER_SCHEMA_COLUMN_MISMATCH", tmp_path, database, project_id)
 
 
 def test_logical_row_validation_fails_closed(tmp_path: Path) -> None:
     database, project_id = _fixture(tmp_path)
-    with sqlite3.connect(database) as db:
-        db.execute("UPDATE jobs SET argv_json='not-json' WHERE job_id='job-1'")
+    _execute_mutation(
+        database,
+        "UPDATE jobs SET argv_json='not-json' WHERE job_id='job-1'",
+    )
     _assert_error("BROKER_JSON_INVALID", tmp_path, database, project_id)
 
     database.unlink()
     _create_schema(database, project_id)
-    with sqlite3.connect(database) as db:
-        db.execute("UPDATE jobs SET project_id=? WHERE job_id='job-1'", ("0" * 64,))
+    _execute_mutation(
+        database,
+        "UPDATE jobs SET project_id=? WHERE job_id='job-1'",
+        ("0" * 64,),
+    )
     _assert_error("BROKER_JOB_PROJECT_MISMATCH", tmp_path, database, project_id)
 
     database.unlink()
     _create_schema(database, project_id)
-    with sqlite3.connect(database) as db:
-        db.execute("UPDATE jobs SET timed_out=2 WHERE job_id='job-1'")
+    _execute_mutation(
+        database,
+        "UPDATE jobs SET timed_out=2 WHERE job_id='job-1'",
+    )
     _assert_error("BROKER_ROW_TYPE_INVALID", tmp_path, database, project_id)
 
 
