@@ -6,6 +6,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from syntavra_runtime.config_contract import resolve_config_phases, status_projection
 from syntavra_runtime.release_identity import identity
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,8 @@ def verify() -> dict[str, object]:
     version = _rust_json("version")
     capabilities = _rust_json("engine", "capabilities")
     contract_hash = _rust_json("engine", "contract-hash")
+    status = _rust_json("status")
+    reference_status = status_projection(resolve_config_phases([{}]))
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -55,6 +58,7 @@ def verify() -> dict[str, object]:
         "capability_contract": capabilities.get("contract_version") == 1,
         "descriptor_hash": contract_hash.get("contract_hash")
         == hashlib.sha256(DESCRIPTOR.read_bytes()).hexdigest(),
+        "default_status": status == reference_status,
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -64,15 +68,21 @@ def verify() -> dict[str, object]:
         for row in capabilities.get("capabilities", [])
         if isinstance(row, dict)
     ]
-    expected = ["engine.capabilities", "engine.contract-hash", "version"]
+    expected = [
+        "config.resolve",
+        "engine.capabilities",
+        "engine.contract-hash",
+        "status",
+        "version",
+    ]
     if capability_names != expected:
         raise RuntimeError(
-            f"unexpected initial Rust capability surface: {capability_names!r}"
+            f"unexpected Rust capability surface: {capability_names!r}"
         )
 
     return {
         "ok": True,
-        "phase": "R0-R3",
+        "phase": "R0-R6",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,

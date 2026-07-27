@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "contract": "R6_CONFIG_IDENTITY_STATUS",
+  "cases": [
+    {
+      "name": "defaults",
+      "phases": [
+        {}
+      ]
+    },
+    {
+      "name": "scope-precedence",
+      "phases": [
+        {
+          "user": {
+            "runtime": {
+              "profile": "compact"
+            },
+            "routing": {
+              "budget_bytes": 2048
+            }
+          },
+          "project": {
+            "runtime": {
+              "profile": "detailed"
+            },
+            "routing": {
+              "budget_bytes": 4096
+            }
+          },
+          "environment": {
+            "runtime.profile": "audit",
+            "routing.budget_bytes": 8192
+          },
+          "session": {
+            "runtime": {
+              "profile": "terse"
+            }
+          },
+          "task": {
+            "runtime": {
+              "profile": "balanced"
+            },
+            "routing": {
+              "budget_bytes": 16384
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "last-good-fallback",
+      "phases": [
+        {
+          "project": {
+            "runtime": {
+              "profile": "compact"
+            },
+            "security": {
+              "dlp": "preferred"
+            }
+          }
+        },
+        {
+          "project": {
+            "runtime": {
+              "profile": "invalid"
+            },
+            "routing": {
+              "budget_bytes": 128
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "environment-secret-reference",
+      "phases": [
+        {
+          "environment": {
+            "provider.credential_ref": "secret://provider/default",
+            "provider.timeout_seconds": 90.0
+          }
+        }
+      ]
+    }
+  ]
+}
