@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "contract_version": 1,
+  "snapshot_id": "syntavra-broker-live-snapshot-v1",
+  "database_name": "broker.sqlite3",
+  "broker_schema_version": 2,
+  "logical_contract": "syntavra-broker-snapshot-v1",
+  "source_policy": {
+    "open_mode": "read-only-live",
+    "query_only": true,
+    "trusted_schema": false,
+    "database_symlinks": "fail-closed",
+    "sidecar_symlinks": "fail-closed",
+    "rollback_journal": "fail-closed",
+    "wal_without_shm": "fail-closed",
+    "shm_without_wal": "fail-closed"
+  },
+  "backup_policy": {
+    "destination": "memory",
+    "api": "sqlite-online-backup",
+    "pages_per_step": 64,
+    "maximum_database_bytes": 67108864,
+    "maximum_duration_milliseconds": 5000,
+    "retry_sleep_milliseconds": 10,
+    "busy_and_locked": "retry-until-deadline",
+    "growth_beyond_limit": "fail-closed"
+  },
+  "mutation_policy": {
+    "source_connection_writes": false,
+    "checkpoint": false,
+    "vacuum": false,
+    "migration": false,
+    "destination_files": false,
+    "persistent_project_state": false
+  },
+  "canonicalization": {
+    "logical_rows": "syntavra-broker-snapshot-v1",
+    "snapshot_hash": "sha256-canonical-json-excluding-snapshot-hash",
+    "dynamic_elapsed_time": "excluded",
+    "dynamic_retry_count": "excluded"
+  }
+}
