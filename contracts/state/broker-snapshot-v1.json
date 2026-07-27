@@ -1,393 +1,395 @@
 {
-  "schema_version": 1,
-  "contract_version": 1,
-  "snapshot_id": "syntavra-broker-snapshot-v1",
-  "database_name": "broker.sqlite3",
   "broker_schema_version": 2,
+  "canonicalization": {
+    "blob_values": "fail-closed",
+    "job_project_binding": "required-exact-match",
+    "json": "utf8-sort-keys-compact-v1",
+    "non_finite_reals": "fail-closed",
+    "real_tag": "$f64",
+    "real_values": "ieee754-binary64-lowerhex-tag-v1",
+    "snapshot_hash": "sha256-canonical-json-excluding-snapshot-hash"
+  },
+  "contract_version": 1,
+  "database_name": "broker.sqlite3",
+  "foreign_keys": [
+    {
+      "from": "job_id",
+      "on_delete": "NO ACTION",
+      "on_update": "NO ACTION",
+      "table": "completion_events",
+      "to": "job_id",
+      "to_table": "jobs"
+    }
+  ],
+  "indexes": [
+    {
+      "columns": [
+        {
+          "descending": false,
+          "name": "state"
+        },
+        {
+          "descending": true,
+          "name": "created_at"
+        }
+      ],
+      "name": "jobs_state_idx",
+      "table": "jobs",
+      "unique": false
+    }
+  ],
+  "object_policy": {
+    "sqlite_internal_objects": "ignored",
+    "triggers": "fail-closed",
+    "unknown_user_indexes": "fail-closed",
+    "unknown_user_tables": "fail-closed",
+    "views": "fail-closed"
+  },
   "open_policy": {
-    "mode": "read-only-immutable",
-    "query_only": true,
-    "quiescent_required": true,
+    "filesystem_mutation": false,
     "forbidden_sidecars": [
       "-journal",
       "-shm",
       "-wal"
     ],
-    "filesystem_mutation": false
+    "mode": "read-only-immutable",
+    "query_only": true,
+    "quiescent_required": true
   },
-  "object_policy": {
-    "unknown_user_tables": "fail-closed",
-    "unknown_user_indexes": "fail-closed",
-    "views": "fail-closed",
-    "triggers": "fail-closed",
-    "sqlite_internal_objects": "ignored"
-  },
+  "schema_version": 1,
+  "snapshot_id": "syntavra-broker-snapshot-v1",
   "tables": [
     {
-      "name": "metadata",
-      "order_by": [
-        "key"
-      ],
-      "json_columns": [],
       "boolean_columns": [],
       "columns": [
         {
+          "default": null,
           "name": "key",
-          "type": "TEXT",
           "not_null": false,
           "primary_key_position": 1,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "value",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         }
+      ],
+      "json_columns": [],
+      "name": "metadata",
+      "order_by": [
+        "key"
       ]
     },
     {
-      "name": "jobs",
-      "order_by": [
-        "job_id"
-      ],
-      "json_columns": [
-        "argv_json"
-      ],
       "boolean_columns": [
         "cancelled",
         "timed_out"
       ],
       "columns": [
         {
+          "default": null,
           "name": "job_id",
-          "type": "TEXT",
           "not_null": false,
           "primary_key_position": 1,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "state",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "argv_json",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "cwd",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "created_at",
-          "type": "REAL",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "REAL"
         },
         {
+          "default": null,
           "name": "started_at",
-          "type": "REAL",
           "not_null": false,
           "primary_key_position": 0,
-          "default": null
+          "type": "REAL"
         },
         {
+          "default": null,
           "name": "completed_at",
-          "type": "REAL",
           "not_null": false,
           "primary_key_position": 0,
-          "default": null
+          "type": "REAL"
         },
         {
+          "default": null,
           "name": "pid",
-          "type": "INTEGER",
           "not_null": false,
           "primary_key_position": 0,
-          "default": null
+          "type": "INTEGER"
         },
         {
+          "default": null,
           "name": "exit_code",
-          "type": "INTEGER",
           "not_null": false,
           "primary_key_position": 0,
-          "default": null
+          "type": "INTEGER"
         },
         {
+          "default": "0",
           "name": "timed_out",
-          "type": "INTEGER",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "0"
+          "type": "INTEGER"
         },
         {
+          "default": "0",
           "name": "cancelled",
-          "type": "INTEGER",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "0"
+          "type": "INTEGER"
         },
         {
+          "default": "''",
           "name": "summary",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "''"
+          "type": "TEXT"
         },
         {
+          "default": "''",
           "name": "evidence_handle",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "''"
+          "type": "TEXT"
         },
         {
+          "default": "''",
           "name": "error",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "''"
+          "type": "TEXT"
         },
         {
+          "default": "0",
           "name": "timeout_seconds",
-          "type": "REAL",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "0"
+          "type": "REAL"
         },
         {
+          "default": "''",
           "name": "stdout_path",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "''"
+          "type": "TEXT"
         },
         {
+          "default": "''",
           "name": "stderr_path",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "''"
+          "type": "TEXT"
         },
         {
+          "default": "'unknown'",
           "name": "repository_tree",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "'unknown'"
+          "type": "TEXT"
         },
         {
+          "default": "'unknown'",
           "name": "environment_hash",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "'unknown'"
+          "type": "TEXT"
         },
         {
+          "default": "''",
           "name": "project_id",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": "''"
+          "type": "TEXT"
         }
+      ],
+      "json_columns": [
+        "argv_json"
+      ],
+      "name": "jobs",
+      "order_by": [
+        "job_id"
       ]
     },
     {
-      "name": "completion_events",
-      "order_by": [
-        "sequence"
+      "boolean_columns": [],
+      "columns": [
+        {
+          "default": null,
+          "name": "sequence",
+          "not_null": false,
+          "primary_key_position": 1,
+          "type": "INTEGER"
+        },
+        {
+          "default": null,
+          "name": "job_id",
+          "not_null": true,
+          "primary_key_position": 0,
+          "type": "TEXT"
+        },
+        {
+          "default": null,
+          "name": "state",
+          "not_null": true,
+          "primary_key_position": 0,
+          "type": "TEXT"
+        },
+        {
+          "default": null,
+          "name": "exit_code",
+          "not_null": false,
+          "primary_key_position": 0,
+          "type": "INTEGER"
+        },
+        {
+          "default": null,
+          "name": "completed_at",
+          "not_null": true,
+          "primary_key_position": 0,
+          "type": "REAL"
+        },
+        {
+          "default": null,
+          "name": "evidence_handle",
+          "not_null": true,
+          "primary_key_position": 0,
+          "type": "TEXT"
+        },
+        {
+          "default": null,
+          "name": "payload_json",
+          "not_null": true,
+          "primary_key_position": 0,
+          "type": "TEXT"
+        }
       ],
       "json_columns": [
         "payload_json"
       ],
-      "boolean_columns": [],
-      "columns": [
-        {
-          "name": "sequence",
-          "type": "INTEGER",
-          "not_null": false,
-          "primary_key_position": 1,
-          "default": null
-        },
-        {
-          "name": "job_id",
-          "type": "TEXT",
-          "not_null": true,
-          "primary_key_position": 0,
-          "default": null
-        },
-        {
-          "name": "state",
-          "type": "TEXT",
-          "not_null": true,
-          "primary_key_position": 0,
-          "default": null
-        },
-        {
-          "name": "exit_code",
-          "type": "INTEGER",
-          "not_null": false,
-          "primary_key_position": 0,
-          "default": null
-        },
-        {
-          "name": "completed_at",
-          "type": "REAL",
-          "not_null": true,
-          "primary_key_position": 0,
-          "default": null
-        },
-        {
-          "name": "evidence_handle",
-          "type": "TEXT",
-          "not_null": true,
-          "primary_key_position": 0,
-          "default": null
-        },
-        {
-          "name": "payload_json",
-          "type": "TEXT",
-          "not_null": true,
-          "primary_key_position": 0,
-          "default": null
-        }
+      "name": "completion_events",
+      "order_by": [
+        "sequence"
       ]
     },
     {
-      "name": "verifier_results",
-      "order_by": [
-        "cache_key"
-      ],
-      "json_columns": [
-        "affected_paths_json",
-        "command_json"
-      ],
       "boolean_columns": [
         "success"
       ],
       "columns": [
         {
+          "default": null,
           "name": "cache_key",
-          "type": "TEXT",
           "not_null": false,
           "primary_key_position": 1,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "command_json",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "tree_hash",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "environment_hash",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "dependency_hash",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "toolchain_hash",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "success",
-          "type": "INTEGER",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "INTEGER"
         },
         {
+          "default": null,
           "name": "exit_code",
-          "type": "INTEGER",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "INTEGER"
         },
         {
+          "default": null,
           "name": "evidence_handle",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "affected_paths_json",
-          "type": "TEXT",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "TEXT"
         },
         {
+          "default": null,
           "name": "created_at",
-          "type": "REAL",
           "not_null": true,
           "primary_key_position": 0,
-          "default": null
+          "type": "REAL"
         }
+      ],
+      "json_columns": [
+        "affected_paths_json",
+        "command_json"
+      ],
+      "name": "verifier_results",
+      "order_by": [
+        "cache_key"
       ]
     }
-  ],
-  "indexes": [
-    {
-      "name": "jobs_state_idx",
-      "table": "jobs",
-      "unique": false,
-      "columns": [
-        {
-          "name": "state",
-          "descending": false
-        },
-        {
-          "name": "created_at",
-          "descending": true
-        }
-      ]
-    }
-  ],
-  "foreign_keys": [
-    {
-      "table": "completion_events",
-      "from": "job_id",
-      "to_table": "jobs",
-      "to": "job_id",
-      "on_update": "NO ACTION",
-      "on_delete": "NO ACTION"
-    }
-  ],
-  "canonicalization": {
-    "json": "utf8-sort-keys-compact-v1",
-    "snapshot_hash": "sha256-canonical-json-excluding-snapshot-hash",
-    "blob_values": "fail-closed",
-    "non_finite_reals": "fail-closed",
-    "job_project_binding": "required-exact-match"
-  }
+  ]
 }

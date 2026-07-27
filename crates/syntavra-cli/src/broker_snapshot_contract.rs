@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
 use rusqlite::types::ValueRef;
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::{Map, Number, Value};
 use syntavra_core::sha256_hex;
 
@@ -71,10 +72,9 @@ fn canonical_project_root(
     if !valid_lower_hash(expected_project_id) {
         return Err(error("BROKER_EXPECTED_PROJECT_INVALID"));
     }
-    let actual = project_id_for_root(project_root)
-        .map_err(|_| error("BROKER_PROJECT_ROOT_INVALID"))?;
-    let root = fs::canonicalize(project_root)
-        .map_err(|_| error("BROKER_PROJECT_ROOT_INVALID"))?;
+    let actual =
+        project_id_for_root(project_root).map_err(|_| error("BROKER_PROJECT_ROOT_INVALID"))?;
+    let root = fs::canonicalize(project_root).map_err(|_| error("BROKER_PROJECT_ROOT_INVALID"))?;
     if actual != expected_project_id {
         return Err(error("BROKER_PROJECT_MISMATCH"));
     }
@@ -155,8 +155,8 @@ fn assert_no_sidecars(database: &Path) -> Result<(), String> {
 }
 
 fn file_identity(path: &Path) -> Result<FileIdentity, String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|_| error("BROKER_DATABASE_METADATA_FAILED"))?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|_| error("BROKER_DATABASE_METADATA_FAILED"))?;
     Ok(FileIdentity {
         length: metadata.len(),
         modified: metadata.modified().ok(),
@@ -171,25 +171,22 @@ fn percent_encode_path(path: &Path) -> Result<String, String> {
     let mut output = String::with_capacity(normalized.len());
     for byte in normalized.bytes() {
         match byte {
-            b'%' => output.push_str("%25"),
-            b'#' => output.push_str("%23"),
-            b'?' => output.push_str("%3F"),
-            _ => output.push(char::from(byte)),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'/' | b':' | b'_' | b'~' => {
+                output.push(char::from(byte));
+            }
+            _ => write!(&mut output, "%{byte:02X}").expect("writing to a String cannot fail"),
         }
     }
     Ok(output)
 }
 
 fn open_database(path: &Path) -> Result<Connection, String> {
-    let uri = format!(
-        "file:{}?mode=ro&immutable=1",
-        percent_encode_path(path)?
-    );
+    let uri = format!("file:{}?mode=ro&immutable=1", percent_encode_path(path)?);
     let flags = OpenFlags::SQLITE_OPEN_READ_ONLY
         | OpenFlags::SQLITE_OPEN_URI
         | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-    let connection =
-        Connection::open_with_flags(uri, flags).map_err(|_| error("BROKER_DATABASE_OPEN_FAILED"))?;
+    let connection = Connection::open_with_flags(uri, flags)
+        .map_err(|_| error("BROKER_DATABASE_OPEN_FAILED"))?;
     connection
         .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;")
         .map_err(|_| error("BROKER_QUERY_ONLY_FAILED"))?;
@@ -219,7 +216,9 @@ fn schema_objects(connection: &Connection, contract: &Value) -> Result<(), Strin
         )
         .map_err(|_| error("BROKER_SCHEMA_READ_FAILED"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|_| error("BROKER_SCHEMA_READ_FAILED"))?;
     let mut actual_tables = BTreeSet::new();
     let mut actual_indexes = BTreeSet::new();
@@ -232,7 +231,6 @@ fn schema_objects(connection: &Connection, contract: &Value) -> Result<(), Strin
             "index" => {
                 actual_indexes.insert(name);
             }
-            "trigger" | "view" => return Err(error("BROKER_SCHEMA_OBJECT_MISMATCH")),
             _ => return Err(error("BROKER_SCHEMA_OBJECT_MISMATCH")),
         }
     }
@@ -504,8 +502,6 @@ fn normalized_cell(
             .map_err(|_| error("BROKER_ROW_TYPE_INVALID")),
         ("INTEGER", ValueRef::Integer(number)) => Ok(Value::Number(Number::from(number))),
         ("REAL", ValueRef::Real(number)) => float_tag(number),
-        ("REAL", ValueRef::Integer(number)) => float_tag(number as f64),
-        (_, ValueRef::Blob(_)) => Err(error("BROKER_ROW_TYPE_INVALID")),
         _ => Err(error("BROKER_ROW_TYPE_INVALID")),
     }
 }
@@ -562,10 +558,7 @@ fn table_rows(
         .query([])
         .map_err(|_| error("BROKER_ROW_READ_FAILED"))?;
     let mut output = Vec::new();
-    while let Some(row) = query
-        .next()
-        .map_err(|_| error("BROKER_ROW_READ_FAILED"))?
-    {
+    while let Some(row) = query.next().map_err(|_| error("BROKER_ROW_READ_FAILED"))? {
         let mut normalized = Map::new();
         for (index, column) in columns.iter().enumerate() {
             let name = column_names[index];
@@ -587,8 +580,7 @@ fn table_rows(
             );
         }
         if table_name == "jobs"
-            && normalized.get("project_id").and_then(Value::as_str)
-                != Some(expected_project_id)
+            && normalized.get("project_id").and_then(Value::as_str) != Some(expected_project_id)
         {
             return Err(error("BROKER_JOB_PROJECT_MISMATCH"));
         }
@@ -602,7 +594,7 @@ fn table_rows(
 /// # Errors
 ///
 /// Returns a stable `BROKER_*` error code when project binding, path confinement,
-/// sidecar policy, SQLite open mode, schema validation, row normalization, or
+/// sidecar policy, `SQLite` open mode, schema validation, row normalization, or
 /// post-read mutation checks fail.
 #[allow(clippy::too_many_lines)]
 pub fn snapshot_broker_database_json(
@@ -614,8 +606,7 @@ pub fn snapshot_broker_database_json(
     if contract_string(&contract, "database_name")? != DATABASE_NAME {
         return Err(error("BROKER_CONTRACT_INVALID"));
     }
-    let (root, actual_project_id) =
-        canonical_project_root(project_root, expected_project_id)?;
+    let (root, actual_project_id) = canonical_project_root(project_root, expected_project_id)?;
     let (database, relative_path) = relative_database_path(&root, database_path)?;
     assert_no_sidecars(&database)?;
     let before = file_identity(&database)?;
@@ -678,9 +669,7 @@ pub fn snapshot_broker_database_json(
     );
     payload.insert(
         "claim".to_owned(),
-        Value::String(
-            "RUST_BROKER_SQLITE_LOGICAL_READ_PARITY_PROVEN_R9_FIXTURES".to_owned(),
-        ),
+        Value::String("RUST_BROKER_SQLITE_LOGICAL_READ_PARITY_PROVEN_R9_FIXTURES".to_owned()),
     );
     payload.insert(
         "contract_version".to_owned(),
@@ -689,14 +678,8 @@ pub fn snapshot_broker_database_json(
     payload.insert("database".to_owned(), Value::Object(database_value));
     payload.insert("mutation".to_owned(), Value::Object(mutation));
     payload.insert("ok".to_owned(), Value::Bool(true));
-    payload.insert(
-        "project_binding".to_owned(),
-        Value::Object(project_binding),
-    );
-    payload.insert(
-        "project_id".to_owned(),
-        Value::String(actual_project_id),
-    );
+    payload.insert("project_binding".to_owned(), Value::Object(project_binding));
+    payload.insert("project_id".to_owned(), Value::String(actual_project_id));
     payload.insert("row_counts".to_owned(), Value::Object(row_counts));
     payload.insert(
         "schema_version".to_owned(),
@@ -714,8 +697,7 @@ pub fn snapshot_broker_database_json(
         "snapshot_hash".to_owned(),
         Value::String(sha256_hex(&encoded)),
     );
-    serde_json::to_string(&Value::Object(payload))
-        .map_err(|_| error("BROKER_ROW_TYPE_INVALID"))
+    serde_json::to_string(&Value::Object(payload)).map_err(|_| error("BROKER_ROW_TYPE_INVALID"))
 }
 
 #[cfg(test)]

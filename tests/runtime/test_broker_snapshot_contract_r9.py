@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import struct
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,11 @@ from syntavra_runtime.state_snapshot_contract import project_id_for_root
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "contracts" / "state" / "broker-snapshot-v1.json"
+
+
+def _f64(value: float) -> dict[str, str]:
+    bits = struct.unpack(">Q", struct.pack(">d", value))[0]
+    return {"$f64": f"{bits:016x}"}
 
 
 def _create_schema(path: Path, project_id: str, *, populated: bool = True) -> None:
@@ -129,7 +135,7 @@ def _create_schema(path: Path, project_id: str, *, populated: bool = True) -> No
                     0,
                     12.25,
                     "sha256:evidence",
-                    '{"state":"COMPLETED","job_id":"job-1"}',
+                    '{"completed_at":12.25,"job_id":"job-1","state":"COMPLETED"}',
                 ),
             )
             db.execute(
@@ -269,6 +275,7 @@ def test_populated_snapshot_is_canonical_and_non_mutating(tmp_path: Path) -> Non
     assert job["timed_out"] is False
     assert job["cancelled"] is False
     assert value["tables"]["completion_events"][0]["payload_json"] == {
+        "completed_at": _f64(12.25),
         "job_id": "job-1",
         "state": "COMPLETED",
     }

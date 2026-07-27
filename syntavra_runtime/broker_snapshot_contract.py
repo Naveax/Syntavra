@@ -7,6 +7,7 @@ import os
 import re
 import sqlite3
 import stat
+import struct
 from pathlib import Path
 from typing import Any, Final
 
@@ -133,14 +134,41 @@ def _canonical_json_bytes(value: Any) -> bytes:
         raise BrokerSnapshotError("BROKER_ROW_TYPE_INVALID") from exc
 
 
+def _float_tag(value: float) -> dict[str, str]:
+    if not math.isfinite(value):
+        raise BrokerSnapshotError("BROKER_ROW_TYPE_INVALID")
+    bits = struct.unpack(">Q", struct.pack(">d", value))[0]
+    return {"$f64": f"{bits:016x}"}
+
+
+def _normalize_json_value(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, int):
+        if -(2**63) <= value <= 2**64 - 1:
+            return value
+        raise BrokerSnapshotError("BROKER_JSON_INVALID")
+    if isinstance(value, float):
+        return _float_tag(value)
+    if isinstance(value, list):
+        return [_normalize_json_value(item) for item in value]
+    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+        return {
+            key: _normalize_json_value(item)
+            for key, item in value.items()
+        }
+    raise BrokerSnapshotError("BROKER_JSON_INVALID")
+
+
 def _json_value(value: str) -> Any:
     def reject_constant(_: str) -> None:
         raise ValueError("non-finite JSON constant")
 
     try:
-        return json.loads(value, parse_constant=reject_constant)
-    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        parsed = json.loads(value, parse_constant=reject_constant)
+    except (TypeError, ValueError) as exc:
         raise BrokerSnapshotError("BROKER_JSON_INVALID") from exc
+    return _normalize_json_value(parsed)
 
 
 def _project_root(
@@ -376,9 +404,7 @@ def _normalize_scalar(value: Any, declared_type: str, nullable: bool) -> Any:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise BrokerSnapshotError("BROKER_ROW_TYPE_INVALID")
         normalized = float(value)
-        if not math.isfinite(normalized):
-            raise BrokerSnapshotError("BROKER_ROW_TYPE_INVALID")
-        return normalized
+        return _float_tag(normalized)
     raise BrokerSnapshotError("BROKER_SCHEMA_COLUMN_MISMATCH")
 
 
