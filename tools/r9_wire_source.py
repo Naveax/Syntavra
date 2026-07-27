@@ -23,7 +23,13 @@ def regex_once(
     *,
     flags: int = 0,
 ) -> str:
-    updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+    updated, count = re.subn(
+        pattern,
+        lambda _match: replacement,
+        text,
+        count=1,
+        flags=flags,
+    )
     if count != 1:
         raise RuntimeError(f"expected one {label} regex match, found {count}")
     return updated
@@ -206,6 +212,30 @@ fn open_database''',
         '''        ("REAL", ValueRef::Real(number)) => float_tag(number),
 ''',
         "Rust strict REAL typing",
+    )
+    source = replace_once(
+        source,
+        '''            "trigger" | "view" => return Err(error("BROKER_SCHEMA_OBJECT_MISMATCH")),
+            _ => return Err(error("BROKER_SCHEMA_OBJECT_MISMATCH")),
+''',
+        '''            _ => return Err(error("BROKER_SCHEMA_OBJECT_MISMATCH")),
+''',
+        "Rust schema object match arms",
+    )
+    source = replace_once(
+        source,
+        '''        (_, ValueRef::Blob(_)) => Err(error("BROKER_ROW_TYPE_INVALID")),
+        _ => Err(error("BROKER_ROW_TYPE_INVALID")),
+''',
+        '''        _ => Err(error("BROKER_ROW_TYPE_INVALID")),
+''',
+        "Rust row-type match arms",
+    )
+    source = replace_once(
+        source,
+        "/// sidecar policy, SQLite open mode, schema validation, row normalization, or\n",
+        "/// sidecar policy, `SQLite` open mode, schema validation, row normalization, or\n",
+        "Rust SQLite documentation markup",
     )
     path.write_text(source, encoding="utf-8", newline="\n")
 
