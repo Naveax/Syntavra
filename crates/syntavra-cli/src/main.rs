@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod broker_live_snapshot_contract;
 mod broker_snapshot_contract;
 mod config_contract;
 mod state_layout_contract;
@@ -10,6 +11,7 @@ use std::env;
 use std::fmt::Write as _;
 use std::process::ExitCode;
 
+use broker_live_snapshot_contract::snapshot_live_broker_database_json;
 use broker_snapshot_contract::snapshot_broker_database_json;
 use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
 use state_layout_contract::state_layout_json;
@@ -32,6 +34,7 @@ const USAGE: &str = concat!(
     "  syntavra-rs config resolve <config-wire-hex>\n",
     "  syntavra-rs state layout\n",
     "  syntavra-rs state inspect <expected-project-id> <project-root>\n",
+    "  syntavra-rs state broker-live-snapshot <expected-project-id> <project-root> <database-path>\n",
     "  syntavra-rs state broker-snapshot <expected-project-id> <project-root> <database-path>\n",
     "  syntavra-rs receipt inspect <expected-project-id> <receipt-wire-hex>\n",
     "  syntavra-rs engine capabilities\n",
@@ -48,6 +51,11 @@ enum Command {
     Status(Option<String>),
     ConfigResolve(String),
     StateLayout,
+    BrokerLiveSnapshot {
+        expected_project_id: String,
+        project_root: String,
+        database_path: String,
+    },
     BrokerSnapshot {
         expected_project_id: String,
         project_root: String,
@@ -86,6 +94,15 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
             Ok(Command::ConfigResolve(wire.clone()))
         }
         [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
+        [state, action, expected_project_id, project_root, database_path]
+            if state == "state" && action == "broker-live-snapshot" =>
+        {
+            Ok(Command::BrokerLiveSnapshot {
+                expected_project_id: expected_project_id.clone(),
+                project_root: project_root.clone(),
+                database_path: database_path.clone(),
+            })
+        }
         [state, action, expected_project_id, project_root, database_path]
             if state == "state" && action == "broker-snapshot" =>
         {
@@ -239,6 +256,18 @@ fn run(command: Command) -> Result<(), String> {
             println!("{}", snapshot_json(&snapshot)?);
         }
         Command::StateLayout => println!("{}", state_layout_json()),
+        Command::BrokerLiveSnapshot {
+            expected_project_id,
+            project_root,
+            database_path,
+        } => println!(
+            "{}",
+            snapshot_live_broker_database_json(
+                &project_root,
+                &database_path,
+                &expected_project_id,
+            )?
+        ),
         Command::BrokerSnapshot {
             expected_project_id,
             project_root,
@@ -387,6 +416,20 @@ mod tests {
             Ok(Command::StateInspect {
                 expected_project_id: "aa".to_owned(),
                 project_root: ".".to_owned(),
+            })
+        );
+        assert_eq!(
+            parse_command(&args(&[
+                "state",
+                "broker-live-snapshot",
+                "aa",
+                ".",
+                ".syntavra/runtime-v3/broker.sqlite3",
+            ])),
+            Ok(Command::BrokerLiveSnapshot {
+                expected_project_id: "aa".to_owned(),
+                project_root: ".".to_owned(),
+                database_path: ".syntavra/runtime-v3/broker.sqlite3".to_owned(),
             })
         );
         assert_eq!(

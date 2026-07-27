@@ -22,6 +22,8 @@ const MAXIMUM_DURATION_MILLISECONDS: u64 = 5_000;
 const PAGES_PER_STEP: i32 = 64;
 const RETRY_SLEEP_MILLISECONDS: u64 = 10;
 
+type LogicalSnapshot = (u64, Map<String, Value>, Map<String, Value>);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ObservedIdentity {
     files: BTreeMap<String, (u64, Option<SystemTime>)>,
@@ -67,15 +69,10 @@ fn sidecar_path(database: &Path, suffix: &str) -> Result<PathBuf, String> {
 
 fn sidecar_state(database: &Path) -> Result<SidecarState, String> {
     let state = SidecarState {
-        journal: regular_file(
-            &sidecar_path(database, "-journal")?,
-            "BROKER_LIVE_SIDECAR",
-        )?
-        .is_some(),
-        shm: regular_file(&sidecar_path(database, "-shm")?, "BROKER_LIVE_SIDECAR")?
+        journal: regular_file(&sidecar_path(database, "-journal")?, "BROKER_LIVE_SIDECAR")?
             .is_some(),
-        wal: regular_file(&sidecar_path(database, "-wal")?, "BROKER_LIVE_SIDECAR")?
-            .is_some(),
+        shm: regular_file(&sidecar_path(database, "-shm")?, "BROKER_LIVE_SIDECAR")?.is_some(),
+        wal: regular_file(&sidecar_path(database, "-wal")?, "BROKER_LIVE_SIDECAR")?.is_some(),
     };
     if state.journal {
         return Err(error("BROKER_LIVE_ROLLBACK_JOURNAL_PRESENT"));
@@ -169,7 +166,7 @@ fn validate_size(page_size: u64, page_count: u64) -> Result<u64, String> {
 fn logical_snapshot(
     connection: &Connection,
     expected_project_id: &str,
-) -> Result<(u64, Map<String, Value>, Map<String, Value>), String> {
+) -> Result<LogicalSnapshot, String> {
     connection
         .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;")
         .map_err(|_| error("BROKER_LIVE_DESTINATION_QUERY_ONLY_FAILED"))?;
@@ -215,7 +212,7 @@ fn insert_project_binding(
 /// # Errors
 ///
 /// Returns a stable `BROKER_*` error code when source binding, sidecar policy,
-/// backup bounds, SQLite online backup, or R9 logical validation fails.
+/// backup bounds, `SQLite` online backup, or R9 logical validation fails.
 #[allow(clippy::too_many_lines)]
 pub fn snapshot_live_broker_database_json(
     project_root: &str,
@@ -240,12 +237,12 @@ pub fn snapshot_live_broker_database_json(
     let initial_page_count = positive_pragma(&source, "page_count")?;
     let initial_logical_bytes = validate_size(page_size, initial_page_count)?;
 
-    let mut destination = Connection::open_in_memory()
-        .map_err(|_| error("BROKER_LIVE_DESTINATION_OPEN_FAILED"))?;
+    let mut destination =
+        Connection::open_in_memory().map_err(|_| error("BROKER_LIVE_DESTINATION_OPEN_FAILED"))?;
     let started = Instant::now();
     let deadline = Duration::from_millis(MAXIMUM_DURATION_MILLISECONDS);
-    let backup = Backup::new(&source, &mut destination)
-        .map_err(|_| error("BROKER_LIVE_BACKUP_FAILED"))?;
+    let backup =
+        Backup::new(&source, &mut destination).map_err(|_| error("BROKER_LIVE_BACKUP_FAILED"))?;
     let mut steps = 0_u64;
     loop {
         if started.elapsed() > deadline {
@@ -289,8 +286,7 @@ pub fn snapshot_live_broker_database_json(
     }
     let final_page_count = positive_pragma(&destination, "page_count")?;
     let final_logical_bytes = validate_size(page_size, final_page_count)?;
-    let (schema_version, tables, row_counts) =
-        logical_snapshot(&destination, expected_project_id)?;
+    let (schema_version, tables, row_counts) = logical_snapshot(&destination, expected_project_id)?;
     drop(destination);
     drop(source);
 
@@ -303,23 +299,14 @@ pub fn snapshot_live_broker_database_json(
         "backup_destination".to_owned(),
         Value::String("memory".to_owned()),
     );
-    database_value.insert(
-        "relative_path".to_owned(),
-        Value::String(relative_path),
-    );
-    database_value.insert(
-        "rollback_journal_present".to_owned(),
-        Value::Bool(false),
-    );
+    database_value.insert("relative_path".to_owned(), Value::String(relative_path));
+    database_value.insert("rollback_journal_present".to_owned(), Value::Bool(false));
     database_value.insert("shm_present".to_owned(), Value::Bool(sidecars_before.shm));
     database_value.insert(
         "source_changed_during_backup".to_owned(),
         Value::Bool(source_changed),
     );
-    database_value.insert(
-        "source_journal_mode".to_owned(),
-        Value::String(journal),
-    );
+    database_value.insert("source_journal_mode".to_owned(), Value::String(journal));
     database_value.insert(
         "source_open_mode".to_owned(),
         Value::String("read-only-live".to_owned()),

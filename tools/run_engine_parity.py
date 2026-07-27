@@ -84,6 +84,7 @@ def verify() -> dict[str, object]:
         "engine.capabilities",
         "engine.contract-hash",
         "receipt.inspect",
+        "state.broker-live-snapshot",
         "state.broker-snapshot",
         "state.inspect",
         "state.layout",
@@ -97,7 +98,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R9",
+        "phase": "R0-R10",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
