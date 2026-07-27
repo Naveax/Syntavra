@@ -16,6 +16,7 @@ on:
       - "tools/verify_config_status_parity.py"
       - "tools/verify_state_receipt_parity.py"
       - "tools/verify_state_snapshot_parity.py"
+      - "tools/verify_broker_snapshot_parity.py"
       - ".github/workflows/contract-drift.yml"
   pull_request:
     branches: [main, "feature/**"]
@@ -32,6 +33,7 @@ on:
       - "tools/verify_config_status_parity.py"
       - "tools/verify_state_receipt_parity.py"
       - "tools/verify_state_snapshot_parity.py"
+      - "tools/verify_broker_snapshot_parity.py"
       - ".github/workflows/contract-drift.yml"
   workflow_dispatch:
 
@@ -142,6 +144,19 @@ jobs:
         with:
           name: syntavra-r8-state-inspection-diagnostics-${{ github.sha }}
           path: state-snapshot-parity.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify R9 logical broker SQLite snapshot parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_broker_snapshot_parity.py 2>&1 | tee broker-snapshot-parity.log
+      - name: Upload R9 broker snapshot diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r9-broker-snapshot-diagnostics-${{ github.sha }}
+          path: broker-snapshot-parity.log
           if-no-files-found: warn
           retention-days: 7
       - name: Run Python-Rust parity gate
