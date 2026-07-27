@@ -1,14 +1,18 @@
 #![forbid(unsafe_code)]
 
 mod config_contract;
+mod state_layout_contract;
 mod state_receipt_contract;
+mod state_snapshot_contract;
 
 use std::env;
 use std::fmt::Write as _;
 use std::process::ExitCode;
 
 use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
-use state_receipt_contract::{inspect_receipt_json, state_layout_json};
+use state_layout_contract::state_layout_json;
+use state_receipt_contract::inspect_receipt_json;
+use state_snapshot_contract::inspect_state_root_json;
 use syntavra_contracts::{
     capabilities_json, CONTRACT_DESCRIPTOR, CONTRACT_VERSION, ENGINE_NAME, ENGINE_STABILITY,
     PRODUCT_NAME, PRODUCT_VERSION, RELEASE_CHANNEL,
@@ -25,6 +29,7 @@ const USAGE: &str = concat!(
     "  syntavra-rs status [config-wire-hex]\n",
     "  syntavra-rs config resolve <config-wire-hex>\n",
     "  syntavra-rs state layout\n",
+    "  syntavra-rs state inspect <expected-project-id> <project-root>\n",
     "  syntavra-rs receipt inspect <expected-project-id> <receipt-wire-hex>\n",
     "  syntavra-rs engine capabilities\n",
     "  syntavra-rs engine contract-hash\n",
@@ -40,6 +45,10 @@ enum Command {
     Status(Option<String>),
     ConfigResolve(String),
     StateLayout,
+    StateInspect {
+        expected_project_id: String,
+        project_root: String,
+    },
     ReceiptInspect {
         expected_project_id: String,
         wire_hex: String,
@@ -69,6 +78,14 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
             Ok(Command::ConfigResolve(wire.clone()))
         }
         [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
+        [state, action, expected_project_id, project_root]
+            if state == "state" && action == "inspect" =>
+        {
+            Ok(Command::StateInspect {
+                expected_project_id: expected_project_id.clone(),
+                project_root: project_root.clone(),
+            })
+        }
         [receipt, action, expected_project_id, wire_hex]
             if receipt == "receipt" && action == "inspect" =>
         {
@@ -205,6 +222,13 @@ fn run(command: Command) -> Result<(), String> {
             println!("{}", snapshot_json(&snapshot)?);
         }
         Command::StateLayout => println!("{}", state_layout_json()),
+        Command::StateInspect {
+            expected_project_id,
+            project_root,
+        } => println!(
+            "{}",
+            inspect_state_root_json(&project_root, &expected_project_id)?
+        ),
         Command::ReceiptInspect {
             expected_project_id,
             wire_hex,
@@ -332,6 +356,13 @@ mod tests {
         assert_eq!(
             parse_command(&args(&["state", "layout"])),
             Ok(Command::StateLayout)
+        );
+        assert_eq!(
+            parse_command(&args(&["state", "inspect", "aa", "."])),
+            Ok(Command::StateInspect {
+                expected_project_id: "aa".to_owned(),
+                project_root: ".".to_owned(),
+            })
         );
         assert_eq!(
             parse_command(&args(&["receipt", "inspect", "aa", "00"])),

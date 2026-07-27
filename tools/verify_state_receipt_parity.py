@@ -13,6 +13,7 @@ from syntavra_runtime.state_receipt_contract import (
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "parity" / "fixtures" / "state-receipts-v1.json"
+LAYOUT = ROOT / "contracts" / "state" / "layout.json"
 
 
 def _rust_json(*arguments: str) -> dict[str, object]:
@@ -68,12 +69,12 @@ def _rust_error(*arguments: str) -> str:
 
 def verify() -> dict[str, object]:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    expected_layout = fixture["layout_expected"]
+    expected_layout = json.loads(LAYOUT.read_text(encoding="utf-8"))
 
     python_layout = state_layout()
     rust_layout = _rust_json("state", "layout")
     if python_layout != expected_layout or rust_layout != expected_layout:
-        raise RuntimeError("R7 state-layout parity failed")
+        raise RuntimeError("R7/R8 state-layout parity failed")
 
     valid_names: list[str] = []
     for row in fixture["valid_receipts"]:
@@ -120,13 +121,14 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R7",
+        "phase": "R7-R8-layout",
         "state_layout": expected_layout["layout_id"],
         "valid_receipts": valid_names,
         "invalid_receipts": invalid_names,
         "claim": "RUST_STATE_LAYOUT_RECEIPT_PARITY_PROVEN_R7_FIXTURES",
         "boundaries": {
-            "filesystem_state_reads": False,
+            "filesystem_state_reads_r7": False,
+            "filesystem_state_reads_r8": True,
             "filesystem_mutation": False,
             "database_access": False,
         },
