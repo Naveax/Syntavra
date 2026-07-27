@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use std::fmt;
+
 const INITIAL_STATE: [u32; 8] = [
     0x6a09_e667,
     0xbb67_ae85,
@@ -77,6 +79,38 @@ const ROUND_CONSTANTS: [u32; 64] = [
     0xbef9_a3f7,
     0xc671_78f2,
 ];
+
+const OPAQUE_MANIFEST_PREFIX: &str = "benchmarks/results/real-tasks";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanonicalPathError {
+    Empty,
+    Absolute,
+    DrivePrefix,
+    ParentTraversal,
+    Nul,
+}
+
+impl CanonicalPathError {
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Empty => "PATH_EMPTY",
+            Self::Absolute => "PATH_ABSOLUTE",
+            Self::DrivePrefix => "PATH_DRIVE_PREFIX",
+            Self::ParentTraversal => "PATH_PARENT_TRAVERSAL",
+            Self::Nul => "PATH_NUL",
+        }
+    }
+}
+
+impl fmt::Display for CanonicalPathError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.code())
+    }
+}
+
+impl std::error::Error for CanonicalPathError {}
 
 #[inline]
 fn choose(x: u32, y: u32, z: u32) -> u32 {
@@ -179,20 +213,114 @@ pub fn sha256(input: &[u8]) -> [u8; 32] {
 }
 
 #[must_use]
-pub fn sha256_hex(input: &[u8]) -> String {
+pub fn bytes_to_hex(input: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let digest = sha256(input);
-    let mut output = String::with_capacity(64);
-    for byte in digest {
+    let mut output = String::with_capacity(input.len() * 2);
+    for &byte in input {
         output.push(char::from(HEX[usize::from(byte >> 4)]));
         output.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     output
 }
 
+#[must_use]
+pub fn sha256_hex(input: &[u8]) -> String {
+    bytes_to_hex(&sha256(input))
+}
+
+/// Normalize a repository-relative path without consulting the filesystem.
+///
+/// # Errors
+///
+/// Returns [`CanonicalPathError`] when the path is empty after normalization,
+/// absolute, drive-prefixed, contains parent traversal, or contains a NUL byte.
+pub fn normalize_repository_path(input: &str) -> Result<String, CanonicalPathError> {
+    if input.as_bytes().contains(&0) {
+        return Err(CanonicalPathError::Nul);
+    }
+    let portable = input.replace('\\', "/");
+    if portable.starts_with('/') {
+        return Err(CanonicalPathError::Absolute);
+    }
+    let bytes = portable.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic() {
+        return Err(CanonicalPathError::DrivePrefix);
+    }
+
+    let mut parts = Vec::new();
+    for part in portable.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => return Err(CanonicalPathError::ParentTraversal),
+            _ => parts.push(part),
+        }
+    }
+    if parts.is_empty() {
+        return Err(CanonicalPathError::Empty);
+    }
+    Ok(parts.join("/"))
+}
+
+#[must_use]
+pub fn canonical_text_bytes(input: &[u8]) -> Vec<u8> {
+    if input.contains(&0) || std::str::from_utf8(input).is_err() {
+        return input.to_vec();
+    }
+
+    let mut output = Vec::with_capacity(input.len());
+    let mut index = 0;
+    while index < input.len() {
+        if input[index] == b'\r' {
+            output.push(b'\n');
+            if index + 1 < input.len() && input[index + 1] == b'\n' {
+                index += 1;
+            }
+        } else {
+            output.push(input[index]);
+        }
+        index += 1;
+    }
+    output
+}
+
+/// Canonicalize bytes for repository-manifest hashing.
+///
+/// # Errors
+///
+/// Returns [`CanonicalPathError`] when `relative_path` violates the repository-
+/// relative path contract enforced by [`normalize_repository_path`].
+pub fn canonical_manifest_bytes(
+    relative_path: &str,
+    input: &[u8],
+) -> Result<Vec<u8>, CanonicalPathError> {
+    let normalized = normalize_repository_path(relative_path)?;
+    if normalized == OPAQUE_MANIFEST_PREFIX
+        || normalized.starts_with("benchmarks/results/real-tasks/")
+    {
+        return Ok(input.to_vec());
+    }
+    Ok(canonical_text_bytes(input))
+}
+
+/// Return the SHA-256 digest of canonical repository-manifest bytes.
+///
+/// # Errors
+///
+/// Returns [`CanonicalPathError`] when `relative_path` violates the repository-
+/// relative path contract enforced by [`normalize_repository_path`].
+pub fn manifest_digest_hex(
+    relative_path: &str,
+    input: &[u8],
+) -> Result<String, CanonicalPathError> {
+    Ok(sha256_hex(&canonical_manifest_bytes(relative_path, input)?))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::sha256_hex;
+    use super::{
+        canonical_manifest_bytes, canonical_text_bytes, manifest_digest_hex,
+        normalize_repository_path, sha256_hex, CanonicalPathError,
+    };
 
     #[test]
     fn matches_empty_vector() {
@@ -207,6 +335,70 @@ mod tests {
         assert_eq!(
             sha256_hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn normalizes_repository_paths_lexically() {
+        assert_eq!(
+            normalize_repository_path(r".\src//./nested\main.py"),
+            Ok("src/nested/main.py".to_owned())
+        );
+        assert_eq!(
+            normalize_repository_path("Müşteri/Özet.md"),
+            Ok("Müşteri/Özet.md".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_repository_paths() {
+        assert_eq!(
+            normalize_repository_path("src/../secret"),
+            Err(CanonicalPathError::ParentTraversal)
+        );
+        assert_eq!(
+            normalize_repository_path("/etc/passwd"),
+            Err(CanonicalPathError::Absolute)
+        );
+        assert_eq!(
+            normalize_repository_path(r"C:\repo\file"),
+            Err(CanonicalPathError::DrivePrefix)
+        );
+        assert_eq!(
+            normalize_repository_path("./"),
+            Err(CanonicalPathError::Empty)
+        );
+    }
+
+    #[test]
+    fn canonicalizes_utf8_line_endings_only() {
+        assert_eq!(
+            canonical_text_bytes(b"first\r\nsecond\r"),
+            b"first\nsecond\n"
+        );
+        let binary = b"alpha\r\n\0omega\r\n";
+        assert_eq!(canonical_text_bytes(binary), binary);
+        let invalid_utf8 = [0xff, b'\r', b'\n', 0xfe];
+        assert_eq!(canonical_text_bytes(&invalid_utf8), invalid_utf8);
+    }
+
+    #[test]
+    fn preserves_real_task_receipts_byte_for_byte() {
+        let input = b"receipt\r\npayload\r\n";
+        assert_eq!(
+            canonical_manifest_bytes("benchmarks/results/real-tasks/raw-receipt.txt", input),
+            Ok(input.to_vec())
+        );
+    }
+
+    #[test]
+    fn manifest_digest_matches_python_reference_vector() {
+        assert_eq!(
+            manifest_digest_hex(
+                "syntavra_runtime/example.py",
+                b"first line\r\nsecond line\r\n"
+            ),
+            Ok("c2097f55f01fc297fc7f4acf21438123e06e4d409a818524428534e850642f4f".to_owned())
         );
     }
 }
