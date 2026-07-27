@@ -25,11 +25,11 @@ fn error(code: &str) -> String {
     code.to_owned()
 }
 
-fn contract() -> Result<Value, String> {
+pub(crate) fn contract() -> Result<Value, String> {
     serde_json::from_str(CONTRACT_JSON).map_err(|_| error("BROKER_CONTRACT_INVALID"))
 }
 
-fn contract_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
+pub(crate) fn contract_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
     value
         .get(key)
         .and_then(Value::as_str)
@@ -43,14 +43,14 @@ fn contract_bool(value: &Value, key: &str) -> Result<bool, String> {
         .ok_or_else(|| error("BROKER_CONTRACT_INVALID"))
 }
 
-fn contract_u64(value: &Value, key: &str) -> Result<u64, String> {
+pub(crate) fn contract_u64(value: &Value, key: &str) -> Result<u64, String> {
     value
         .get(key)
         .and_then(Value::as_u64)
         .ok_or_else(|| error("BROKER_CONTRACT_INVALID"))
 }
 
-fn contract_array<'a>(value: &'a Value, key: &str) -> Result<&'a [Value], String> {
+pub(crate) fn contract_array<'a>(value: &'a Value, key: &str) -> Result<&'a [Value], String> {
     value
         .get(key)
         .and_then(Value::as_array)
@@ -65,7 +65,7 @@ fn valid_lower_hash(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn canonical_project_root(
+pub(crate) fn canonical_project_root(
     project_root: &str,
     expected_project_id: &str,
 ) -> Result<(PathBuf, String), String> {
@@ -81,7 +81,10 @@ fn canonical_project_root(
     Ok((root, actual))
 }
 
-fn relative_database_path(root: &Path, database_path: &str) -> Result<(PathBuf, String), String> {
+pub(crate) fn relative_database_path(
+    root: &Path,
+    database_path: &str,
+) -> Result<(PathBuf, String), String> {
     let supplied = Path::new(database_path);
     let candidate = if supplied.is_absolute() {
         supplied.to_path_buf()
@@ -163,7 +166,7 @@ fn file_identity(path: &Path) -> Result<FileIdentity, String> {
     })
 }
 
-fn percent_encode_path(path: &Path) -> Result<String, String> {
+pub(crate) fn percent_encode_path(path: &Path) -> Result<String, String> {
     let normalized = path
         .to_str()
         .ok_or_else(|| error("BROKER_DATABASE_PATH_UTF8_INVALID"))?
@@ -199,7 +202,7 @@ fn open_database(path: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn schema_objects(connection: &Connection, contract: &Value) -> Result<(), String> {
+pub(crate) fn schema_objects(connection: &Connection, contract: &Value) -> Result<(), String> {
     let tables = contract_array(contract, "tables")?
         .iter()
         .map(|table| contract_string(table, "name").map(str::to_owned))
@@ -254,7 +257,7 @@ fn default_value(value: &Value) -> Result<Option<String>, String> {
     }
 }
 
-fn table_columns(connection: &Connection, table: &Value) -> Result<(), String> {
+pub(crate) fn table_columns(connection: &Connection, table: &Value) -> Result<(), String> {
     let table_name = contract_string(table, "name")?;
     let expected = contract_array(table, "columns")?;
     let sql = format!("PRAGMA table_info(\"{table_name}\")");
@@ -298,7 +301,7 @@ fn table_columns(connection: &Connection, table: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn indexes(connection: &Connection, contract: &Value) -> Result<(), String> {
+pub(crate) fn indexes(connection: &Connection, contract: &Value) -> Result<(), String> {
     for index in contract_array(contract, "indexes")? {
         let name = contract_string(index, "name")?;
         let table = contract_string(index, "table")?;
@@ -354,7 +357,7 @@ fn indexes(connection: &Connection, contract: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn foreign_keys(connection: &Connection, contract: &Value) -> Result<(), String> {
+pub(crate) fn foreign_keys(connection: &Connection, contract: &Value) -> Result<(), String> {
     let mut expected = BTreeMap::<String, Vec<(String, String, String, String, String)>>::new();
     for foreign_key in contract_array(contract, "foreign_keys")? {
         expected
@@ -402,7 +405,10 @@ fn foreign_keys(connection: &Connection, contract: &Value) -> Result<(), String>
     Ok(())
 }
 
-fn broker_schema_version(connection: &Connection, contract: &Value) -> Result<u64, String> {
+pub(crate) fn broker_schema_version(
+    connection: &Connection,
+    contract: &Value,
+) -> Result<u64, String> {
     let mut statement = connection
         .prepare("SELECT value FROM metadata WHERE key='schema_version'")
         .map_err(|_| error("BROKER_SCHEMA_VERSION_MISSING"))?;
@@ -506,7 +512,7 @@ fn normalized_cell(
     }
 }
 
-fn table_rows(
+pub(crate) fn table_rows(
     connection: &Connection,
     table: &Value,
     expected_project_id: &str,
