@@ -87,6 +87,7 @@ jobs:
               tools/verify_broker_live_snapshot_parity.py
             git diff --cached --check
             git commit -m "Wire R10 bounded live broker backup parity"
+            git reset --hard HEAD
             for attempt in 1 2 3 4 5 6 7 8; do
               git fetch origin feature/dual-engine-r10-live-broker-backup
               git rebase origin/feature/dual-engine-r10-live-broker-backup
