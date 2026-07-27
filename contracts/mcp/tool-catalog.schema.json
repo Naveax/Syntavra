@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntavra.dev/contracts/mcp/tool-catalog.schema.json",
+  "title": "Syntavra MCP Tool Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "contract_version", "tools"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "contract_version": {"type": "integer", "minimum": 1},
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "stability",
+          "mutation",
+          "input_schema"
+        ],
+        "properties": {
+          "name": {"type": "string", "pattern": "^syntavra\\."},
+          "description": {"type": "string", "minLength": 1},
+          "stability": {
+            "enum": ["experimental", "preview", "stable", "deprecated"]
+          },
+          "mutation": {
+            "enum": ["read-only", "mutating", "execution"]
+          },
+          "input_schema": {"type": "object"},
+          "required_capabilities": {
+            "type": "array",
+            "items": {"type": "string"},
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  }
+}

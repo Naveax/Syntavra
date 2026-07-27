@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntavra.dev/contracts/engine/capabilities.schema.json",
+  "title": "Syntavra Engine Capabilities",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "product",
+    "product_version",
+    "release_channel",
+    "engine",
+    "engine_stability",
+    "contract_version",
+    "capabilities"
+  ],
+  "properties": {
+    "product": {"const": "Syntavra"},
+    "product_version": {"type": "string"},
+    "release_channel": {"type": "string"},
+    "engine": {"enum": ["python", "rust"]},
+    "engine_stability": {
+      "enum": ["reference", "experimental", "preview", "beta", "stable"]
+    },
+    "contract_version": {"type": "integer", "minimum": 1},
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "maturity", "mutation"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "maturity": {
+            "enum": ["unsupported", "experimental", "preview", "stable"]
+          },
+          "mutation": {
+            "enum": ["read-only", "mutating", "execution"]
+          }
+        }
+      }
+    }
+  }
+}

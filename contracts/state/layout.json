@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "contract_version": 1,
+  "root": ".syntavra",
+  "engine_policy": {
+    "single_writer": true,
+    "fallback_after_mutation": false,
+    "lock_root": ".syntavra/locks"
+  },
+  "shared_paths": [
+    {
+      "path": ".syntavra/config.toml",
+      "kind": "configuration",
+      "writers": ["python", "rust"]
+    },
+    {
+      "path": ".syntavra/pre-release",
+      "kind": "product-state",
+      "writers": ["python", "rust"]
+    },
+    {
+      "path": ".syntavra/runtime-v3",
+      "kind": "runtime-state",
+      "writers": ["python", "rust"]
+    }
+  ],
+  "compatibility_rules": [
+    "A mutating operation selects one engine before the first state write.",
+    "An engine may fall back only after a capability preflight reports unsupported and before mutation.",
+    "Unknown schema versions fail closed.",
+    "Logical SQLite records, not physical page layout, define parity."
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntavra.dev/contracts/cli/result-envelope.schema.json",
+  "title": "Syntavra CLI Result Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ok", "engine", "command", "result"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "ok": {"type": "boolean"},
+    "engine": {"enum": ["python", "rust"]},
+    "command": {"type": "string", "minLength": 1},
+    "result": {},
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "retryable": {"type": "boolean"}
+      },
+      "required": ["code", "message", "retryable"],
+      "additionalProperties": false
+    },
+    "fallback": {
+      "type": ["object", "null"],
+      "properties": {
+        "from": {"enum": ["python", "rust"]},
+        "to": {"enum": ["python", "rust"]},
+        "reason": {"type": "string"},
+        "state_mutated": {"const": false}
+      },
+      "required": ["from", "to", "reason", "state_mutated"],
+      "additionalProperties": false
+    }
+  }
+}
