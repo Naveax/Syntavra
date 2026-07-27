@@ -228,12 +228,12 @@ pub fn sha256_hex(input: &[u8]) -> String {
     bytes_to_hex(&sha256(input))
 }
 
-/// Normalize a repository-relative path without consulting the filesystem.
+/// Normalizes a repository-relative path without consulting the filesystem.
 ///
 /// # Errors
 ///
-/// Returns [`CanonicalPathError`] when the path is empty after normalization,
-/// absolute, drive-prefixed, contains parent traversal, or contains a NUL byte.
+/// Returns [`CanonicalPathError`] when the path is empty, absolute, drive-prefixed,
+/// contains parent traversal, or contains a NUL byte.
 pub fn normalize_repository_path(input: &str) -> Result<String, CanonicalPathError> {
     if input.as_bytes().contains(&0) {
         return Err(CanonicalPathError::Nul);
@@ -283,12 +283,12 @@ pub fn canonical_text_bytes(input: &[u8]) -> Vec<u8> {
     output
 }
 
-/// Canonicalize bytes for repository-manifest hashing.
+/// Produces the canonical manifest byte representation for a repository path.
 ///
 /// # Errors
 ///
-/// Returns [`CanonicalPathError`] when `relative_path` violates the repository-
-/// relative path contract enforced by [`normalize_repository_path`].
+/// Returns [`CanonicalPathError`] when `relative_path` violates the repository path
+/// contract.
 pub fn canonical_manifest_bytes(
     relative_path: &str,
     input: &[u8],
@@ -302,12 +302,12 @@ pub fn canonical_manifest_bytes(
     Ok(canonical_text_bytes(input))
 }
 
-/// Return the SHA-256 digest of canonical repository-manifest bytes.
+/// Computes a lowercase SHA-256 digest over canonical manifest bytes.
 ///
 /// # Errors
 ///
-/// Returns [`CanonicalPathError`] when `relative_path` violates the repository-
-/// relative path contract enforced by [`normalize_repository_path`].
+/// Returns [`CanonicalPathError`] when `relative_path` violates the repository path
+/// contract.
 pub fn manifest_digest_hex(
     relative_path: &str,
     input: &[u8],

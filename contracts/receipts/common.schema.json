@@ -1,40 +1,107 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://syntavra.dev/contracts/receipts/common.schema.json",
-  "title": "Syntavra Common Receipt Fields",
+  "title": "Syntavra R7 Receipt Envelope",
   "type": "object",
+  "additionalProperties": false,
   "required": [
     "schema_version",
     "product_version",
     "contract_version",
     "engine",
     "operation",
-    "created_at",
+    "created_at_ms",
+    "project_id",
+    "receipt_id",
+    "payload_hash",
+    "previous_hash",
+    "fallback",
     "receipt_hash"
   ],
   "properties": {
-    "schema_version": {"type": "integer", "minimum": 1},
-    "product_version": {"type": "string"},
-    "contract_version": {"type": "integer", "minimum": 1},
-    "engine": {"enum": ["python", "rust"]},
-    "operation": {"type": "string", "minLength": 1},
-    "created_at": {"type": "number"},
-    "project_id": {"type": "string"},
-    "receipt_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "schema_version": {
+      "const": 1
+    },
+    "product_version": {
+      "const": "0.0.1"
+    },
+    "contract_version": {
+      "const": 1
+    },
+    "engine": {
+      "enum": [
+        "python",
+        "rust"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+    },
+    "created_at_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "previous_hash": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "pattern": "^[0-9a-f]{64}$"
     },
     "fallback": {
-      "type": ["object", "null"],
-      "properties": {
-        "from": {"enum": ["python", "rust"]},
-        "to": {"enum": ["python", "rust"]},
-        "reason": {"type": "string"},
-        "state_mutated": {"const": false}
-      },
-      "required": ["from", "to", "reason", "state_mutated"],
-      "additionalProperties": false
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "from",
+            "to",
+            "reason",
+            "state_mutated"
+          ],
+          "properties": {
+            "from": {
+              "enum": [
+                "python",
+                "rust"
+              ]
+            },
+            "to": {
+              "enum": [
+                "python",
+                "rust"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state_mutated": {
+              "const": false
+            }
+          }
+        }
+      ]
+    },
+    "receipt_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
     }
   }
 }
