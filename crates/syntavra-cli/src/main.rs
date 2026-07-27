@@ -1,8 +1,14 @@
 #![forbid(unsafe_code)]
 
+mod config_contract;
+
 use std::env;
 use std::fmt::Write as _;
 use std::process::ExitCode;
+
+use config_contract::{
+    default_config_wire, resolve_config_wire, snapshot_json, status_json,
+};
 use syntavra_contracts::{
     capabilities_json, CONTRACT_DESCRIPTOR, CONTRACT_VERSION, ENGINE_NAME, ENGINE_STABILITY,
     PRODUCT_NAME, PRODUCT_VERSION, RELEASE_CHANNEL,
@@ -16,6 +22,8 @@ const USAGE: &str = concat!(
     "Syntavra native Rust engine (experimental)\n\n",
     "USAGE:\n",
     "  syntavra-rs version\n",
+    "  syntavra-rs status [config-wire-hex]\n",
+    "  syntavra-rs config resolve <config-wire-hex>\n",
     "  syntavra-rs engine capabilities\n",
     "  syntavra-rs engine contract-hash\n",
     "  syntavra-rs primitive sha256 <input-hex>\n",
@@ -27,6 +35,8 @@ const USAGE: &str = concat!(
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Command {
     Version,
+    Status(Option<String>),
+    ConfigResolve(String),
     Capabilities,
     ContractHash,
     PrimitiveSha256(String),
@@ -40,6 +50,11 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
     match arguments {
         [] => Ok(Command::Help),
         [value] if value == "version" || value == "--version" => Ok(Command::Version),
+        [value] if value == "status" => Ok(Command::Status(None)),
+        [value, wire] if value == "status" => Ok(Command::Status(Some(wire.clone()))),
+        [config, action, wire] if config == "config" && action == "resolve" => {
+            Ok(Command::ConfigResolve(wire.clone()))
+        }
         [value] if value == "help" || value == "--help" || value == "-h" => Ok(Command::Help),
         [engine, action] if engine == "engine" && action == "capabilities" => {
             Ok(Command::Capabilities)
@@ -50,7 +65,9 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [primitive, action, input_hex] if primitive == "primitive" && action == "sha256" => {
             Ok(Command::PrimitiveSha256(input_hex.clone()))
         }
-        [primitive, action, path] if primitive == "primitive" && action == "normalize-path" => {
+        [primitive, action, path]
+            if primitive == "primitive" && action == "normalize-path" =>
+        {
             Ok(Command::PrimitiveNormalizePath(path.clone()))
         }
         [primitive, action, path, input_hex]
@@ -137,7 +154,7 @@ fn hex_nibble(value: u8) -> Result<u8, String> {
 }
 
 fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
-    if (value.len() & 1) == 1 {
+    if value.len() % 2 != 0 {
         return Err("HEX_ODD_LENGTH".to_owned());
     }
     let mut output = Vec::with_capacity(value.len() / 2);
@@ -147,9 +164,26 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
+fn config_wire(encoded: Option<String>) -> Result<Vec<u8>, String> {
+    encoded.map_or_else(
+        || Ok(default_config_wire().to_vec()),
+        |value| decode_hex(&value),
+    )
+}
+
 fn run(command: Command) -> Result<(), String> {
     match command {
         Command::Version => println!("{}", version_json()),
+        Command::Status(encoded) => {
+            let wire = config_wire(encoded)?;
+            let snapshot = resolve_config_wire(&wire)?;
+            println!("{}", status_json(&snapshot));
+        }
+        Command::ConfigResolve(encoded) => {
+            let wire = decode_hex(&encoded)?;
+            let snapshot = resolve_config_wire(&wire)?;
+            println!("{}", snapshot_json(&snapshot)?);
+        }
         Command::Capabilities => println!("{}", capabilities_json()),
         Command::ContractHash => println!("{}", contract_hash_json()),
         Command::PrimitiveSha256(input_hex) => {
@@ -212,7 +246,9 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{contract_hash_json, decode_hex, parse_command, version_json, Command};
+    use super::{
+        contract_hash_json, decode_hex, parse_command, version_json, Command,
+    };
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -253,8 +289,21 @@ mod tests {
     }
 
     #[test]
+    fn parses_r6_config_and_status_commands() {
+        assert_eq!(parse_command(&args(&["status"])), Ok(Command::Status(None)));
+        assert_eq!(
+            parse_command(&args(&["status", "00"])),
+            Ok(Command::Status(Some("00".to_owned())))
+        );
+        assert_eq!(
+            parse_command(&args(&["config", "resolve", "00"])),
+            Ok(Command::ConfigResolve("00".to_owned()))
+        );
+    }
+
+    #[test]
     fn rejects_unknown_commands() {
-        assert!(parse_command(&args(&["status"])).is_err());
+        assert!(parse_command(&args(&["unknown"])).is_err());
     }
 
     #[test]
