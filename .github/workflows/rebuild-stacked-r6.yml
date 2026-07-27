@@ -1,0 +1,79 @@
+name: Rebuild stacked R6 exactly
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/rebuild-stacked-r6.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-r6:
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+      R6_HEAD: "7582f12e7f8e9eaef6b751a733df7c001a111786"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Rebuild R6 from verified source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main feature/dual-engine-r6-config-status
+          git checkout -B r6-rebuilt origin/main
+
+          paths=(
+            .github/workflows/contract-drift.yml
+            contracts/engine/descriptor.txt
+            crates/syntavra-cli/src/config_contract.rs
+            crates/syntavra-cli/src/main.rs
+            crates/syntavra-contracts/src/lib.rs
+            docs/adr/0006-config-identity-status-parity.md
+            parity/fixtures/config-status-v1.json
+            syntavra_runtime/config_contract.py
+            tests/runtime/test_config_contract_r6.py
+            tools/run_engine_parity.py
+            tools/verify_config_status_parity.py
+          )
+
+          git checkout "$R6_HEAD" -- "${paths[@]}"
+          cargo fmt --all
+
+          mapfile -t changed < <(git diff --name-only)
+          for path in "${changed[@]}"; do
+            allowed=false
+            for expected in "${paths[@]}"; do
+              if [ "$path" = "$expected" ]; then
+                allowed=true
+                break
+              fi
+            done
+            if [ "$allowed" != true ]; then
+              echo "unexpected R6 rebuild change: $path"
+              exit 1
+            fi
+          done
+
+          python -m pip install -e .
+          python tools/verify_config_status_parity.py
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+
+          git config user.name "Syntavra Stack Rebuild"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- "${paths[@]}"
+          git commit -m "Rebase R6 config and status parity onto merged R5"
+          git merge -s ours --no-ff "$R6_HEAD" -m "Preserve original R6 stack ancestry"
+          git push origin HEAD:feature/dual-engine-r6-config-status --force
