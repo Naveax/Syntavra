@@ -8,6 +8,7 @@ from pathlib import Path
 
 from syntavra_runtime.config_contract import resolve_config_phases, status_projection
 from syntavra_runtime.release_identity import identity
+from syntavra_runtime.state_receipt_contract import state_layout
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
@@ -47,6 +48,7 @@ def verify() -> dict[str, object]:
     capabilities = _rust_json("engine", "capabilities")
     contract_hash = _rust_json("engine", "contract-hash")
     status = _rust_json("status")
+    layout = _rust_json("state", "layout")
     reference_status = status_projection(resolve_config_phases([{}]))
 
     checks = {
@@ -59,6 +61,7 @@ def verify() -> dict[str, object]:
         "descriptor_hash": contract_hash.get("contract_hash")
         == hashlib.sha256(DESCRIPTOR.read_bytes()).hexdigest(),
         "default_status": status == reference_status,
+        "state_layout": layout == state_layout(),
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -72,6 +75,8 @@ def verify() -> dict[str, object]:
         "config.resolve",
         "engine.capabilities",
         "engine.contract-hash",
+        "receipt.inspect",
+        "state.layout",
         "status",
         "version",
     ]
@@ -82,7 +87,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R6",
+        "phase": "R0-R7",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
