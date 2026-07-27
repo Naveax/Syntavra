@@ -1,0 +1,83 @@
+name: Assemble R10 Live Broker Backup Parity
+
+on:
+  push:
+    branches: ["feature/dual-engine-r10-live-broker-backup"]
+    paths:
+      - ".github/workflows/r10-assembly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r10-live-broker-backup-assembly
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/dual-engine-r10-live-broker-backup
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Assemble and validate the R10 source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/r10_wire_clippy_final.py
+          cargo check --workspace
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          python -m pip install -e . pytest
+          python -m pytest -q \
+            tests/runtime/test_broker_snapshot_contract_r9.py \
+            tests/runtime/test_broker_live_snapshot_contract_r10.py
+          python tools/verify_dual_engine_contract.py
+          python tools/verify_broker_snapshot_parity.py
+          python tools/verify_broker_live_snapshot_parity.py
+          python tools/run_engine_parity.py
+      - name: Commit the verified R10 candidate atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git restore MANIFEST.sha256
+          git add \
+            Cargo.lock \
+            crates/syntavra-cli/Cargo.toml \
+            crates/syntavra-cli/src/broker_live_snapshot_contract.rs \
+            crates/syntavra-cli/src/broker_snapshot_contract.rs \
+            crates/syntavra-cli/src/main.rs \
+            crates/syntavra-contracts/src/lib.rs \
+            contracts/engine/descriptor.txt \
+            contracts/state/broker-live-snapshot-v1.json \
+            syntavra_runtime/broker_live_snapshot_contract.py \
+            tests/runtime/test_broker_live_snapshot_contract_r10.py \
+            tools/run_engine_parity.py \
+            tools/verify_broker_live_snapshot_parity.py
+          git diff --cached --check
+          git commit -m "Wire R10 bounded live broker backup parity"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            git fetch origin feature/dual-engine-r10-live-broker-backup
+            git rebase origin/feature/dual-engine-r10-live-broker-backup
+            if git push origin HEAD:feature/dual-engine-r10-live-broker-backup; then
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          exit 1
