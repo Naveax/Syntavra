@@ -9,9 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
 RUST_CONTRACTS = ROOT / "crates" / "syntavra-contracts" / "src" / "lib.rs"
+CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v2.json"
 CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "capabilities.schema.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v1.json",
+    CURRENT_ROUTING,
     ROOT / "contracts" / "engine" / "selection.schema.json",
     ROOT / "contracts" / "cli" / "result-envelope.schema.json",
     ROOT / "contracts" / "mcp" / "tool-catalog.schema.json",
@@ -79,10 +81,27 @@ def verify() -> dict[str, object]:
             raise RuntimeError(f"contract must be a JSON object: {path}")
         parsed_contracts.append(path.relative_to(ROOT).as_posix())
 
-    selection = json.loads((ROOT / "contracts" / "engine" / "selection.schema.json").read_text(encoding="utf-8"))
+    selection_path = ROOT / "contracts" / "engine" / "selection.schema.json"
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
     engine_enum = selection.get("properties", {}).get("engine", {}).get("enum")
     if engine_enum != ["auto", "python", "rust"]:
         raise RuntimeError("engine selection enum or order drifted")
+
+    routing = json.loads(CURRENT_ROUTING.read_text(encoding="utf-8"))
+    route_names = [
+        row.get("command")
+        for row in routing.get("routes", [])
+        if isinstance(row, dict)
+    ]
+    if routing.get("schema_version") != 2 or routing.get("phase") != "R13":
+        raise RuntimeError("current read-only routing schema or phase drifted")
+    if route_names != ["status", "version"]:
+        raise RuntimeError("current read-only route inventory drifted")
+    if routing.get("maximum_input_bytes") != 262144:
+        raise RuntimeError("current read-only routing input bound drifted")
+    input_metadata = routing.get("input_metadata", {})
+    if input_metadata.get("raw_input_forbidden") is not True:
+        raise RuntimeError("current routing contract must forbid raw input metadata")
 
     return {
         "ok": True,
@@ -90,6 +109,9 @@ def verify() -> dict[str, object]:
         "descriptor_sha256": hashlib.sha256(descriptor.encode("utf-8")).hexdigest(),
         "capabilities": capability_rows,
         "engine_modes": engine_enum,
+        "routing_schema_version": routing["schema_version"],
+        "routing_phase": routing["phase"],
+        "routing_routes": route_names,
         "json_contracts": parsed_contracts,
     }
 
