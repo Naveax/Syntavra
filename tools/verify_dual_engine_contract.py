@@ -11,6 +11,7 @@ DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
 RUST_CONTRACTS = ROOT / "crates" / "syntavra-contracts" / "src" / "lib.rs"
 CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "capabilities.schema.json",
+    ROOT / "contracts" / "engine" / "read-only-routing-v1.json",
     ROOT / "contracts" / "engine" / "selection.schema.json",
     ROOT / "contracts" / "cli" / "result-envelope.schema.json",
     ROOT / "contracts" / "mcp" / "tool-catalog.schema.json",
