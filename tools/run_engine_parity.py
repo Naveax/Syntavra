@@ -10,6 +10,7 @@ from syntavra_runtime.config_contract import resolve_config_phases, status_proje
 from syntavra_runtime.release_identity import identity
 from syntavra_runtime.state_receipt_contract import state_layout
 from syntavra_runtime.state_snapshot_contract import inspect_state_root, project_id_for_root
+from tools.verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
@@ -57,6 +58,7 @@ def verify() -> dict[str, object]:
         expected_project_id=project_id,
     )
     reference_status = status_projection(resolve_config_phases([{}]))
+    routing = verify_read_only_routing()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -70,6 +72,8 @@ def verify() -> dict[str, object]:
         "default_status": status == reference_status,
         "state_layout": layout == state_layout(),
         "state_inspection": state_inspection == reference_state_inspection,
+        "read_only_routing": routing.get("ok") is True
+        and routing.get("phase") == "R11",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -98,11 +102,12 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R10",
+        "phase": "R0-R11",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
         "capabilities": capability_names,
+        "routing": routing,
         "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
     }
 
