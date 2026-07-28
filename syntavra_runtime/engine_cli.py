@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
+from .read_only_router import ReadOnlyCommandRouter
 
 
 def _emit(value: Any) -> None:
@@ -14,7 +15,10 @@ def _emit(value: Any) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="syntavra", description="Syntavra R4 engine selector")
+    parser = argparse.ArgumentParser(
+        prog="syntavra",
+        description="Syntavra R11 engine selector and safe read-only router",
+    )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
     parser.add_argument("--skill-root")
@@ -31,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     use.add_argument("--scope", choices=("project", "user"), default="project")
     verify = actions.add_parser("verify")
     verify.add_argument("--all", action="store_true", dest="all_engines")
+    route = actions.add_parser("route")
+    route.add_argument("route_command")
     return parser
 
 
@@ -39,6 +45,7 @@ def main(
     *,
     selector: EngineSelector | None = None,
     cli_override: str | None = None,
+    router: ReadOnlyCommandRouter | None = None,
 ) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(values)
@@ -46,6 +53,7 @@ def main(
         project_root=Path(args.project),
         state_root=Path(args.state_root) if args.state_root else None,
     )
+    active_router = router or ReadOnlyCommandRouter(active)
     try:
         if args.action == "list":
             result = active.list_engines(cli_override=cli_override)
@@ -57,6 +65,8 @@ def main(
                 result["command_override"] = active.resolve(cli_override=cli_override).to_dict()
         elif args.action == "verify":
             result = active.verify(cli_override=cli_override, all_engines=args.all_engines)
+        elif args.action == "route":
+            result = active_router.route(args.route_command, cli_override=cli_override)
         else:  # pragma: no cover - argparse guarantees the action set
             raise RuntimeError(args.action)
     except EngineSelectionError as exc:

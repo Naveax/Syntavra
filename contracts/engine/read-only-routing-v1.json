@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "phase": "R11",
+  "default_engine": "python",
+  "auto_engine": "python",
+  "fallback_policy": "none",
+  "maximum_response_bytes": 1048576,
+  "routes": [
+    {
+      "command": "version",
+      "required_capability": "version",
+      "mutation": "read-only",
+      "rust_argv": ["version"],
+      "result_schema": {
+        "required": [
+          "product",
+          "product_version",
+          "release_channel",
+          "engine",
+          "engine_stability",
+          "contract_version"
+        ],
+        "additional_properties": false
+      }
+    }
+  ],
+  "success_envelope": {
+    "required": [
+      "ok",
+      "phase",
+      "schema_version",
+      "command",
+      "capability",
+      "mutation",
+      "selection",
+      "fallback",
+      "result"
+    ],
+    "additional_properties": false
+  },
+  "error_envelope": {
+    "required": ["ok", "error"],
+    "fallback_attempted": false
+  },
+  "claims": [
+    "PYTHON_REFERENCE_ENGINE",
+    "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
+    "RUST_READ_ONLY_VERSION_ROUTING_R11"
+  ]
+}

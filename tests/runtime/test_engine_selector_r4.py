@@ -34,9 +34,19 @@ def _rust_runner(_binary: Path, arguments: tuple[str, ...]):
         return {
             "contract_version": 1,
             "capabilities": [
-                {"name": "engine.capabilities", "maturity": "preview", "mutation": "read-only"},
-                {"name": "engine.contract-hash", "maturity": "preview", "mutation": "read-only"},
-                {"name": "version", "maturity": "preview", "mutation": "read-only"},
+                {"name": name, "maturity": "preview", "mutation": "read-only"}
+                for name in (
+                    "config.resolve",
+                    "engine.capabilities",
+                    "engine.contract-hash",
+                    "receipt.inspect",
+                    "state.broker-live-snapshot",
+                    "state.broker-snapshot",
+                    "state.inspect",
+                    "state.layout",
+                    "status",
+                    "version",
+                )
             ],
         }
     if arguments == ("engine", "contract-hash"):
@@ -119,8 +129,15 @@ def test_rust_verification_and_persisted_selection(tmp_path: Path) -> None:
     assert verification.available
     assert verification.compatible
     assert verification.capabilities == (
+        "config.resolve",
         "engine.capabilities",
         "engine.contract-hash",
+        "receipt.inspect",
+        "state.broker-live-snapshot",
+        "state.broker-snapshot",
+        "state.inspect",
+        "state.layout",
+        "status",
         "version",
     )
 

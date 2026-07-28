@@ -18,6 +18,7 @@ on:
       - "tools/verify_state_snapshot_parity.py"
       - "tools/verify_broker_snapshot_parity.py"
       - "tools/verify_broker_live_snapshot_parity.py"
+      - "tools/verify_read_only_routing_parity.py"
       - ".github/workflows/contract-drift.yml"
   pull_request:
     branches: [main, "feature/**"]
@@ -36,6 +37,7 @@ on:
       - "tools/verify_state_snapshot_parity.py"
       - "tools/verify_broker_snapshot_parity.py"
       - "tools/verify_broker_live_snapshot_parity.py"
+      - "tools/verify_read_only_routing_parity.py"
       - ".github/workflows/contract-drift.yml"
   workflow_dispatch:
 
@@ -172,6 +174,19 @@ jobs:
         with:
           name: syntavra-r10-broker-live-snapshot-diagnostics-${{ github.sha }}
           path: broker-live-snapshot-parity.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify R11 safe read-only command routing parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_read_only_routing_parity.py 2>&1 | tee read-only-routing-parity.log
+      - name: Upload R11 read-only routing diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r11-read-only-routing-diagnostics-${{ github.sha }}
+          path: read-only-routing-parity.log
           if-no-files-found: warn
           retention-days: 7
       - name: Run Python-Rust parity gate
