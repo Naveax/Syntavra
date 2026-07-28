@@ -10,7 +10,7 @@ from syntavra_runtime.config_contract import resolve_config_phases, status_proje
 from syntavra_runtime.release_identity import identity
 from syntavra_runtime.state_receipt_contract import state_layout
 from syntavra_runtime.state_snapshot_contract import inspect_state_root, project_id_for_root
-from tools.verify_read_only_routing_parity import verify as verify_read_only_routing
+from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
