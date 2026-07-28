@@ -5,12 +5,17 @@ on:
     branches: [feature/dual-engine-r11-read-only-routing]
     paths:
       - ".github/workflows/r11-selector-capability-sync.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/r11-selector-capability-sync.yml"
 
 permissions:
   contents: write
 
 jobs:
   synchronize:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
