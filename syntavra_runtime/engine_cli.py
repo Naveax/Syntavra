@@ -17,7 +17,7 @@ def _emit(value: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="syntavra",
-        description="Syntavra R12 engine selector and safe read-only router",
+        description="Syntavra R13 engine selector and safe read-only router",
     )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
@@ -37,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--all", action="store_true", dest="all_engines")
     route = actions.add_parser("route")
     route.add_argument("route_command")
+    route.add_argument("--config-wire-hex")
     return parser
 
 
@@ -66,7 +67,11 @@ def main(
         elif args.action == "verify":
             result = active.verify(cli_override=cli_override, all_engines=args.all_engines)
         elif args.action == "route":
-            result = active_router.route(args.route_command, cli_override=cli_override)
+            result = active_router.route(
+                args.route_command,
+                cli_override=cli_override,
+                config_wire_hex=args.config_wire_hex,
+            )
         else:  # pragma: no cover - argparse guarantees the action set
             raise RuntimeError(args.action)
     except EngineSelectionError as exc:

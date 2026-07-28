@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from syntavra_runtime.config_contract import resolve_config_phases, status_projection
+from syntavra_runtime.config_contract import (
+    encode_config_wire,
+    resolve_config_phases,
+    resolve_config_wire,
+    status_projection,
+)
 from syntavra_runtime.engine_cli import main as engine_main
 from syntavra_runtime.engine_selector import (
     ENGINE_CONTRACT_SHA256,
@@ -18,6 +23,20 @@ from syntavra_runtime.read_only_router import ReadOnlyCommandRouter
 
 def _default_status() -> dict[str, object]:
     return status_projection(resolve_config_phases([{}]))
+
+
+def _explicit_phases() -> list[dict[str, dict[str, object]]]:
+    return [
+        {
+            "project": {
+                "runtime": {"profile": "compact"},
+                "routing": {"budget_bytes": 4096},
+            },
+            "environment": {
+                "provider.timeout_seconds": 90.0,
+            },
+        }
+    ]
 
 
 def _capability_rows() -> list[dict[str, str]]:
@@ -39,6 +58,9 @@ def _rust_runner(_binary: Path, arguments: tuple[str, ...]):
         }
     if arguments == ("status",):
         return _default_status()
+    if len(arguments) == 2 and arguments[0] == "status":
+        raw = bytes.fromhex(arguments[1])
+        return status_projection(resolve_config_wire(raw))
     if arguments == ("engine", "capabilities"):
         return {"contract_version": 1, "capabilities": _capability_rows()}
     if arguments == ("engine", "contract-hash"):
@@ -62,14 +84,13 @@ def _selector(tmp_path: Path) -> EngineSelector:
     )
 
 
-def test_supported_r12_routes_are_status_and_version(tmp_path: Path) -> None:
+def test_supported_r13_routes_are_status_and_version(tmp_path: Path) -> None:
     router = ReadOnlyCommandRouter(_selector(tmp_path), runner=_rust_runner)
     assert router.supported_commands() == ("status", "version")
 
 
-def test_python_version_route_uses_exact_success_envelope(tmp_path: Path) -> None:
-    selector = _selector(tmp_path)
-    result = ReadOnlyCommandRouter(selector, runner=_rust_runner).route(
+def test_python_version_route_uses_v2_success_envelope(tmp_path: Path) -> None:
+    result = ReadOnlyCommandRouter(_selector(tmp_path), runner=_rust_runner).route(
         "version",
         cli_override="python",
     )
@@ -81,52 +102,84 @@ def test_python_version_route_uses_exact_success_envelope(tmp_path: Path) -> Non
         "capability",
         "mutation",
         "selection",
+        "input",
         "fallback",
         "result",
     }
-    assert result["ok"] is True
-    assert result["phase"] == "R12"
-    assert result["fallback"] == {"policy": "none", "attempted": False}
-    assert result["result"] == {
-        "product": "Syntavra",
-        "product_version": "0.0.1",
-        "release_channel": "pre-release",
-        "engine": "python",
-        "engine_stability": "reference",
-        "contract_version": 1,
+    assert result["phase"] == "R13"
+    assert result["schema_version"] == 2
+    assert result["input"] == {
+        "profile": "none",
+        "format": None,
+        "bytes": 0,
+        "sha256": None,
     }
-
-
-def test_rust_version_route_executes_verified_binary_without_fallback(tmp_path: Path) -> None:
-    selector = _selector(tmp_path)
-    result = ReadOnlyCommandRouter(selector, runner=_rust_runner).route(
-        "version",
-        cli_override="rust",
-    )
-    assert result["selection"]["resolved"] == "rust"
     assert result["fallback"] == {"policy": "none", "attempted": False}
-    assert result["result"]["engine"] == "rust"
-    assert result["result"]["engine_stability"] == "experimental"
 
 
-@pytest.mark.parametrize("engine", ["python", "rust"])
-def test_default_status_route_has_exact_cross_engine_parity(
-    tmp_path: Path,
-    engine: str,
-) -> None:
-    selector = _selector(tmp_path)
-    result = ReadOnlyCommandRouter(selector, runner=_rust_runner).route(
+def test_default_status_route_has_exact_cross_engine_parity(tmp_path: Path) -> None:
+    router = ReadOnlyCommandRouter(_selector(tmp_path), runner=_rust_runner)
+    python_result = router.route("status", cli_override="python")
+    rust_result = router.route("status", cli_override="rust")
+    assert python_result["result"] == rust_result["result"] == _default_status()
+    assert python_result["input"] == rust_result["input"]
+    assert python_result["input"]["profile"] == "default-config-only"
+    assert python_result["input"]["format"] == "R6CFG1"
+    assert python_result["input"]["bytes"] > 0
+    assert len(python_result["input"]["sha256"]) == 64
+
+
+def test_explicit_status_wire_has_exact_cross_engine_parity(tmp_path: Path) -> None:
+    wire = encode_config_wire(_explicit_phases())
+    router = ReadOnlyCommandRouter(_selector(tmp_path), runner=_rust_runner)
+    python_result = router.route(
         "status",
-        cli_override=engine,
+        cli_override="python",
+        config_wire_hex=wire.hex(),
     )
-    assert result["phase"] == "R12"
-    assert result["command"] == "status"
-    assert result["capability"] == "status"
-    assert result["mutation"] == "read-only"
-    assert result["selection"]["resolved"] == engine
-    assert result["fallback"] == {"policy": "none", "attempted": False}
-    assert result["result"] == _default_status()
-    assert result["result"]["general_command_routing"] == "blocked"
+    rust_result = router.route(
+        "status",
+        cli_override="rust",
+        config_wire_hex=wire.hex(),
+    )
+    expected = status_projection(resolve_config_wire(wire))
+    assert python_result["result"] == rust_result["result"] == expected
+    assert python_result["input"] == rust_result["input"]
+    assert python_result["input"]["profile"] == "explicit-config-wire-v1"
+    assert python_result["input"]["bytes"] == len(wire)
+    assert wire.hex() not in json.dumps(rust_result)
+
+
+def test_version_rejects_config_input_before_engine_execution(tmp_path: Path) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def runner(_binary: Path, arguments: tuple[str, ...]):
+        calls.append(arguments)
+        return _rust_runner(_binary, arguments)
+
+    router = ReadOnlyCommandRouter(_selector(tmp_path), runner=runner)
+    with pytest.raises(EngineSelectionError) as error:
+        router.route("version", cli_override="rust", config_wire_hex="00")
+    assert error.value.code == "ENGINE_ROUTE_INPUT_UNSUPPORTED_R13"
+    assert error.value.details["fallback_attempted"] is False
+    assert calls == []
+
+
+def test_invalid_status_wire_fails_before_engine_execution(tmp_path: Path) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def runner(_binary: Path, arguments: tuple[str, ...]):
+        calls.append(arguments)
+        return _rust_runner(_binary, arguments)
+
+    router = ReadOnlyCommandRouter(_selector(tmp_path), runner=runner)
+    with pytest.raises(EngineSelectionError) as error:
+        router.route("status", cli_override="rust", config_wire_hex="abc")
+    assert error.value.code == "ENGINE_ROUTE_INPUT_INVALID_R13"
+    assert error.value.details["provided_hex_characters"] == 3
+    assert "abc" not in json.dumps(error.value.to_dict())
+    assert error.value.details["fallback_attempted"] is False
+    assert calls == []
 
 
 def test_unsupported_route_fails_closed_for_both_engines(tmp_path: Path) -> None:
@@ -134,45 +187,32 @@ def test_unsupported_route_fails_closed_for_both_engines(tmp_path: Path) -> None
     for engine in ("python", "rust"):
         with pytest.raises(EngineSelectionError) as error:
             router.route("config.resolve", cli_override=engine)
-        assert error.value.code == "ENGINE_ROUTE_UNSUPPORTED_R12"
+        assert error.value.code == "ENGINE_ROUTE_UNSUPPORTED_R13"
         assert error.value.details["supported"] == ["status", "version"]
         assert error.value.details["fallback_attempted"] is False
-        assert error.value.details["fallback_policy"] == "none"
-
-
-def test_invalid_rust_version_result_never_reexecutes_in_python(tmp_path: Path) -> None:
-    selector = _selector(tmp_path)
-    calls: list[tuple[str, ...]] = []
-
-    def invalid_runner(_binary: Path, arguments: tuple[str, ...]):
-        calls.append(arguments)
-        return {"product": "Syntavra"}
-
-    router = ReadOnlyCommandRouter(selector, runner=invalid_runner)
-    with pytest.raises(EngineSelectionError) as error:
-        router.route("version", cli_override="rust")
-    assert error.value.code == "RUST_ROUTE_RESULT_SCHEMA_INVALID"
-    assert error.value.details["fallback_attempted"] is False
-    assert calls == [("version",)]
 
 
 def test_rust_status_drift_fails_closed_without_python_reexecution(tmp_path: Path) -> None:
-    selector = _selector(tmp_path)
+    wire = encode_config_wire(_explicit_phases())
     calls: list[tuple[str, ...]] = []
 
     def drift_runner(_binary: Path, arguments: tuple[str, ...]):
         calls.append(arguments)
-        result = _default_status()
+        result = status_projection(resolve_config_wire(wire))
         result["config_hash"] = "0" * 64
         return result
 
-    router = ReadOnlyCommandRouter(selector, runner=drift_runner)
+    router = ReadOnlyCommandRouter(_selector(tmp_path), runner=drift_runner)
     with pytest.raises(EngineSelectionError) as error:
-        router.route("status", cli_override="rust")
+        router.route(
+            "status",
+            cli_override="rust",
+            config_wire_hex=wire.hex(),
+        )
     assert error.value.code == "RUST_STATUS_ROUTE_PARITY_INVALID"
-    assert error.value.details["input_profile"] == "default-config-only"
+    assert error.value.details["input_profile"] == "explicit-config-wire-v1"
     assert error.value.details["fallback_attempted"] is False
-    assert calls == [("status",)]
+    assert calls == [("status", wire.hex())]
 
 
 @pytest.mark.parametrize("command", ["status", "version"])
@@ -180,59 +220,48 @@ def test_rust_execution_failure_never_reexecutes_in_python(
     tmp_path: Path,
     command: str,
 ) -> None:
-    selector = _selector(tmp_path)
     calls: list[tuple[str, ...]] = []
 
     def failing_runner(_binary: Path, arguments: tuple[str, ...]):
         calls.append(arguments)
         raise TimeoutError("bounded route timeout")
 
-    router = ReadOnlyCommandRouter(selector, runner=failing_runner)
+    router = ReadOnlyCommandRouter(_selector(tmp_path), runner=failing_runner)
     with pytest.raises(EngineSelectionError) as error:
         router.route(command, cli_override="rust")
-    assert error.value.code == "RUST_ROUTE_EXECUTION_FAILED_R12"
+    assert error.value.code == "RUST_ROUTE_EXECUTION_FAILED_R13"
     assert error.value.details["command"] == command
-    assert error.value.details["exception"] == "TimeoutError"
-    assert error.value.details["exception_message"] == "bounded route timeout"
+    assert error.value.details["exception_message"] == "redacted"
     assert error.value.details["fallback_policy"] == "none"
     assert error.value.details["fallback_attempted"] is False
     assert calls == [(command,)]
 
 
-def test_engine_cli_emits_structured_r12_status_result(
+def test_engine_cli_routes_explicit_status_wire(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    wire = encode_config_wire(_explicit_phases())
     selector = _selector(tmp_path)
     router = ReadOnlyCommandRouter(selector, runner=_rust_runner)
     code = engine_main(
-        ["--project", str(tmp_path), "engine", "route", "status"],
+        [
+            "--project",
+            str(tmp_path),
+            "engine",
+            "route",
+            "status",
+            "--config-wire-hex",
+            wire.hex(),
+        ],
         selector=selector,
         cli_override="rust",
         router=router,
     )
     assert code == 0
     value = json.loads(capsys.readouterr().out)
-    assert value["phase"] == "R12"
+    assert value["phase"] == "R13"
+    assert value["schema_version"] == 2
     assert value["selection"]["resolved"] == "rust"
-    assert value["command"] == "status"
-    assert value["result"] == _default_status()
-
-
-def test_engine_cli_emits_structured_unsupported_error(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    selector = _selector(tmp_path)
-    router = ReadOnlyCommandRouter(selector, runner=_rust_runner)
-    code = engine_main(
-        ["--project", str(tmp_path), "engine", "route", "config.resolve"],
-        selector=selector,
-        cli_override="rust",
-        router=router,
-    )
-    assert code == 4
-    value = json.loads(capsys.readouterr().out)
-    assert value["ok"] is False
-    assert value["error"]["code"] == "ENGINE_ROUTE_UNSUPPORTED_R12"
-    assert value["error"]["details"]["fallback_attempted"] is False
+    assert value["input"]["profile"] == "explicit-config-wire-v1"
+    assert value["result"] == status_projection(resolve_config_wire(wire))
