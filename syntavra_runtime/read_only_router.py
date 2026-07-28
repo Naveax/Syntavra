@@ -191,7 +191,7 @@ class ReadOnlyCommandRouter:
                     schema_version=ROUTING_SCHEMA_VERSION,
                     command=definition.command,
                     exception=type(exc).__name__,
-                    message=str(exc),
+                    exception_message=str(exc),
                     fallback_policy="none",
                     fallback_attempted=False,
                 ) from exc
