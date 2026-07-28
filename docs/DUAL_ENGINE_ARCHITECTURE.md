@@ -1,6 +1,6 @@
 # Syntavra Dual-Engine Architecture
 
-Status: **R11 safe read-only routing implemented for `version` / Python remains default**  
+Status: **R12 safe read-only routing implemented for `version` and default `status` / Python remains default**  
 Product identity: **0.0.1 / pre-release / version locked**
 
 ## Objective
@@ -10,7 +10,7 @@ Syntavra remains one product with two independent runtime implementations:
 - **Python engine** — maintained reference implementation.
 - **Rust engine** — native implementation that must prove behavioral, protocol and state parity before becoming default.
 - **Engine selector** — active boundary for `python`, `rust` and `auto` modes.
-- **Read-only router** — R11 capability whitelist for individually proven routes.
+- **Read-only router** — capability whitelist for individually proven installed routes.
 
 The Python runtime is not removed. A user must always be able to select it explicitly.
 
@@ -21,12 +21,13 @@ The Python runtime is not removed. A user must always be able to select it expli
 3. A mutating operation selects one engine before its first state write.
 4. Fallback is allowed only after a preflight reports `unsupported` and before mutation.
 5. Runtime errors after mutation fail closed; they never trigger hidden re-execution in the other engine.
-6. R11 read-only route failures also fail closed and are never re-executed in Python.
+6. Read-only route failures also fail closed and are never re-executed in Python.
 7. Python remains the reference until Rust passes all stable gates.
 8. Unknown contract, selector, routing or state schema versions fail closed.
 9. Logical SQLite records define parity; physical database page layout does not.
 10. Cryptographic formats require byte-level cross-engine vectors.
 11. `auto` may prefer Rust only after the command, platform, state schema and parity gates are compatible.
+12. Direct Rust capability availability does not authorize installed routing; every route requires an explicit contract row.
 
 ## Repository layout
 
@@ -45,7 +46,7 @@ parity/
   normalizers/         Strict nondeterministic-field normalization
 syntavra_runtime/
   engine_entry.py      Installed command boundary
-  engine_cli.py        Selector and R11 route commands
+  engine_cli.py        Selector and read-only route commands
   engine_selector.py   Resolution, persistence and verification
   read_only_router.py  Capability-whitelisted no-fallback router
 ```
@@ -75,14 +76,16 @@ status
 version
 ```
 
-Direct Rust binary availability does not imply installed product-command routing. R11 initially routes only:
+Direct Rust binary availability does not imply installed product-command routing. R12 routes only:
 
 ```text
 syntavra --engine python engine route version
 syntavra --engine rust engine route version
+syntavra --engine python engine route status
+syntavra --engine rust engine route status
 ```
 
-All other `engine route` commands fail closed as unsupported. Existing product commands continue through the Python reference runtime unless a later route contract explicitly admits them.
+The status route uses only the deterministic built-in default configuration. It does not read project, user, environment, session or task configuration. All other `engine route` commands fail closed as unsupported. Existing product commands continue through the Python reference runtime unless a later route contract explicitly admits them.
 
 ## Selection contract
 
@@ -104,7 +107,7 @@ Current resolution remains conservative:
 |---|---|---|
 | `python` | `python` | Python reference command path |
 | `auto` | `python` | Python reference command path |
-| `rust` | `rust` | Selector operations plus explicitly whitelisted R11 routes only |
+| `rust` | `rust` | Selector operations plus explicitly whitelisted read-only routes only |
 
 Rust can be persisted only after the binary proves product identity, `0.0.1 / pre-release`, contract version, exact read-only capability rows and descriptor SHA-256. Missing binaries, malformed output, unknown selector values and unsupported schemas fail closed.
 
@@ -116,15 +119,17 @@ syntavra engine status
 syntavra engine use python|rust|auto
 syntavra engine verify
 syntavra engine route version
+syntavra engine route status
 ```
 
-## R11 routing contract
+## Read-only routing contract
 
 `contracts/engine/read-only-routing-v1.json` is the authority for admitted routes. A route must define:
 
 - exact command name;
 - required Rust capability;
 - `read-only` mutation classification;
+- fixed input profile;
 - fixed Rust argv;
 - exact result fields;
 - exact success envelope;
@@ -138,7 +143,15 @@ fallback.policy = none
 fallback.attempted = false
 ```
 
-Unsupported commands, unavailable or incompatible Rust binaries, execution failures, oversized output, malformed JSON and identity drift produce a structured error and stop. The router does not invoke Python after a Rust route begins.
+Unsupported commands, unavailable or incompatible Rust binaries, execution failures, oversized output, malformed JSON, identity drift and parity drift produce a structured error and stop. The router does not invoke Python after a Rust route begins.
+
+### R11 route
+
+`version` proves the installed routing mechanism, exact engine-specific identity result and fail-closed execution.
+
+### R12 route
+
+`status` is admitted only with `input_profile=default-config-only`. Python computes the default status projection and Rust executes `status` without a config wire. Their result objects must be exactly equal. Live configuration discovery is deliberately outside R12.
 
 ## Shared state policy
 
@@ -159,7 +172,7 @@ Future mutating operations require:
 
 `contracts/engine/selection.schema.json` is the canonical persisted selector format. `tools/verify_engine_selector.py` freezes precedence, Python-default auto policy and fail-closed handling.
 
-`contracts/engine/read-only-routing-v1.json` freezes the R11 whitelist and envelopes. `tools/verify_read_only_routing_parity.py` proves shared identity fields, engine-specific metadata, exact envelopes and no-fallback behavior.
+`contracts/engine/read-only-routing-v1.json` freezes the installed whitelist and envelopes. `tools/verify_read_only_routing_parity.py` proves route inventory, fixed inputs, exact envelopes, result parity and no-fallback behavior.
 
 The Python runtime remains the source of truth for the complete command and MCP inventory. `tools/export_python_contract.py` exports that surface for snapshot and code-generation gates.
 
@@ -177,7 +190,8 @@ The Python runtime remains the source of truth for the complete command and MCP 
 10. **R9** — quiescent logical broker SQLite snapshot parity. Implemented.
 11. **R10** — bounded live broker SQLite online-backup parity. Implemented.
 12. **R11** — first installed read-only command route with no fallback. Implemented for `version`.
-13. **R12+** — additional read-only routes, MCP transport, evidence, process, structural, session, sandbox, installer and eventually mutating parity.
+13. **R12** — deterministic default `status` route with exact Python/Rust parity. Implemented.
+14. **R13+** — explicit live config transport, additional read-only routes, MCP transport, evidence, process, structural, session, sandbox, installer and eventually mutating parity.
 
 ## Stable gate
 
@@ -197,6 +211,8 @@ Rust cannot become the `auto` preference until all of these pass on Windows, Lin
 
 ```text
 RUST_READ_ONLY_VERSION_ROUTING_PARITY_PROVEN_R11
+RUST_READ_ONLY_STATUS_ROUTING_PARITY_PROVEN_R12
+RUST_LIVE_CONFIG_STATUS_ROUTING_NOT_PROVEN
 RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT
 RUST_GENERAL_PRODUCT_COMMAND_ROUTING_NOT_PROVEN
 RUST_MUTATING_COMMAND_ROUTING_NOT_PROVEN

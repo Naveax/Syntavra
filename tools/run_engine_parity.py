@@ -73,7 +73,8 @@ def verify() -> dict[str, object]:
         "state_layout": layout == state_layout(),
         "state_inspection": state_inspection == reference_state_inspection,
         "read_only_routing": routing.get("ok") is True
-        and routing.get("phase") == "R11",
+        and routing.get("phase") == "R12"
+        and routing.get("routes") == ["status", "version"],
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -102,7 +103,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R11",
+        "phase": "R0-R12",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,

@@ -57,58 +57,85 @@ def verify() -> dict[str, object]:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     selector = EngineSelector(
         project_root=ROOT,
-        env={"HOME": str(ROOT / ".syntavra-r11-verifier-home")},
+        env={"HOME": str(ROOT / ".syntavra-r12-verifier-home")},
         rust_binary=ROOT / "Cargo.toml",
         runner=_cargo_rust_json,
     )
     router = ReadOnlyCommandRouter(selector, runner=_cargo_rust_json)
 
-    python_route = router.route("version", cli_override="python")
-    rust_route = router.route("version", cli_override="rust")
+    python_version = router.route("version", cli_override="python")
+    rust_version = router.route("version", cli_override="rust")
+    python_status = router.route("status", cli_override="python")
+    rust_status = router.route("status", cli_override="rust")
 
     unsupported_error: EngineSelectionError | None = None
     try:
-        router.route("status", cli_override="rust")
+        router.route("config.resolve", cli_override="rust")
     except EngineSelectionError as exc:
         unsupported_error = exc
 
     expected_success_keys = set(contract["success_envelope"]["required"])
     route_rows = contract.get("routes", [])
+    route_names = [
+        str(row.get("command"))
+        for row in route_rows
+        if isinstance(row, dict)
+    ]
+    route_by_name = {
+        str(row.get("command")): row
+        for row in route_rows
+        if isinstance(row, dict)
+    }
+    successful_routes = (python_version, rust_version, python_status, rust_status)
     checks = {
         "contract_schema": contract.get("schema_version") == 1,
-        "contract_phase": contract.get("phase") == "R11",
-        "single_initial_route": isinstance(route_rows, list)
-        and len(route_rows) == 1
-        and route_rows[0].get("command") == "version",
-        "python_success_envelope": set(python_route) == expected_success_keys,
-        "rust_success_envelope": set(rust_route) == expected_success_keys,
-        "shared_version_fields": _shared_version_fields(python_route["result"])
-        == _shared_version_fields(rust_route["result"]),
-        "python_reference_selected": python_route["result"].get("engine") == "python",
-        "rust_binary_selected": rust_route["result"].get("engine") == "rust",
-        "read_only_mutation": python_route.get("mutation") == "read-only"
-        and rust_route.get("mutation") == "read-only",
-        "no_success_fallback": python_route.get("fallback")
-        == {"policy": "none", "attempted": False}
-        and rust_route.get("fallback") == {"policy": "none", "attempted": False},
+        "contract_phase": contract.get("phase") == "R12",
+        "route_inventory": route_names == ["status", "version"],
+        "status_fixed_default_input": route_by_name.get("status", {}).get("input_profile")
+        == "default-config-only"
+        and route_by_name.get("status", {}).get("rust_argv") == ["status"],
+        "version_fixed_input": route_by_name.get("version", {}).get("input_profile")
+        == "none"
+        and route_by_name.get("version", {}).get("rust_argv") == ["version"],
+        "exact_success_envelopes": all(
+            set(route) == expected_success_keys for route in successful_routes
+        ),
+        "shared_version_fields": _shared_version_fields(python_version["result"])
+        == _shared_version_fields(rust_version["result"]),
+        "python_reference_selected": python_version["result"].get("engine") == "python",
+        "rust_binary_selected": rust_version["result"].get("engine") == "rust",
+        "default_status_parity": python_status["result"] == rust_status["result"],
+        "default_status_locked_boundary": python_status["result"].get(
+            "general_command_routing"
+        )
+        == "blocked"
+        and python_status["result"].get("mutation") == "read-only",
+        "read_only_mutation": all(
+            route.get("mutation") == "read-only" for route in successful_routes
+        ),
+        "no_success_fallback": all(
+            route.get("fallback") == {"policy": "none", "attempted": False}
+            for route in successful_routes
+        ),
         "unsupported_fails_closed": unsupported_error is not None
-        and unsupported_error.code == "ENGINE_ROUTE_UNSUPPORTED_R11",
+        and unsupported_error.code == "ENGINE_ROUTE_UNSUPPORTED_R12",
         "unsupported_no_fallback": unsupported_error is not None
         and unsupported_error.details.get("fallback_attempted") is False
         and unsupported_error.details.get("fallback_policy") == "none",
     }
     if not all(checks.values()):
-        raise RuntimeError(f"R11 read-only routing parity failed: {checks}")
+        raise RuntimeError(f"R12 read-only routing parity failed: {checks}")
 
     return {
         "ok": True,
-        "phase": "R11",
+        "phase": "R12",
         "checks": checks,
-        "routes": ["version"],
+        "routes": ["status", "version"],
+        "status_input_profile": "default-config-only",
         "fallback_policy": "none",
         "reference_engine": "python",
         "candidate_engine": "rust",
-        "claim": "RUST_READ_ONLY_VERSION_ROUTING_PARITY_PROVEN_R11",
+        "claim": "RUST_READ_ONLY_VERSION_STATUS_ROUTING_PARITY_PROVEN_R12",
     }
 
 
