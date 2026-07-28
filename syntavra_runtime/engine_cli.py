@@ -17,7 +17,7 @@ def _emit(value: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="syntavra",
-        description="Syntavra R11 engine selector and safe read-only router",
+        description="Syntavra R12 engine selector and safe read-only router",
     )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
