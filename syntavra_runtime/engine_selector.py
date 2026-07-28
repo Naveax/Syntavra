@@ -19,14 +19,19 @@ DEFAULT_ENGINE = "python"
 AUTO_ENGINE = "python"
 RUST_BINARY_NAME = "syntavra-rs.exe" if os.name == "nt" else "syntavra-rs"
 RUST_CAPABILITIES = (
+    "config.resolve",
     "engine.capabilities",
     "engine.contract-hash",
+    "receipt.inspect",
+    "state.broker-live-snapshot",
+    "state.broker-snapshot",
+    "state.inspect",
+    "state.layout",
+    "status",
     "version",
 )
 RUST_CAPABILITY_ROWS = {
-    "engine.capabilities": ("preview", "read-only"),
-    "engine.contract-hash": ("preview", "read-only"),
-    "version": ("preview", "read-only"),
+    name: ("preview", "read-only") for name in RUST_CAPABILITIES
 }
 ENGINE_CONTRACT_DESCRIPTOR = (
     "product=Syntavra\n"
@@ -35,8 +40,15 @@ ENGINE_CONTRACT_DESCRIPTOR = (
     "contract_version=1\n"
     "engine=rust\n"
     "engine_stability=experimental\n"
+    "capability=config.resolve|preview|read-only\n"
     "capability=engine.capabilities|preview|read-only\n"
     "capability=engine.contract-hash|preview|read-only\n"
+    "capability=receipt.inspect|preview|read-only\n"
+    "capability=state.broker-live-snapshot|preview|read-only\n"
+    "capability=state.broker-snapshot|preview|read-only\n"
+    "capability=state.inspect|preview|read-only\n"
+    "capability=state.layout|preview|read-only\n"
+    "capability=status|preview|read-only\n"
     "capability=version|preview|read-only\n"
 )
 ENGINE_CONTRACT_SHA256 = hashlib.sha256(ENGINE_CONTRACT_DESCRIPTOR.encode("utf-8")).hexdigest()
