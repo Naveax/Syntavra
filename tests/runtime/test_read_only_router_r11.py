@@ -124,6 +124,25 @@ def test_invalid_rust_result_never_reexecutes_in_python(tmp_path: Path) -> None:
     assert calls == [("version",)]
 
 
+def test_rust_execution_failure_never_reexecutes_in_python(tmp_path: Path) -> None:
+    selector = _selector(tmp_path)
+    calls: list[tuple[str, ...]] = []
+
+    def failing_runner(_binary: Path, arguments: tuple[str, ...]):
+        calls.append(arguments)
+        raise TimeoutError("bounded route timeout")
+
+    router = ReadOnlyCommandRouter(selector, runner=failing_runner)
+    with pytest.raises(EngineSelectionError) as error:
+        router.route("version", cli_override="rust")
+    assert error.value.code == "RUST_ROUTE_EXECUTION_FAILED_R11"
+    assert error.value.details["exception"] == "TimeoutError"
+    assert error.value.details["exception_message"] == "bounded route timeout"
+    assert error.value.details["fallback_policy"] == "none"
+    assert error.value.details["fallback_attempted"] is False
+    assert calls == [("version",)]
+
+
 def test_engine_cli_emits_structured_r11_route_result(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
