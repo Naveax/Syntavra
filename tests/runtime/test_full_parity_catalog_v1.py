@@ -36,7 +36,7 @@ def test_catalog_starts_every_remaining_workstream() -> None:
     assert all(row["status"] == "ACTIVE" for row in catalog["workstreams"])
 
 
-def test_current_proven_routes_are_exactly_the_r22_surface() -> None:
+def test_current_proven_routes_include_r22_and_r24_surfaces() -> None:
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
     proven = {
         row["id"]
@@ -52,6 +52,8 @@ def test_current_proven_routes_are_exactly_the_r22_surface() -> None:
         "route.receipt.inspect",
         "route.state.broker-snapshot",
         "route.state.broker-live-snapshot",
+        "route.pipeline.describe",
+        "route.plugins.list",
     }
 
 
