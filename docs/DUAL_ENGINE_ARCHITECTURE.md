@@ -1,6 +1,6 @@
 # Syntavra Dual-Engine Architecture
 
-Status: **R18 installed state.inspect routing implemented / Python remains default**  
+Status: **R20 installed quiescent broker snapshot routing implemented / Python remains default**  
 Product identity: **0.0.1 / pre-release / version locked**
 
 ## Objective
@@ -34,6 +34,8 @@ The Python runtime is not removed. A user must always be able to select it expli
 16. Transient session and task override JSON is decoded only by Python; Rust receives only the final canonical `R6CFG1` wire.
 17. Static state metadata routing grants no filesystem or database access by implication.
 18. Project-bound state inspection exposes the derived project identifier, never the selected project-root path.
+19. Receipt inspection rejects cross-project replay before Rust selection.
+20. Installed broker database routing is quiescent-only until live WAL backup parity is separately admitted.
 
 ## Repository layout
 
@@ -66,6 +68,10 @@ syntavra_runtime/
                        Static state-layout routing wrapper
   read_only_router_r18.py
                        Project-bound state-root inspection wrapper
+  read_only_router_r19.py
+                       Project-bound receipt inspection wrapper
+  read_only_router_r20.py
+                       Quiescent project-bound broker SQLite snapshot wrapper
 ```
 
 ## Engine states
@@ -93,7 +99,7 @@ status
 version
 ```
 
-Direct Rust binary availability does not imply installed product-command routing. R18 routes:
+Direct Rust binary availability does not imply installed product-command routing. R20 routes:
 
 ```text
 syntavra --engine python engine route version
@@ -104,6 +110,16 @@ syntavra --engine rust engine route state.layout
 
 syntavra --engine python --project <root> engine route state.inspect
 syntavra --engine rust --project <root> engine route state.inspect
+
+syntavra --engine python --project <root> engine route receipt.inspect \
+  --receipt-wire-hex <hex>
+syntavra --engine rust --project <root> engine route receipt.inspect \
+  --receipt-wire-hex <hex>
+
+syntavra --engine python --project <root> engine route state.broker-snapshot \
+  --database-path <project-bound-broker.sqlite3>
+syntavra --engine rust --project <root> engine route state.broker-snapshot \
+  --database-path <project-bound-broker.sqlite3>
 
 syntavra --engine python engine route status
 syntavra --engine rust engine route status
@@ -159,7 +175,7 @@ Rust can be persisted only after the binary proves product identity, `0.0.1 / pr
 
 ## Read-only routing contract
 
-`contracts/engine/read-only-routing-v7.json` is the current authority. The v1–v6 contracts remain historical evidence. A current route defines:
+`contracts/engine/read-only-routing-v9.json` is the current authority. The v1–v8 contracts remain historical evidence. A current route defines:
 
 - exact command name;
 - required Rust capability;
@@ -226,9 +242,19 @@ The final canonical wire remains limited to 262,144 bytes. Rust receives only th
 
 Success metadata contains only the derived project identifier and its fixed format. The project-root string is forbidden in route envelopes and diagnostics. The route opens no SQLite database and writes no state.
 
+### R19 receipt inspection
+
+`receipt.inspect` admits a bounded canonical `R7RCPT1` receipt wire. Python validates lowercase hexadecimal transport, the complete receipt hash chain and expected project binding before Rust selection. Cross-project replay, unknown fields and invalid fallback semantics fail closed. Rust receives the same canonical wire and derived project ID. Raw receipt values and project paths are absent from envelopes and diagnostics.
+
+### R20 quiescent broker snapshot
+
+`state.broker-snapshot` admits the R9 logical SQLite snapshot contract to the installed router. Python validates the lexical project root, project ID, project-contained `broker.sqlite3` path, symlink-free ancestry, absence of rollback/WAL sidecars, exact schema and project-bound logical rows before Rust selection. The database is opened with `mode=ro`, `immutable=1` and `query_only=ON`; any concurrent file identity change fails closed.
+
+Rust receives the same derived project ID, selected project root and database path. The complete result objects must match exactly. The absolute project and database paths are forbidden in envelopes and diagnostics; the validated relative database path remains part of the canonical result. The route performs no database write, sidecar creation, migration or recovery.
+
 ## Shared state policy
 
-R7–R10 prove selected read-only views of existing `.syntavra` state. R17 routes the static layout; R18 routes bounded project-state inspection. Rust still has no installed database access or state-writing authority.
+R7–R10 prove selected read-only views of existing `.syntavra` state. R17 routes the static layout, R18 routes bounded project-state inspection, R19 routes project-bound receipt inspection, and R20 routes quiescent logical broker snapshots. Rust still has no installed live-WAL database access or state-writing authority.
 
 Future mutating operations require:
 
@@ -238,69 +264,3 @@ Future mutating operations require:
 - contract and schema preflight;
 - no fallback after the first mutation;
 - cross-engine recovery tests.
-
-## Contract authority
-
-`contracts/engine/descriptor.txt` is the canonical engine descriptor. The Rust binary embeds exactly the same bytes and reports their SHA-256 digest.
-
-`contracts/engine/selection.schema.json` is the canonical persisted selector format.
-
-`contracts/engine/read-only-routing-v7.json` freezes the installed whitelist, bounded configuration inputs, static layout route, project-bound state inspection, result exposure rules and schema-v7 envelopes.
-
-The Python runtime remains the source of truth for the complete command and MCP inventory.
-
-## Delivery phases
-
-1. **R0** — architecture and fail-closed rules. Implemented.
-2. **R1** — Python reference inventory. Implemented.
-3. **R2** — schemas, normalizers and parity runner. Implemented.
-4. **R3** — Rust workspace and read-only bootstrap commands. Implemented.
-5. **R4** — engine selector with Python default. Implemented.
-6. **R5** — canonical primitives and exact hashing parity. Implemented.
-7. **R6** — config, identity and status parity. Implemented.
-8. **R7** — state layout and receipt inspection parity. Implemented.
-9. **R8** — bounded state-root inspection parity. Implemented.
-10. **R9** — quiescent logical broker SQLite snapshot parity. Implemented.
-11. **R10** — bounded live broker SQLite online-backup parity. Implemented.
-12. **R11** — first installed read-only command route with no fallback. Implemented for `version`.
-13. **R12** — deterministic default `status` route with exact Python/Rust parity. Implemented.
-14. **R13** — bounded explicit canonical config-wire transport for installed `status` routing. Implemented.
-15. **R14** — explicit complete `config.resolve` snapshot routing with digest-only parity errors. Implemented.
-16. **R15** — bounded user/project/environment live config discovery. Implemented.
-17. **R16** — bounded canonical session/task overrides over live config discovery. Implemented.
-18. **R17** — installed static `state.layout` routing. Implemented.
-19. **R18** — installed project-bound `state.inspect` routing. Implemented.
-20. **R19+** — receipt routing, broker snapshots, MCP transport, evidence, process, structural, sandbox, installer and eventually mutating parity.
-
-## Stable gate
-
-Rust cannot become the `auto` preference until all of these pass on Windows, Linux and macOS:
-
-- complete CLI contract parity;
-- MCP discovery and error parity;
-- authoritative live-config export parity;
-- shared-state migration and rollback;
-- Python-to-Rust and Rust-to-Python evidence compatibility;
-- process cancellation, timeout and orphan recovery;
-- session continuation and lineage verification;
-- installer rollback and explicit host targeting;
-- no hidden fallback after route start or mutation.
-
-## Current claim boundary
-
-```text
-RUST_READ_ONLY_VERSION_ROUTING_PARITY_PROVEN_R11
-RUST_READ_ONLY_STATUS_ROUTING_PARITY_PROVEN_R12
-RUST_EXPLICIT_CONFIG_STATUS_ROUTING_PARITY_PROVEN_R13
-RUST_EXPLICIT_CONFIG_RESOLVE_ROUTING_PARITY_PROVEN_R14
-RUST_LIVE_CONFIG_DISCOVERY_ROUTING_PARITY_PROVEN_R15
-RUST_SESSION_TASK_OVERRIDE_ROUTING_PARITY_PROVEN_R16
-RUST_STATE_LAYOUT_ROUTING_PARITY_PROVEN_R17
-RUST_STATE_INSPECT_ROUTING_PARITY_PROVEN_R18
-RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT
-RUST_GENERAL_PRODUCT_COMMAND_ROUTING_NOT_PROVEN
-RUST_MUTATING_COMMAND_ROUTING_NOT_PROVEN
-RUST_MCP_PARITY_NOT_PROVEN
-RUST_PROCESS_PARITY_NOT_PROVEN
-RUST_INSTALLER_PARITY_NOT_PROVEN
-```
