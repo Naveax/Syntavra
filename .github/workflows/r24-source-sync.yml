@@ -10,13 +10,24 @@ on:
       - syntavra_runtime/read_only_cli_contract.py
       - syntavra_runtime/read_only_router_r24.py
       - crates/syntavra-cli/src/read_only_cli_contract.rs
+      - .github/workflows/r24-source-sync.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/apply_r24_static_cli_patch.py
+      - contracts/cli/read-only-static-v1.json
+      - syntavra_runtime/read_only_cli_contract.py
+      - syntavra_runtime/read_only_router_r24.py
+      - crates/syntavra-cli/src/read_only_cli_contract.rs
+      - .github/workflows/r24-source-sync.yml
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: github.head_ref == 'feature/full-parity-r24-read-only-cli-core' || github.ref_name == 'feature/full-parity-r24-read-only-cli-core'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
