@@ -19,6 +19,8 @@ on:
       - "tools/verify_broker_snapshot_parity.py"
       - "tools/verify_broker_live_snapshot_parity.py"
       - "tools/verify_read_only_routing_parity.py"
+      - "tools/verify_r15_live_config_routing.py"
+      - "tools/verify_r16_session_task_routing.py"
       - ".github/workflows/contract-drift.yml"
   pull_request:
     branches: [main, "feature/**"]
@@ -38,6 +40,8 @@ on:
       - "tools/verify_broker_snapshot_parity.py"
       - "tools/verify_broker_live_snapshot_parity.py"
       - "tools/verify_read_only_routing_parity.py"
+      - "tools/verify_r15_live_config_routing.py"
+      - "tools/verify_r16_session_task_routing.py"
       - ".github/workflows/contract-drift.yml"
   workflow_dispatch:
 
@@ -187,6 +191,32 @@ jobs:
         with:
           name: syntavra-r14-read-only-routing-diagnostics-${{ github.sha }}
           path: read-only-routing-parity.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify R15 live config discovery routing parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_r15_live_config_routing.py 2>&1 | tee r15-live-config-routing.log
+      - name: Upload R15 live config diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r15-live-config-diagnostics-${{ github.sha }}
+          path: r15-live-config-routing.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify R16 session/task override routing parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_r16_session_task_routing.py 2>&1 | tee r16-session-task-routing.log
+      - name: Upload R16 session/task diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r16-session-task-diagnostics-${{ github.sha }}
+          path: r16-session-task-routing.log
           if-no-files-found: warn
           retention-days: 7
       - name: Run Python-Rust parity gate

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 import stat
 import tomllib
 from pathlib import Path
@@ -8,8 +10,11 @@ from typing import Any, Mapping
 
 from .config_contract import MAX_CONFIG_WIRE_BYTES, WIRE_ENV_PREFIX, encode_config_wire
 from .unified_config import ConfigError, _parse_env_value
+from .util import canonical_json
 
 MAX_CONFIG_FILE_BYTES = 128 * 1024
+MAX_OVERRIDE_JSON_BYTES = 64 * 1024
+_CANONICAL_HEX = re.compile(r"^[0-9a-f]+$")
 
 
 def _lexical_absolute(path: Path) -> Path:
@@ -22,20 +27,67 @@ def _default_user_config(env: Mapping[str, str]) -> Path:
     return _lexical_absolute(root) / ".config" / "syntavra" / "config.toml"
 
 
-def _sorted_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
+def _sorted_mapping(value: Mapping[str, Any], *, prefix: str = "") -> dict[str, Any]:
     result: dict[str, Any] = {}
     for raw_key in sorted(value, key=lambda item: str(item)):
         key = str(raw_key)
+        if not key:
+            raise ConfigError("live config keys must not be empty")
+        path = f"{prefix}.{key}" if prefix else key
         child = value[raw_key]
         if isinstance(child, Mapping):
-            result[key] = _sorted_mapping(child)
+            result[key] = _sorted_mapping(child, prefix=path)
         elif child is None or isinstance(child, (bool, int, float, str)):
             result[key] = child
         else:
             raise ConfigError(
-                f"live config values must be scalar leaves, got {type(child).__name__} at {key}"
+                f"live config values must be scalar leaves, got {type(child).__name__} at {path}"
             )
     return result
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ConfigError("override JSON contains a duplicate key")
+        result[key] = value
+    return result
+
+
+def decode_override_json_hex(value: str, *, scope: str) -> dict[str, Any]:
+    """Decode one bounded canonical JSON object used as a transient override."""
+
+    text = str(value)
+    if len(text) > MAX_OVERRIDE_JSON_BYTES * 2:
+        raise ConfigError(f"{scope} override exceeds the input limit")
+    if len(text) % 2 or _CANONICAL_HEX.fullmatch(text) is None:
+        raise ConfigError(f"{scope} override hex must be non-empty lowercase hexadecimal")
+    raw = bytes.fromhex(text)
+    if len(raw) > MAX_OVERRIDE_JSON_BYTES:
+        raise ConfigError(f"{scope} override exceeds the input limit")
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConfigError(f"{scope} override is not UTF-8") from exc
+    try:
+        parsed = json.loads(
+            decoded,
+            object_pairs_hook=_strict_json_object,
+            parse_constant=lambda _value: (_ for _ in ()).throw(
+                ConfigError(f"{scope} override contains a non-finite number")
+            ),
+        )
+    except ConfigError:
+        raise
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"{scope} override is invalid JSON") from exc
+    if not isinstance(parsed, Mapping):
+        raise ConfigError(f"{scope} override must be a JSON object")
+    normalized = _sorted_mapping(parsed)
+    if canonical_json(normalized) != raw:
+        raise ConfigError(f"{scope} override JSON is not canonical")
+    return normalized
 
 
 def _read_toml_layer(path: Path, *, scope: str) -> dict[str, Any]:
@@ -95,6 +147,8 @@ def discover_live_config_wire(
     env: Mapping[str, str] | None = None,
     user_config: Path | None = None,
     project_config: Path | None = None,
+    session: Mapping[str, Any] | None = None,
+    task: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Build one immutable R6CFG1 phase without writing product state."""
 
@@ -112,6 +166,8 @@ def discover_live_config_wire(
         "user": _read_toml_layer(user_path, scope="user"),
         "project": _read_toml_layer(project_path, scope="project"),
         "environment": _environment_layer(active_env),
+        "session": _sorted_mapping(session or {}),
+        "task": _sorted_mapping(task or {}),
     }
     wire = encode_config_wire([phase])
     if len(wire) > MAX_CONFIG_WIRE_BYTES:

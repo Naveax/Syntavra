@@ -11,6 +11,7 @@ from syntavra_runtime.release_identity import identity
 from syntavra_runtime.state_receipt_contract import state_layout
 from syntavra_runtime.state_snapshot_contract import inspect_state_root, project_id_for_root
 from verify_r15_live_config_routing import verify as verify_live_config_routing
+from verify_r16_session_task_routing import verify as verify_session_task_routing
 from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +62,7 @@ def verify() -> dict[str, object]:
     reference_status = status_projection(resolve_config_phases([{}]))
     routing = verify_read_only_routing()
     live_routing = verify_live_config_routing()
+    session_task_routing = verify_session_task_routing()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -82,6 +84,12 @@ def verify() -> dict[str, object]:
         and live_routing.get("phase") == "R15"
         and live_routing.get("routes") == ["config.resolve", "status", "version"]
         and live_routing.get("input_profile") == "live-config-discovery-v1",
+        "session_task_routing": session_task_routing.get("ok") is True
+        and session_task_routing.get("phase") == "R16"
+        and session_task_routing.get("routes")
+        == ["config.resolve", "status", "version"]
+        and session_task_routing.get("input_profile")
+        == "live-config-session-task-v1",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -110,13 +118,14 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R15",
+        "phase": "R0-R16",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
         "capabilities": capability_names,
         "routing": routing,
         "live_config_routing": live_routing,
+        "session_task_routing": session_task_routing,
         "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
     }
 

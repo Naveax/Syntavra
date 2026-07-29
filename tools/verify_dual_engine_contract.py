@@ -9,12 +9,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
 RUST_CONTRACTS = ROOT / "crates" / "syntavra-contracts" / "src" / "lib.rs"
-CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v4.json"
+CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v5.json"
 CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "capabilities.schema.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v1.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v2.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v3.json",
+    ROOT / "contracts" / "engine" / "read-only-routing-v4.json",
     CURRENT_ROUTING,
     ROOT / "contracts" / "engine" / "selection.schema.json",
     ROOT / "contracts" / "cli" / "result-envelope.schema.json",
@@ -95,7 +96,7 @@ def verify() -> dict[str, object]:
         for row in routing.get("routes", [])
         if isinstance(row, dict)
     ]
-    if routing.get("schema_version") != 4 or routing.get("phase") != "R15":
+    if routing.get("schema_version") != 5 or routing.get("phase") != "R16":
         raise RuntimeError("current read-only routing schema or phase drifted")
     if route_names != ["config.resolve", "status", "version"]:
         raise RuntimeError("current read-only route inventory drifted")
@@ -103,14 +104,21 @@ def verify() -> dict[str, object]:
         raise RuntimeError("current read-only routing input bound drifted")
     if routing.get("maximum_config_file_bytes") != 131072:
         raise RuntimeError("current live config file bound drifted")
+    if routing.get("maximum_override_json_bytes") != 65536:
+        raise RuntimeError("current transient override bound drifted")
+
     input_metadata = routing.get("input_metadata", {})
     if input_metadata.get("raw_input_forbidden") is not True:
         raise RuntimeError("current routing contract must forbid raw input metadata")
     if input_metadata.get("source_paths_forbidden") is not True:
         raise RuntimeError("current routing contract must forbid source paths")
+
     result_policy = routing.get("result_policy", {})
     if result_policy.get("parity_error_values_forbidden") is not True:
         raise RuntimeError("current routing contract must forbid parity error values")
+    if result_policy.get("raw_override_forbidden") is not True:
+        raise RuntimeError("current routing contract must forbid raw overrides")
+
     live_discovery = routing.get("live_discovery", {})
     if live_discovery.get("owner") != "python-router":
         raise RuntimeError("live config discovery owner drifted")
@@ -123,6 +131,26 @@ def verify() -> dict[str, object]:
     if live_discovery.get("rust_environment_access") is not False:
         raise RuntimeError("Rust must not discover configuration environment")
 
+    overrides = routing.get("session_task_overrides", {})
+    if overrides.get("owner") != "python-router":
+        raise RuntimeError("session/task override owner drifted")
+    if overrides.get("require_live_config") is not True:
+        raise RuntimeError("session/task overrides must require live discovery")
+    if overrides.get("format") != "canonical-json-hex":
+        raise RuntimeError("session/task override format drifted")
+    if overrides.get("scopes") != ["session", "task"]:
+        raise RuntimeError("session/task override scopes drifted")
+    if overrides.get("precedence") != ["session", "task"]:
+        raise RuntimeError("session/task precedence drifted")
+    if overrides.get("maximum_bytes_per_scope") != 65536:
+        raise RuntimeError("session/task override size drifted")
+    if overrides.get("raw_input_in_envelope") is not False:
+        raise RuntimeError("raw session/task override input must remain hidden")
+    if overrides.get("rust_decodes_override_json") is not False:
+        raise RuntimeError("Rust must not decode transient override JSON")
+    if overrides.get("rust_receives_final_r6cfg1_only") is not True:
+        raise RuntimeError("Rust must receive only the final canonical config wire")
+
     route_by_name = {
         str(row.get("command")): row
         for row in routing.get("routes", [])
@@ -134,6 +162,7 @@ def verify() -> dict[str, object]:
     if config_profiles != [
         "explicit-config-wire-v1",
         "live-config-discovery-v1",
+        "live-config-session-task-v1",
     ]:
         raise RuntimeError("config.resolve input profile drifted")
     status_profiles = route_by_name.get("status", {}).get(
@@ -143,6 +172,7 @@ def verify() -> dict[str, object]:
         "default-config-only",
         "explicit-config-wire-v1",
         "live-config-discovery-v1",
+        "live-config-session-task-v1",
     ]:
         raise RuntimeError("status input profile drifted")
 
@@ -159,6 +189,7 @@ def verify() -> dict[str, object]:
             "config.resolve": config_profiles,
             "status": status_profiles,
         },
+        "routing_override_scopes": overrides["scopes"],
         "json_contracts": parsed_contracts,
     }
 
