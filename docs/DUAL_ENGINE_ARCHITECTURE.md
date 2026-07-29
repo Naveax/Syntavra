@@ -1,6 +1,6 @@
 # Syntavra Dual-Engine Architecture
 
-Status: **R17 installed state.layout routing implemented / Python remains default**  
+Status: **R18 installed state.inspect routing implemented / Python remains default**  
 Product identity: **0.0.1 / pre-release / version locked**
 
 ## Objective
@@ -33,6 +33,7 @@ The Python runtime is not removed. A user must always be able to select it expli
 15. Parity diagnostics contain digests and mismatched field names, never resolved configuration or state values.
 16. Transient session and task override JSON is decoded only by Python; Rust receives only the final canonical `R6CFG1` wire.
 17. Static state metadata routing grants no filesystem or database access by implication.
+18. Project-bound state inspection exposes the derived project identifier, never the selected project-root path.
 
 ## Repository layout
 
@@ -63,6 +64,8 @@ syntavra_runtime/
                        Session/task transient override wrapper
   read_only_router_r17.py
                        Static state-layout routing wrapper
+  read_only_router_r18.py
+                       Project-bound state-root inspection wrapper
 ```
 
 ## Engine states
@@ -90,7 +93,7 @@ status
 version
 ```
 
-Direct Rust binary availability does not imply installed product-command routing. R17 routes:
+Direct Rust binary availability does not imply installed product-command routing. R18 routes:
 
 ```text
 syntavra --engine python engine route version
@@ -98,6 +101,9 @@ syntavra --engine rust engine route version
 
 syntavra --engine python engine route state.layout
 syntavra --engine rust engine route state.layout
+
+syntavra --engine python --project <root> engine route state.inspect
+syntavra --engine rust --project <root> engine route state.inspect
 
 syntavra --engine python engine route status
 syntavra --engine rust engine route status
@@ -153,7 +159,7 @@ Rust can be persisted only after the binary proves product identity, `0.0.1 / pr
 
 ## Read-only routing contract
 
-`contracts/engine/read-only-routing-v6.json` is the current authority. The v1–v5 contracts remain historical evidence. A current route defines:
+`contracts/engine/read-only-routing-v7.json` is the current authority. The v1–v6 contracts remain historical evidence. A current route defines:
 
 - exact command name;
 - required Rust capability;
@@ -214,9 +220,15 @@ The final canonical wire remains limited to 262,144 bytes. Rust receives only th
 
 `state.layout` admits the static R7 state-layout contract to the installed router. It accepts no input and compares the complete Python `state_layout()` object with `syntavra-rs state layout`. The route performs no filesystem read, database access or mutation. Configuration input, live discovery and transient overrides are rejected before engine selection.
 
+### R18 state inspection
+
+`state.inspect` admits the bounded R8 project-state inspection contract. The installed CLI preserves the lexical `--project` path for a no-follow root check, while the selector continues to use its canonical resolved root for existing behavior. Python derives the project ID, inspects only five contract-declared paths, and rejects root/path symlinks, unsupported types, files larger than 1 MiB and concurrent changes before Rust selection. Rust receives the same derived project ID and selected root. The complete result objects must match exactly.
+
+Success metadata contains only the derived project identifier and its fixed format. The project-root string is forbidden in route envelopes and diagnostics. The route opens no SQLite database and writes no state.
+
 ## Shared state policy
 
-R7–R10 prove selected read-only views of existing `.syntavra` state. R17 routes only the static state-layout description. Rust still has no installed filesystem-state read or state-writing authority.
+R7–R10 prove selected read-only views of existing `.syntavra` state. R17 routes the static layout; R18 routes bounded project-state inspection. Rust still has no installed database access or state-writing authority.
 
 Future mutating operations require:
 
@@ -233,7 +245,7 @@ Future mutating operations require:
 
 `contracts/engine/selection.schema.json` is the canonical persisted selector format.
 
-`contracts/engine/read-only-routing-v6.json` freezes the installed whitelist, bounded configuration inputs, static state-layout route, result exposure rules and schema-v6 envelopes.
+`contracts/engine/read-only-routing-v7.json` freezes the installed whitelist, bounded configuration inputs, static layout route, project-bound state inspection, result exposure rules and schema-v7 envelopes.
 
 The Python runtime remains the source of truth for the complete command and MCP inventory.
 
@@ -257,7 +269,8 @@ The Python runtime remains the source of truth for the complete command and MCP 
 16. **R15** — bounded user/project/environment live config discovery. Implemented.
 17. **R16** — bounded canonical session/task overrides over live config discovery. Implemented.
 18. **R17** — installed static `state.layout` routing. Implemented.
-19. **R18+** — project-bound state inspection, receipt routing, MCP transport, evidence, process, structural, sandbox, installer and eventually mutating parity.
+19. **R18** — installed project-bound `state.inspect` routing. Implemented.
+20. **R19+** — receipt routing, broker snapshots, MCP transport, evidence, process, structural, sandbox, installer and eventually mutating parity.
 
 ## Stable gate
 
@@ -283,6 +296,7 @@ RUST_EXPLICIT_CONFIG_RESOLVE_ROUTING_PARITY_PROVEN_R14
 RUST_LIVE_CONFIG_DISCOVERY_ROUTING_PARITY_PROVEN_R15
 RUST_SESSION_TASK_OVERRIDE_ROUTING_PARITY_PROVEN_R16
 RUST_STATE_LAYOUT_ROUTING_PARITY_PROVEN_R17
+RUST_STATE_INSPECT_ROUTING_PARITY_PROVEN_R18
 RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT
 RUST_GENERAL_PRODUCT_COMMAND_ROUTING_NOT_PROVEN
 RUST_MUTATING_COMMAND_ROUTING_NOT_PROVEN
