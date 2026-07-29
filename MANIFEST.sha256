@@ -19,6 +19,7 @@ a4d0a6a0451fe68d2c7a4cc47289804ae10761bf22b5f01cb0c87c17dd60b09b  .github/workfl
 eb4b6fd03789169bbee734b2c197227b65c0607e24141266d387e6b671db8cc4  .github/workflows/r20-broker-snapshot-routing.yml
 88a4a0ec9f1fff73e1c2705985f6e74cc7a761ca9203d867149df06e77459da6  .github/workflows/r21-live-broker-snapshot-routing.yml
 a161e460e0f0f5ec9c3198fc9a1d1c5e454c913803c994b5009a7d1626e252a5  .github/workflows/r22-capability-aware-auto.yml
+0a266e530bbb7ff64a19da2049844be1dff449f6712bbaa4723dc52b63aa382f  .github/workflows/r24-config-explain.yml
 30818803c3d42f01db5c289ff31e1cac008cc367a307a7af20a0bd5c4dec15a3  .github/workflows/r24-config-validate.yml
 df25fe36043eb556dc84f09e11346652380068792d9b31e019849b5c9ed31f21  .github/workflows/r24-static-read-only-cli.yml
 f4d17d1c5d1ba749c4784eafe5c16b84134af2accf4d009b3a64c3bd0861931a  .github/workflows/refresh-branch-manifest.yml
