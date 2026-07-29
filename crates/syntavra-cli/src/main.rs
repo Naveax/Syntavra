@@ -102,9 +102,7 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [pipeline, action] if pipeline == "pipeline" && action == "describe" => {
             Ok(Command::PipelineDescribe)
         }
-        [plugins, action] if plugins == "plugins" && action == "list" => {
-            Ok(Command::PluginsList)
-        }
+        [plugins, action] if plugins == "plugins" && action == "list" => Ok(Command::PluginsList),
         [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
         [state, action, expected_project_id, project_root, database_path]
             if state == "state" && action == "broker-live-snapshot" =>
