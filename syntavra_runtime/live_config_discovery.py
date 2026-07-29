@@ -12,10 +12,14 @@ from .unified_config import ConfigError, _parse_env_value
 MAX_CONFIG_FILE_BYTES = 128 * 1024
 
 
+def _lexical_absolute(path: Path) -> Path:
+    return Path(os.path.abspath(os.fspath(Path(path).expanduser())))
+
+
 def _default_user_config(env: Mapping[str, str]) -> Path:
     home = str(env.get("USERPROFILE") or env.get("HOME") or "").strip()
     root = Path(home).expanduser() if home else Path.home()
-    return root.resolve(strict=False) / ".config" / "syntavra" / "config.toml"
+    return _lexical_absolute(root) / ".config" / "syntavra" / "config.toml"
 
 
 def _sorted_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -35,7 +39,7 @@ def _sorted_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _read_toml_layer(path: Path, *, scope: str) -> dict[str, Any]:
-    candidate = Path(path).expanduser().resolve(strict=False)
+    candidate = _lexical_absolute(path)
     try:
         before = candidate.lstat()
     except FileNotFoundError:
@@ -95,11 +99,15 @@ def discover_live_config_wire(
     """Build one immutable R6CFG1 phase without writing product state."""
 
     active_env = dict(os.environ if env is None else env)
-    root = Path(project_root).resolve(strict=False)
-    if not root.is_dir() or root.is_symlink():
+    lexical_root = _lexical_absolute(project_root)
+    try:
+        root_metadata = lexical_root.lstat()
+    except OSError as exc:
+        raise ConfigError("cannot inspect live config project root") from exc
+    if stat.S_ISLNK(root_metadata.st_mode) or not stat.S_ISDIR(root_metadata.st_mode):
         raise ConfigError("live config project root must be a non-symlink directory")
     user_path = user_config or _default_user_config(active_env)
-    project_path = project_config or root / ".syntavra" / "config.toml"
+    project_path = project_config or lexical_root / ".syntavra" / "config.toml"
     phase = {
         "user": _read_toml_layer(user_path, scope="user"),
         "project": _read_toml_layer(project_path, scope="project"),
