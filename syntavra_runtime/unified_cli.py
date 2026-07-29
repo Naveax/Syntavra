@@ -14,9 +14,8 @@ from .janitor import RuntimeJanitor
 from .job_scheduler import DurableJobScheduler
 from .migrations import MigrationManager
 from .observability import Observability
-from .plugin_sdk import PluginRegistry
+from .read_only_cli_contract import pipeline_description, plugin_inventory
 from .prerelease_cli import PRE_RELEASE_COMMANDS, main as prerelease_main
-from .runtime_pipeline import UnifiedRuntimePipeline
 from .platform import SyntavraPlatform
 from .autonomous_agent import AgentMode, AgentTask, PatchProposal
 from .model_gateway import GatewayConfig, create_gateway
@@ -156,6 +155,14 @@ def _core_main(argv: list[str]) -> int:
     project = Path(args.project).resolve(strict=False)
     state = Path(args.state_root).resolve(strict=False) if args.state_root else project / ".syntavra" / "pre-release"
     project_id = stable_project_id(project)
+
+    if args.command == "pipeline":
+        _emit(pipeline_description())
+        return 0
+    if args.command == "plugins":
+        _emit(plugin_inventory())
+        return 0
+
     evidence = EvidenceStore(state / "evidence", project_id=project_id)
 
     if args.command == "config":
@@ -188,17 +195,6 @@ def _core_main(argv: list[str]) -> int:
             dry_run=not args.apply,
         )
         _emit(result)
-        return 0
-
-    if args.command == "pipeline":
-        config = ConfigManager(project_root=project, state_root=state)
-        observability = Observability(state / "observability")
-        pipeline = UnifiedRuntimePipeline(evidence=evidence, config=config, observability=observability)
-        _emit(pipeline.describe())
-        return 0
-
-    if args.command == "plugins":
-        _emit({"plugins": PluginRegistry().records(), "discovery": "explicit-only"})
         return 0
 
     if args.command == "scheduler":
