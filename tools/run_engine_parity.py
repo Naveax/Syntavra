@@ -185,6 +185,8 @@ def verify() -> dict[str, object]:
         "config.resolve",
         "engine.capabilities",
         "engine.contract-hash",
+        "pipeline.describe",
+        "plugins.list",
         "receipt.inspect",
         "state.broker-live-snapshot",
         "state.broker-snapshot",
