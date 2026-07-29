@@ -12,46 +12,14 @@
   "maximum_receipt_wire_bytes": 65536,
   "maximum_response_bytes": 1048576,
   "routes": [
-    {
-      "command": "config.resolve",
-      "required_capability": "config.resolve",
-      "mutation": "read-only"
-    },
-    {
-      "command": "receipt.inspect",
-      "required_capability": "receipt.inspect",
-      "mutation": "read-only"
-    },
-    {
-      "command": "state.broker-live-snapshot",
-      "required_capability": "state.broker-live-snapshot",
-      "mutation": "read-only"
-    },
-    {
-      "command": "state.broker-snapshot",
-      "required_capability": "state.broker-snapshot",
-      "mutation": "read-only"
-    },
-    {
-      "command": "state.inspect",
-      "required_capability": "state.inspect",
-      "mutation": "read-only"
-    },
-    {
-      "command": "state.layout",
-      "required_capability": "state.layout",
-      "mutation": "read-only"
-    },
-    {
-      "command": "status",
-      "required_capability": "status",
-      "mutation": "read-only"
-    },
-    {
-      "command": "version",
-      "required_capability": "version",
-      "mutation": "read-only"
-    }
+    {"command": "config.resolve", "required_capability": "config.resolve", "mutation": "read-only"},
+    {"command": "receipt.inspect", "required_capability": "receipt.inspect", "mutation": "read-only"},
+    {"command": "state.broker-live-snapshot", "required_capability": "state.broker-live-snapshot", "mutation": "read-only"},
+    {"command": "state.broker-snapshot", "required_capability": "state.broker-snapshot", "mutation": "read-only"},
+    {"command": "state.inspect", "required_capability": "state.inspect", "mutation": "read-only"},
+    {"command": "state.layout", "required_capability": "state.layout", "mutation": "read-only"},
+    {"command": "status", "required_capability": "status", "mutation": "read-only"},
+    {"command": "version", "required_capability": "version", "mutation": "read-only"}
   ],
   "auto_selection": {
     "scope": "installed-engine-route-only",
@@ -81,6 +49,7 @@
       "required-capability-present"
     ],
     "verification_commands_may_run_before_candidate": true,
+    "platform_probe_failure": "select-python-before-candidate-execution",
     "verification_failure": "select-python-before-candidate-execution",
     "unsupported_platform": "select-python-before-candidate-execution",
     "missing_capability": "select-python-before-candidate-execution",
@@ -94,6 +63,7 @@
   "selection_reasons": [
     "AUTO_ROUTE_RUST_SELECTED_R22",
     "AUTO_ROUTE_NOT_ADMITTED_R22",
+    "AUTO_ROUTE_PLATFORM_PROBE_FAILED_R22",
     "AUTO_ROUTE_PLATFORM_UNSUPPORTED_R22",
     "AUTO_ROUTE_VERIFICATION_FAILED_R22",
     "AUTO_ROUTE_RUST_UNAVAILABLE_R22",
@@ -102,18 +72,7 @@
     "AUTO_ROUTE_RUST_BINARY_MISSING_R22"
   ],
   "success_envelope": {
-    "required": [
-      "ok",
-      "phase",
-      "schema_version",
-      "command",
-      "capability",
-      "mutation",
-      "selection",
-      "input",
-      "fallback",
-      "result"
-    ],
+    "required": ["ok", "phase", "schema_version", "command", "capability", "mutation", "selection", "input", "fallback", "result"],
     "selection_requested": "auto",
     "selection_resolved": ["python", "rust"],
     "additional_properties": false
