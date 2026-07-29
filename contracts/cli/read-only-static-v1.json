@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "phase": "R24",
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "mutation": "read-only",
+  "filesystem_mutation": false,
+  "database_access": false,
+  "network_access": false,
+  "commands": [
+    {
+      "route": "pipeline.describe",
+      "cli_argv": ["pipeline", "describe"],
+      "rust_argv": ["pipeline", "describe"],
+      "capability": "pipeline.describe",
+      "result": {
+        "canonical": true,
+        "exact_evidence": true,
+        "fail_closed": true,
+        "schema_version": 1,
+        "stages": [
+          "validate",
+          "authorize",
+          "configure",
+          "request-security",
+          "request-evidence",
+          "context",
+          "provider",
+          "response-evidence",
+          "response-security",
+          "data-route",
+          "deliver"
+        ],
+        "typed_delivery": true
+      }
+    },
+    {
+      "route": "plugins.list",
+      "cli_argv": ["plugins", "list"],
+      "rust_argv": ["plugins", "list"],
+      "capability": "plugins.list",
+      "result": {
+        "discovery": "explicit-only",
+        "plugins": []
+      }
+    }
+  ]
+}
