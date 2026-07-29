@@ -17,6 +17,7 @@ from verify_r18_state_inspect_routing import verify as verify_state_inspect_rout
 from verify_r19_receipt_inspect_routing import verify as verify_receipt_inspect_routing
 from verify_r20_broker_snapshot_routing import verify as verify_broker_snapshot_routing
 from verify_r21_live_broker_snapshot_routing import verify as verify_live_broker_snapshot_routing
+from verify_r22_capability_aware_auto import verify as verify_capability_aware_auto
 from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,6 +74,7 @@ def verify() -> dict[str, object]:
     receipt_inspect_routing = verify_receipt_inspect_routing()
     broker_snapshot_routing = verify_broker_snapshot_routing()
     live_broker_snapshot_routing = verify_live_broker_snapshot_routing()
+    capability_aware_auto = verify_capability_aware_auto()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -153,6 +155,23 @@ def verify() -> dict[str, object]:
         ]
         and live_broker_snapshot_routing.get("input_profile")
         == "project-bound-bounded-live-broker-sqlite-v1",
+        "capability_aware_auto": capability_aware_auto.get("ok") is True
+        and capability_aware_auto.get("phase") == "R22"
+        and capability_aware_auto.get("routes")
+        == [
+            "config.resolve",
+            "receipt.inspect",
+            "state.broker-live-snapshot",
+            "state.broker-snapshot",
+            "state.inspect",
+            "state.layout",
+            "status",
+            "version",
+        ]
+        and capability_aware_auto.get("auto_policy")
+        == "route-scoped-capability-aware-r22"
+        and capability_aware_auto.get("default_engine") == "python"
+        and capability_aware_auto.get("selected_engine") == "rust",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -181,7 +200,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R21",
+        "phase": "R0-R22",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
@@ -194,7 +213,8 @@ def verify() -> dict[str, object]:
         "receipt_inspect_routing": receipt_inspect_routing,
         "broker_snapshot_routing": broker_snapshot_routing,
         "live_broker_snapshot_routing": live_broker_snapshot_routing,
-        "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
+        "capability_aware_auto": capability_aware_auto,
+        "claim": "RUST_ROUTE_SCOPED_CAPABILITY_AWARE_AUTO_R22",
     }
 
 

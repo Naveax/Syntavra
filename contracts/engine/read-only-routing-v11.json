@@ -1,0 +1,92 @@
+{
+  "schema_version": 11,
+  "phase": "R22",
+  "predecessor": "contracts/engine/read-only-routing-v10.json",
+  "default_engine": "python",
+  "auto_engine": "route-scoped-capability-aware",
+  "fallback_policy": "none-after-selection",
+  "maximum_input_bytes": 262144,
+  "maximum_config_file_bytes": 131072,
+  "maximum_override_json_bytes": 65536,
+  "maximum_state_file_bytes": 1048576,
+  "maximum_receipt_wire_bytes": 65536,
+  "maximum_response_bytes": 1048576,
+  "routes": [
+    {"command": "config.resolve", "required_capability": "config.resolve", "mutation": "read-only"},
+    {"command": "receipt.inspect", "required_capability": "receipt.inspect", "mutation": "read-only"},
+    {"command": "state.broker-live-snapshot", "required_capability": "state.broker-live-snapshot", "mutation": "read-only"},
+    {"command": "state.broker-snapshot", "required_capability": "state.broker-snapshot", "mutation": "read-only"},
+    {"command": "state.inspect", "required_capability": "state.inspect", "mutation": "read-only"},
+    {"command": "state.layout", "required_capability": "state.layout", "mutation": "read-only"},
+    {"command": "status", "required_capability": "status", "mutation": "read-only"},
+    {"command": "version", "required_capability": "version", "mutation": "read-only"}
+  ],
+  "auto_selection": {
+    "scope": "installed-engine-route-only",
+    "policy_id": "route-scoped-capability-aware-r22",
+    "selection_boundary": "after-python-route-preflight-before-rust-candidate-execution",
+    "eligible_mutation": "read-only",
+    "eligible_commands": [
+      "config.resolve",
+      "receipt.inspect",
+      "state.broker-live-snapshot",
+      "state.broker-snapshot",
+      "state.inspect",
+      "state.layout",
+      "status",
+      "version"
+    ],
+    "supported_platforms": [
+      "linux-x86_64",
+      "macos-aarch64",
+      "macos-x86_64",
+      "windows-x86_64"
+    ],
+    "required_checks": [
+      "platform-supported",
+      "rust-binary-available",
+      "rust-contract-compatible",
+      "required-capability-present"
+    ],
+    "verification_commands_may_run_before_candidate": true,
+    "platform_probe_failure": "select-python-before-candidate-execution",
+    "verification_failure": "select-python-before-candidate-execution",
+    "unsupported_platform": "select-python-before-candidate-execution",
+    "missing_capability": "select-python-before-candidate-execution",
+    "candidate_execution_failure": "fail-closed-without-python-reexecution",
+    "candidate_parity_failure": "fail-closed-without-python-reexecution",
+    "explicit_python": "unchanged",
+    "explicit_rust": "unchanged-fail-closed",
+    "general_non-route_commands": "python",
+    "default_without-auto-request": "python"
+  },
+  "selection_reasons": [
+    "AUTO_ROUTE_RUST_SELECTED_R22",
+    "AUTO_ROUTE_NOT_ADMITTED_R22",
+    "AUTO_ROUTE_PLATFORM_PROBE_FAILED_R22",
+    "AUTO_ROUTE_PLATFORM_UNSUPPORTED_R22",
+    "AUTO_ROUTE_VERIFICATION_FAILED_R22",
+    "AUTO_ROUTE_RUST_UNAVAILABLE_R22",
+    "AUTO_ROUTE_CONTRACT_INCOMPATIBLE_R22",
+    "AUTO_ROUTE_CAPABILITY_MISSING_R22",
+    "AUTO_ROUTE_RUST_BINARY_MISSING_R22"
+  ],
+  "success_envelope": {
+    "required": ["ok", "phase", "schema_version", "command", "capability", "mutation", "selection", "input", "fallback", "result"],
+    "selection_requested": "auto",
+    "selection_resolved": ["python", "rust"],
+    "additional_properties": false
+  },
+  "error_envelope": {
+    "required": ["ok", "error"],
+    "raw_input_forbidden": true,
+    "raw_values_forbidden": true,
+    "source_paths_forbidden": true,
+    "fallback_attempted": false
+  },
+  "claims": [
+    "PYTHON_REFERENCE_ENGINE",
+    "RUST_ENGINE_EXPERIMENTAL_READ_ONLY",
+    "RUST_ROUTE_SCOPED_CAPABILITY_AWARE_AUTO_R22"
+  ]
+}
