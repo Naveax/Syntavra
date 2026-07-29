@@ -17,7 +17,7 @@ from syntavra_runtime.engine_selector import EngineSelectionError, EngineSelecto
 from syntavra_runtime.read_only_router import ReadOnlyCommandRouter
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTRACT = ROOT / "contracts" / "engine" / "read-only-routing-v2.json"
+CONTRACT = ROOT / "contracts" / "engine" / "read-only-routing-v3.json"
 FIXTURE = ROOT / "parity" / "fixtures" / "config-status-v1.json"
 
 
@@ -66,7 +66,7 @@ def verify() -> dict[str, object]:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     selector = EngineSelector(
         project_root=ROOT,
-        env={"HOME": str(ROOT / ".syntavra-r13-verifier-home")},
+        env={"HOME": str(ROOT / ".syntavra-r14-verifier-home")},
         rust_binary=ROOT / "Cargo.toml",
         runner=_cargo_rust_json,
     )
@@ -78,46 +78,88 @@ def verify() -> dict[str, object]:
     rust_default_status = router.route("status", cli_override="rust")
 
     case_results: list[dict[str, object]] = []
+    successful_routes: list[Mapping[str, Any]] = [
+        python_version,
+        rust_version,
+        python_default_status,
+        rust_default_status,
+    ]
     for case in fixture.get("cases", []):
         name = str(case.get("name") or "")
         phases = case.get("phases")
         if not name or not isinstance(phases, list):
-            raise RuntimeError("R13 fixture case requires name and phases")
+            raise RuntimeError("R14 fixture case requires name and phases")
         wire = encode_config_wire(phases)
-        expected = status_projection(resolve_config_phases(phases))
-        python_route = router.route(
+        expected_snapshot = resolve_config_phases(phases)
+        expected_status = status_projection(expected_snapshot)
+
+        python_status = router.route(
             "status",
             cli_override="python",
             config_wire_hex=wire.hex(),
         )
-        rust_route = router.route(
+        rust_status = router.route(
             "status",
             cli_override="rust",
             config_wire_hex=wire.hex(),
         )
-        if python_route["result"] != expected or rust_route["result"] != expected:
-            raise RuntimeError(f"R13 status route parity failed for {name}")
-        if python_route["input"] != rust_route["input"]:
-            raise RuntimeError(f"R13 input metadata parity failed for {name}")
+        python_config = router.route(
+            "config.resolve",
+            cli_override="python",
+            config_wire_hex=wire.hex(),
+        )
+        rust_config = router.route(
+            "config.resolve",
+            cli_override="rust",
+            config_wire_hex=wire.hex(),
+        )
+
+        if python_status["result"] != expected_status or rust_status["result"] != expected_status:
+            raise RuntimeError(f"R14 status route parity failed for {name}")
+        if python_config["result"] != expected_snapshot or rust_config["result"] != expected_snapshot:
+            raise RuntimeError(f"R14 config.resolve route parity failed for {name}")
+        if not (
+            python_status["input"]
+            == rust_status["input"]
+            == python_config["input"]
+            == rust_config["input"]
+        ):
+            raise RuntimeError(f"R14 input metadata parity failed for {name}")
+        encoded_envelopes = json.dumps(
+            [python_status, rust_status, python_config, rust_config],
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        if wire.hex() in encoded_envelopes:
+            raise RuntimeError(f"R14 route envelope exposed raw wire for {name}")
+
+        successful_routes.extend(
+            [python_status, rust_status, python_config, rust_config]
+        )
         case_results.append(
             {
                 "name": name,
                 "wire_bytes": len(wire),
                 "wire_sha256": hashlib.sha256(wire).hexdigest(),
-                "config_hash": expected["config_hash"],
-                "warnings": expected["warnings"],
+                "config_hash": expected_snapshot["config_hash"],
+                "warnings": expected_snapshot["warnings"],
             }
         )
 
     unsupported_error: EngineSelectionError | None = None
+    missing_input_error: EngineSelectionError | None = None
     invalid_input_error: EngineSelectionError | None = None
     version_input_error: EngineSelectionError | None = None
     try:
-        router.route("config.resolve", cli_override="rust")
+        router.route("state.layout", cli_override="rust")
     except EngineSelectionError as exc:
         unsupported_error = exc
     try:
-        router.route("status", cli_override="rust", config_wire_hex="abc")
+        router.route("config.resolve", cli_override="rust")
+    except EngineSelectionError as exc:
+        missing_input_error = exc
+    try:
+        router.route("config.resolve", cli_override="rust", config_wire_hex="abc")
     except EngineSelectionError as exc:
         invalid_input_error = exc
     try:
@@ -137,19 +179,21 @@ def verify() -> dict[str, object]:
         for row in route_rows
         if isinstance(row, dict)
     }
-    successful_routes = (
-        python_version,
-        rust_version,
-        python_default_status,
-        rust_default_status,
-    )
     status_profiles = route_by_name.get("status", {}).get("accepted_input_profiles")
+    config_profiles = route_by_name.get("config.resolve", {}).get(
+        "accepted_input_profiles"
+    )
     checks = {
-        "contract_schema": contract.get("schema_version") == 2,
-        "contract_phase": contract.get("phase") == "R13",
-        "route_inventory": route_names == ["status", "version"],
+        "contract_schema": contract.get("schema_version") == 3,
+        "contract_phase": contract.get("phase") == "R14",
+        "route_inventory": route_names == ["config.resolve", "status", "version"],
         "bounded_input": contract.get("maximum_input_bytes")
         == MAX_CONFIG_WIRE_BYTES,
+        "config_input_profile": config_profiles == ["explicit-config-wire-v1"],
+        "config_rust_argv": route_by_name.get("config.resolve", {})
+        .get("rust_argv", {})
+        .get("explicit-config-wire-v1")
+        == ["config", "resolve", "<config-wire-hex>"],
         "status_input_profiles": status_profiles
         == ["default-config-only", "explicit-config-wire-v1"],
         "version_input_profile": route_by_name.get("version", {}).get(
@@ -176,37 +220,41 @@ def verify() -> dict[str, object]:
             for route in successful_routes
         ),
         "unsupported_fails_closed": unsupported_error is not None
-        and unsupported_error.code == "ENGINE_ROUTE_UNSUPPORTED_R13",
+        and unsupported_error.code == "ENGINE_ROUTE_UNSUPPORTED_R14",
+        "config_input_required": missing_input_error is not None
+        and missing_input_error.code == "ENGINE_ROUTE_INPUT_REQUIRED_R14",
         "invalid_input_fails_before_routing": invalid_input_error is not None
-        and invalid_input_error.code == "ENGINE_ROUTE_INPUT_INVALID_R13",
+        and invalid_input_error.code == "ENGINE_ROUTE_INPUT_INVALID_R14",
         "version_input_rejected": version_input_error is not None
-        and version_input_error.code == "ENGINE_ROUTE_INPUT_UNSUPPORTED_R13",
+        and version_input_error.code == "ENGINE_ROUTE_INPUT_UNSUPPORTED_R14",
         "all_errors_no_fallback": all(
             error is not None
             and error.details.get("fallback_attempted") is False
             and error.details.get("fallback_policy") == "none"
             for error in (
                 unsupported_error,
+                missing_input_error,
                 invalid_input_error,
                 version_input_error,
             )
         ),
     }
     if not all(checks.values()):
-        raise RuntimeError(f"R13 read-only routing parity failed: {checks}")
+        raise RuntimeError(f"R14 read-only routing parity failed: {checks}")
 
     return {
         "ok": True,
-        "phase": "R13",
+        "phase": "R14",
         "checks": checks,
-        "routes": ["status", "version"],
+        "routes": ["config.resolve", "status", "version"],
+        "config_input_profiles": config_profiles,
         "status_input_profiles": status_profiles,
         "maximum_input_bytes": MAX_CONFIG_WIRE_BYTES,
         "cases": case_results,
         "fallback_policy": "none",
         "reference_engine": "python",
         "candidate_engine": "rust",
-        "claim": "RUST_EXPLICIT_CONFIG_STATUS_ROUTING_PARITY_PROVEN_R13",
+        "claim": "RUST_EXPLICIT_CONFIG_RESOLVE_ROUTING_PARITY_PROVEN_R14",
     }
 
 

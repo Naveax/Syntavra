@@ -18,12 +18,21 @@ from .engine_selector import ENGINE_CONTRACT_VERSION, EngineSelectionError, Engi
 from .release_identity import CHANNEL, VERSION
 from .unified_config import ConfigError
 
-ROUTING_PHASE = "R13"
-ROUTING_SCHEMA_VERSION = 2
+ROUTING_PHASE = "R14"
+ROUTING_SCHEMA_VERSION = 3
 MAX_RESPONSE_BYTES = 1024 * 1024
 
 RustRouteRunner = Callable[[Path, tuple[str, ...]], Mapping[str, Any]]
 
+CONFIG_RESULT_KEYS = frozenset(
+    {
+        "schema_version",
+        "values",
+        "provenance",
+        "config_hash",
+        "warnings",
+    }
+)
 VERSION_RESULT_KEYS = frozenset(
     {
         "product",
@@ -69,6 +78,12 @@ class PreparedRouteInput:
 
 
 READ_ONLY_ROUTES: Mapping[str, ReadOnlyRoute] = {
+    "config.resolve": ReadOnlyRoute(
+        command="config.resolve",
+        capability="config.resolve",
+        mutation="read-only",
+        result_keys=CONFIG_RESULT_KEYS,
+    ),
     "status": ReadOnlyRoute(
         command="status",
         capability="status",
@@ -124,6 +139,45 @@ def _input_metadata(profile: str, raw: bytes | None) -> dict[str, Any]:
     }
 
 
+def _explicit_config_input(
+    command: str,
+    config_wire_hex: str | None,
+) -> tuple[bytes, dict[str, Any]]:
+    if config_wire_hex is None:
+        raise EngineSelectionError(
+            "ENGINE_ROUTE_INPUT_REQUIRED_R14",
+            "The selected route requires an explicit canonical configuration wire",
+            phase=ROUTING_PHASE,
+            schema_version=ROUTING_SCHEMA_VERSION,
+            command=command,
+            accepted_input_profiles=["explicit-config-wire-v1"],
+            maximum_input_bytes=MAX_CONFIG_WIRE_BYTES,
+            fallback_policy="none",
+            fallback_attempted=False,
+        )
+    try:
+        raw = decode_config_wire_hex(
+            config_wire_hex,
+            maximum_bytes=MAX_CONFIG_WIRE_BYTES,
+        )
+        snapshot = resolve_config_wire(raw)
+    except ConfigError as exc:
+        raise EngineSelectionError(
+            "ENGINE_ROUTE_INPUT_INVALID_R14",
+            "The explicit configuration wire is invalid",
+            phase=ROUTING_PHASE,
+            schema_version=ROUTING_SCHEMA_VERSION,
+            command=command,
+            input_profile="explicit-config-wire-v1",
+            provided_hex_characters=len(str(config_wire_hex)),
+            maximum_input_bytes=MAX_CONFIG_WIRE_BYTES,
+            reason=str(exc),
+            fallback_policy="none",
+            fallback_attempted=False,
+        ) from exc
+    return raw, snapshot
+
+
 def _prepare_route_input(
     command: str,
     config_wire_hex: str | None,
@@ -131,7 +185,7 @@ def _prepare_route_input(
     if command == "version":
         if config_wire_hex is not None:
             raise EngineSelectionError(
-                "ENGINE_ROUTE_INPUT_UNSUPPORTED_R13",
+                "ENGINE_ROUTE_INPUT_UNSUPPORTED_R14",
                 "The version route does not accept configuration input",
                 phase=ROUTING_PHASE,
                 schema_version=ROUTING_SCHEMA_VERSION,
@@ -146,43 +200,62 @@ def _prepare_route_input(
             python_result=_python_version_result(),
         )
 
-    if command != "status":
-        raise RuntimeError(f"unhandled read-only route: {command}")
-
-    if config_wire_hex is None:
-        raw = encode_config_wire([{}])
-        profile = "default-config-only"
-        rust_argv = ("status",)
-        snapshot = resolve_config_wire(raw)
-    else:
-        try:
-            raw = decode_config_wire_hex(
-                config_wire_hex,
-                maximum_bytes=MAX_CONFIG_WIRE_BYTES,
-            )
+    if command == "status":
+        if config_wire_hex is None:
+            raw = encode_config_wire([{}])
             snapshot = resolve_config_wire(raw)
-        except ConfigError as exc:
-            raise EngineSelectionError(
-                "ENGINE_ROUTE_INPUT_INVALID_R13",
-                "The explicit status configuration wire is invalid",
-                phase=ROUTING_PHASE,
-                schema_version=ROUTING_SCHEMA_VERSION,
-                command="status",
-                input_profile="explicit-config-wire-v1",
-                provided_hex_characters=len(str(config_wire_hex)),
-                maximum_input_bytes=MAX_CONFIG_WIRE_BYTES,
-                reason=str(exc),
-                fallback_policy="none",
-                fallback_attempted=False,
-            ) from exc
-        profile = "explicit-config-wire-v1"
-        rust_argv = ("status", raw.hex())
+            profile = "default-config-only"
+            rust_argv = ("status",)
+        else:
+            raw, snapshot = _explicit_config_input(command, config_wire_hex)
+            profile = "explicit-config-wire-v1"
+            rust_argv = ("status", raw.hex())
+        return PreparedRouteInput(
+            metadata=_input_metadata(profile, raw),
+            rust_argv=rust_argv,
+            python_result=status_projection(snapshot),
+        )
 
-    return PreparedRouteInput(
-        metadata=_input_metadata(profile, raw),
-        rust_argv=rust_argv,
-        python_result=status_projection(snapshot),
-    )
+    if command == "config.resolve":
+        raw, snapshot = _explicit_config_input(command, config_wire_hex)
+        return PreparedRouteInput(
+            metadata=_input_metadata("explicit-config-wire-v1", raw),
+            rust_argv=("config", "resolve", raw.hex()),
+            python_result=snapshot,
+        )
+
+    raise RuntimeError(f"unhandled read-only route: {command}")
+
+
+def _canonical_result_bytes(value: Mapping[str, Any]) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+        default=str,
+    ).encode("utf-8")
+
+
+def _result_digest(value: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_canonical_result_bytes(value)).hexdigest()
+
+
+def _validate_response_size(command: str, value: Mapping[str, Any]) -> dict[str, Any]:
+    response_bytes = len(_canonical_result_bytes(value))
+    if response_bytes > MAX_RESPONSE_BYTES:
+        raise EngineSelectionError(
+            "ENGINE_ROUTE_RESPONSE_TOO_LARGE_R14",
+            "The read-only route result exceeded the response limit",
+            phase=ROUTING_PHASE,
+            schema_version=ROUTING_SCHEMA_VERSION,
+            command=command,
+            response_bytes=response_bytes,
+            maximum_response_bytes=MAX_RESPONSE_BYTES,
+            fallback_policy="none",
+            fallback_attempted=False,
+        )
+    return dict(value)
 
 
 def _validate_result_shape(
@@ -216,11 +289,9 @@ def _validate_version_result(value: Mapping[str, Any]) -> dict[str, Any]:
         "engine_stability": "experimental",
         "contract_version": ENGINE_CONTRACT_VERSION,
     }
-    mismatches = {
-        key: {"expected": expected_value, "actual": result.get(key)}
-        for key, expected_value in expected.items()
-        if result.get(key) != expected_value
-    }
+    mismatches = sorted(
+        key for key, expected_value in expected.items() if result.get(key) != expected_value
+    )
     if mismatches:
         raise EngineSelectionError(
             "RUST_ROUTE_RESULT_IDENTITY_INVALID",
@@ -228,34 +299,42 @@ def _validate_version_result(value: Mapping[str, Any]) -> dict[str, Any]:
             phase=ROUTING_PHASE,
             schema_version=ROUTING_SCHEMA_VERSION,
             command="version",
-            mismatches=mismatches,
+            mismatched_keys=mismatches,
+            expected_sha256=_result_digest(expected),
+            actual_sha256=_result_digest(result),
             fallback_policy="none",
             fallback_attempted=False,
         )
     return result
 
 
-def _validate_status_result(
+def _validate_exact_result(
+    command: str,
     value: Mapping[str, Any],
     *,
-    expected: Mapping[str, Any],
-    input_profile: str,
+    prepared: PreparedRouteInput,
+    expected_keys: frozenset[str],
+    error_code: str,
+    error_message: str,
 ) -> dict[str, Any]:
-    result = _validate_result_shape("status", value, STATUS_RESULT_KEYS)
+    result = _validate_result_shape(command, value, expected_keys)
+    expected = prepared.python_result
     if result != expected:
-        mismatches = {
-            key: {"expected": expected.get(key), "actual": result.get(key)}
-            for key in sorted(STATUS_RESULT_KEYS)
+        mismatched_keys = sorted(
+            key
+            for key in expected_keys
             if result.get(key) != expected.get(key)
-        }
+        )
         raise EngineSelectionError(
-            "RUST_STATUS_ROUTE_PARITY_INVALID",
-            "Rust status route differs from the Python status projection",
+            error_code,
+            error_message,
             phase=ROUTING_PHASE,
             schema_version=ROUTING_SCHEMA_VERSION,
-            command="status",
-            input_profile=input_profile,
-            mismatches=mismatches,
+            command=command,
+            input_profile=prepared.metadata["profile"],
+            mismatched_keys=mismatched_keys,
+            expected_sha256=_result_digest(expected),
+            actual_sha256=_result_digest(result),
             fallback_policy="none",
             fallback_attempted=False,
         )
@@ -263,23 +342,35 @@ def _validate_status_result(
 
 
 def _validate_rust_result(
-    command: str,
+    definition: ReadOnlyRoute,
     value: Mapping[str, Any],
     prepared: PreparedRouteInput,
 ) -> dict[str, Any]:
-    if command == "status":
-        return _validate_status_result(
-            value,
-            expected=prepared.python_result,
-            input_profile=str(prepared.metadata["profile"]),
-        )
-    if command == "version":
+    if definition.command == "version":
         return _validate_version_result(value)
-    raise RuntimeError(f"unhandled read-only route: {command}")
+    if definition.command == "status":
+        return _validate_exact_result(
+            "status",
+            value,
+            prepared=prepared,
+            expected_keys=definition.result_keys,
+            error_code="RUST_STATUS_ROUTE_PARITY_INVALID",
+            error_message="Rust status route differs from the Python status projection",
+        )
+    if definition.command == "config.resolve":
+        return _validate_exact_result(
+            "config.resolve",
+            value,
+            prepared=prepared,
+            expected_keys=definition.result_keys,
+            error_code="RUST_CONFIG_RESOLVE_ROUTE_PARITY_INVALID",
+            error_message="Rust config.resolve route differs from the Python snapshot",
+        )
+    raise RuntimeError(f"unhandled read-only route: {definition.command}")
 
 
 class ReadOnlyCommandRouter:
-    """R13 capability-whitelisted routing with bounded explicit config input."""
+    """R14 capability-whitelisted routing with explicit config snapshot parity."""
 
     def __init__(
         self,
@@ -305,8 +396,8 @@ class ReadOnlyCommandRouter:
         definition = READ_ONLY_ROUTES.get(normalized)
         if definition is None:
             raise EngineSelectionError(
-                "ENGINE_ROUTE_UNSUPPORTED_R13",
-                "The selected R13 route is not in the read-only capability whitelist",
+                "ENGINE_ROUTE_UNSUPPORTED_R14",
+                "The selected R14 route is not in the read-only capability whitelist",
                 phase=ROUTING_PHASE,
                 schema_version=ROUTING_SCHEMA_VERSION,
                 command=normalized or "<missing>",
@@ -323,7 +414,7 @@ class ReadOnlyCommandRouter:
             verification = self.selector.verify_rust()
             if not verification.compatible:
                 raise EngineSelectionError(
-                    "RUST_ENGINE_UNAVAILABLE_R13",
+                    "RUST_ENGINE_UNAVAILABLE_R14",
                     "Rust is selected but its binary or contract verification failed",
                     phase=ROUTING_PHASE,
                     schema_version=ROUTING_SCHEMA_VERSION,
@@ -336,7 +427,7 @@ class ReadOnlyCommandRouter:
             binary = self.selector.discover_rust_binary()
             if binary is None:
                 raise EngineSelectionError(
-                    "RUST_ENGINE_BINARY_NOT_FOUND_R13",
+                    "RUST_ENGINE_BINARY_NOT_FOUND_R14",
                     "Rust is selected but no verified binary is available for routing",
                     phase=ROUTING_PHASE,
                     schema_version=ROUTING_SCHEMA_VERSION,
@@ -351,7 +442,7 @@ class ReadOnlyCommandRouter:
                 raise
             except Exception as exc:
                 raise EngineSelectionError(
-                    "RUST_ROUTE_EXECUTION_FAILED_R13",
+                    "RUST_ROUTE_EXECUTION_FAILED_R14",
                     "The Rust read-only route failed and was not re-executed in Python",
                     phase=ROUTING_PHASE,
                     schema_version=ROUTING_SCHEMA_VERSION,
@@ -362,8 +453,9 @@ class ReadOnlyCommandRouter:
                     fallback_policy="none",
                     fallback_attempted=False,
                 ) from exc
-            result = _validate_rust_result(definition.command, raw, prepared)
+            result = _validate_rust_result(definition, raw, prepared)
 
+        result = _validate_response_size(definition.command, result)
         return {
             "ok": True,
             "phase": ROUTING_PHASE,

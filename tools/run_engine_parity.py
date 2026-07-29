@@ -73,8 +73,8 @@ def verify() -> dict[str, object]:
         "state_layout": layout == state_layout(),
         "state_inspection": state_inspection == reference_state_inspection,
         "read_only_routing": routing.get("ok") is True
-        and routing.get("phase") == "R13"
-        and routing.get("routes") == ["status", "version"]
+        and routing.get("phase") == "R14"
+        and routing.get("routes") == ["config.resolve", "status", "version"]
         and routing.get("maximum_input_bytes") == 262144,
     }
     if not all(checks.values()):
@@ -104,7 +104,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R13",
+        "phase": "R0-R14",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
