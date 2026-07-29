@@ -11,16 +11,24 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 from run_engine_parity_r23 import verify as verify_r0_r23
+from verify_r24_config_validate import verify as verify_r24_config_validate
 from verify_r24_static_cli_parity import verify as verify_r24_static_cli
 
 
 def verify() -> dict[str, object]:
     previous = verify_r0_r23()
     static_cli = verify_r24_static_cli()
+    config_validate = verify_r24_config_validate()
     if previous.get("ok") is not True or previous.get("phase") != "R0-R23":
         raise RuntimeError("R0-R23 aggregate parity regression")
     if static_cli.get("ok") is not True or static_cli.get("phase") != "R24":
         raise RuntimeError("R24 static read-only CLI parity regression")
+    if (
+        config_validate.get("ok") is not True
+        or config_validate.get("phase") != "R24"
+        or config_validate.get("command") != "config.validate"
+    ):
+        raise RuntimeError("R24 config.validate parity regression")
     return {
         "ok": True,
         "phase": "R0-R24",
@@ -28,7 +36,8 @@ def verify() -> dict[str, object]:
         "candidate_engine": "rust",
         "previous": previous,
         "static_read_only_cli": static_cli,
-        "claim": "RUST_STATIC_READ_ONLY_CLI_PARITY_PROVEN_R24",
+        "config_validate": config_validate,
+        "claim": "RUST_READ_ONLY_CLI_PARITY_EXPANDED_R24",
         "full_parity_claim": "FULL_PARITY_NOT_PROVEN",
     }
 

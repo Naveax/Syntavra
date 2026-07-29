@@ -11,7 +11,8 @@ from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 from .read_only_router_r24 import ReadOnlyCommandRouterR24
 
 SELECTOR_COMMANDS = frozenset({"engine"})
-STATIC_READ_ONLY_COMMANDS = {
+READ_ONLY_COMMANDS = {
+    ("config", "validate"): "config.validate",
     ("pipeline", "describe"): "pipeline.describe",
     ("plugins", "list"): "plugins.list",
 }
@@ -81,8 +82,8 @@ def _find_command(rest: list[str]) -> str:
     return ""
 
 
-def _static_read_only_route(rest: list[str]) -> str | None:
-    return STATIC_READ_ONLY_COMMANDS.get(tuple(rest))
+def _read_only_route(rest: list[str]) -> str | None:
+    return READ_ONLY_COMMANDS.get(tuple(rest))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,10 +93,10 @@ def main(argv: list[str] | None = None) -> int:
         project, state, rest = _context(values)
         command = _find_command(rest)
         selector = EngineSelector(project_root=project, state_root=state)
-        static_route = _static_read_only_route(rest)
-        if static_route is not None:
+        read_only_route = _read_only_route(rest)
+        if read_only_route is not None:
             router = ReadOnlyCommandRouterR24(selector, project_input_root=project)
-            routed = router.route(static_route, cli_override=override)
+            routed = router.route(read_only_route, cli_override=override)
             _emit(routed["result"])
             return 0
         if command in SELECTOR_COMMANDS:

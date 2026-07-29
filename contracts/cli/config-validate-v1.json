@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "phase": "R24",
+  "command": "config.validate",
+  "reference_engine": "python",
+  "candidate_engine": "rust",
+  "candidate_capability": "config.resolve",
+  "candidate_command": ["config", "resolve", "<R6CFG1-wire-hex>"],
+  "input_profile": "live-config-discovery-v1",
+  "input_format": "R6CFG1",
+  "mutation": "read-only",
+  "filesystem_write": false,
+  "database_access": false,
+  "network_access": false,
+  "process_access": "verified-rust-binary-only",
+  "fallback_policy": "none",
+  "validation": {
+    "python_resolves_canonical_wire": true,
+    "rust_resolves_same_canonical_wire": true,
+    "full_snapshot_equality_required": true,
+    "result_emitted_only_after_parity": true
+  },
+  "result": {
+    "required_keys": ["ok", "config_hash", "warnings"],
+    "ok": true,
+    "warnings_type": "array"
+  },
+  "claim": "RUST_CONFIG_VALIDATE_READ_ONLY_PARITY_PROVEN_R24"
+}
