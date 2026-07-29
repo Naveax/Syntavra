@@ -14,6 +14,7 @@ from verify_r15_live_config_routing import verify as verify_live_config_routing
 from verify_r16_session_task_routing import verify as verify_session_task_routing
 from verify_r17_state_layout_routing import verify as verify_state_layout_routing
 from verify_r18_state_inspect_routing import verify as verify_state_inspect_routing
+from verify_r19_receipt_inspect_routing import verify as verify_receipt_inspect_routing
 from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +68,7 @@ def verify() -> dict[str, object]:
     session_task_routing = verify_session_task_routing()
     state_layout_routing = verify_state_layout_routing()
     state_inspect_routing = verify_state_inspect_routing()
+    receipt_inspect_routing = verify_receipt_inspect_routing()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -105,6 +107,19 @@ def verify() -> dict[str, object]:
         == ["config.resolve", "state.inspect", "state.layout", "status", "version"]
         and state_inspect_routing.get("input_profile")
         == "project-bound-state-root-v1",
+        "receipt_inspect_routing": receipt_inspect_routing.get("ok") is True
+        and receipt_inspect_routing.get("phase") == "R19"
+        and receipt_inspect_routing.get("routes")
+        == [
+            "config.resolve",
+            "receipt.inspect",
+            "state.inspect",
+            "state.layout",
+            "status",
+            "version",
+        ]
+        and receipt_inspect_routing.get("input_profile")
+        == "project-bound-receipt-wire-v1",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -133,7 +148,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R18",
+        "phase": "R0-R19",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
@@ -143,6 +158,7 @@ def verify() -> dict[str, object]:
         "session_task_routing": session_task_routing,
         "state_layout_routing": state_layout_routing,
         "state_inspect_routing": state_inspect_routing,
+        "receipt_inspect_routing": receipt_inspect_routing,
         "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
     }
 

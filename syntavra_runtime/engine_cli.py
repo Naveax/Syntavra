@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
-from .read_only_router_r18 import ReadOnlyCommandRouterR18
+from .read_only_router_r19 import ReadOnlyCommandRouterR19
 
 
 def _emit(value: Any) -> None:
@@ -17,7 +17,7 @@ def _emit(value: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="syntavra",
-        description="Syntavra R18 engine selector and safe read-only router",
+        description="Syntavra R19 engine selector and safe read-only router",
     )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
@@ -42,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     input_group.add_argument("--live-config", action="store_true")
     route.add_argument("--session-override-json-hex")
     route.add_argument("--task-override-json-hex")
+    route.add_argument("--receipt-wire-hex")
     return parser
 
 
@@ -50,7 +51,7 @@ def main(
     *,
     selector: EngineSelector | None = None,
     cli_override: str | None = None,
-    router: ReadOnlyCommandRouterR18 | None = None,
+    router: ReadOnlyCommandRouterR19 | None = None,
 ) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(values)
@@ -59,7 +60,7 @@ def main(
         project_root=project_input_root,
         state_root=Path(args.state_root) if args.state_root else None,
     )
-    active_router = router or ReadOnlyCommandRouterR18(
+    active_router = router or ReadOnlyCommandRouterR19(
         active,
         project_input_root=project_input_root,
     )
@@ -85,6 +86,8 @@ def main(
                 route_kwargs["session_override_json_hex"] = args.session_override_json_hex
             if args.task_override_json_hex is not None:
                 route_kwargs["task_override_json_hex"] = args.task_override_json_hex
+            if args.receipt_wire_hex is not None:
+                route_kwargs["receipt_wire_hex"] = args.receipt_wire_hex
             result = active_router.route(args.route_command, **route_kwargs)
         else:  # pragma: no cover - argparse guarantees the action set
             raise RuntimeError(args.action)
