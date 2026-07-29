@@ -1,0 +1,124 @@
+{
+  "schema_version": 3,
+  "phase": "R14",
+  "default_engine": "python",
+  "auto_engine": "python",
+  "fallback_policy": "none",
+  "maximum_input_bytes": 262144,
+  "maximum_response_bytes": 1048576,
+  "routes": [
+    {
+      "command": "config.resolve",
+      "required_capability": "config.resolve",
+      "mutation": "read-only",
+      "accepted_input_profiles": ["explicit-config-wire-v1"],
+      "input_format": "R6CFG1",
+      "rust_argv": {
+        "explicit-config-wire-v1": ["config", "resolve", "<config-wire-hex>"]
+      },
+      "result_schema": {
+        "required": [
+          "schema_version",
+          "values",
+          "provenance",
+          "config_hash",
+          "warnings"
+        ],
+        "additional_properties": false
+      }
+    },
+    {
+      "command": "status",
+      "required_capability": "status",
+      "mutation": "read-only",
+      "accepted_input_profiles": [
+        "default-config-only",
+        "explicit-config-wire-v1"
+      ],
+      "input_format": "R6CFG1",
+      "rust_argv": {
+        "default-config-only": ["status"],
+        "explicit-config-wire-v1": ["status", "<config-wire-hex>"]
+      },
+      "result_schema": {
+        "required": [
+          "product",
+          "product_version",
+          "release_channel",
+          "stability",
+          "version_locked",
+          "reference_engine",
+          "candidate_engine",
+          "candidate_stability",
+          "config_schema_version",
+          "config_hash",
+          "warnings",
+          "general_command_routing",
+          "mutation"
+        ],
+        "additional_properties": false
+      }
+    },
+    {
+      "command": "version",
+      "required_capability": "version",
+      "mutation": "read-only",
+      "accepted_input_profiles": ["none"],
+      "input_format": null,
+      "rust_argv": {
+        "none": ["version"]
+      },
+      "result_schema": {
+        "required": [
+          "product",
+          "product_version",
+          "release_channel",
+          "engine",
+          "engine_stability",
+          "contract_version"
+        ],
+        "additional_properties": false
+      }
+    }
+  ],
+  "input_metadata": {
+    "required": ["profile", "format", "bytes", "sha256"],
+    "raw_input_forbidden": true,
+    "additional_properties": false
+  },
+  "result_policy": {
+    "config.resolve_returns_resolved_values_only_on_explicit_request": true,
+    "raw_wire_forbidden": true,
+    "parity_error_values_forbidden": true,
+    "candidate_execution_messages_redacted": true
+  },
+  "success_envelope": {
+    "required": [
+      "ok",
+      "phase",
+      "schema_version",
+      "command",
+      "capability",
+      "mutation",
+      "selection",
+      "input",
+      "fallback",
+      "result"
+    ],
+    "additional_properties": false
+  },
+  "error_envelope": {
+    "required": ["ok", "error"],
+    "raw_input_forbidden": true,
+    "resolved_values_forbidden_for_parity_errors": true,
+    "fallback_attempted": false
+  },
+  "claims": [
+    "PYTHON_REFERENCE_ENGINE",
+    "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
+    "RUST_READ_ONLY_VERSION_ROUTING_R11",
+    "RUST_READ_ONLY_STATUS_ROUTING_R12",
+    "RUST_EXPLICIT_CONFIG_STATUS_ROUTING_R13",
+    "RUST_EXPLICIT_CONFIG_RESOLVE_ROUTING_R14"
+  ]
+}

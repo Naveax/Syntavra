@@ -9,10 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
 RUST_CONTRACTS = ROOT / "crates" / "syntavra-contracts" / "src" / "lib.rs"
-CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v2.json"
+CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v3.json"
 CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "capabilities.schema.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v1.json",
+    ROOT / "contracts" / "engine" / "read-only-routing-v2.json",
     CURRENT_ROUTING,
     ROOT / "contracts" / "engine" / "selection.schema.json",
     ROOT / "contracts" / "cli" / "result-envelope.schema.json",
@@ -93,15 +94,26 @@ def verify() -> dict[str, object]:
         for row in routing.get("routes", [])
         if isinstance(row, dict)
     ]
-    if routing.get("schema_version") != 2 or routing.get("phase") != "R13":
+    if routing.get("schema_version") != 3 or routing.get("phase") != "R14":
         raise RuntimeError("current read-only routing schema or phase drifted")
-    if route_names != ["status", "version"]:
+    if route_names != ["config.resolve", "status", "version"]:
         raise RuntimeError("current read-only route inventory drifted")
     if routing.get("maximum_input_bytes") != 262144:
         raise RuntimeError("current read-only routing input bound drifted")
     input_metadata = routing.get("input_metadata", {})
     if input_metadata.get("raw_input_forbidden") is not True:
         raise RuntimeError("current routing contract must forbid raw input metadata")
+    result_policy = routing.get("result_policy", {})
+    if result_policy.get("parity_error_values_forbidden") is not True:
+        raise RuntimeError("current routing contract must forbid parity error values")
+    config_route = next(
+        (row for row in routing.get("routes", []) if row.get("command") == "config.resolve"),
+        None,
+    )
+    if not isinstance(config_route, dict):
+        raise RuntimeError("config.resolve route is missing")
+    if config_route.get("accepted_input_profiles") != ["explicit-config-wire-v1"]:
+        raise RuntimeError("config.resolve input profile drifted")
 
     return {
         "ok": True,
