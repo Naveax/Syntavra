@@ -69,12 +69,13 @@ def main(
         elif args.action == "verify":
             result = active.verify(cli_override=cli_override, all_engines=args.all_engines)
         elif args.action == "route":
-            result = active_router.route(
-                args.route_command,
-                cli_override=cli_override,
-                config_wire_hex=args.config_wire_hex,
-                live_config=args.live_config,
-            )
+            route_kwargs: dict[str, Any] = {
+                "cli_override": cli_override,
+                "config_wire_hex": args.config_wire_hex,
+            }
+            if args.live_config:
+                route_kwargs["live_config"] = True
+            result = active_router.route(args.route_command, **route_kwargs)
         else:  # pragma: no cover - argparse guarantees the action set
             raise RuntimeError(args.action)
     except EngineSelectionError as exc:
