@@ -22,6 +22,8 @@ RUST_CAPABILITIES = (
     "config.resolve",
     "engine.capabilities",
     "engine.contract-hash",
+    "pipeline.describe",
+    "plugins.list",
     "receipt.inspect",
     "state.broker-live-snapshot",
     "state.broker-snapshot",
@@ -43,6 +45,8 @@ ENGINE_CONTRACT_DESCRIPTOR = (
     "capability=config.resolve|preview|read-only\n"
     "capability=engine.capabilities|preview|read-only\n"
     "capability=engine.contract-hash|preview|read-only\n"
+    "capability=pipeline.describe|preview|read-only\n"
+    "capability=plugins.list|preview|read-only\n"
     "capability=receipt.inspect|preview|read-only\n"
     "capability=state.broker-live-snapshot|preview|read-only\n"
     "capability=state.broker-snapshot|preview|read-only\n"

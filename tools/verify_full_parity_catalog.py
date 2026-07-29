@@ -32,6 +32,8 @@ PROVEN_ROUTE_CAPABILITIES = {
     "route.receipt.inspect": "receipt.inspect",
     "route.state.broker-snapshot": "state.broker-snapshot",
     "route.state.broker-live-snapshot": "state.broker-live-snapshot",
+    "route.pipeline.describe": "pipeline.describe",
+    "route.plugins.list": "plugins.list",
 }
 REQUIRED_PYTHON_COMMANDS = {
     "agent",

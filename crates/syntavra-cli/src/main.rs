@@ -3,6 +3,7 @@
 mod broker_live_snapshot_contract;
 mod broker_snapshot_contract;
 mod config_contract;
+mod read_only_cli_contract;
 mod state_layout_contract;
 mod state_receipt_contract;
 mod state_snapshot_contract;
@@ -14,6 +15,7 @@ use std::process::ExitCode;
 use broker_live_snapshot_contract::snapshot_live_broker_database_json;
 use broker_snapshot_contract::snapshot_broker_database_json;
 use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
+use read_only_cli_contract::result_json as static_cli_result_json;
 use state_layout_contract::state_layout_json;
 use state_receipt_contract::inspect_receipt_json;
 use state_snapshot_contract::inspect_state_root_json;
@@ -32,6 +34,8 @@ const USAGE: &str = concat!(
     "  syntavra-rs version\n",
     "  syntavra-rs status [config-wire-hex]\n",
     "  syntavra-rs config resolve <config-wire-hex>\n",
+    "  syntavra-rs pipeline describe\n",
+    "  syntavra-rs plugins list\n",
     "  syntavra-rs state layout\n",
     "  syntavra-rs state inspect <expected-project-id> <project-root>\n",
     "  syntavra-rs state broker-live-snapshot <expected-project-id> <project-root> <database-path>\n",
@@ -50,6 +54,8 @@ enum Command {
     Version,
     Status(Option<String>),
     ConfigResolve(String),
+    PipelineDescribe,
+    PluginsList,
     StateLayout,
     BrokerLiveSnapshot {
         expected_project_id: String,
@@ -93,6 +99,10 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [config, action, wire] if config == "config" && action == "resolve" => {
             Ok(Command::ConfigResolve(wire.clone()))
         }
+        [pipeline, action] if pipeline == "pipeline" && action == "describe" => {
+            Ok(Command::PipelineDescribe)
+        }
+        [plugins, action] if plugins == "plugins" && action == "list" => Ok(Command::PluginsList),
         [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
         [state, action, expected_project_id, project_root, database_path]
             if state == "state" && action == "broker-live-snapshot" =>
@@ -255,6 +265,8 @@ fn run(command: Command) -> Result<(), String> {
             let snapshot = resolve_config_wire(&wire)?;
             println!("{}", snapshot_json(&snapshot)?);
         }
+        Command::PipelineDescribe => println!("{}", static_cli_result_json("pipeline.describe")?),
+        Command::PluginsList => println!("{}", static_cli_result_json("plugins.list")?),
         Command::StateLayout => println!("{}", state_layout_json()),
         Command::BrokerLiveSnapshot {
             expected_project_id,
@@ -452,6 +464,18 @@ mod tests {
                 expected_project_id: "aa".to_owned(),
                 wire_hex: "00".to_owned(),
             })
+        );
+    }
+
+    #[test]
+    fn parses_r24_static_read_only_cli_commands() {
+        assert_eq!(
+            parse_command(&args(&["pipeline", "describe"])),
+            Ok(Command::PipelineDescribe)
+        );
+        assert_eq!(
+            parse_command(&args(&["plugins", "list"])),
+            Ok(Command::PluginsList)
         );
     }
 

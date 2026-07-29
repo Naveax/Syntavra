@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
-from .read_only_router_r22 import ReadOnlyCommandRouterR22
+from .read_only_router_r24 import ReadOnlyCommandRouterR24
 
 
 def _emit(value: Any) -> None:
@@ -17,7 +17,7 @@ def _emit(value: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="syntavra",
-        description="Syntavra R22 capability-aware auto read-only router",
+        description="Syntavra R24 full read-only CLI parity router",
     )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
@@ -52,7 +52,7 @@ def main(
     *,
     selector: EngineSelector | None = None,
     cli_override: str | None = None,
-    router: ReadOnlyCommandRouterR22 | None = None,
+    router: ReadOnlyCommandRouterR24 | None = None,
 ) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(values)
@@ -61,7 +61,7 @@ def main(
         project_root=project_input_root,
         state_root=Path(args.state_root) if args.state_root else None,
     )
-    active_router = router or ReadOnlyCommandRouterR22(
+    active_router = router or ReadOnlyCommandRouterR24(
         active,
         project_input_root=project_input_root,
     )
