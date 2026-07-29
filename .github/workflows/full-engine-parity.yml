@@ -12,15 +12,18 @@ on:
       - "tools/verify_full_parity_catalog.py"
       - "tools/verify_r24_static_cli_parity.py"
       - "tools/verify_r24_config_validate.py"
+      - "tools/verify_r24_config_explain.py"
       - "tools/run_engine_parity_r24.py"
       - "tests/runtime/test_full_parity_catalog_v1.py"
       - "tests/runtime/test_read_only_cli_r24.py"
       - "tests/runtime/test_config_validate_r24.py"
+      - "tests/runtime/test_config_explain_r24.py"
       - ".github/workflows/full-engine-parity.yml"
       - "docs/PYTHON_RUST_FULL_PARITY_PLAN.md"
       - "docs/adr/0023-full-python-rust-parity-program.md"
       - "docs/adr/0024-static-read-only-cli-parity.md"
       - "docs/adr/0025-config-validate-read-only-parity.md"
+      - "docs/adr/0026-config-explain-native-parity.md"
   push:
     branches:
       - main
@@ -61,6 +64,7 @@ jobs:
           tests/runtime/test_full_parity_catalog_v1.py
           tests/runtime/test_read_only_cli_r24.py
           tests/runtime/test_config_validate_r24.py
+          tests/runtime/test_config_explain_r24.py
 
       - name: Set up pinned Rust 1.82
         uses: dtolnay/rust-toolchain@1.82.0
