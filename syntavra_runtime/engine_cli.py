@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
-from .read_only_router_r15 import ReadOnlyCommandRouterR15
+from .read_only_router_r16 import ReadOnlyCommandRouterR16
 
 
 def _emit(value: Any) -> None:
@@ -17,7 +17,7 @@ def _emit(value: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="syntavra",
-        description="Syntavra R15 engine selector and safe read-only router",
+        description="Syntavra R16 engine selector and safe read-only router",
     )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
@@ -40,6 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
     input_group = route.add_mutually_exclusive_group()
     input_group.add_argument("--config-wire-hex")
     input_group.add_argument("--live-config", action="store_true")
+    route.add_argument("--session-override-json-hex")
+    route.add_argument("--task-override-json-hex")
     return parser
 
 
@@ -48,7 +50,7 @@ def main(
     *,
     selector: EngineSelector | None = None,
     cli_override: str | None = None,
-    router: ReadOnlyCommandRouterR15 | None = None,
+    router: ReadOnlyCommandRouterR16 | None = None,
 ) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(values)
@@ -56,7 +58,7 @@ def main(
         project_root=Path(args.project),
         state_root=Path(args.state_root) if args.state_root else None,
     )
-    active_router = router or ReadOnlyCommandRouterR15(active)
+    active_router = router or ReadOnlyCommandRouterR16(active)
     try:
         if args.action == "list":
             result = active.list_engines(cli_override=cli_override)
@@ -75,6 +77,10 @@ def main(
             }
             if args.live_config:
                 route_kwargs["live_config"] = True
+            if args.session_override_json_hex is not None:
+                route_kwargs["session_override_json_hex"] = args.session_override_json_hex
+            if args.task_override_json_hex is not None:
+                route_kwargs["task_override_json_hex"] = args.task_override_json_hex
             result = active_router.route(args.route_command, **route_kwargs)
         else:  # pragma: no cover - argparse guarantees the action set
             raise RuntimeError(args.action)
