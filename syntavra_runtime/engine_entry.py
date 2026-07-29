@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .config_explain_router_r24 import ConfigExplainRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
-from .read_only_router_r24 import ReadOnlyCommandRouterR24
 
 SELECTOR_COMMANDS = frozenset({"engine"})
 READ_ONLY_COMMANDS = {
@@ -82,8 +82,13 @@ def _find_command(rest: list[str]) -> str:
     return ""
 
 
-def _read_only_route(rest: list[str]) -> str | None:
-    return READ_ONLY_COMMANDS.get(tuple(rest))
+def _read_only_request(rest: list[str]) -> tuple[str, str | None] | None:
+    route = READ_ONLY_COMMANDS.get(tuple(rest))
+    if route is not None:
+        return route, None
+    if len(rest) == 3 and rest[0] == "config" and rest[1] == "explain":
+        return "config.explain", rest[2]
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -93,10 +98,15 @@ def main(argv: list[str] | None = None) -> int:
         project, state, rest = _context(values)
         command = _find_command(rest)
         selector = EngineSelector(project_root=project, state_root=state)
-        read_only_route = _read_only_route(rest)
-        if read_only_route is not None:
-            router = ReadOnlyCommandRouterR24(selector, project_input_root=project)
-            routed = router.route(read_only_route, cli_override=override)
+        request = _read_only_request(rest)
+        if request is not None:
+            route, explain_path = request
+            router = ConfigExplainRouterR24(selector, project_input_root=project)
+            routed = router.route(
+                route,
+                cli_override=override,
+                explain_path=explain_path,
+            )
             _emit(routed["result"])
             return 0
         if command in SELECTOR_COMMANDS:
