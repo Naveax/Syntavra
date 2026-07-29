@@ -12,6 +12,7 @@ from syntavra_runtime.state_receipt_contract import state_layout
 from syntavra_runtime.state_snapshot_contract import inspect_state_root, project_id_for_root
 from verify_r15_live_config_routing import verify as verify_live_config_routing
 from verify_r16_session_task_routing import verify as verify_session_task_routing
+from verify_r17_state_layout_routing import verify as verify_state_layout_routing
 from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,6 +64,7 @@ def verify() -> dict[str, object]:
     routing = verify_read_only_routing()
     live_routing = verify_live_config_routing()
     session_task_routing = verify_session_task_routing()
+    state_layout_routing = verify_state_layout_routing()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -90,6 +92,11 @@ def verify() -> dict[str, object]:
         == ["config.resolve", "status", "version"]
         and session_task_routing.get("input_profile")
         == "live-config-session-task-v1",
+        "state_layout_routing": state_layout_routing.get("ok") is True
+        and state_layout_routing.get("phase") == "R17"
+        and state_layout_routing.get("routes")
+        == ["config.resolve", "state.layout", "status", "version"]
+        and state_layout_routing.get("input_profile") == "none",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -118,7 +125,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R16",
+        "phase": "R0-R17",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
@@ -126,6 +133,7 @@ def verify() -> dict[str, object]:
         "routing": routing,
         "live_config_routing": live_routing,
         "session_task_routing": session_task_routing,
+        "state_layout_routing": state_layout_routing,
         "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
     }
 

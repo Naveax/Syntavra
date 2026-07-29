@@ -1,6 +1,6 @@
 # Syntavra Dual-Engine Architecture
 
-Status: **R16 session/task override routing implemented / Python remains default**  
+Status: **R17 installed state.layout routing implemented / Python remains default**  
 Product identity: **0.0.1 / pre-release / version locked**
 
 ## Objective
@@ -30,8 +30,9 @@ The Python runtime is not removed. A user must always be able to select it expli
 12. Direct Rust capability availability does not authorize installed routing; every route requires an explicit contract row.
 13. Cross-engine inputs are immutable, bounded and hashed before candidate execution.
 14. Raw route input is forbidden in success and error envelopes.
-15. Parity diagnostics for resolved configuration contain digests and mismatched field names, never configuration values.
+15. Parity diagnostics contain digests and mismatched field names, never resolved configuration or state values.
 16. Transient session and task override JSON is decoded only by Python; Rust receives only the final canonical `R6CFG1` wire.
+17. Static state metadata routing grants no filesystem or database access by implication.
 
 ## Repository layout
 
@@ -60,6 +61,8 @@ syntavra_runtime/
                        User/project/environment live discovery wrapper
   read_only_router_r16.py
                        Session/task transient override wrapper
+  read_only_router_r17.py
+                       Static state-layout routing wrapper
 ```
 
 ## Engine states
@@ -87,11 +90,14 @@ status
 version
 ```
 
-Direct Rust binary availability does not imply installed product-command routing. R16 routes:
+Direct Rust binary availability does not imply installed product-command routing. R17 routes:
 
 ```text
 syntavra --engine python engine route version
 syntavra --engine rust engine route version
+
+syntavra --engine python engine route state.layout
+syntavra --engine rust engine route state.layout
 
 syntavra --engine python engine route status
 syntavra --engine rust engine route status
@@ -147,7 +153,7 @@ Rust can be persisted only after the binary proves product identity, `0.0.1 / pr
 
 ## Read-only routing contract
 
-`contracts/engine/read-only-routing-v5.json` is the current authority. The v1–v4 contracts remain historical evidence. A current route defines:
+`contracts/engine/read-only-routing-v6.json` is the current authority. The v1–v5 contracts remain historical evidence. A current route defines:
 
 - exact command name;
 - required Rust capability;
@@ -172,7 +178,7 @@ fallback.policy = none
 fallback.attempted = false
 ```
 
-Raw input is never returned. Unsupported commands, unsupported or missing inputs, invalid wire data, unavailable or incompatible Rust binaries, execution failures, oversized output, malformed JSON, identity drift and parity drift produce a structured error and stop. Candidate execution error text is redacted. Configuration parity errors contain only mismatched top-level keys and SHA-256 result digests. The router does not invoke Python after a Rust route begins.
+Raw input is never returned. Unsupported commands, unsupported or missing inputs, invalid wire data, unavailable or incompatible Rust binaries, execution failures, oversized output, malformed JSON, identity drift and parity drift produce a structured error and stop. Candidate execution error text is redacted. Parity errors contain only mismatched top-level keys and SHA-256 result digests. The router does not invoke Python after a Rust route begins.
 
 ### R11 route
 
@@ -204,9 +210,13 @@ default < user < project < environment < session < task
 
 The final canonical wire remains limited to 262,144 bytes. Rust receives only that wire. Raw override JSON is absent from envelopes and diagnostics.
 
+### R17 state layout
+
+`state.layout` admits the static R7 state-layout contract to the installed router. It accepts no input and compares the complete Python `state_layout()` object with `syntavra-rs state layout`. The route performs no filesystem read, database access or mutation. Configuration input, live discovery and transient overrides are rejected before engine selection.
+
 ## Shared state policy
 
-R7–R10 prove selected read-only views of existing `.syntavra` state. Rust still has no state-writing authority.
+R7–R10 prove selected read-only views of existing `.syntavra` state. R17 routes only the static state-layout description. Rust still has no installed filesystem-state read or state-writing authority.
 
 Future mutating operations require:
 
@@ -223,7 +233,7 @@ Future mutating operations require:
 
 `contracts/engine/selection.schema.json` is the canonical persisted selector format.
 
-`contracts/engine/read-only-routing-v5.json` freezes the installed whitelist, bounded live discovery, bounded transient overrides, result exposure rules and schema-v5 envelopes.
+`contracts/engine/read-only-routing-v6.json` freezes the installed whitelist, bounded configuration inputs, static state-layout route, result exposure rules and schema-v6 envelopes.
 
 The Python runtime remains the source of truth for the complete command and MCP inventory.
 
@@ -246,7 +256,8 @@ The Python runtime remains the source of truth for the complete command and MCP 
 15. **R14** — explicit complete `config.resolve` snapshot routing with digest-only parity errors. Implemented.
 16. **R15** — bounded user/project/environment live config discovery. Implemented.
 17. **R16** — bounded canonical session/task overrides over live config discovery. Implemented.
-18. **R17+** — additional read-only routes, MCP transport, evidence, process, structural, sandbox, installer and eventually mutating parity.
+18. **R17** — installed static `state.layout` routing. Implemented.
+19. **R18+** — project-bound state inspection, receipt routing, MCP transport, evidence, process, structural, sandbox, installer and eventually mutating parity.
 
 ## Stable gate
 
@@ -271,6 +282,7 @@ RUST_EXPLICIT_CONFIG_STATUS_ROUTING_PARITY_PROVEN_R13
 RUST_EXPLICIT_CONFIG_RESOLVE_ROUTING_PARITY_PROVEN_R14
 RUST_LIVE_CONFIG_DISCOVERY_ROUTING_PARITY_PROVEN_R15
 RUST_SESSION_TASK_OVERRIDE_ROUTING_PARITY_PROVEN_R16
+RUST_STATE_LAYOUT_ROUTING_PARITY_PROVEN_R17
 RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT
 RUST_GENERAL_PRODUCT_COMMAND_ROUTING_NOT_PROVEN
 RUST_MUTATING_COMMAND_ROUTING_NOT_PROVEN
