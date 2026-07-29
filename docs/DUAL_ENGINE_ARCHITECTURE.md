@@ -1,6 +1,6 @@
 # Syntavra Dual-Engine Architecture
 
-Status: **R14 explicit config.resolve routing implemented / Python remains default**  
+Status: **R16 session/task override routing implemented / Python remains default**  
 Product identity: **0.0.1 / pre-release / version locked**
 
 ## Objective
@@ -31,6 +31,7 @@ The Python runtime is not removed. A user must always be able to select it expli
 13. Cross-engine inputs are immutable, bounded and hashed before candidate execution.
 14. Raw route input is forbidden in success and error envelopes.
 15. Parity diagnostics for resolved configuration contain digests and mismatched field names, never configuration values.
+16. Transient session and task override JSON is decoded only by Python; Rust receives only the final canonical `R6CFG1` wire.
 
 ## Repository layout
 
@@ -52,7 +53,13 @@ syntavra_runtime/
   engine_cli.py        Selector and read-only route commands
   engine_selector.py   Resolution, persistence and verification
   config_contract.py   Canonical R6CFG1 encoder/decoder and projections
+  live_config_discovery.py
+                       Bounded Python-owned live configuration and override transport
   read_only_router.py  Capability-whitelisted no-fallback router
+  read_only_router_r15.py
+                       User/project/environment live discovery wrapper
+  read_only_router_r16.py
+                       Session/task transient override wrapper
 ```
 
 ## Engine states
@@ -80,20 +87,39 @@ status
 version
 ```
 
-Direct Rust binary availability does not imply installed product-command routing. R14 routes only:
+Direct Rust binary availability does not imply installed product-command routing. R16 routes:
 
 ```text
 syntavra --engine python engine route version
 syntavra --engine rust engine route version
+
 syntavra --engine python engine route status
 syntavra --engine rust engine route status
+
 syntavra --engine python engine route status --config-wire-hex <hex>
 syntavra --engine rust engine route status --config-wire-hex <hex>
+
 syntavra --engine python engine route config.resolve --config-wire-hex <hex>
 syntavra --engine rust engine route config.resolve --config-wire-hex <hex>
+
+syntavra --engine python engine route status --live-config
+syntavra --engine rust engine route status --live-config
+
+syntavra --engine python engine route config.resolve --live-config
+syntavra --engine rust engine route config.resolve --live-config
+
+syntavra --engine python engine route status --live-config \
+  [--session-override-json-hex <hex>] [--task-override-json-hex <hex>]
+syntavra --engine rust engine route status --live-config \
+  [--session-override-json-hex <hex>] [--task-override-json-hex <hex>]
+
+syntavra --engine python engine route config.resolve --live-config \
+  [--session-override-json-hex <hex>] [--task-override-json-hex <hex>]
+syntavra --engine rust engine route config.resolve --live-config \
+  [--session-override-json-hex <hex>] [--task-override-json-hex <hex>]
 ```
 
-The `status` route supports either the deterministic built-in default or an explicit canonical `R6CFG1` input. The `config.resolve` route requires an explicit canonical wire and returns the complete resolved snapshot. Neither route independently reads project files, user files, environment variables, session overrides or task overrides. All other `engine route` commands fail closed as unsupported.
+All other `engine route` commands fail closed as unsupported.
 
 ## Selection contract
 
@@ -119,21 +145,9 @@ Current resolution remains conservative:
 
 Rust can be persisted only after the binary proves product identity, `0.0.1 / pre-release`, contract version, exact read-only capability rows and descriptor SHA-256. Missing binaries, malformed output, unknown selector values and unsupported schemas fail closed.
 
-The selector surface is:
-
-```text
-syntavra engine list
-syntavra engine status
-syntavra engine use python|rust|auto
-syntavra engine verify
-syntavra engine route version
-syntavra engine route status [--config-wire-hex <hex>]
-syntavra engine route config.resolve --config-wire-hex <hex>
-```
-
 ## Read-only routing contract
 
-`contracts/engine/read-only-routing-v3.json` is the current authority for admitted routes. The v1 and v2 contracts remain historical evidence. A current route must define:
+`contracts/engine/read-only-routing-v5.json` is the current authority. The v1–v4 contracts remain historical evidence. A current route defines:
 
 - exact command name;
 - required Rust capability;
@@ -147,7 +161,7 @@ syntavra engine route config.resolve --config-wire-hex <hex>
 - explicit no-fallback behavior;
 - diagnostic data-exposure policy.
 
-The schema-v3 success envelope records selection, capability, mutation class and bounded input metadata:
+The success envelope records selection, capability, mutation class and bounded input metadata:
 
 ```text
 input.profile
@@ -170,15 +184,25 @@ Raw input is never returned. Unsupported commands, unsupported or missing inputs
 
 ### R13 route input
 
-`status --config-wire-hex <hex>` transports one immutable canonical `R6CFG1` wire to both engines. Python independently decodes and resolves the wire. Rust receives the same normalized lower-case hexadecimal bytes. The complete status objects must be identical.
+`status --config-wire-hex <hex>` transports one immutable canonical `R6CFG1` wire to both engines.
 
 ### R14 route
 
-`config.resolve --config-wire-hex <hex>` resolves the same immutable wire in both engines. The complete snapshot objects must be identical across `schema_version`, `values`, `provenance`, `config_hash` and `warnings`.
+`config.resolve --config-wire-hex <hex>` resolves the same immutable wire in both engines.
 
-The route has no default input. A missing wire fails before engine selection. A successful response intentionally returns resolved values because snapshot inspection is the explicit command purpose. Snapshot drift diagnostics never return those values.
+### R15 live discovery
 
-The decoded wire is limited to 262,144 bytes. Both Python and Rust results are limited to 1 MiB. The decoder rejects malformed hexadecimal input, invalid UTF-8, unknown headers/scopes/types, duplicate assignments, phase or scope-order drift, non-canonical encoding and first-phase configuration validation failure. Later invalid phases preserve the established R6 last-good fallback behavior.
+`status --live-config` and `config.resolve --live-config` let Python read bounded user/project TOML and `SYNTAVRA_CFG__*` environment values, construct one canonical wire, and give the same wire to Rust. No last-good state is written.
+
+### R16 transient overrides
+
+R16 adds optional canonical JSON-hex session and task mappings to live discovery. Each mapping is limited to 65,536 bytes, must be a canonical JSON object with scalar leaves, and is decoded only by Python. Duplicate keys, arrays, non-finite numbers, noncanonical bytes and raw secret material fail closed. The final precedence is:
+
+```text
+default < user < project < environment < session < task
+```
+
+The final canonical wire remains limited to 262,144 bytes. Rust receives only that wire. Raw override JSON is absent from envelopes and diagnostics.
 
 ## Shared state policy
 
@@ -195,13 +219,13 @@ Future mutating operations require:
 
 ## Contract authority
 
-`contracts/engine/descriptor.txt` is the canonical engine descriptor. The Rust binary embeds exactly the same bytes and reports their SHA-256 digest. `tools/verify_dual_engine_contract.py` rejects descriptor drift.
+`contracts/engine/descriptor.txt` is the canonical engine descriptor. The Rust binary embeds exactly the same bytes and reports their SHA-256 digest.
 
-`contracts/engine/selection.schema.json` is the canonical persisted selector format. `tools/verify_engine_selector.py` freezes precedence, Python-default auto policy and fail-closed handling.
+`contracts/engine/selection.schema.json` is the canonical persisted selector format.
 
-`contracts/engine/read-only-routing-v3.json` freezes the current installed whitelist, bounded input metadata, result exposure rules and schema-v3 envelopes. `tools/verify_read_only_routing_parity.py` proves route inventory, fixture-wide status and config snapshot parity, exact envelopes and no-fallback behavior.
+`contracts/engine/read-only-routing-v5.json` freezes the installed whitelist, bounded live discovery, bounded transient overrides, result exposure rules and schema-v5 envelopes.
 
-The Python runtime remains the source of truth for the complete command and MCP inventory. `tools/export_python_contract.py` exports that surface for snapshot and code-generation gates.
+The Python runtime remains the source of truth for the complete command and MCP inventory.
 
 ## Delivery phases
 
@@ -220,7 +244,9 @@ The Python runtime remains the source of truth for the complete command and MCP 
 13. **R12** — deterministic default `status` route with exact Python/Rust parity. Implemented.
 14. **R13** — bounded explicit canonical config-wire transport for installed `status` routing. Implemented.
 15. **R14** — explicit complete `config.resolve` snapshot routing with digest-only parity errors. Implemented.
-16. **R15+** — authoritative live config export/discovery, additional read-only routes, MCP transport, evidence, process, structural, session, sandbox, installer and eventually mutating parity.
+16. **R15** — bounded user/project/environment live config discovery. Implemented.
+17. **R16** — bounded canonical session/task overrides over live config discovery. Implemented.
+18. **R17+** — additional read-only routes, MCP transport, evidence, process, structural, sandbox, installer and eventually mutating parity.
 
 ## Stable gate
 
@@ -243,7 +269,8 @@ RUST_READ_ONLY_VERSION_ROUTING_PARITY_PROVEN_R11
 RUST_READ_ONLY_STATUS_ROUTING_PARITY_PROVEN_R12
 RUST_EXPLICIT_CONFIG_STATUS_ROUTING_PARITY_PROVEN_R13
 RUST_EXPLICIT_CONFIG_RESOLVE_ROUTING_PARITY_PROVEN_R14
-RUST_AUTOMATIC_LIVE_CONFIG_DISCOVERY_NOT_PROVEN
+RUST_LIVE_CONFIG_DISCOVERY_ROUTING_PARITY_PROVEN_R15
+RUST_SESSION_TASK_OVERRIDE_ROUTING_PARITY_PROVEN_R16
 RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT
 RUST_GENERAL_PRODUCT_COMMAND_ROUTING_NOT_PROVEN
 RUST_MUTATING_COMMAND_ROUTING_NOT_PROVEN
