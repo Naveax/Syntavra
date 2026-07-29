@@ -13,6 +13,7 @@ from syntavra_runtime.state_snapshot_contract import inspect_state_root, project
 from verify_r15_live_config_routing import verify as verify_live_config_routing
 from verify_r16_session_task_routing import verify as verify_session_task_routing
 from verify_r17_state_layout_routing import verify as verify_state_layout_routing
+from verify_r18_state_inspect_routing import verify as verify_state_inspect_routing
 from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +66,7 @@ def verify() -> dict[str, object]:
     live_routing = verify_live_config_routing()
     session_task_routing = verify_session_task_routing()
     state_layout_routing = verify_state_layout_routing()
+    state_inspect_routing = verify_state_inspect_routing()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -97,6 +99,12 @@ def verify() -> dict[str, object]:
         and state_layout_routing.get("routes")
         == ["config.resolve", "state.layout", "status", "version"]
         and state_layout_routing.get("input_profile") == "none",
+        "state_inspect_routing": state_inspect_routing.get("ok") is True
+        and state_inspect_routing.get("phase") == "R18"
+        and state_inspect_routing.get("routes")
+        == ["config.resolve", "state.inspect", "state.layout", "status", "version"]
+        and state_inspect_routing.get("input_profile")
+        == "project-bound-state-root-v1",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -125,7 +133,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R17",
+        "phase": "R0-R18",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
@@ -134,6 +142,7 @@ def verify() -> dict[str, object]:
         "live_config_routing": live_routing,
         "session_task_routing": session_task_routing,
         "state_layout_routing": state_layout_routing,
+        "state_inspect_routing": state_inspect_routing,
         "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
     }
 
