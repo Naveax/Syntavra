@@ -1,0 +1,67 @@
+name: R22 Capability-Aware Auto Routing
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**"]
+    paths:
+      - "syntavra_runtime/engine_cli.py"
+      - "syntavra_runtime/engine_selector.py"
+      - "syntavra_runtime/read_only_router*.py"
+      - "contracts/engine/auto-routing-v1.json"
+      - "tests/runtime/test_read_only_router_r22.py"
+      - "tools/verify_r22_auto_routing.py"
+      - ".github/workflows/r22-auto-routing.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "syntavra_runtime/engine_cli.py"
+      - "syntavra_runtime/engine_selector.py"
+      - "syntavra_runtime/read_only_router*.py"
+      - "contracts/engine/auto-routing-v1.json"
+      - "tests/runtime/test_read_only_router_r22.py"
+      - "tools/verify_r22_auto_routing.py"
+      - ".github/workflows/r22-auto-routing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Install Python test runtime
+        run: python -m pip install -e . pytest
+      - name: Verify routing contract JSON
+        run: python -m json.tool contracts/engine/auto-routing-v1.json > /dev/null
+      - name: Run R22 Python regressions
+        run: python -m pytest -q tests/runtime/test_read_only_router_r22.py
+      - name: Verify pinned Rust workspace quality
+        run: |
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Run Cargo-backed R22 parity verifier
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_r22_auto_routing.py 2>&1 | tee r22-auto-routing.log
+      - name: Upload R22 diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r22-auto-routing-${{ github.sha }}
+          path: r22-auto-routing.log
+          if-no-files-found: warn
+          retention-days: 7
