@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "phase": "R22",
+  "policy": "route-scoped-capability-aware-rust-v1",
+  "default_engine": "python",
+  "explicit_selection": {
+    "python": "unchanged",
+    "rust": "unchanged-fail-closed"
+  },
+  "auto": {
+    "decision_stage": "pre-execution",
+    "supported_platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ],
+    "rust_eligible_routes": [
+      "config.resolve",
+      "receipt.inspect",
+      "state.broker-live-snapshot",
+      "state.broker-snapshot",
+      "state.inspect",
+      "state.layout",
+      "status",
+      "version"
+    ],
+    "required_checks": [
+      "route-whitelisted",
+      "platform-supported",
+      "rust-binary-available",
+      "rust-contract-compatible",
+      "route-capability-present"
+    ],
+    "python_selection_before_start_is_fallback": false,
+    "rust_failure_after_start_allows_python_retry": false
+  },
+  "mutation": "read-only",
+  "rust_stability": "experimental",
+  "version_locked": "0.0.1",
+  "deliberate_exclusions": [
+    "general-command-auto-routing",
+    "mcp-auto-routing",
+    "process-execution",
+    "database-mutation",
+    "migration",
+    "recovery",
+    "installer-mutation",
+    "rust-default-engine"
+  ]
+}
