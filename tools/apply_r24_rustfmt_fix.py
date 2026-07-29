@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
+# Temporary assertion-locked formatter correction; removed after application.
 path = Path(__file__).resolve().parents[1] / "crates" / "syntavra-cli" / "src" / "main.rs"
 source = path.read_text(encoding="utf-8")
 old = '''        [plugins, action] if plugins == "plugins" && action == "list" => {\n            Ok(Command::PluginsList)\n        }\n'''
