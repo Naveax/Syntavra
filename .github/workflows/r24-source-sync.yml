@@ -1,0 +1,41 @@
+name: Apply R24 Static CLI Source Sync
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-read-only-cli-core
+    paths:
+      - tools/apply_r24_static_cli_patch.py
+      - contracts/cli/read-only-static-v1.json
+      - syntavra_runtime/read_only_cli_contract.py
+      - syntavra_runtime/read_only_router_r24.py
+      - crates/syntavra-cli/src/read_only_cli_contract.rs
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r24-read-only-cli-core
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Apply assertion-locked patch
+        run: python tools/apply_r24_static_cli_patch.py
+      - name: Commit synchronized sources
+        run: |
+          if git diff --quiet; then
+            echo 'R24 sources already synchronized'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/syntavra-cli/src/main.rs crates/syntavra-contracts/src/lib.rs syntavra_runtime/unified_cli.py syntavra_runtime/engine_cli.py syntavra_runtime/engine_entry.py
+          git commit -m 'Apply R24 static read-only CLI source sync'
+          git push origin HEAD:feature/full-parity-r24-read-only-cli-core
