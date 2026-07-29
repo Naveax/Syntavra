@@ -9,11 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
 RUST_CONTRACTS = ROOT / "crates" / "syntavra-contracts" / "src" / "lib.rs"
-CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v3.json"
+CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v4.json"
 CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "capabilities.schema.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v1.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v2.json",
+    ROOT / "contracts" / "engine" / "read-only-routing-v3.json",
     CURRENT_ROUTING,
     ROOT / "contracts" / "engine" / "selection.schema.json",
     ROOT / "contracts" / "cli" / "result-envelope.schema.json",
@@ -94,26 +95,56 @@ def verify() -> dict[str, object]:
         for row in routing.get("routes", [])
         if isinstance(row, dict)
     ]
-    if routing.get("schema_version") != 3 or routing.get("phase") != "R14":
+    if routing.get("schema_version") != 4 or routing.get("phase") != "R15":
         raise RuntimeError("current read-only routing schema or phase drifted")
     if route_names != ["config.resolve", "status", "version"]:
         raise RuntimeError("current read-only route inventory drifted")
     if routing.get("maximum_input_bytes") != 262144:
         raise RuntimeError("current read-only routing input bound drifted")
+    if routing.get("maximum_config_file_bytes") != 131072:
+        raise RuntimeError("current live config file bound drifted")
     input_metadata = routing.get("input_metadata", {})
     if input_metadata.get("raw_input_forbidden") is not True:
         raise RuntimeError("current routing contract must forbid raw input metadata")
+    if input_metadata.get("source_paths_forbidden") is not True:
+        raise RuntimeError("current routing contract must forbid source paths")
     result_policy = routing.get("result_policy", {})
     if result_policy.get("parity_error_values_forbidden") is not True:
         raise RuntimeError("current routing contract must forbid parity error values")
-    config_route = next(
-        (row for row in routing.get("routes", []) if row.get("command") == "config.resolve"),
-        None,
+    live_discovery = routing.get("live_discovery", {})
+    if live_discovery.get("owner") != "python-router":
+        raise RuntimeError("live config discovery owner drifted")
+    if live_discovery.get("read_only") is not True:
+        raise RuntimeError("live config discovery must remain read-only")
+    if live_discovery.get("last_good_write") is not False:
+        raise RuntimeError("live config discovery must not write last-good state")
+    if live_discovery.get("rust_filesystem_access") is not False:
+        raise RuntimeError("Rust must not discover configuration files")
+    if live_discovery.get("rust_environment_access") is not False:
+        raise RuntimeError("Rust must not discover configuration environment")
+
+    route_by_name = {
+        str(row.get("command")): row
+        for row in routing.get("routes", [])
+        if isinstance(row, dict)
+    }
+    config_profiles = route_by_name.get("config.resolve", {}).get(
+        "accepted_input_profiles"
     )
-    if not isinstance(config_route, dict):
-        raise RuntimeError("config.resolve route is missing")
-    if config_route.get("accepted_input_profiles") != ["explicit-config-wire-v1"]:
+    if config_profiles != [
+        "explicit-config-wire-v1",
+        "live-config-discovery-v1",
+    ]:
         raise RuntimeError("config.resolve input profile drifted")
+    status_profiles = route_by_name.get("status", {}).get(
+        "accepted_input_profiles"
+    )
+    if status_profiles != [
+        "default-config-only",
+        "explicit-config-wire-v1",
+        "live-config-discovery-v1",
+    ]:
+        raise RuntimeError("status input profile drifted")
 
     return {
         "ok": True,
@@ -124,6 +155,10 @@ def verify() -> dict[str, object]:
         "routing_schema_version": routing["schema_version"],
         "routing_phase": routing["phase"],
         "routing_routes": route_names,
+        "routing_live_profiles": {
+            "config.resolve": config_profiles,
+            "status": status_profiles,
+        },
         "json_contracts": parsed_contracts,
     }
 
