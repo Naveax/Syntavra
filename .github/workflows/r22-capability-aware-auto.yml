@@ -1,0 +1,72 @@
+name: R22 Capability-Aware Auto Routing
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**"]
+    paths:
+      - "syntavra_runtime/engine_cli.py"
+      - "syntavra_runtime/engine_selector.py"
+      - "syntavra_runtime/read_only_router_r22.py"
+      - "syntavra_runtime/read_only_router_r21.py"
+      - "contracts/engine/read-only-routing-v11.json"
+      - "tests/runtime/test_read_only_router_r22.py"
+      - "tools/verify_r22_capability_aware_auto.py"
+      - "tools/run_engine_parity.py"
+      - ".github/workflows/r22-capability-aware-auto.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "syntavra_runtime/engine_cli.py"
+      - "syntavra_runtime/engine_selector.py"
+      - "syntavra_runtime/read_only_router_r22.py"
+      - "syntavra_runtime/read_only_router_r21.py"
+      - "contracts/engine/read-only-routing-v11.json"
+      - "tests/runtime/test_read_only_router_r22.py"
+      - "tools/verify_r22_capability_aware_auto.py"
+      - "tools/run_engine_parity.py"
+      - ".github/workflows/r22-capability-aware-auto.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capability-aware-auto:
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - name: Install Python reference runtime and tests
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - name: Verify R22 Python routing regressions
+        run: python -m pytest tests/runtime/test_read_only_router_r22.py -q
+      - name: Verify R21 routing regression boundary
+        run: python -m pytest tests/runtime/test_read_only_router_r21.py -q
+      - name: Verify pinned Rust workspace quality
+        run: |
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Verify R22 capability-aware auto parity
+        id: parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_r22_capability_aware_auto.py 2>&1 | tee r22-capability-aware-auto.log
+      - name: Upload R22 diagnostics
+        if: failure() && steps.parity.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r22-capability-aware-auto-diagnostics-${{ github.sha }}
+          path: r22-capability-aware-auto.log
+          if-no-files-found: error
+          retention-days: 7
