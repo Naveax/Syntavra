@@ -24,6 +24,15 @@ def _capability_rows() -> list[dict[str, str]]:
 
 
 def _rust_runner(_binary: Path, arguments: tuple[str, ...]):
+    if arguments == ("version",):
+        return {
+            "product": "Syntavra",
+            "product_version": "0.0.1",
+            "release_channel": "pre-release",
+            "engine": "rust",
+            "engine_stability": "experimental",
+            "contract_version": 1,
+        }
     if arguments == ("state", "layout"):
         return state_layout()
     if arguments == ("engine", "capabilities"):
