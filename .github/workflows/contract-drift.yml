@@ -21,6 +21,7 @@ on:
       - "tools/verify_read_only_routing_parity.py"
       - "tools/verify_r15_live_config_routing.py"
       - "tools/verify_r16_session_task_routing.py"
+      - "tools/verify_r17_state_layout_routing.py"
       - ".github/workflows/contract-drift.yml"
   pull_request:
     branches: [main, "feature/**"]
@@ -42,6 +43,7 @@ on:
       - "tools/verify_read_only_routing_parity.py"
       - "tools/verify_r15_live_config_routing.py"
       - "tools/verify_r16_session_task_routing.py"
+      - "tools/verify_r17_state_layout_routing.py"
       - ".github/workflows/contract-drift.yml"
   workflow_dispatch:
 
@@ -217,6 +219,19 @@ jobs:
         with:
           name: syntavra-r16-session-task-diagnostics-${{ github.sha }}
           path: r16-session-task-routing.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify R17 state.layout routing parity
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_r17_state_layout_routing.py 2>&1 | tee r17-state-layout-routing.log
+      - name: Upload R17 state.layout diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-r17-state-layout-diagnostics-${{ github.sha }}
+          path: r17-state-layout-routing.log
           if-no-files-found: warn
           retention-days: 7
       - name: Run Python-Rust parity gate
