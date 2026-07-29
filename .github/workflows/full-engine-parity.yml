@@ -1,0 +1,81 @@
+name: Syntavra Full Engine Parity Program
+
+on:
+  pull_request:
+    paths:
+      - "contracts/parity/**"
+      - "syntavra_runtime/**"
+      - "crates/**"
+      - "tools/export_python_surface.py"
+      - "tools/export_rust_surface.py"
+      - "tools/verify_full_parity_catalog.py"
+      - "tools/run_engine_parity_r23.py"
+      - "tests/runtime/test_full_parity_catalog_v1.py"
+      - ".github/workflows/full-engine-parity.yml"
+      - "docs/PYTHON_RUST_FULL_PARITY_PLAN.md"
+      - "docs/adr/0023-full-python-rust-parity-program.md"
+  push:
+    branches:
+      - main
+      - "feature/full-parity-**"
+
+permissions:
+  contents: read
+
+jobs:
+  parity-program:
+    name: R23-R37 Full Parity Freeze Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python validation dependencies
+        run: python -m pip install --disable-pip-version-check -e . pytest
+
+      - name: Export Python surface
+        run: python tools/export_python_surface.py --output python-surface.json
+
+      - name: Export Rust surface
+        run: python tools/export_rust_surface.py --output rust-surface.json
+
+      - name: Verify full parity catalog
+        run: python tools/verify_full_parity_catalog.py | tee full-parity-report.json
+
+      - name: Run catalog regressions
+        run: python -m pytest -q tests/runtime/test_full_parity_catalog_v1.py
+
+      - name: Set up pinned Rust 1.82
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Test Rust workspace
+        run: cargo test --workspace --locked
+
+      - name: Lint Rust workspace
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run aggregate R0-R23 parity
+        run: python tools/run_engine_parity_r23.py | tee aggregate-r0-r23.json
+
+      - name: Upload parity inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-engine-parity-inventory
+          path: |
+            python-surface.json
+            rust-surface.json
+            full-parity-report.json
+            aggregate-r0-r23.json
+          if-no-files-found: warn
