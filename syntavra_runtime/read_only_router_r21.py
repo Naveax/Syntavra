@@ -5,11 +5,8 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from .broker_live_snapshot_contract import (
-    BrokerLiveSnapshotError,
-    snapshot_live_broker_database,
-)
-from .broker_snapshot_contract import _canonical_json_bytes
+from .broker_live_snapshot_contract import snapshot_live_broker_database
+from .broker_snapshot_contract import BrokerSnapshotError, _canonical_json_bytes
 from .engine_selector import EngineSelectionError, EngineSelector
 from .read_only_router import MAX_RESPONSE_BYTES, RustRouteRunner, _result_digest
 from .read_only_router_r17 import _canonical_result_size
@@ -176,7 +173,7 @@ class ReadOnlyCommandRouterR21(ReadOnlyCommandRouterR20):
                 database_path,
                 expected_project_id=project_id,
             )
-        except (BrokerLiveSnapshotError, StateInspectionError) as exc:
+        except (BrokerSnapshotError, StateInspectionError) as exc:
             code = getattr(exc, "code", type(exc).__name__)
             raise EngineSelectionError(
                 "ENGINE_ROUTE_BROKER_LIVE_PREFLIGHT_FAILED_R21",
@@ -297,8 +294,6 @@ class ReadOnlyCommandRouterR21(ReadOnlyCommandRouterR20):
                     fallback_attempted=False,
                 )
 
-        # Python remains the output authority in R21. A selected Rust engine must
-        # prove the stable live-snapshot projection first; failure never falls back.
         result = expected
         response_bytes = _canonical_result_size(result)
         if response_bytes > MAX_RESPONSE_BYTES:
