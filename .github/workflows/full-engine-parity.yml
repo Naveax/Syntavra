@@ -4,16 +4,20 @@ on:
   pull_request:
     paths:
       - "contracts/parity/**"
+      - "contracts/cli/**"
       - "syntavra_runtime/**"
       - "crates/**"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
       - "tools/verify_full_parity_catalog.py"
-      - "tools/run_engine_parity_r23.py"
+      - "tools/verify_r24_static_cli_parity.py"
+      - "tools/run_engine_parity_r24.py"
       - "tests/runtime/test_full_parity_catalog_v1.py"
+      - "tests/runtime/test_read_only_cli_r24.py"
       - ".github/workflows/full-engine-parity.yml"
       - "docs/PYTHON_RUST_FULL_PARITY_PLAN.md"
       - "docs/adr/0023-full-python-rust-parity-program.md"
+      - "docs/adr/0024-static-read-only-cli-parity.md"
   push:
     branches:
       - main
@@ -26,7 +30,7 @@ jobs:
   parity-program:
     name: R23-R37 Full Parity Freeze Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,8 +52,8 @@ jobs:
       - name: Verify full parity catalog
         run: python tools/verify_full_parity_catalog.py | tee full-parity-report.json
 
-      - name: Run catalog regressions
-        run: python -m pytest -q tests/runtime/test_full_parity_catalog_v1.py
+      - name: Run catalog and R24 regressions
+        run: python -m pytest -q tests/runtime/test_full_parity_catalog_v1.py tests/runtime/test_read_only_cli_r24.py
 
       - name: Set up pinned Rust 1.82
         uses: dtolnay/rust-toolchain@1.82.0
@@ -65,8 +69,8 @@ jobs:
       - name: Lint Rust workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      - name: Run aggregate R0-R23 parity
-        run: python tools/run_engine_parity_r23.py | tee aggregate-r0-r23.json
+      - name: Run aggregate R0-R24 parity
+        run: python tools/run_engine_parity_r24.py | tee aggregate-r0-r24.json
 
       - name: Upload parity inventory
         if: always()
@@ -77,5 +81,5 @@ jobs:
             python-surface.json
             rust-surface.json
             full-parity-report.json
-            aggregate-r0-r23.json
+            aggregate-r0-r24.json
           if-no-files-found: warn
