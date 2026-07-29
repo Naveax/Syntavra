@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
-from .read_only_router import ReadOnlyCommandRouter
+from .read_only_router_r15 import ReadOnlyCommandRouterR15
 
 
 def _emit(value: Any) -> None:
@@ -17,7 +17,7 @@ def _emit(value: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="syntavra",
-        description="Syntavra R14 engine selector and safe read-only router",
+        description="Syntavra R15 engine selector and safe read-only router",
     )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
@@ -37,7 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--all", action="store_true", dest="all_engines")
     route = actions.add_parser("route")
     route.add_argument("route_command")
-    route.add_argument("--config-wire-hex")
+    input_group = route.add_mutually_exclusive_group()
+    input_group.add_argument("--config-wire-hex")
+    input_group.add_argument("--live-config", action="store_true")
     return parser
 
 
@@ -46,7 +48,7 @@ def main(
     *,
     selector: EngineSelector | None = None,
     cli_override: str | None = None,
-    router: ReadOnlyCommandRouter | None = None,
+    router: ReadOnlyCommandRouterR15 | None = None,
 ) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(values)
@@ -54,7 +56,7 @@ def main(
         project_root=Path(args.project),
         state_root=Path(args.state_root) if args.state_root else None,
     )
-    active_router = router or ReadOnlyCommandRouter(active)
+    active_router = router or ReadOnlyCommandRouterR15(active)
     try:
         if args.action == "list":
             result = active.list_engines(cli_override=cli_override)
@@ -71,6 +73,7 @@ def main(
                 args.route_command,
                 cli_override=cli_override,
                 config_wire_hex=args.config_wire_hex,
+                live_config=args.live_config,
             )
         else:  # pragma: no cover - argparse guarantees the action set
             raise RuntimeError(args.action)
