@@ -117,7 +117,15 @@ class _RouteScopedSelector:
             )
             return self._selection
 
-        platform_pair = _normalized_platform(*self._platform_probe())
+        try:
+            platform_pair = _normalized_platform(*self._platform_probe())
+        except Exception:
+            self._selection = _auto_selection(
+                original,
+                resolved="python",
+                reason="AUTO_ROUTE_PLATFORM_PROBE_FAILED_R22",
+            )
+            return self._selection
         if platform_pair not in SUPPORTED_PLATFORM_PAIRS:
             self._selection = _auto_selection(
                 original,
