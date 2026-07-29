@@ -27,6 +27,7 @@ PROVEN_ROUTE_CAPABILITIES = {
     "route.version": "version",
     "route.status": "status",
     "route.config.resolve": "config.resolve",
+    "route.config.validate": "config.resolve",
     "route.state.layout": "state.layout",
     "route.state.inspect": "state.inspect",
     "route.receipt.inspect": "receipt.inspect",
