@@ -16,6 +16,11 @@ pub struct Capability {
 
 pub const ENGINE_CAPABILITIES: &[Capability] = &[
     Capability {
+        name: "config.explain",
+        maturity: "preview",
+        mutation: "read-only",
+    },
+    Capability {
         name: "config.resolve",
         maturity: "preview",
         mutation: "read-only",
@@ -88,6 +93,7 @@ pub const CONTRACT_DESCRIPTOR: &str = concat!(
     "contract_version=1\n",
     "engine=rust\n",
     "engine_stability=experimental\n",
+    "capability=config.explain|preview|read-only\n",
     "capability=config.resolve|preview|read-only\n",
     "capability=engine.capabilities|preview|read-only\n",
     "capability=engine.contract-hash|preview|read-only\n",
@@ -163,6 +169,7 @@ mod tests {
     fn capabilities_json_is_deterministic() {
         assert_eq!(capabilities_json(), capabilities_json());
         assert!(capabilities_json().contains("\"contract_version\":1"));
+        assert!(capabilities_json().contains("\"name\":\"config.explain\""));
         assert!(capabilities_json().contains("\"name\":\"config.resolve\""));
         assert!(capabilities_json().contains("\"name\":\"pipeline.describe\""));
         assert!(capabilities_json().contains("\"name\":\"plugins.list\""));

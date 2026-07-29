@@ -36,6 +36,7 @@ def _rust_runner(_binary: Path, arguments: tuple[str, ...]):
             "capabilities": [
                 {"name": name, "maturity": "preview", "mutation": "read-only"}
                 for name in (
+                    "config.explain",
                     "config.resolve",
                     "engine.capabilities",
                     "engine.contract-hash",
@@ -131,6 +132,7 @@ def test_rust_verification_and_persisted_selection(tmp_path: Path) -> None:
     assert verification.available
     assert verification.compatible
     assert verification.capabilities == (
+        "config.explain",
         "config.resolve",
         "engine.capabilities",
         "engine.contract-hash",
