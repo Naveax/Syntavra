@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "contracts" / "engine" / "descriptor.txt"
 RUST_CONTRACTS = ROOT / "crates" / "syntavra-contracts" / "src" / "lib.rs"
-CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v6.json"
+CURRENT_ROUTING = ROOT / "contracts" / "engine" / "read-only-routing-v7.json"
 CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "capabilities.schema.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v1.json",
@@ -17,6 +17,7 @@ CONTRACT_JSON = (
     ROOT / "contracts" / "engine" / "read-only-routing-v3.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v4.json",
     ROOT / "contracts" / "engine" / "read-only-routing-v5.json",
+    ROOT / "contracts" / "engine" / "read-only-routing-v6.json",
     CURRENT_ROUTING,
     ROOT / "contracts" / "engine" / "selection.schema.json",
     ROOT / "contracts" / "cli" / "result-envelope.schema.json",
@@ -97,9 +98,15 @@ def verify() -> dict[str, object]:
         for row in routing.get("routes", [])
         if isinstance(row, dict)
     ]
-    if routing.get("schema_version") != 6 or routing.get("phase") != "R17":
+    if routing.get("schema_version") != 7 or routing.get("phase") != "R18":
         raise RuntimeError("current read-only routing schema or phase drifted")
-    if route_names != ["config.resolve", "state.layout", "status", "version"]:
+    if route_names != [
+        "config.resolve",
+        "state.inspect",
+        "state.layout",
+        "status",
+        "version",
+    ]:
         raise RuntimeError("current read-only route inventory drifted")
     if routing.get("maximum_input_bytes") != 262144:
         raise RuntimeError("current read-only routing input bound drifted")
@@ -107,6 +114,8 @@ def verify() -> dict[str, object]:
         raise RuntimeError("current live config file bound drifted")
     if routing.get("maximum_override_json_bytes") != 65536:
         raise RuntimeError("current transient override bound drifted")
+    if routing.get("maximum_state_file_bytes") != 1048576:
+        raise RuntimeError("current state inspection file bound drifted")
 
     input_metadata = routing.get("input_metadata", {})
     if input_metadata.get("raw_input_forbidden") is not True:
@@ -119,23 +128,57 @@ def verify() -> dict[str, object]:
         raise RuntimeError("current routing contract must forbid parity error values")
     if result_policy.get("raw_override_forbidden") is not True:
         raise RuntimeError("current routing contract must forbid raw overrides")
+    if result_policy.get("project_root_forbidden") is not True:
+        raise RuntimeError("current routing contract must forbid project-root exposure")
 
-    state_policy = routing.get("state_layout_route", {})
-    if state_policy.get("python_authority") != (
+    inspect_policy = routing.get("state_inspect_route", {})
+    if inspect_policy.get("python_authority") != (
+        "syntavra_runtime.state_snapshot_contract.inspect_state_root"
+    ):
+        raise RuntimeError("state.inspect Python authority drifted")
+    if inspect_policy.get("rust_capability") != "state.inspect":
+        raise RuntimeError("state.inspect Rust capability drifted")
+    if inspect_policy.get("project_root_source") != "installed-cli---project":
+        raise RuntimeError("state.inspect project-root source drifted")
+    if inspect_policy.get("project_id_derivation") != (
+        "sha256-normalized-canonical-absolute-path"
+    ):
+        raise RuntimeError("state.inspect project binding drifted")
+    if inspect_policy.get("project_root_symlink") != "reject-before-selection":
+        raise RuntimeError("state.inspect root-symlink policy drifted")
+    if inspect_policy.get("known_paths_only") is not True:
+        raise RuntimeError("state.inspect must remain limited to known paths")
+    if inspect_policy.get("recursive_directory_read") is not False:
+        raise RuntimeError("state.inspect must not recursively inspect directories")
+    if inspect_policy.get("maximum_file_bytes") != 1048576:
+        raise RuntimeError("state.inspect file bound drifted")
+    if inspect_policy.get("database_access") is not False:
+        raise RuntimeError("state.inspect must not access databases")
+    if inspect_policy.get("mutation") is not False:
+        raise RuntimeError("state.inspect must remain non-mutating")
+    if inspect_policy.get("source_path_in_envelope") is not False:
+        raise RuntimeError("state.inspect must not expose source paths")
+    if inspect_policy.get("source_path_in_error") is not False:
+        raise RuntimeError("state.inspect errors must not expose source paths")
+    if inspect_policy.get("comparison") != "exact-complete-object":
+        raise RuntimeError("state.inspect comparison policy drifted")
+
+    layout_policy = routing.get("state_layout_route", {})
+    if layout_policy.get("python_authority") != (
         "syntavra_runtime.state_receipt_contract.state_layout"
     ):
         raise RuntimeError("state.layout Python authority drifted")
-    if state_policy.get("rust_capability") != "state.layout":
+    if layout_policy.get("rust_capability") != "state.layout":
         raise RuntimeError("state.layout Rust capability drifted")
-    if state_policy.get("filesystem_access") is not False:
+    if layout_policy.get("filesystem_access") is not False:
         raise RuntimeError("state.layout must not access the filesystem")
-    if state_policy.get("database_access") is not False:
+    if layout_policy.get("database_access") is not False:
         raise RuntimeError("state.layout must not access databases")
-    if state_policy.get("mutation") is not False:
+    if layout_policy.get("mutation") is not False:
         raise RuntimeError("state.layout must remain non-mutating")
-    if state_policy.get("input_profile") != "none":
+    if layout_policy.get("input_profile") != "none":
         raise RuntimeError("state.layout input profile drifted")
-    if state_policy.get("comparison") != "exact-complete-object":
+    if layout_policy.get("comparison") != "exact-complete-object":
         raise RuntimeError("state.layout comparison policy drifted")
 
     live_discovery = routing.get("live_discovery", {})
@@ -184,10 +227,15 @@ def verify() -> dict[str, object]:
         "live-config-session-task-v1",
     ]:
         raise RuntimeError("config.resolve input profile drifted")
-    state_profiles = route_by_name.get("state.layout", {}).get(
+    inspect_profiles = route_by_name.get("state.inspect", {}).get(
         "accepted_input_profiles"
     )
-    if state_profiles != ["none"]:
+    if inspect_profiles != ["project-bound-state-root-v1"]:
+        raise RuntimeError("state.inspect input profile drifted")
+    layout_profiles = route_by_name.get("state.layout", {}).get(
+        "accepted_input_profiles"
+    )
+    if layout_profiles != ["none"]:
         raise RuntimeError("state.layout input profile drifted")
     status_profiles = route_by_name.get("status", {}).get(
         "accepted_input_profiles"
@@ -211,7 +259,8 @@ def verify() -> dict[str, object]:
         "routing_routes": route_names,
         "routing_live_profiles": {
             "config.resolve": config_profiles,
-            "state.layout": state_profiles,
+            "state.inspect": inspect_profiles,
+            "state.layout": layout_profiles,
             "status": status_profiles,
         },
         "routing_override_scopes": overrides["scopes"],
