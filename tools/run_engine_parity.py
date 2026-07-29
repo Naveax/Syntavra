@@ -16,6 +16,7 @@ from verify_r17_state_layout_routing import verify as verify_state_layout_routin
 from verify_r18_state_inspect_routing import verify as verify_state_inspect_routing
 from verify_r19_receipt_inspect_routing import verify as verify_receipt_inspect_routing
 from verify_r20_broker_snapshot_routing import verify as verify_broker_snapshot_routing
+from verify_r21_live_broker_snapshot_routing import verify as verify_live_broker_snapshot_routing
 from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +72,7 @@ def verify() -> dict[str, object]:
     state_inspect_routing = verify_state_inspect_routing()
     receipt_inspect_routing = verify_receipt_inspect_routing()
     broker_snapshot_routing = verify_broker_snapshot_routing()
+    live_broker_snapshot_routing = verify_live_broker_snapshot_routing()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -136,6 +138,21 @@ def verify() -> dict[str, object]:
         ]
         and broker_snapshot_routing.get("input_profile")
         == "project-bound-quiescent-broker-sqlite-v1",
+        "live_broker_snapshot_routing": live_broker_snapshot_routing.get("ok") is True
+        and live_broker_snapshot_routing.get("phase") == "R21"
+        and live_broker_snapshot_routing.get("routes")
+        == [
+            "config.resolve",
+            "receipt.inspect",
+            "state.broker-live-snapshot",
+            "state.broker-snapshot",
+            "state.inspect",
+            "state.layout",
+            "status",
+            "version",
+        ]
+        and live_broker_snapshot_routing.get("input_profile")
+        == "project-bound-bounded-live-broker-sqlite-v1",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -164,7 +181,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R20",
+        "phase": "R0-R21",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
@@ -176,6 +193,7 @@ def verify() -> dict[str, object]:
         "state_inspect_routing": state_inspect_routing,
         "receipt_inspect_routing": receipt_inspect_routing,
         "broker_snapshot_routing": broker_snapshot_routing,
+        "live_broker_snapshot_routing": live_broker_snapshot_routing,
         "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
     }
 
