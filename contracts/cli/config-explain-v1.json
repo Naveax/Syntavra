@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "phase": "R24",
+  "command": "config.explain",
+  "reference_engine": "python",
+  "candidate_engine": "rust",
+  "candidate_capability": "config.explain",
+  "candidate_command": ["config", "explain", "<R6CFG1-wire-hex>", "<path-utf8-hex>"],
+  "input_profile": "live-config-discovery-v1",
+  "input_format": "R6CFG1",
+  "path": {
+    "encoding": "utf-8",
+    "transport": "lowercase-hex",
+    "maximum_bytes": 512,
+    "empty_forbidden": true,
+    "empty_segments_forbidden": true,
+    "control_characters_forbidden": true,
+    "matching": "exact-case-sensitive-provenance-path"
+  },
+  "mutation": "read-only",
+  "filesystem_write": false,
+  "database_access": false,
+  "network_access": false,
+  "process_access": "verified-rust-binary-only",
+  "fallback_policy": "none",
+  "result": {
+    "found": {
+      "required_keys": ["path", "value", "source", "scope"]
+    },
+    "not_found": {
+      "required_keys": ["found", "path"],
+      "found": false
+    },
+    "complete_python_rust_equality_required": true
+  },
+  "security": {
+    "raw_secret_material_forbidden_by_config_validation": true,
+    "environment_credential_reference_value": "[secret-ref]"
+  },
+  "claim": "RUST_CONFIG_EXPLAIN_READ_ONLY_PARITY_PROVEN_R24"
+}
