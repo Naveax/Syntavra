@@ -6,6 +6,7 @@ on:
       - feature/full-parity-r24-config-explain-cli
     paths:
       - tools/apply_r24_config_explain_patch.py
+      - tools/apply_r24_config_explain_aggregate_patch.py
 
 permissions:
   contents: write
@@ -25,8 +26,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Apply assertion-locked source patch
-        run: python tools/apply_r24_config_explain_patch.py
+      - name: Apply assertion-locked source patches
+        run: |
+          python tools/apply_r24_config_explain_patch.py
+          python tools/apply_r24_config_explain_aggregate_patch.py
       - name: Format Rust sources
         run: cargo fmt --all
       - name: Commit synchronized sources
