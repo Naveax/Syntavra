@@ -45,8 +45,8 @@ jobs:
         with:
           toolchain: 1.82.0
           components: rustfmt, clippy
-      - name: Install Python reference runtime
-        run: python -m pip install -e .
+      - name: Install Python reference runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check -e . pytest
       - name: Verify R20 Python routing regressions
         run: python -m pytest tests/runtime/test_read_only_router_r20.py -q
       - name: Verify pinned Rust workspace quality
