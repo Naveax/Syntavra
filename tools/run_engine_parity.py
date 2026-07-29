@@ -15,6 +15,7 @@ from verify_r16_session_task_routing import verify as verify_session_task_routin
 from verify_r17_state_layout_routing import verify as verify_state_layout_routing
 from verify_r18_state_inspect_routing import verify as verify_state_inspect_routing
 from verify_r19_receipt_inspect_routing import verify as verify_receipt_inspect_routing
+from verify_r20_broker_snapshot_routing import verify as verify_broker_snapshot_routing
 from verify_read_only_routing_parity import verify as verify_read_only_routing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +70,7 @@ def verify() -> dict[str, object]:
     state_layout_routing = verify_state_layout_routing()
     state_inspect_routing = verify_state_inspect_routing()
     receipt_inspect_routing = verify_receipt_inspect_routing()
+    broker_snapshot_routing = verify_broker_snapshot_routing()
 
     checks = {
         "product": version.get("product") == "Syntavra",
@@ -120,6 +122,20 @@ def verify() -> dict[str, object]:
         ]
         and receipt_inspect_routing.get("input_profile")
         == "project-bound-receipt-wire-v1",
+        "broker_snapshot_routing": broker_snapshot_routing.get("ok") is True
+        and broker_snapshot_routing.get("phase") == "R20"
+        and broker_snapshot_routing.get("routes")
+        == [
+            "config.resolve",
+            "receipt.inspect",
+            "state.broker-snapshot",
+            "state.inspect",
+            "state.layout",
+            "status",
+            "version",
+        ]
+        and broker_snapshot_routing.get("input_profile")
+        == "project-bound-quiescent-broker-sqlite-v1",
     }
     if not all(checks.values()):
         raise RuntimeError(f"initial Python/Rust parity failed: {checks}")
@@ -148,7 +164,7 @@ def verify() -> dict[str, object]:
 
     return {
         "ok": True,
-        "phase": "R0-R19",
+        "phase": "R0-R20",
         "reference_engine": "python",
         "candidate_engine": "rust",
         "checks": checks,
@@ -159,6 +175,7 @@ def verify() -> dict[str, object]:
         "state_layout_routing": state_layout_routing,
         "state_inspect_routing": state_inspect_routing,
         "receipt_inspect_routing": receipt_inspect_routing,
+        "broker_snapshot_routing": broker_snapshot_routing,
         "claim": "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
     }
 
