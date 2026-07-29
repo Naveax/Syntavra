@@ -1,0 +1,194 @@
+{
+  "schema_version": 7,
+  "phase": "R18",
+  "default_engine": "python",
+  "auto_engine": "python",
+  "fallback_policy": "none",
+  "maximum_input_bytes": 262144,
+  "maximum_config_file_bytes": 131072,
+  "maximum_override_json_bytes": 65536,
+  "maximum_state_file_bytes": 1048576,
+  "maximum_response_bytes": 1048576,
+  "routes": [
+    {
+      "command": "config.resolve",
+      "required_capability": "config.resolve",
+      "mutation": "read-only",
+      "accepted_input_profiles": [
+        "explicit-config-wire-v1",
+        "live-config-discovery-v1",
+        "live-config-session-task-v1"
+      ],
+      "input_format": "R6CFG1",
+      "rust_argv": {
+        "explicit-config-wire-v1": ["config", "resolve", "<config-wire-hex>"],
+        "live-config-discovery-v1": ["config", "resolve", "<discovered-config-wire-hex>"],
+        "live-config-session-task-v1": ["config", "resolve", "<discovered-config-wire-with-overrides-hex>"]
+      }
+    },
+    {
+      "command": "state.inspect",
+      "required_capability": "state.inspect",
+      "mutation": "read-only",
+      "accepted_input_profiles": ["project-bound-state-root-v1"],
+      "input_format": "sha256-normalized-absolute-path-v1",
+      "rust_argv": {
+        "project-bound-state-root-v1": [
+          "state",
+          "inspect",
+          "<derived-project-id>",
+          "<selected-project-root>"
+        ]
+      }
+    },
+    {
+      "command": "state.layout",
+      "required_capability": "state.layout",
+      "mutation": "read-only",
+      "accepted_input_profiles": ["none"],
+      "input_format": null,
+      "rust_argv": {
+        "none": ["state", "layout"]
+      }
+    },
+    {
+      "command": "status",
+      "required_capability": "status",
+      "mutation": "read-only",
+      "accepted_input_profiles": [
+        "default-config-only",
+        "explicit-config-wire-v1",
+        "live-config-discovery-v1",
+        "live-config-session-task-v1"
+      ],
+      "input_format": "R6CFG1",
+      "rust_argv": {
+        "default-config-only": ["status"],
+        "explicit-config-wire-v1": ["status", "<config-wire-hex>"],
+        "live-config-discovery-v1": ["status", "<discovered-config-wire-hex>"],
+        "live-config-session-task-v1": ["status", "<discovered-config-wire-with-overrides-hex>"]
+      }
+    },
+    {
+      "command": "version",
+      "required_capability": "version",
+      "mutation": "read-only",
+      "accepted_input_profiles": ["none"],
+      "input_format": null,
+      "rust_argv": {
+        "none": ["version"]
+      }
+    }
+  ],
+  "state_inspect_route": {
+    "python_authority": "syntavra_runtime.state_snapshot_contract.inspect_state_root",
+    "rust_capability": "state.inspect",
+    "project_root_source": "installed-cli---project",
+    "project_id_derivation": "sha256-normalized-canonical-absolute-path",
+    "project_root_symlink": "reject-before-selection",
+    "known_paths_only": true,
+    "recursive_directory_read": false,
+    "maximum_file_bytes": 1048576,
+    "file_symlink": "reject",
+    "unsupported_file_type": "reject",
+    "concurrent_change": "reject",
+    "database_access": false,
+    "mutation": false,
+    "comparison": "exact-complete-object",
+    "source_path_in_envelope": false,
+    "source_path_in_error": false,
+    "parity_diagnostics": "mismatched-top-level-keys-and-digests-only"
+  },
+  "state_layout_route": {
+    "python_authority": "syntavra_runtime.state_receipt_contract.state_layout",
+    "rust_capability": "state.layout",
+    "filesystem_access": false,
+    "database_access": false,
+    "mutation": false,
+    "input_profile": "none",
+    "comparison": "exact-complete-object",
+    "schema_drift": "fail-closed",
+    "parity_diagnostics": "mismatched-top-level-keys-and-digests-only"
+  },
+  "live_discovery": {
+    "owner": "python-router",
+    "read_only": true,
+    "user_config": "~/.config/syntavra/config.toml",
+    "project_config": "<project>/.syntavra/config.toml",
+    "environment_prefix": "SYNTAVRA_CFG__",
+    "symlinks": "reject",
+    "concurrent_change": "reject",
+    "last_good_write": false,
+    "raw_wire_in_envelope": false,
+    "raw_values_in_error": false,
+    "rust_filesystem_access": false,
+    "rust_environment_access": false
+  },
+  "session_task_overrides": {
+    "owner": "python-router",
+    "require_live_config": true,
+    "format": "canonical-json-hex",
+    "scopes": ["session", "task"],
+    "precedence": ["session", "task"],
+    "maximum_bytes_per_scope": 65536,
+    "top_level": "object",
+    "values": "scalar-leaf-mappings",
+    "duplicate_keys": "reject",
+    "noncanonical_json": "reject",
+    "raw_input_in_envelope": false,
+    "raw_values_in_error": false,
+    "rust_decodes_override_json": false,
+    "rust_receives_final_r6cfg1_only": true
+  },
+  "input_metadata": {
+    "required": ["profile", "format", "bytes", "sha256"],
+    "raw_input_forbidden": true,
+    "source_paths_forbidden": true,
+    "additional_properties": false
+  },
+  "result_policy": {
+    "raw_wire_forbidden": true,
+    "raw_override_forbidden": true,
+    "project_root_forbidden": true,
+    "parity_error_values_forbidden": true,
+    "candidate_execution_messages_redacted": true,
+    "live_values_only_on_config_resolve": true
+  },
+  "success_envelope": {
+    "required": [
+      "ok",
+      "phase",
+      "schema_version",
+      "command",
+      "capability",
+      "mutation",
+      "selection",
+      "input",
+      "fallback",
+      "result"
+    ],
+    "route_optional_fields": {
+      "state.inspect": ["limits"]
+    },
+    "additional_properties": false
+  },
+  "error_envelope": {
+    "required": ["ok", "error"],
+    "raw_input_forbidden": true,
+    "raw_values_forbidden": true,
+    "source_paths_forbidden": true,
+    "fallback_attempted": false
+  },
+  "claims": [
+    "PYTHON_REFERENCE_ENGINE",
+    "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
+    "RUST_READ_ONLY_VERSION_ROUTING_R11",
+    "RUST_READ_ONLY_STATUS_ROUTING_R12",
+    "RUST_EXPLICIT_CONFIG_STATUS_ROUTING_R13",
+    "RUST_EXPLICIT_CONFIG_RESOLVE_ROUTING_R14",
+    "RUST_LIVE_CONFIG_DISCOVERY_ROUTING_R15",
+    "RUST_SESSION_TASK_OVERRIDE_ROUTING_R16",
+    "RUST_STATE_LAYOUT_ROUTING_R17",
+    "RUST_STATE_INSPECT_ROUTING_R18"
+  ]
+}

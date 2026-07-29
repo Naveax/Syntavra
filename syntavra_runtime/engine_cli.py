@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
-from .read_only_router_r17 import ReadOnlyCommandRouterR17
+from .read_only_router_r18 import ReadOnlyCommandRouterR18
 
 
 def _emit(value: Any) -> None:
@@ -17,7 +17,7 @@ def _emit(value: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="syntavra",
-        description="Syntavra R17 engine selector and safe read-only router",
+        description="Syntavra R18 engine selector and safe read-only router",
     )
     parser.add_argument("--project", default=".")
     parser.add_argument("--state-root")
@@ -50,15 +50,19 @@ def main(
     *,
     selector: EngineSelector | None = None,
     cli_override: str | None = None,
-    router: ReadOnlyCommandRouterR17 | None = None,
+    router: ReadOnlyCommandRouterR18 | None = None,
 ) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(values)
+    project_input_root = Path(args.project)
     active = selector or EngineSelector(
-        project_root=Path(args.project),
+        project_root=project_input_root,
         state_root=Path(args.state_root) if args.state_root else None,
     )
-    active_router = router or ReadOnlyCommandRouterR17(active)
+    active_router = router or ReadOnlyCommandRouterR18(
+        active,
+        project_input_root=project_input_root,
+    )
     try:
         if args.action == "list":
             result = active.list_engines(cli_override=cli_override)
