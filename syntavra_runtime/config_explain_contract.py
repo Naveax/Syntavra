@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import unicodedata
 from typing import Any, Mapping
 
 from .unified_config import ConfigError
@@ -21,7 +22,7 @@ def validate_explain_path(value: str) -> str:
         raise ConfigError("config explain path must not be empty")
     if len(encoded) > MAX_EXPLAIN_PATH_BYTES:
         raise ConfigError("config explain path exceeds the input limit")
-    if any(character.iscontrol() for character in path):
+    if any(unicodedata.category(character) == "Cc" for character in path):
         raise ConfigError("config explain path contains a control character")
     if any(not segment for segment in path.split(".")):
         raise ConfigError("config explain path contains an empty segment")
