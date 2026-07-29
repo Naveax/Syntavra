@@ -63,6 +63,39 @@
     "rust_filesystem_access": false,
     "rust_environment_access": false
   },
+  "input_metadata": {
+    "required": ["profile", "format", "bytes", "sha256"],
+    "raw_input_forbidden": true,
+    "source_paths_forbidden": true,
+    "additional_properties": false
+  },
+  "result_policy": {
+    "raw_wire_forbidden": true,
+    "parity_error_values_forbidden": true,
+    "candidate_execution_messages_redacted": true,
+    "live_values_only_on_config_resolve": true
+  },
+  "success_envelope": {
+    "required": [
+      "ok",
+      "phase",
+      "schema_version",
+      "command",
+      "capability",
+      "mutation",
+      "selection",
+      "input",
+      "fallback",
+      "result"
+    ],
+    "additional_properties": false
+  },
+  "error_envelope": {
+    "required": ["ok", "error"],
+    "raw_input_forbidden": true,
+    "raw_values_forbidden": true,
+    "fallback_attempted": false
+  },
   "claims": [
     "PYTHON_REFERENCE_ENGINE",
     "RUST_ENGINE_EXPERIMENTAL_NOT_DEFAULT",
