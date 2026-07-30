@@ -1,18 +1,20 @@
 name: Apply R24 Config Explain Clippy Fix
 
 on:
-  push:
+  pull_request:
+    types: [synchronize]
     branches:
-      - feature/full-parity-r24-config-explain-cli
+      - main
     paths:
       - tools/apply_r24_config_explain_clippy_fix.py
+      - .github/workflows/r24-config-explain-clippy-sync.yml
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.ref == 'feature/full-parity-r24-config-explain-cli' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
