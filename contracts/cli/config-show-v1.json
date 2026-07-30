@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "phase": "R24",
+  "command": "config.show",
+  "reference_engine": "python",
+  "candidate_engine": "rust",
+  "candidate_capability": "config.show",
+  "candidate_command": ["config", "show", "<R6CFG1-wire-hex>"],
+  "input_profile": "live-config-discovery-v1",
+  "input_format": "R6CFG1",
+  "mutation": "read-only",
+  "filesystem_write": false,
+  "database_access": false,
+  "network_access": false,
+  "process_access": "verified-rust-binary-only",
+  "fallback_policy": "none",
+  "result": {
+    "required_keys": [
+      "schema_version",
+      "values",
+      "provenance",
+      "config_hash",
+      "warnings"
+    ],
+    "forbidden_keys": ["loaded_at"],
+    "complete_python_rust_equality_required": true,
+    "provenance_source_policy": "canonical-logical-source-identifiers"
+  },
+  "compatibility": {
+    "legacy_loaded_at_removed": true,
+    "reason": "loaded_at is invocation-time metadata and prevents deterministic read-only parity",
+    "configuration_semantics_unchanged": true
+  },
+  "security": {
+    "environment_credential_provenance_value": "[secret-ref]",
+    "raw_secret_material_forbidden_by_config_validation": true
+  },
+  "claim": "RUST_CONFIG_SHOW_CANONICAL_READ_ONLY_PARITY_PROVEN_R24"
+}
