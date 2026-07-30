@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "contract_id": "syntavra-config-last-good-atomic-apply-v1",
+  "phase": "R25",
+  "claim": "RUST_CONFIG_LAST_GOOD_ATOMIC_APPLY_PARITY_PROVEN_R25_FIXTURES",
+  "status": "RUST_SHADOW",
+  "target": {
+    "relative_path": ".syntavra/pre-release/config-last-good.json",
+    "lock_relative_path": ".syntavra/pre-release/config-last-good.lock",
+    "mode": "0600",
+    "maximum_payload_bytes": 262144,
+    "same_directory_temporary_file": true,
+    "atomic_replace_required": true,
+    "file_sync_required": true,
+    "directory_sync_required_where_supported": true
+  },
+  "admission": {
+    "project_binding_required": true,
+    "project_root_symlink_forbidden": true,
+    "target_parent_symlink_forbidden": true,
+    "target_symlink_forbidden": true,
+    "lock_symlink_forbidden": true,
+    "ephemeral_scopes_forbidden": ["session", "task"],
+    "plan_decisions": ["write", "retain-existing"]
+  },
+  "semantics": {
+    "write": "write canonical last-good payload with exclusive lock and atomic replacement",
+    "retain-existing": "return without creating directories, lock files, temporary files or target files",
+    "unchanged": "when existing bytes equal the canonical payload, retain bytes without replacement",
+    "failure": "remove owned temporary and lock files and emit no successful result"
+  },
+  "result_required_fields": [
+    "ok",
+    "schema_version",
+    "contract_id",
+    "claim",
+    "project_id",
+    "decision",
+    "action",
+    "payload_bytes",
+    "payload_sha256",
+    "target_sha256",
+    "mutation",
+    "full_product_parity"
+  ],
+  "result_forbidden_fields": [
+    "project_root",
+    "absolute_target_path",
+    "absolute_lock_path",
+    "temporary_path",
+    "config_wire",
+    "payload"
+  ],
+  "excluded_authority": [
+    "general_state_write",
+    "config_migration",
+    "profile_installation",
+    "mcp_mutation",
+    "process_execution",
+    "setup_or_host_mutation"
+  ],
+  "version": "0.0.1",
+  "release_channel": "pre-release"
+}
