@@ -130,9 +130,7 @@ fn normalized_json_payload(raw: &[u8]) -> Result<String, ApplyFailure> {
     let value: Value = serde_json::from_slice(payload)
         .map_err(|_| ApplyFailure::normal("CONFIG_LIFECYCLE_TARGET_JSON_INVALID"))?;
     if !value.is_object() {
-        return Err(ApplyFailure::normal(
-            "CONFIG_LIFECYCLE_TARGET_JSON_INVALID",
-        ));
+        return Err(ApplyFailure::normal("CONFIG_LIFECYCLE_TARGET_JSON_INVALID"));
     }
     serde_json::to_string(&value)
         .map_err(|_| ApplyFailure::normal("CONFIG_LIFECYCLE_TARGET_JSON_INVALID"))
@@ -146,9 +144,7 @@ fn validate_target_snapshot(
     let value: Value = serde_json::from_str(&canonical)
         .map_err(|_| ApplyFailure::normal("CONFIG_LIFECYCLE_TARGET_JSON_INVALID"))?;
     let Some(object) = value.as_object() else {
-        return Err(ApplyFailure::normal(
-            "CONFIG_LIFECYCLE_TARGET_JSON_INVALID",
-        ));
+        return Err(ApplyFailure::normal("CONFIG_LIFECYCLE_TARGET_JSON_INVALID"));
     };
     for key in ["schema_version", "values", "provenance", "config_hash"] {
         if !object.contains_key(key) {
@@ -214,14 +210,11 @@ fn validate_lock_binding(path: &Path, project_id: &str) -> Result<(), ApplyFailu
     let raw = read_bytes(path, "CONFIG_LIFECYCLE_STALE_LOCK_INVALID")?;
     let value: Value = serde_json::from_slice(&raw)
         .map_err(|_| ApplyFailure::normal("CONFIG_LIFECYCLE_STALE_LOCK_INVALID"))?;
-    if value.get("contract_version").and_then(Value::as_u64)
-        != Some(u64::from(CONTRACT_VERSION))
+    if value.get("contract_version").and_then(Value::as_u64) != Some(u64::from(CONTRACT_VERSION))
         || value.get("project_id").and_then(Value::as_str) != Some(project_id)
         || value.get("target").and_then(Value::as_str) != Some(TARGET_RELATIVE_PATH)
     {
-        return Err(ApplyFailure::normal(
-            "CONFIG_LIFECYCLE_STALE_LOCK_INVALID",
-        ));
+        return Err(ApplyFailure::normal("CONFIG_LIFECYCLE_STALE_LOCK_INVALID"));
     }
     Ok(())
 }
@@ -236,18 +229,9 @@ fn write_lock(file: &mut File, project_id: &str) -> Result<(), ApplyFailure> {
     map_io(file.sync_all(), "CONFIG_LIFECYCLE_LOCK_WRITE_FAILED")
 }
 
-fn acquire_lock(
-    path: &Path,
-    project_id: &str,
-    now_unix: u64,
-) -> Result<bool, ApplyFailure> {
+fn acquire_lock(path: &Path, project_id: &str, now_unix: u64) -> Result<bool, ApplyFailure> {
     reject_symlink(path, "CONFIG_LIFECYCLE_LOCK_SYMLINK")?;
-    let open = || {
-        OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-    };
+    let open = || OpenOptions::new().write(true).create_new(true).open(path);
     match open() {
         Ok(mut file) => {
             write_lock(&mut file, project_id)?;
@@ -269,9 +253,7 @@ fn acquire_lock(
             set_private_mode(path);
             Ok(true)
         }
-        Err(_) => Err(ApplyFailure::normal(
-            "CONFIG_LIFECYCLE_LOCK_ACQUIRE_FAILED",
-        )),
+        Err(_) => Err(ApplyFailure::normal("CONFIG_LIFECYCLE_LOCK_ACQUIRE_FAILED")),
     }
 }
 
@@ -299,10 +281,7 @@ fn write_temp(path: &Path, payload: &[u8]) -> Result<(), ApplyFailure> {
         file.write_all(payload),
         "CONFIG_LIFECYCLE_TEMP_WRITE_FAILED",
     )?;
-    map_io(
-        file.write_all(b"\n"),
-        "CONFIG_LIFECYCLE_TEMP_WRITE_FAILED",
-    )?;
+    map_io(file.write_all(b"\n"), "CONFIG_LIFECYCLE_TEMP_WRITE_FAILED")?;
     map_io(file.flush(), "CONFIG_LIFECYCLE_TEMP_WRITE_FAILED")?;
     map_io(file.sync_all(), "CONFIG_LIFECYCLE_TEMP_WRITE_FAILED")?;
     set_private_mode(path);
@@ -514,9 +493,7 @@ pub fn apply_json(
 ) -> Result<String, ApplyFailure> {
     if let Some(point) = fault_point {
         if !matches!(point, "after-lock" | "after-temp-sync" | "after-replace") {
-            return Err(ApplyFailure::normal(
-                "CONFIG_LIFECYCLE_FAULT_POINT_INVALID",
-            ));
+            return Err(ApplyFailure::normal("CONFIG_LIFECYCLE_FAULT_POINT_INVALID"));
         }
     }
 
