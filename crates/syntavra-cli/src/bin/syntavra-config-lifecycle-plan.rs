@@ -1,16 +1,18 @@
 #![forbid(unsafe_code)]
 
+#[allow(dead_code)]
 #[path = "../config_contract.rs"]
 mod config_contract;
 #[path = "../config_last_good_plan.rs"]
 mod config_last_good_plan;
+#[allow(dead_code)]
 #[path = "../state_snapshot_contract.rs"]
 mod state_snapshot_contract;
 
 use std::env;
 use std::process::ExitCode;
 
-use config_last_good_plan::config_last_good_plan_json;
+use config_last_good_plan::plan_json;
 
 const USAGE: &str =
     "USAGE: syntavra-config-lifecycle-plan <expected-project-id> <project-root> <config-wire-hex>";
@@ -40,10 +42,7 @@ fn run(arguments: &[String]) -> Result<(), String> {
         return Err("CONFIG_LIFECYCLE_ARGUMENTS_INVALID".to_owned());
     };
     let wire = decode_hex(wire_hex)?;
-    println!(
-        "{}",
-        config_last_good_plan_json(project_root, expected_project_id, &wire)?
-    );
+    println!("{}", plan_json(project_root, expected_project_id, &wire)?);
     Ok(())
 }
 
