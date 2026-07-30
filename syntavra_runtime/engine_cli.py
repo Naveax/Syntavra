@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
-from .scheduler_read_only_router_r24 import SchedulerReadOnlyRouterR24
+from .migration_plan_router_r24 import MigrationPlanRouterR24
 
 
 def _emit(value: Any) -> None:
@@ -46,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     route.add_argument("--database-path")
     route.add_argument("--scheduler-state", action="append")
     route.add_argument("--scheduler-limit", type=int)
+    route.add_argument("--migration-database")
     return parser
 
 
@@ -54,7 +55,7 @@ def main(
     *,
     selector: EngineSelector | None = None,
     cli_override: str | None = None,
-    router: SchedulerReadOnlyRouterR24 | None = None,
+    router: MigrationPlanRouterR24 | None = None,
 ) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(values)
@@ -63,7 +64,7 @@ def main(
         project_root=project_input_root,
         state_root=Path(args.state_root) if args.state_root else None,
     )
-    active_router = router or SchedulerReadOnlyRouterR24(
+    active_router = router or MigrationPlanRouterR24(
         active,
         project_input_root=project_input_root,
     )
@@ -97,6 +98,8 @@ def main(
                 route_kwargs["scheduler_states"] = tuple(args.scheduler_state)
             if args.scheduler_limit is not None:
                 route_kwargs["scheduler_limit"] = args.scheduler_limit
+            if args.migration_database is not None:
+                route_kwargs["migration_database"] = args.migration_database
             result = active_router.route(args.route_command, **route_kwargs)
         else:  # pragma: no cover - argparse guarantees the action set
             raise RuntimeError(args.action)

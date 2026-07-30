@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "phase": "R24",
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "reference_engine": "python",
+  "candidate_engine": "rust",
+  "route": "migration.plan",
+  "capability": "migration.plan",
+  "result_keys": ["current_version", "database", "pending", "target_version"],
+  "input": {
+    "profile": "project-bound-quiescent-migration-sqlite-v1",
+    "format": "canonical-project-relative-path",
+    "maximum_path_bytes": 4096,
+    "maximum_database_bytes": 67108864,
+    "path_escape": "reject",
+    "absolute_outside_project": "reject"
+  },
+  "filesystem": {
+    "missing_database_result": "version-zero-empty-plan",
+    "database_open_mode": "read-only",
+    "query_only": true,
+    "trusted_schema": false,
+    "project_root_symlink": "reject-when-present",
+    "database_parent_symlink": "reject-when-present",
+    "database_symlink": "reject",
+    "sidecars": {"journal": "reject", "shm": "reject", "wal": "reject"},
+    "source_change_during_read": "reject",
+    "directory_creation": false,
+    "table_creation": false,
+    "database_creation": false,
+    "backup_creation": false
+  },
+  "schema": {
+    "migration_table": "syntavra_schema_migrations",
+    "missing_table_version": 0,
+    "columns": [
+      ["version", "INTEGER", 0, 1],
+      ["name", "TEXT", 1, 0],
+      ["identity", "TEXT", 1, 0],
+      ["applied_at", "REAL", 1, 0]
+    ],
+    "row_validation": {
+      "version": "positive-unique-integer",
+      "name": "non-empty-utf8-at-most-1024-bytes",
+      "identity": "lowercase-sha256",
+      "applied_at": "finite-non-negative-real"
+    }
+  },
+  "parity": {
+    "python_preflight_before_selection": true,
+    "comparison": "complete-result-object",
+    "rust_error_fallback": false,
+    "absolute_paths_in_envelopes": false,
+    "parity_error_fields": ["mismatched_keys", "expected_sha256", "actual_sha256"]
+  },
+  "claim": "RUST_MIGRATION_PLAN_READ_ONLY_CLI_PARITY_PROVEN_R24_FIXTURES"
+}
