@@ -172,10 +172,7 @@ fn validate_schema(connection: &Connection) -> Result<(), String> {
         ),
         (
             "job_dependencies",
-            vec![
-                ("job_id", "TEXT", 1, 1),
-                ("dependency_id", "TEXT", 1, 2),
-            ],
+            vec![("job_id", "TEXT", 1, 1), ("dependency_id", "TEXT", 1, 2)],
         ),
         (
             "scheduler_events",
@@ -326,8 +323,7 @@ fn inspect(
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
         let mut counts = Map::new();
         for row in rows {
-            let (state, count) =
-                row.map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
+            let (state, count) = row.map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
             counts.insert(state, json!(count));
         }
         let projects: i64 = connection
