@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "contract": "syntavra-full-parity-runtime-v1",
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "reference_engine": "python",
+  "candidate_engine": "rust",
+  "phases": ["R25", "R26", "R27", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37"],
+  "transport": {
+    "encoding": "canonical-json-utf8",
+    "maximum_request_bytes": 1048576,
+    "request_required": ["schema_version", "phase", "operation", "payload"],
+    "response_required": ["schema_version", "runtime", "phase", "operation", "project_id", "result", "mutation", "receipt"],
+    "error_encoding": "stable-code-only"
+  },
+  "project_binding": {
+    "derivation": "sha256-normalized-canonical-absolute-path",
+    "root_symlink": "reject",
+    "expected_project_id": "required"
+  },
+  "operations": {
+    "R25": ["profile.create", "profile.update", "profile.select", "profile.delete", "profile.list"],
+    "R26": ["state.write", "receipt.write"],
+    "R27": ["broker.enqueue", "broker.claim", "broker.complete", "broker.cancel", "broker.list"],
+    "R28": ["process.execute"],
+    "R29": ["context.rewrite", "context.compact", "context.restore"],
+    "R30": ["memory.add", "memory.search", "repository.index", "repository.query"],
+    "R31": ["provider.route", "provider.loopback"],
+    "R32": ["mcp.catalog", "mcp.call"],
+    "R33": ["setup.plan", "setup.apply", "setup.verify", "setup.repair", "setup.rollback"],
+    "R34": ["benchmark.compare", "evidence.validate"],
+    "R35": ["publication.build", "publication.verify"],
+    "R36": ["distribution.manifest", "distribution.verify"],
+    "R37": ["certification.evaluate"]
+  },
+  "security": {
+    "rust_python_invocation": "forbidden",
+    "hidden_fallback": "forbidden",
+    "network": "loopback-only",
+    "process_modes": ["echo", "hash", "fail", "sleep"],
+    "persistent_config_scopes": ["system", "user", "project"],
+    "ephemeral_config_scopes": ["session", "task"],
+    "ephemeral_persistence": "forbidden",
+    "relative_paths": "validated-no-traversal",
+    "symlink_targets": "reject",
+    "sqlite": "transactional-wal-bounded"
+  },
+  "comparison": {
+    "envelopes": "exact-complete-object",
+    "errors": "exact-stable-code",
+    "files": "exact-sha256",
+    "sqlite": "exact-logical-rows",
+    "cross_platform": ["linux-x64", "windows-x64", "macos-x64", "macos-arm64"]
+  },
+  "authority": {
+    "python": "reference",
+    "rust": "production-candidate",
+    "public_auto_selection": "requires-r37-certification"
+  }
+}
