@@ -68,4 +68,12 @@ jobs:
       - name: Run strict Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Run cross-engine R25-R37 parity
-        run: python tools/verify_r25_r37_full_parity.py
+        run: python tools/verify_r25_r37_full_parity.py | tee r25-r37-exact-parity.json
+      - name: Upload exact-parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r25-r37-exact-parity-${{ matrix.os }}
+          path: r25-r37-exact-parity.json
+          if-no-files-found: warn
+          retention-days: 90
