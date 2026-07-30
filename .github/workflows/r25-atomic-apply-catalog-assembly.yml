@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - feature/full-parity-r25-config-last-good-atomic-apply
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/r25-atomic-apply-catalog-assembly.yml"
+      - "contracts/parity/python-rust-full-parity-v1.json"
+      - "contracts/config/config-last-good-atomic-apply-v1.json"
+      - "syntavra_runtime/config_last_good_apply.py"
+      - "tools/verify_r25_config_last_good_apply.py"
 
 permissions:
   contents: write
@@ -20,6 +29,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Install catalog test environment
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m pip install -e .
       - name: Add exact R25 shadow feature
         shell: bash
         run: |
