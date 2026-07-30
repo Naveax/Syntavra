@@ -5,15 +5,19 @@ on:
     paths:
       - "contracts/cli/config-show-v1.json"
       - "contracts/engine/descriptor.txt"
+      - "contracts/parity/python-rust-full-parity-v1.json"
       - "crates/syntavra-cli/src/main.rs"
       - "crates/syntavra-contracts/src/lib.rs"
       - "syntavra_runtime/config_show_contract.py"
       - "syntavra_runtime/config_show_router_r24.py"
       - "syntavra_runtime/engine_entry.py"
       - "syntavra_runtime/engine_selector.py"
+      - "syntavra_runtime/unified_cli.py"
       - "tests/runtime/test_config_show_r24.py"
-      - "tools/verify_r24_config_show.py"
+      - "tests/runtime/test_engine_selector_r4.py"
+      - "tools/run_engine_parity.py"
       - "tools/run_engine_parity_r24.py"
+      - "tools/verify_r24_config_show.py"
       - ".github/workflows/r24-config-show.yml"
   push:
     branches:
