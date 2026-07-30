@@ -44,12 +44,14 @@ fn run(arguments: &[String]) -> Result<ExitCode, String> {
     match arguments {
         [flag, mode, value] if flag == "--child" => {
             let code = full_parity_runtime::child_mode(mode, value)?;
-            Ok(ExitCode::from(u8::try_from(code).unwrap_or(255)))
+            let exit_code = u8::try_from(code).unwrap_or(u8::MAX);
+            Ok(ExitCode::from(exit_code))
         }
         [project_root, expected_project_id, request_hex] => {
             let request = decode_hex(request_hex)?;
-            let output = full_parity_runtime::execute_json(project_root, expected_project_id, &request)
-                .map_err(|error| error.code)?;
+            let output =
+                full_parity_runtime::execute_json(project_root, expected_project_id, &request)
+                    .map_err(|error| error.code)?;
             println!("{output}");
             Ok(ExitCode::SUCCESS)
         }
