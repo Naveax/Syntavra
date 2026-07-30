@@ -6,6 +6,13 @@ on:
       - feature/full-parity-r24-config-show-cli
     paths:
       - tools/apply_r24_config_show_patch.py
+      - .github/workflows/r24-config-show-source-sync.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/apply_r24_config_show_patch.py
+      - .github/workflows/r24-config-show-source-sync.yml
 
 permissions:
   contents: write
