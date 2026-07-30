@@ -14,7 +14,9 @@ use std::process::ExitCode;
 
 use broker_live_snapshot_contract::snapshot_live_broker_database_json;
 use broker_snapshot_contract::snapshot_broker_database_json;
-use config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
+use config_contract::{
+    default_config_wire, explain_config_wire_json, resolve_config_wire, snapshot_json, status_json,
+};
 use read_only_cli_contract::result_json as static_cli_result_json;
 use state_layout_contract::state_layout_json;
 use state_receipt_contract::inspect_receipt_json;
@@ -33,6 +35,7 @@ const USAGE: &str = concat!(
     "USAGE:\n",
     "  syntavra-rs version\n",
     "  syntavra-rs status [config-wire-hex]\n",
+    "  syntavra-rs config explain <config-wire-hex> <path-utf8-hex>\n",
     "  syntavra-rs config resolve <config-wire-hex>\n",
     "  syntavra-rs pipeline describe\n",
     "  syntavra-rs plugins list\n",
@@ -53,6 +56,10 @@ const USAGE: &str = concat!(
 enum Command {
     Version,
     Status(Option<String>),
+    ConfigExplain {
+        wire_hex: String,
+        path_hex: String,
+    },
     ConfigResolve(String),
     PipelineDescribe,
     PluginsList,
@@ -96,6 +103,12 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         [value] if value == "version" || value == "--version" => Ok(Command::Version),
         [value] if value == "status" => Ok(Command::Status(None)),
         [value, wire] if value == "status" => Ok(Command::Status(Some(wire.clone()))),
+        [config, action, wire_hex, path_hex] if config == "config" && action == "explain" => {
+            Ok(Command::ConfigExplain {
+                wire_hex: wire_hex.clone(),
+                path_hex: path_hex.clone(),
+            })
+        }
         [config, action, wire] if config == "config" && action == "resolve" => {
             Ok(Command::ConfigResolve(wire.clone()))
         }
@@ -252,6 +265,13 @@ fn config_wire(encoded: Option<String>) -> Result<Vec<u8>, String> {
     )
 }
 
+fn run_config_explain(wire_hex: &str, path_hex: &str) -> Result<(), String> {
+    let wire = decode_hex(wire_hex)?;
+    let path = decode_hex(path_hex)?;
+    println!("{}", explain_config_wire_json(&wire, &path)?);
+    Ok(())
+}
+
 fn run(command: Command) -> Result<(), String> {
     match command {
         Command::Version => println!("{}", version_json()),
@@ -259,6 +279,9 @@ fn run(command: Command) -> Result<(), String> {
             let wire = config_wire(encoded)?;
             let snapshot = resolve_config_wire(&wire)?;
             println!("{}", status_json(&snapshot));
+        }
+        Command::ConfigExplain { wire_hex, path_hex } => {
+            run_config_explain(&wire_hex, &path_hex)?;
         }
         Command::ConfigResolve(encoded) => {
             let wire = decode_hex(&encoded)?;
@@ -414,6 +437,18 @@ mod tests {
         assert_eq!(
             parse_command(&args(&["config", "resolve", "00"])),
             Ok(Command::ConfigResolve("00".to_owned()))
+        );
+        assert_eq!(
+            parse_command(&args(&[
+                "config",
+                "explain",
+                "00",
+                "72756e74696d652e70726f66696c65"
+            ])),
+            Ok(Command::ConfigExplain {
+                wire_hex: "00".to_owned(),
+                path_hex: "72756e74696d652e70726f66696c65".to_owned(),
+            })
         );
     }
 

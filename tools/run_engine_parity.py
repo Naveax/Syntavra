@@ -182,6 +182,7 @@ def verify() -> dict[str, object]:
         if isinstance(row, dict)
     ]
     expected = [
+        "config.explain",
         "config.resolve",
         "engine.capabilities",
         "engine.contract-hash",

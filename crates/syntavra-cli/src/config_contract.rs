@@ -6,6 +6,7 @@ use std::fmt::Write as _;
 use syntavra_core::sha256_hex;
 
 const WIRE_HEADER: &str = "R6CFG1";
+pub const MAX_EXPLAIN_PATH_BYTES: usize = 512;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigScalar {
@@ -474,6 +475,43 @@ pub fn default_config_wire() -> &'static [u8] {
     b"R6CFG1\nphase\t0\n"
 }
 
+pub fn explain_config_wire_json(input: &[u8], path_input: &[u8]) -> Result<String, String> {
+    if path_input.is_empty() {
+        return Err("CONFIG_EXPLAIN_PATH_EMPTY".to_owned());
+    }
+    if path_input.len() > MAX_EXPLAIN_PATH_BYTES {
+        return Err("CONFIG_EXPLAIN_PATH_TOO_LARGE".to_owned());
+    }
+    let path = std::str::from_utf8(path_input)
+        .map_err(|_| "CONFIG_EXPLAIN_PATH_UTF8_INVALID".to_owned())?;
+    if path.chars().any(char::is_control) {
+        return Err("CONFIG_EXPLAIN_PATH_CONTROL_INVALID".to_owned());
+    }
+    if path.split('.').any(str::is_empty) {
+        return Err("CONFIG_EXPLAIN_PATH_SEGMENT_EMPTY".to_owned());
+    }
+
+    let snapshot = resolve_config_wire(input)?;
+    if let Some(item) = snapshot
+        .provenance
+        .iter()
+        .rev()
+        .find(|item| item.path == path)
+    {
+        return Ok(format!(
+            "{{\"path\":{},\"value\":{},\"source\":{},\"scope\":{}}}",
+            json_string(path),
+            scalar_json(&item.value),
+            json_string(&item.source),
+            json_string(&item.scope)
+        ));
+    }
+    Ok(format!(
+        "{{\"found\":false,\"path\":{}}}",
+        json_string(path)
+    ))
+}
+
 pub fn snapshot_json(snapshot: &ConfigSnapshot) -> Result<String, String> {
     let provenance = snapshot
         .provenance
@@ -543,7 +581,8 @@ pub fn status_json(snapshot: &ConfigSnapshot) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        default_config_wire, resolve_config_wire, snapshot_json, status_json, ConfigScalar,
+        default_config_wire, explain_config_wire_json, resolve_config_wire, snapshot_json,
+        status_json, ConfigScalar,
     };
 
     #[test]
@@ -586,6 +625,36 @@ mod tests {
         assert_eq!(
             snapshot.warnings,
             vec!["invalid-current-config-fell-back:ConfigError".to_owned()]
+        );
+    }
+
+    #[test]
+    fn explains_latest_provenance_and_missing_paths() {
+        let wire = concat!(
+            "R6CFG1\n",
+            "phase\t0\n",
+            "a\tproject\t70726f6a6563742d636f6e666967\t72756e74696d652e70726f66696c65\ts\t636f6d70616374\n"
+        );
+        let found = explain_config_wire_json(wire.as_bytes(), b"runtime.profile")
+            .expect("found explain result");
+        assert!(found.contains("\"value\":\"compact\""));
+        assert!(found.contains("\"source\":\"project-config\""));
+        assert!(found.contains("\"scope\":\"project\""));
+
+        let missing = explain_config_wire_json(wire.as_bytes(), b"missing.value")
+            .expect("missing explain result");
+        assert_eq!(missing, "{\"found\":false,\"path\":\"missing.value\"}");
+    }
+
+    #[test]
+    fn rejects_invalid_explain_paths() {
+        assert_eq!(
+            explain_config_wire_json(default_config_wire(), b".runtime"),
+            Err("CONFIG_EXPLAIN_PATH_SEGMENT_EMPTY".to_owned())
+        );
+        assert_eq!(
+            explain_config_wire_json(default_config_wire(), b"runtime\nprofile"),
+            Err("CONFIG_EXPLAIN_PATH_CONTROL_INVALID".to_owned())
         );
     }
 

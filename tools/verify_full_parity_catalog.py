@@ -26,6 +26,7 @@ EXPECTED_PHASES = [f"R{value}" for value in range(23, 38)]
 PROVEN_ROUTE_CAPABILITIES = {
     "route.version": "version",
     "route.status": "status",
+    "route.config.explain": "config.explain",
     "route.config.resolve": "config.resolve",
     "route.config.validate": "config.resolve",
     "route.state.layout": "state.layout",

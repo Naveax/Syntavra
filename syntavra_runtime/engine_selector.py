@@ -19,6 +19,7 @@ DEFAULT_ENGINE = "python"
 AUTO_ENGINE = "python"
 RUST_BINARY_NAME = "syntavra-rs.exe" if os.name == "nt" else "syntavra-rs"
 RUST_CAPABILITIES = (
+    "config.explain",
     "config.resolve",
     "engine.capabilities",
     "engine.contract-hash",
@@ -42,6 +43,7 @@ ENGINE_CONTRACT_DESCRIPTOR = (
     "contract_version=1\n"
     "engine=rust\n"
     "engine_stability=experimental\n"
+    "capability=config.explain|preview|read-only\n"
     "capability=config.resolve|preview|read-only\n"
     "capability=engine.capabilities|preview|read-only\n"
     "capability=engine.contract-hash|preview|read-only\n"

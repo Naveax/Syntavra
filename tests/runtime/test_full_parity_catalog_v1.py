@@ -46,6 +46,7 @@ def test_current_proven_routes_include_r22_and_r24_surfaces() -> None:
     assert proven == {
         "route.version",
         "route.status",
+        "route.config.explain",
         "route.config.resolve",
         "route.config.validate",
         "route.state.layout",
