@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "contract_version": 1,
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "phase": "R25",
+  "apply_id": "syntavra-config-last-good-apply-v1",
+  "input_format": "R6CFG1",
+  "maximum_input_bytes": 262144,
+  "target": {
+    "relative_path": ".syntavra/pre-release/config-last-good.json",
+    "temporary_relative_path": ".syntavra/pre-release/.config-last-good.json.apply.tmp",
+    "lock_relative_path": ".syntavra/pre-release/config-last-good.lock",
+    "file_mode": "0600",
+    "atomic_replace_required": true,
+    "directory_sync_required": "best-effort-on-unsupported-platforms"
+  },
+  "lock": {
+    "exclusive_create": true,
+    "project_bound": true,
+    "stale_after_seconds": 300,
+    "stale_recovery_requires_valid_binding": true
+  },
+  "decisions": {
+    "write": [
+      "write",
+      "already-current",
+      "recover-temp"
+    ],
+    "retain-existing": [
+      "retain-existing"
+    ],
+    "invalid_or_mismatched_state": "fail-closed"
+  },
+  "crash_recovery": {
+    "fixed_project_bound_temp": true,
+    "recover_matching_temp_when_target_missing": true,
+    "remove_nonmatching_temp": true,
+    "post_write_readback_verification": true,
+    "fault_points": [
+      "after-lock",
+      "after-temp-sync",
+      "after-replace"
+    ]
+  },
+  "compatibility": {
+    "legacy_loaded_at_field_accepted_for_retain": true,
+    "new_payload_excludes_loaded_at": true,
+    "current_python_last_good_reader_compatible": true
+  },
+  "scope_policy": {
+    "persistent": [
+      "user",
+      "project",
+      "environment"
+    ],
+    "ephemeral_forbidden": [
+      "session",
+      "task"
+    ]
+  },
+  "routing": {
+    "public_cli": "blocked",
+    "auto": "blocked",
+    "mcp": "blocked",
+    "dedicated_shadow_binary": "syntavra-config-lifecycle-apply"
+  },
+  "mutation": {
+    "filesystem": true,
+    "database_opened": false,
+    "apply_authority": "bounded-shadow"
+  },
+  "claim": "RUST_CONFIG_LAST_GOOD_APPLY_PARITY_PROVEN_R25_FIXTURES",
+  "full_product_parity": "FULL_PARITY_NOT_PROVEN"
+}

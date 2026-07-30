@@ -1,0 +1,134 @@
+name: R25 Config Last-Good Apply Transaction
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r25-config-last-good-lifecycle-apply
+  pull_request:
+    paths:
+      - "contracts/config/config-last-good-lifecycle-apply-v1.json"
+      - "contracts/parity/python-rust-full-parity-v1.json"
+      - "crates/syntavra-cli/Cargo.toml"
+      - "crates/syntavra-cli/src/config_last_good_apply.rs"
+      - "crates/syntavra-cli/src/bin/syntavra-config-lifecycle-apply.rs"
+      - "syntavra_runtime/config_last_good_apply.py"
+      - "tools/verify_r25_config_last_good_apply.py"
+      - "tools/run_engine_parity_r25.py"
+      - "tests/runtime/test_config_last_good_apply_r25.py"
+      - "docs/adr/0033-r25-config-last-good-bounded-apply.md"
+      - ".github/workflows/r25-config-last-good-lifecycle-apply.yml"
+      - "MANIFEST.sha256"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  apply-parity:
+    name: R25 apply parity (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Python test environment
+        run: |
+          python -m pip install --upgrade pip setuptools wheel pytest
+          python -m pip install -e .
+
+      - name: Set up pinned Rust 1.82
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r25-config-last-good-apply-${{ matrix.os }}
+
+      - name: Run R25 Python transaction regressions
+        run: python -m pytest -q tests/runtime/test_config_last_good_apply_r25.py
+
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Rust workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Run strict Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run cross-engine apply, fault and crash-recovery parity
+        run: |
+          python tools/verify_r25_config_last_good_apply.py > r25-config-last-good-apply.json
+          python -m json.tool r25-config-last-good-apply.json
+
+      - name: Upload platform evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r25-config-last-good-apply-${{ matrix.os }}
+          path: r25-config-last-good-apply.json
+          if-no-files-found: warn
+
+  aggregate:
+    name: Aggregate R0-R25 apply parity
+    needs: apply-parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Python test environment
+        run: |
+          python -m pip install --upgrade pip setuptools wheel pytest
+          python -m pip install -e .
+
+      - name: Set up pinned Rust 1.82
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r25-config-last-good-apply-aggregate
+
+      - name: Run aggregate R0-R25 apply parity
+        run: |
+          python tools/run_engine_parity_r25.py > aggregate-r0-r25-apply.json
+          python -m json.tool aggregate-r0-r25-apply.json
+
+      - name: Upload aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r25-config-last-good-apply-aggregate
+          path: aggregate-r0-r25-apply.json
+          if-no-files-found: warn
