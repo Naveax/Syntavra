@@ -1,0 +1,69 @@
+name: R25-R37 Full Parity Completion
+
+on:
+  push:
+    branches: [main, "feature/full-parity-r25-r37-completion"]
+    paths:
+      - "syntavra_runtime/full_parity_runtime.py"
+      - "tests/runtime/test_full_parity_runtime_r25_r37.py"
+      - "crates/syntavra-cli/src/full_parity_runtime.rs"
+      - "crates/syntavra-cli/src/bin/syntavra-full-parity.rs"
+      - "crates/syntavra-cli/Cargo.toml"
+      - "tools/verify_r25_r37_full_parity.py"
+      - "contracts/parity/**"
+      - ".github/workflows/r25-r37-full-parity-completion.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "syntavra_runtime/full_parity_runtime.py"
+      - "tests/runtime/test_full_parity_runtime_r25_r37.py"
+      - "crates/syntavra-cli/src/full_parity_runtime.rs"
+      - "crates/syntavra-cli/src/bin/syntavra-full-parity.rs"
+      - "crates/syntavra-cli/Cargo.toml"
+      - "tools/verify_r25_r37_full_parity.py"
+      - "contracts/parity/**"
+      - ".github/workflows/r25-r37-full-parity-completion.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: R25-R37 quality (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: "1.82.0"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install Python runtime
+        run: python -m pip install -e .
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          toolchain: 1.82.0
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r25-r37-full-parity
+          cache-on-failure: false
+      - name: Run Python R25-R37 regressions
+        run: python -m pytest -q tests/runtime/test_full_parity_runtime_r25_r37.py
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Run Rust workspace tests
+        run: cargo test --workspace --all-targets --locked
+      - name: Run strict Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Run cross-engine R25-R37 parity
+        if: ${{ hashFiles('tools/verify_r25_r37_full_parity.py') != '' }}
+        run: python tools/verify_r25_r37_full_parity.py
