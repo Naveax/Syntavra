@@ -28,6 +28,7 @@ b2c6b2a5a6490d0cb3b0daf01f69920ddae12bfbd3ac66d558d257dffb992e45  .github/workfl
 8ada06954afcbbff1da7c70712c30b8f17c6c18de0a467ce4127e7318a58f512  .github/workflows/r24-scheduler-read-only.yml
 df25fe36043eb556dc84f09e11346652380068792d9b31e019849b5c9ed31f21  .github/workflows/r24-static-read-only-cli.yml
 164630e629dafd48568a73e9417176c23d866452092420871f0d52b7dcbbf2d2  .github/workflows/r24-telemetry-metrics-read-only.yml
+e9f2fde7dc022eeed4c0bdbf86ed74d2deb26dcea3bc9a5fe4f45ccbbd0a7d0e  .github/workflows/r25-config-last-good-atomic-apply.yml
 43e44e5da3589f59d0578f56a8eaa40903b97c87f01d26918d2af822efc2b42e  .github/workflows/r25-config-last-good-lifecycle-plan.yml
 f4d17d1c5d1ba749c4784eafe5c16b84134af2accf4d009b3a64c3bd0861931a  .github/workflows/refresh-branch-manifest.yml
 162b4420cd918279527ecd64ddb9bcc6ee936e1c4c08532852b6c0f1907934bf  .github/workflows/refresh-manifest.yml
