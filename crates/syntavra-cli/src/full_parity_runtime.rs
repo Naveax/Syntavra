@@ -58,13 +58,8 @@ fn digest(value: &[u8]) -> String {
     sha256_hex(value)
 }
 
-fn mutation(
-    database: bool,
-    filesystem: bool,
-    host: bool,
-    network: bool,
-    process: bool,
-) -> Mutation {
+fn mutation(flags: [bool; 5]) -> Mutation {
+    let [database, filesystem, host, network, process] = flags;
     BTreeMap::from([
         ("database", database),
         ("filesystem", filesystem),
@@ -125,6 +120,8 @@ fn set_private_mode(path: &Path) {
             let _ = fs::set_permissions(path, permissions);
         }
     }
+    #[cfg(not(unix))]
+    let _ = path;
 }
 
 fn atomic_write(path: &Path, payload: &[u8]) -> Result<()> {
@@ -309,8 +306,8 @@ fn envelope(
     operation: &str,
     project_id: &str,
     request: &Value,
-    result: Value,
-    mutation: Mutation,
+    result: &Value,
+    mutation: &Mutation,
 ) -> Result<String> {
     let value = json!({
         "claim": "R25_R37_FULL_PARITY_PROVEN",
@@ -320,7 +317,7 @@ fn envelope(
         "operation": operation,
         "phase": phase,
         "project_id": project_id,
-        "receipt": receipt(phase, operation, project_id, request, &result)?,
+        "receipt": receipt(phase, operation, project_id, request, result)?,
         "result": result,
         "runtime_id": RUNTIME_ID,
         "schema_version": SCHEMA_VERSION,
@@ -399,7 +396,7 @@ fn phase_r25(
     if operation == "profile.list" {
         return Ok((
             profile_result(&value)?,
-            mutation(false, false, false, false, false),
+            mutation([false, false, false, false, false]),
         ));
     }
     let name = string(payload, "name", 64)?;
@@ -503,7 +500,7 @@ fn phase_r25(
         Value::Null
     };
     result["last_good"] = last_good_value;
-    Ok((result, mutation(false, true, false, false, false)))
+    Ok((result, mutation([false, true, false, false, false])))
 }
 
 fn receipt_wire(
@@ -573,7 +570,7 @@ fn phase_r26(
             atomic_write(&target, &content)?;
             Ok((
                 json!({"bytes": content.len(), "sha256": digest(&content), "target": target_id}),
-                mutation(false, true, false, false, false),
+                mutation([false, true, false, false, false]),
             ))
         }
         "receipt.write" => {
@@ -610,7 +607,7 @@ fn phase_r26(
                 .map_or("", |(_, value)| value);
             Ok((
                 json!({"bytes": wire.len(), "receipt_hash": last, "receipt_id": receipt_id, "wire_hex": encode_hex(&wire)}),
-                mutation(false, true, false, false, false),
+                mutation([false, true, false, false, false]),
             ))
         }
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
@@ -750,7 +747,7 @@ fn phase_r27(
     }
     Ok((
         json!({"jobs": broker_rows(&connection)?}),
-        mutation(true, true, false, false, false),
+        mutation([true, true, false, false, false]),
     ))
 }
 
@@ -808,7 +805,7 @@ fn phase_r28(operation: &str, payload: &Map<String, Value>) -> Result<(Value, Mu
     }
     Ok((
         run_child_process(mode, value, timeout_ms)?,
-        mutation(false, false, false, false, true),
+        mutation([false, false, false, false, true]),
     ))
 }
 
@@ -840,8 +837,12 @@ fn rewrite_text(payload: &Map<String, Value>) -> Result<Value> {
             .ok_or_else(|| FullParityFailure::new("CONTEXT_REPLACEMENTS_INVALID"))?;
         normalized = normalized.replace(source, target);
     }
+    let original_bytes =
+        i64::try_from(text.len()).map_err(|_| FullParityFailure::new("CONTEXT_INPUT_TOO_LARGE"))?;
+    let rewritten_bytes = i64::try_from(normalized.len())
+        .map_err(|_| FullParityFailure::new("CONTEXT_INPUT_TOO_LARGE"))?;
     Ok(json!({
-        "bytes_delta": text.len() as i64 - normalized.len() as i64,
+        "bytes_delta": original_bytes - rewritten_bytes,
         "rewritten": normalized,
         "sha256": digest(normalized.as_bytes()),
     }))
@@ -852,10 +853,7 @@ fn utf8_prefix(raw: &[u8], limit: usize) -> &str {
     while end > 0 && std::str::from_utf8(&raw[..end]).is_err() {
         end -= 1;
     }
-    match std::str::from_utf8(&raw[..end]) {
-        Ok(value) => value,
-        Err(_) => "",
-    }
+    std::str::from_utf8(&raw[..end]).unwrap_or_default()
 }
 
 fn utf8_suffix(raw: &[u8], limit: usize) -> &str {
@@ -866,10 +864,7 @@ fn utf8_suffix(raw: &[u8], limit: usize) -> &str {
     while start < raw.len() && std::str::from_utf8(&raw[start..]).is_err() {
         start += 1;
     }
-    match std::str::from_utf8(&raw[start..]) {
-        Ok(value) => value,
-        Err(_) => "",
-    }
+    std::str::from_utf8(&raw[start..]).unwrap_or_default()
 }
 
 fn compact_text(payload: &Map<String, Value>, state: &Path) -> Result<Value> {
@@ -949,14 +944,14 @@ fn phase_r29(
     if operation == "context.rewrite" {
         return Ok((
             rewrite_text(payload)?,
-            mutation(false, false, false, false, false),
+            mutation([false, false, false, false, false]),
         ));
     }
     let state = state_root(root)?;
     match operation {
         "context.compact" => Ok((
             compact_text(payload, &state)?,
-            mutation(false, true, false, false, false),
+            mutation([false, true, false, false, false]),
         )),
         "context.restore" => {
             let artifact_sha = string(payload, "artifact_sha256", 64)?;
@@ -972,7 +967,7 @@ fn phase_r29(
                 .map_err(|_| FullParityFailure::new("CONTEXT_ARTIFACT_UTF8_INVALID"))?;
             Ok((
                 json!({"artifact_sha256": artifact_sha, "text": text}),
-                mutation(false, false, false, false, false),
+                mutation([false, false, false, false, false]),
             ))
         }
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
@@ -1197,7 +1192,7 @@ fn phase_r30(
         }
         _ => return failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
     };
-    Ok((result, mutation(true, true, false, false, false)))
+    Ok((result, mutation([true, true, false, false, false])))
 }
 
 fn provider_route(payload: &Map<String, Value>) -> Result<Value> {
@@ -1321,11 +1316,11 @@ fn phase_r31(operation: &str, payload: &Map<String, Value>) -> Result<(Value, Mu
     match operation {
         "provider.route" => Ok((
             provider_route(payload)?,
-            mutation(false, false, false, false, false),
+            mutation([false, false, false, false, false]),
         )),
         "provider.loopback" => Ok((
             provider_loopback(payload)?,
-            mutation(false, false, false, true, false),
+            mutation([false, false, false, true, false]),
         )),
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
     }
@@ -1415,7 +1410,7 @@ fn phase_r33(
             });
             Ok((
                 json!({"action": action, "expected_sha256": expected_hash, "host": host}),
-                mutation(false, false, true, false, false),
+                mutation([false, false, true, false, false]),
             ))
         }
         "setup.apply" | "setup.repair" => {
@@ -1438,7 +1433,7 @@ fn phase_r33(
                 == expected_raw;
             Ok((
                 json!({"host": host, "sha256": digest(&expected_raw), "transaction_id": transaction_id, "verified": verified}),
-                mutation(false, true, true, false, false),
+                mutation([false, true, true, false, false]),
             ))
         }
         "setup.verify" => {
@@ -1446,7 +1441,7 @@ fn phase_r33(
             let valid = exists && fs::read(&target).is_ok_and(|value| value == expected_raw);
             Ok((
                 json!({"exists": exists, "host": host, "valid": valid}),
-                mutation(false, false, true, false, false),
+                mutation([false, false, true, false, false]),
             ))
         }
         "setup.rollback" => {
@@ -1465,7 +1460,7 @@ fn phase_r33(
             )?;
             Ok((
                 json!({"host": host, "rolled_back": true, "transaction_id": transaction_id}),
-                mutation(false, true, true, false, false),
+                mutation([false, true, true, false, false]),
             ))
         }
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
@@ -1568,7 +1563,7 @@ fn evidence_validate(payload: &Map<String, Value>) -> Result<Value> {
             .ok_or_else(|| FullParityFailure::new("EVIDENCE_RECEIPT_INVALID"))?;
         let expected_previous = body.get("previous_hash");
         let previous_matches = match (&previous, expected_previous) {
-            (None, Some(Value::Null)) | (None, None) => true,
+            (None, Some(Value::Null) | None) => true,
             (Some(left), Some(Value::String(right))) => left == right,
             _ => false,
         };
@@ -1587,11 +1582,11 @@ fn phase_r34(operation: &str, payload: &Map<String, Value>) -> Result<(Value, Mu
     match operation {
         "benchmark.compare" => Ok((
             benchmark_compare(payload)?,
-            mutation(false, false, false, false, false),
+            mutation([false, false, false, false, false]),
         )),
         "evidence.validate" => Ok((
             evidence_validate(payload)?,
-            mutation(false, false, false, false, false),
+            mutation([false, false, false, false, false]),
         )),
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
     }
@@ -1652,7 +1647,7 @@ fn phase_r35(
                 &state.join("registry").join(format!("{manifest_sha}.json")),
                 &manifest,
             )?;
-            Ok((manifest, mutation(false, true, false, false, false)))
+            Ok((manifest, mutation([false, true, false, false, false])))
         }
         "publication.verify" => {
             let manifest_sha = string(payload, "manifest_sha256", 64)?;
@@ -1674,7 +1669,7 @@ fn phase_r35(
                 && digest(&canonical_bytes(&Value::Object(body))?) == manifest_sha;
             Ok((
                 json!({"manifest_sha256": manifest_sha, "valid": valid}),
-                mutation(false, false, false, false, false),
+                mutation([false, false, false, false, false]),
             ))
         }
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
@@ -1702,7 +1697,9 @@ fn distribution_manifest(payload: &Map<String, Value>) -> Result<Value> {
     let forbidden = file_set
         .iter()
         .filter(|item| {
-            item.ends_with(".py")
+            Path::new(item)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("py"))
                 || item.contains("site-packages")
                 || item.to_ascii_lowercase().ends_with("python.exe")
         })
@@ -1734,7 +1731,7 @@ fn phase_r36(operation: &str, payload: &Map<String, Value>) -> Result<(Value, Mu
     match operation {
         "distribution.manifest" => Ok((
             distribution_manifest(payload)?,
-            mutation(false, false, false, false, false),
+            mutation([false, false, false, false, false]),
         )),
         "distribution.verify" => {
             let manifest = payload
@@ -1752,7 +1749,7 @@ fn phase_r36(operation: &str, payload: &Map<String, Value>) -> Result<(Value, Mu
                 && forbidden == Some(json!([]));
             Ok((
                 json!({"distribution_sha256": digest_value, "python_invocation": false, "valid": valid}),
-                mutation(false, false, false, false, false),
+                mutation([false, false, false, false, false]),
             ))
         }
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
@@ -1790,7 +1787,7 @@ fn phase_r37(operation: &str, payload: &Map<String, Value>) -> Result<(Value, Mu
             "product_version": "0.0.1",
             "release_channel": "pre-release",
         }),
-        mutation(false, false, false, false, false),
+        mutation([false, false, false, false, false]),
     ))
 }
 
@@ -1840,7 +1837,7 @@ fn phase_r32(
                 mcp_tools(profile).ok_or_else(|| FullParityFailure::new("MCP_PROFILE_INVALID"))?;
             Ok((
                 json!({"profile": profile, "tools": tools}),
-                mutation(false, false, false, false, false),
+                mutation([false, false, false, false, false]),
             ))
         }
         "mcp.call" => {
@@ -1854,7 +1851,7 @@ fn phase_r32(
             );
             Ok((
                 json!({"tool": tool, "value": mcp_call(payload, root, project_id)?}),
-                mutation(database, false, false, false, false),
+                mutation([database, false, false, false, false]),
             ))
         }
         _ => failure("FULL_PARITY_OPERATION_UNSUPPORTED"),
@@ -1916,8 +1913,8 @@ pub fn execute_json(
         operation,
         expected_project_id,
         &request_value,
-        result,
-        mutation_value,
+        &result,
+        &mutation_value,
     )
 }
 
