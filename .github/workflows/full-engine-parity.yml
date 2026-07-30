@@ -16,6 +16,7 @@ on:
       - "tools/verify_r24_config_show.py"
       - "tools/verify_r24_migration_plan.py"
       - "tools/verify_r24_scheduler_read_only.py"
+      - "tools/verify_r24_telemetry_metrics.py"
       - "tools/run_engine_parity.py"
       - "tools/run_engine_parity_r24.py"
       - "tests/runtime/test_full_parity_catalog_v1.py"
@@ -25,6 +26,7 @@ on:
       - "tests/runtime/test_config_show_r24.py"
       - "tests/runtime/test_migration_plan_read_only_r24.py"
       - "tests/runtime/test_scheduler_read_only_r24.py"
+      - "tests/runtime/test_telemetry_metrics_read_only_r24.py"
       - ".github/workflows/full-engine-parity.yml"
       - "docs/PYTHON_RUST_FULL_PARITY_PLAN.md"
       - "docs/adr/0023-full-python-rust-parity-program.md"
@@ -34,6 +36,7 @@ on:
       - "docs/adr/0027-canonical-config-show-parity.md"
       - "docs/adr/0028-scheduler-read-only-cli-parity.md"
       - "docs/adr/0029-migration-plan-read-only-cli-parity.md"
+      - "docs/adr/0030-telemetry-metrics-read-only-cli-parity.md"
   push:
     branches:
       - main
@@ -78,6 +81,7 @@ jobs:
           tests/runtime/test_config_show_r24.py
           tests/runtime/test_migration_plan_read_only_r24.py
           tests/runtime/test_scheduler_read_only_r24.py
+          tests/runtime/test_telemetry_metrics_read_only_r24.py
 
       - name: Set up pinned Rust 1.82
         uses: dtolnay/rust-toolchain@1.82.0
@@ -96,6 +100,9 @@ jobs:
       - name: Run R24 migration plan parity
         run: python tools/verify_r24_migration_plan.py | tee r24-migration-plan-parity.json
 
+      - name: Run R24 telemetry metrics parity
+        run: python tools/verify_r24_telemetry_metrics.py | tee r24-telemetry-metrics-parity.json
+
       - name: Run aggregate R0-R24 parity
         run: python tools/run_engine_parity_r24.py | tee aggregate-r0-r24.json
 
@@ -109,5 +116,6 @@ jobs:
             rust-surface.json
             full-parity-report.json
             r24-migration-plan-parity.json
+            r24-telemetry-metrics-parity.json
             aggregate-r0-r24.json
           if-no-files-found: warn
