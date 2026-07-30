@@ -28,6 +28,7 @@ b2c6b2a5a6490d0cb3b0daf01f69920ddae12bfbd3ac66d558d257dffb992e45  .github/workfl
 8ada06954afcbbff1da7c70712c30b8f17c6c18de0a467ce4127e7318a58f512  .github/workflows/r24-scheduler-read-only.yml
 df25fe36043eb556dc84f09e11346652380068792d9b31e019849b5c9ed31f21  .github/workflows/r24-static-read-only-cli.yml
 164630e629dafd48568a73e9417176c23d866452092420871f0d52b7dcbbf2d2  .github/workflows/r24-telemetry-metrics-read-only.yml
+43e44e5da3589f59d0578f56a8eaa40903b97c87f01d26918d2af822efc2b42e  .github/workflows/r25-config-last-good-lifecycle-plan.yml
 f4d17d1c5d1ba749c4784eafe5c16b84134af2accf4d009b3a64c3bd0861931a  .github/workflows/refresh-branch-manifest.yml
 162b4420cd918279527ecd64ddb9bcc6ee936e1c4c08532852b6c0f1907934bf  .github/workflows/refresh-manifest.yml
 a9d4c51d4720d2515663bd20d81fd1d41d27787bdb76d0df91842c7bd33354a2  .github/workflows/repository-hardening.yml
@@ -198,6 +199,7 @@ a96ae768ca580178155cdd9f3224a1cf75b41f18acc020d2ff5d7eabbf7da63f  docs/adr/0028-
 cc00e9a6ca86ec29c197a2b02133db3be0baf55634eb25f54acb714c4c414522  docs/adr/0029-migration-plan-read-only-cli-parity.md
 0424cb0c8cdacd9759dc5ab4ca41cfa70cdb9ef1d0e51468ce82ef11b11f33dd  docs/adr/0030-telemetry-metrics-read-only-cli-parity.md
 00394294e0c631e331e3d491f91bd82876eefcca86bfec8c2c18f2ce86d764d8  docs/adr/0031-r24-read-only-cli-completion-certification.md
+62f970b3b04d56a42007ef5b3ae3c854452eb94fbc1b61935b6fc6e642cc332f  docs/adr/0032-r25-config-last-good-lifecycle-plan.md
 cf3a23b0cb714867888eb119f6bed2d19674874d1897aecb990a646d3ee47ed6  docs/audits/ROBLOX_PROFILE_TRANSFER_FAILURE.md
 b9c4fabcbfe57ba993ffe4be1e0890174317fc69f2be5b91fc3b7d9749b03ece  docs/claims/claims.json
 695f2f23824f1c4de5cffdb98b0b3f075fef581e18a48e360a0f98209e26cbfe  docs/research/CLEAN_ROOM_REQUIREMENTS.md
