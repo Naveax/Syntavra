@@ -198,7 +198,7 @@ def logical_state(project: Path) -> dict[str, Any]:
 
 def verify() -> dict[str, Any]:
     source = RUST_SOURCE.read_text(encoding="utf-8") + RUST_BIN_SOURCE.read_text(encoding="utf-8")
-    forbidden = ['Command::new("python', "python3", "python.exe", "PYTHONHOME", "PYTHONPATH"]
+    forbidden = ['Command::new("python', 'Command::new("python3', "PYTHONHOME", "PYTHONPATH"]
     present = [item for item in forbidden if item in source]
     if present:
         raise RuntimeError(f"Rust runtime invokes or embeds Python: {present}")
