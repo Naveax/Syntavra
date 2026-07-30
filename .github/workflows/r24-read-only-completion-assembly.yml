@@ -4,13 +4,19 @@ on:
   push:
     branches:
       - feature/full-parity-r24-read-only-completion-certification
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   assemble:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -38,9 +44,15 @@ jobs:
           if not isinstance(rows, list):
               raise SystemExit("catalog features must be a list")
 
-          matches = [row for row in rows if isinstance(row, dict) and row.get("id") == "cli.read-only.complete"]
+          matches = [
+              row
+              for row in rows
+              if isinstance(row, dict) and row.get("id") == "cli.read-only.complete"
+          ]
           if len(matches) != 1:
-              raise SystemExit(f"expected one cli.read-only.complete row, got {len(matches)}")
+              raise SystemExit(
+                  f"expected one cli.read-only.complete row, got {len(matches)}"
+              )
 
           row = matches[0]
           expected_old = {
