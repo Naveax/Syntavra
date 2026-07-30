@@ -1,0 +1,40 @@
+name: Apply R24 Migration Plan Source Patch
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-migration-plan-cli
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r24-migration-plan-cli
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt
+      - name: Apply fail-closed source patch
+        run: python tools/apply_r24_migration_plan_patch.py
+      - name: Format Rust workspace
+        run: cargo fmt --all
+      - name: Remove temporary synchronizer
+        run: |
+          git rm tools/apply_r24_migration_plan_patch.py
+          git rm .github/workflows/apply-r24-migration-plan-patch.yml
+      - name: Commit permanent source changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/syntavra-cli/src/main.rs crates/syntavra-contracts/src/lib.rs contracts/engine/descriptor.txt syntavra_runtime/engine_selector.py syntavra_runtime/engine_entry.py syntavra_runtime/engine_cli.py syntavra_runtime/unified_cli.py
+          git commit -m 'Wire native R24 migration plan CLI parity'
+          git push origin HEAD:feature/full-parity-r24-migration-plan-cli
