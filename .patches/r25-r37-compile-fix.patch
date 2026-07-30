@@ -1,0 +1,22 @@
+--- a/crates/syntavra-cli/src/full_parity_runtime.rs
++++ b/crates/syntavra-cli/src/full_parity_runtime.rs
+@@ -16,11 +16,11 @@
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
+-use rusqlite::{params, Connection, OptionalExtension};
++use rusqlite::{params, Connection};
+ use serde_json::{json, Map, Value};
+ 
+ use crate::config_contract::project_id_for_root;
+-use crate::config_contract::{resolve_config_wire, snapshot_json};
++use crate::config_contract::resolve_config_wire;
+@@ -177,7 +177,7 @@
+     Ok(value)
+ }
+ 
+-fn object(value: &Value, code: &str) -> Result<&Map<String, Value>> {
++fn object<'a>(value: &'a Value, code: &str) -> Result<&'a Map<String, Value>> {
+     value
+         .as_object()
+         .ok_or_else(|| FullParityFailure::new(code))
