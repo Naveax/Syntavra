@@ -1,0 +1,33 @@
+name: Finalize R24 Scheduler Branch Manifest
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-scheduler-read-only-cli
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r24-scheduler-read-only-cli
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Remove temporary workflow before hashing
+        run: git rm .github/workflows/finalize-r24-scheduler-manifest.yml
+      - name: Refresh canonical manifest for final tree
+        run: python -m tools.refresh_manifest
+      - name: Commit final manifest
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add MANIFEST.sha256
+          git commit -m 'Finalize R24 scheduler integrity manifest'
+          git push origin HEAD:feature/full-parity-r24-scheduler-read-only-cli
