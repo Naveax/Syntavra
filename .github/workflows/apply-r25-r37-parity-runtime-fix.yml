@@ -40,22 +40,25 @@ jobs:
 
           verifier_path = Path('tools/verify_r25_r37_full_parity.py')
           verifier = verifier_path.read_text(encoding='utf-8')
-          old = '''    invoke("R33", "setup.apply", host="codex")
-          invoke("R33", "setup.verify", host="codex")
-          invoke("R33", "setup.repair", host="codex")
-          invoke("R33", "setup.rollback", host="codex")'''
-          new = '''    invoke("R33", "setup.apply", host="codex")
-          invoke("R33", "setup.verify", host="codex")
-          repaired = invoke("R33", "setup.repair", host="codex")
-          invoke(
+          repair_line = '    invoke("R33", "setup.repair", host="codex")'
+          rollback_line = '    invoke("R33", "setup.rollback", host="codex")'
+          if repair_line not in verifier or rollback_line not in verifier:
+              raise SystemExit('verifier R33 lines not found')
+          verifier = verifier.replace(
+              repair_line,
+              '    repaired = invoke("R33", "setup.repair", host="codex")',
+              1,
+          )
+          verifier = verifier.replace(
+              rollback_line,
+              '''    invoke(
               "R33",
               "setup.rollback",
               host="codex",
               transaction_id=repaired["result"]["transaction_id"],
-          )'''
-          if old not in verifier:
-              raise SystemExit('verifier R33 sequence not found')
-          verifier = verifier.replace(old, new, 1)
+          )''',
+              1,
+          )
           verifier_path.write_text(verifier, encoding='utf-8')
           PY
           python -m py_compile syntavra_runtime/full_parity_runtime.py tools/verify_r25_r37_full_parity.py
