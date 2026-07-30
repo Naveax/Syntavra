@@ -1,0 +1,33 @@
+name: Format R24 Scheduler Rust Sources
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-scheduler-read-only-cli
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r24-scheduler-read-only-cli
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt
+      - name: Format Rust workspace
+        run: cargo fmt --all
+      - name: Remove temporary formatter
+        run: git rm .github/workflows/format-r24-scheduler-rust.yml
+      - name: Commit formatting
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/syntavra-cli/src/main.rs crates/syntavra-cli/src/scheduler_read_only_contract.rs crates/syntavra-contracts/src/lib.rs
+          git commit -m 'Format R24 scheduler Rust sources'
+          git push origin HEAD:feature/full-parity-r24-scheduler-read-only-cli
