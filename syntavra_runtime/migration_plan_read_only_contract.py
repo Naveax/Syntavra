@@ -53,11 +53,11 @@ def _metadata(path: Path, prefix: str) -> os.stat_result | None:
 
 
 def _project_root(project_root: Path) -> Path:
-    root = Path(project_root).resolve(strict=False)
-    metadata = _metadata(root, "MIGRATION_PLAN_PROJECT_ROOT")
+    lexical = Path(os.path.abspath(os.fspath(project_root)))
+    metadata = _metadata(lexical, "MIGRATION_PLAN_PROJECT_ROOT")
     if metadata is not None and not stat.S_ISDIR(metadata.st_mode):
         raise _error("MIGRATION_PLAN_PROJECT_ROOT_NOT_DIRECTORY")
-    return root
+    return lexical.resolve(strict=False)
 
 
 def resolve_database(project_root: Path, database_input: str | Path) -> tuple[Path, str]:
@@ -67,10 +67,10 @@ def resolve_database(project_root: Path, database_input: str | Path) -> tuple[Pa
     if not raw or "\x00" in raw or len(encoded) > MAXIMUM_PATH_BYTES:
         raise _error("MIGRATION_PLAN_DATABASE_PATH_INVALID")
     candidate = Path(raw)
-    selected = candidate if candidate.is_absolute() else root / candidate
-    selected = selected.resolve(strict=False)
+    joined = candidate if candidate.is_absolute() else root / candidate
+    lexical = Path(os.path.abspath(os.fspath(joined)))
     try:
-        relative = selected.relative_to(root)
+        relative = lexical.relative_to(root)
     except ValueError as exc:
         raise _error("MIGRATION_PLAN_DATABASE_PATH_ESCAPE", exc)
     if relative == Path(".") or not relative.parts:
@@ -84,6 +84,12 @@ def resolve_database(project_root: Path, database_input: str | Path) -> tuple[Pa
             break
         if not stat.S_ISDIR(metadata.st_mode):
             raise _error("MIGRATION_PLAN_DATABASE_PARENT_NOT_DIRECTORY")
+    _metadata(lexical, "MIGRATION_PLAN_DATABASE")
+    selected = lexical.resolve(strict=False)
+    try:
+        selected.relative_to(root)
+    except ValueError as exc:
+        raise _error("MIGRATION_PLAN_DATABASE_PATH_ESCAPE", exc)
     logical = relative.as_posix()
     return selected, logical
 
