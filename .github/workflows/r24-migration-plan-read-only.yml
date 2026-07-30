@@ -1,0 +1,75 @@
+name: R24 Migration Plan Read-Only Parity
+
+on:
+  pull_request:
+    paths:
+      - "contracts/cli/migration-plan-read-only-v1.json"
+      - "contracts/engine/**"
+      - "contracts/parity/python-rust-full-parity-v1.json"
+      - "syntavra_runtime/engine_cli.py"
+      - "syntavra_runtime/engine_entry.py"
+      - "syntavra_runtime/engine_selector.py"
+      - "syntavra_runtime/migration_plan_read_only_contract.py"
+      - "syntavra_runtime/migration_plan_router_r24.py"
+      - "syntavra_runtime/unified_cli.py"
+      - "crates/syntavra-cli/src/main.rs"
+      - "crates/syntavra-cli/src/migration_plan_read_only_contract.rs"
+      - "crates/syntavra-contracts/src/lib.rs"
+      - "tests/runtime/test_migration_plan_read_only_r24.py"
+      - "tools/verify_r24_migration_plan.py"
+      - "tools/run_engine_parity.py"
+      - "tools/run_engine_parity_r24.py"
+      - ".github/workflows/r24-migration-plan-read-only.yml"
+      - "docs/adr/0029-migration-plan-read-only-cli-parity.md"
+  push:
+    branches:
+      - main
+      - "feature/full-parity-r24-migration-plan-cli"
+
+permissions:
+  contents: read
+
+jobs:
+  migration-plan-parity:
+    name: R24 Migration Plan Read-Only Parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python validation dependencies
+        run: python -m pip install --disable-pip-version-check -e . pytest
+
+      - name: Run migration-plan regressions
+        run: python -m pytest -q tests/runtime/test_migration_plan_read_only_r24.py
+
+      - name: Set up pinned Rust 1.82
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Test Rust workspace
+        run: cargo test --workspace --locked
+
+      - name: Lint Rust workspace
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run real Cargo-backed migration-plan parity
+        run: python tools/verify_r24_migration_plan.py | tee r24-migration-plan-parity.json
+
+      - name: Upload parity diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r24-migration-plan-parity
+          path: r24-migration-plan-parity.json
+          if-no-files-found: warn
