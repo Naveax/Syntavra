@@ -11,6 +11,7 @@ from syntavra_runtime.config_contract import resolve_config_wire
 from syntavra_runtime.config_show_contract import show_result
 from syntavra_runtime.config_show_router_r24 import ConfigShowRouterR24
 from syntavra_runtime.engine_entry import main as engine_main
+from syntavra_runtime.unified_cli import main as unified_main
 from syntavra_runtime.engine_selector import (
     ENGINE_CONTRACT_SHA256,
     RUST_CAPABILITIES,
@@ -120,6 +121,37 @@ def test_public_python_config_show_is_deterministic_and_state_free(
     }
     assert "loaded_at" not in first
     assert first["values"]["runtime"]["profile"] == "compact"
+    assert not state.exists()
+    assert not (project / ".syntavra" / "config-last-good.json").exists()
+
+
+def test_direct_python_core_config_show_is_state_free(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_project_config(project, '[runtime]\nprofile = "audit"\n')
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    for name in tuple(os.environ):
+        if name.startswith("SYNTAVRA_CFG__"):
+            monkeypatch.delenv(name, raising=False)
+
+    state = project / ".syntavra" / "pre-release"
+    assert unified_main(
+        [
+            "--project",
+            str(project),
+            "--state-root",
+            str(state),
+            "config",
+            "show",
+        ]
+    ) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["values"]["runtime"]["profile"] == "audit"
+    assert "loaded_at" not in result
     assert not state.exists()
     assert not (project / ".syntavra" / "config-last-good.json").exists()
 

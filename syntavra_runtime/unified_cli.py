@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from .backup import StateBackupManager
+from .config_contract import resolve_config_wire
+from .config_show_contract import show_result
+from .live_config_discovery import discover_live_config_wire
 from .unified_config import ConfigManager
 from .evidence import EvidenceStore
 from .janitor import RuntimeJanitor
@@ -161,6 +164,10 @@ def _core_main(argv: list[str]) -> int:
         return 0
     if args.command == "plugins":
         _emit(plugin_inventory())
+        return 0
+    if args.command == "config" and args.action == "show":
+        wire = discover_live_config_wire(project_root=project)
+        _emit(show_result(resolve_config_wire(wire)))
         return 0
 
     evidence = EvidenceStore(state / "evidence", project_id=project_id)

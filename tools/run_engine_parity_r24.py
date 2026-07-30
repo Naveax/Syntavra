@@ -12,6 +12,7 @@ if str(TOOLS) not in sys.path:
 
 from run_engine_parity_r23 import verify as verify_r0_r23
 from verify_r24_config_explain import verify as verify_r24_config_explain
+from verify_r24_config_show import verify as verify_r24_config_show
 from verify_r24_config_validate import verify as verify_r24_config_validate
 from verify_r24_static_cli_parity import verify as verify_r24_static_cli
 
@@ -21,6 +22,7 @@ def verify() -> dict[str, object]:
     static_cli = verify_r24_static_cli()
     config_validate = verify_r24_config_validate()
     config_explain = verify_r24_config_explain()
+    config_show = verify_r24_config_show()
     if previous.get("ok") is not True or previous.get("phase") != "R0-R23":
         raise RuntimeError("R0-R23 aggregate parity regression")
     if static_cli.get("ok") is not True or static_cli.get("phase") != "R24":
@@ -38,6 +40,13 @@ def verify() -> dict[str, object]:
         or config_explain.get("capability") != "config.explain"
     ):
         raise RuntimeError("R24 config.explain parity regression")
+    if (
+        config_show.get("ok") is not True
+        or config_show.get("phase") != "R24"
+        or config_show.get("command") != "config.show"
+        or config_show.get("capability") != "config.show"
+    ):
+        raise RuntimeError("R24 config.show parity regression")
     return {
         "ok": True,
         "phase": "R0-R24",
@@ -47,6 +56,7 @@ def verify() -> dict[str, object]:
         "static_read_only_cli": static_cli,
         "config_validate": config_validate,
         "config_explain": config_explain,
+        "config_show": config_show,
         "claim": "RUST_READ_ONLY_CLI_PARITY_EXPANDED_R24",
         "full_parity_claim": "FULL_PARITY_NOT_PROVEN",
     }

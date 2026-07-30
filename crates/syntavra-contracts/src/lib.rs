@@ -26,6 +26,11 @@ pub const ENGINE_CAPABILITIES: &[Capability] = &[
         mutation: "read-only",
     },
     Capability {
+        name: "config.show",
+        maturity: "preview",
+        mutation: "read-only",
+    },
+    Capability {
         name: "engine.capabilities",
         maturity: "preview",
         mutation: "read-only",
@@ -95,6 +100,7 @@ pub const CONTRACT_DESCRIPTOR: &str = concat!(
     "engine_stability=experimental\n",
     "capability=config.explain|preview|read-only\n",
     "capability=config.resolve|preview|read-only\n",
+    "capability=config.show|preview|read-only\n",
     "capability=engine.capabilities|preview|read-only\n",
     "capability=engine.contract-hash|preview|read-only\n",
     "capability=pipeline.describe|preview|read-only\n",
@@ -171,6 +177,7 @@ mod tests {
         assert!(capabilities_json().contains("\"contract_version\":1"));
         assert!(capabilities_json().contains("\"name\":\"config.explain\""));
         assert!(capabilities_json().contains("\"name\":\"config.resolve\""));
+        assert!(capabilities_json().contains("\"name\":\"config.show\""));
         assert!(capabilities_json().contains("\"name\":\"pipeline.describe\""));
         assert!(capabilities_json().contains("\"name\":\"plugins.list\""));
         assert!(capabilities_json().contains("\"name\":\"receipt.inspect\""));

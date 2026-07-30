@@ -37,6 +37,7 @@ const USAGE: &str = concat!(
     "  syntavra-rs status [config-wire-hex]\n",
     "  syntavra-rs config explain <config-wire-hex> <path-utf8-hex>\n",
     "  syntavra-rs config resolve <config-wire-hex>\n",
+    "  syntavra-rs config show <config-wire-hex>\n",
     "  syntavra-rs pipeline describe\n",
     "  syntavra-rs plugins list\n",
     "  syntavra-rs state layout\n",
@@ -61,6 +62,7 @@ enum Command {
         path_hex: String,
     },
     ConfigResolve(String),
+    ConfigShow(String),
     PipelineDescribe,
     PluginsList,
     StateLayout,
@@ -111,6 +113,9 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
         }
         [config, action, wire] if config == "config" && action == "resolve" => {
             Ok(Command::ConfigResolve(wire.clone()))
+        }
+        [config, action, wire] if config == "config" && action == "show" => {
+            Ok(Command::ConfigShow(wire.clone()))
         }
         [pipeline, action] if pipeline == "pipeline" && action == "describe" => {
             Ok(Command::PipelineDescribe)
@@ -288,6 +293,11 @@ fn run(command: Command) -> Result<(), String> {
             let snapshot = resolve_config_wire(&wire)?;
             println!("{}", snapshot_json(&snapshot)?);
         }
+        Command::ConfigShow(encoded) => {
+            let wire = decode_hex(&encoded)?;
+            let snapshot = resolve_config_wire(&wire)?;
+            println!("{}", snapshot_json(&snapshot)?);
+        }
         Command::PipelineDescribe => println!("{}", static_cli_result_json("pipeline.describe")?),
         Command::PluginsList => println!("{}", static_cli_result_json("plugins.list")?),
         Command::StateLayout => println!("{}", state_layout_json()),
@@ -437,6 +447,10 @@ mod tests {
         assert_eq!(
             parse_command(&args(&["config", "resolve", "00"])),
             Ok(Command::ConfigResolve("00".to_owned()))
+        );
+        assert_eq!(
+            parse_command(&args(&["config", "show", "00"])),
+            Ok(Command::ConfigShow("00".to_owned()))
         );
         assert_eq!(
             parse_command(&args(&[

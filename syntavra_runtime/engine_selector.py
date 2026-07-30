@@ -21,6 +21,7 @@ RUST_BINARY_NAME = "syntavra-rs.exe" if os.name == "nt" else "syntavra-rs"
 RUST_CAPABILITIES = (
     "config.explain",
     "config.resolve",
+    "config.show",
     "engine.capabilities",
     "engine.contract-hash",
     "pipeline.describe",
@@ -45,6 +46,7 @@ ENGINE_CONTRACT_DESCRIPTOR = (
     "engine_stability=experimental\n"
     "capability=config.explain|preview|read-only\n"
     "capability=config.resolve|preview|read-only\n"
+    "capability=config.show|preview|read-only\n"
     "capability=engine.capabilities|preview|read-only\n"
     "capability=engine.contract-hash|preview|read-only\n"
     "capability=pipeline.describe|preview|read-only\n"
