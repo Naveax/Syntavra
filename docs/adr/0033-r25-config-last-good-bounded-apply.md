@@ -34,6 +34,8 @@ The transaction:
 - accepts the legacy `loaded_at` field while retaining an existing Python snapshot;
 - emits a deterministic receipt without absolute paths, raw configuration wire or secret material.
 
+The native transaction is separated into temporary recovery, target inspection and candidate-write stages. Strict lint findings are resolved structurally rather than suppressed with broad lint exemptions.
+
 The transaction exposes explicit fault points after lock acquisition, temporary-file synchronization and target replacement. Fault injection deliberately preserves lock/temp state to model process termination; the next invocation must recover through the same contract.
 
 ## Authority boundary
