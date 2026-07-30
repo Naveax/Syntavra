@@ -16,6 +16,10 @@ path = "src/main.rs"
 name = "syntavra-config-lifecycle-plan"
 path = "src/bin/syntavra-config-lifecycle-plan.rs"
 
+[[bin]]
+name = "syntavra-config-last-good-apply"
+path = "src/bin/syntavra-config-last-good-apply.rs"
+
 [dependencies]
 rusqlite = { version = "0.32.1", features = ["backup", "bundled"] }
 serde_json = "1.0"
