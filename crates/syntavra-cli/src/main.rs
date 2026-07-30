@@ -111,7 +111,33 @@ enum Command {
     Help,
 }
 
+fn parse_scheduler_command(arguments: &[String]) -> Result<Option<Command>, String> {
+    match arguments {
+        [scheduler, action, state_root] if scheduler == "scheduler" && action == "stats" => {
+            Ok(Some(Command::SchedulerStats {
+                state_root: state_root.clone(),
+            }))
+        }
+        [scheduler, action, state_root, limit, states_hex]
+            if scheduler == "scheduler" && action == "list" =>
+        {
+            let limit = limit
+                .parse::<usize>()
+                .map_err(|_| "SCHEDULER_READ_ONLY_LIMIT_INVALID".to_owned())?;
+            Ok(Some(Command::SchedulerList {
+                state_root: state_root.clone(),
+                limit,
+                states_hex: states_hex.clone(),
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
 fn parse_command(arguments: &[String]) -> Result<Command, String> {
+    if let Some(command) = parse_scheduler_command(arguments)? {
+        return Ok(command);
+    }
     match arguments {
         [] => Ok(Command::Help),
         [value] if value == "version" || value == "--version" => Ok(Command::Version),
@@ -313,7 +339,29 @@ fn run_config_snapshot(encoded: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn run_scheduler(command: &Command) -> Result<bool, String> {
+    match command {
+        Command::SchedulerStats { state_root } => {
+            println!("{}", scheduler_stats_json(state_root)?);
+            Ok(true)
+        }
+        Command::SchedulerList {
+            state_root,
+            limit,
+            states_hex,
+        } => {
+            let states_json = decode_hex(states_hex)?;
+            println!("{}", scheduler_list_json(state_root, *limit, &states_json)?);
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 fn run(command: Command) -> Result<(), String> {
+    if run_scheduler(&command)? {
+        return Ok(());
+    }
     match command {
         Command::Version => println!("{}", version_json()),
         Command::Status(encoded) => {

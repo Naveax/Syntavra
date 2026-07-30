@@ -299,20 +299,20 @@ fn empty_result(stats: bool) -> Value {
 
 fn inspect(
     state_root: &Path,
-    stats: bool,
-    states: &[String],
+    stats_mode: bool,
+    state_filters: &[String],
     limit: usize,
 ) -> Result<Value, String> {
     let database = state_database(state_root)?;
     reject_sidecars(&database)?;
     if metadata(&database, "SCHEDULER_READ_ONLY_DATABASE")?.is_none() {
-        return Ok(empty_result(stats));
+        return Ok(empty_result(stats_mode));
     }
     let identity_before = source_identity(&database)?;
     let connection = open_database(&database)?;
     validate_schema(&connection)?;
 
-    let result = if stats {
+    let result = if stats_mode {
         let mut state_statement = connection
             .prepare("SELECT state,COUNT(*) FROM scheduled_jobs GROUP BY state ORDER BY state")
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
@@ -323,8 +323,9 @@ fn inspect(
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
         let mut counts = Map::new();
         for row in rows {
-            let (state, count) = row.map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
-            counts.insert(state, json!(count));
+            let (state_name, count) =
+                row.map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
+            counts.insert(state_name, json!(count));
         }
         let projects: i64 = connection
             .query_row(
@@ -343,19 +344,19 @@ fn inspect(
         })
     } else {
         let mut query = format!("SELECT {} FROM scheduled_jobs", JOB_COLUMNS.join(","));
-        if !states.is_empty() {
+        if !state_filters.is_empty() {
             query.push_str(" WHERE state IN (");
-            query.push_str(&vec!["?"; states.len()].join(","));
+            query.push_str(&vec!["?"; state_filters.len()].join(","));
             query.push(')');
         }
         query.push_str(" ORDER BY created_at DESC,job_id DESC LIMIT ?");
-        let mut parameters = states
+        let mut parameters = state_filters
             .iter()
             .map(|value| rusqlite::types::Value::Text(value.clone()))
             .collect::<Vec<_>>();
-        parameters.push(rusqlite::types::Value::Integer(
-            limit.clamp(1, MAXIMUM_LIMIT) as i64,
-        ));
+        let bounded_limit = i64::try_from(limit.clamp(1, MAXIMUM_LIMIT))
+            .map_err(|_| "SCHEDULER_READ_ONLY_LIMIT_INVALID".to_owned())?;
+        parameters.push(rusqlite::types::Value::Integer(bounded_limit));
         let mut statement = connection
             .prepare(&query)
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
