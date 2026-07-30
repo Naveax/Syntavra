@@ -46,8 +46,8 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - name: Install Python runtime
-        run: python -m pip install -e .
+      - name: Install Python runtime and tests
+        run: python -m pip install -e . pytest
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           toolchain: 1.82.0
