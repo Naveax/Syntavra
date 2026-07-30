@@ -422,6 +422,19 @@
       ]
     },
     {
+      "id": "config.last-good.lifecycle.apply",
+      "target_phase": "R25",
+      "category": "config",
+      "python_owner": "syntavra_runtime.config_last_good_apply",
+      "rust_owner": "crates/syntavra-cli/src/config_last_good_apply.rs",
+      "status": "RUST_SHADOW",
+      "mutation": "write",
+      "contract": "contracts/config/config-last-good-atomic-apply-v1.json",
+      "parity_tests": [
+        "tools/verify_r25_config_last_good_apply.py"
+      ]
+    },
+    {
       "id": "config.profile.lifecycle",
       "target_phase": "R25",
       "category": "config",
