@@ -44,6 +44,7 @@ def test_current_proven_routes_include_r22_and_r24_surfaces() -> None:
         if row["status"] == "PARITY_PROVEN"
     }
     assert proven == {
+        "cli.read-only.complete",
         "route.version",
         "route.status",
         "route.config.explain",
