@@ -265,6 +265,13 @@ fn config_wire(encoded: Option<String>) -> Result<Vec<u8>, String> {
     )
 }
 
+fn run_config_explain(wire_hex: &str, path_hex: &str) -> Result<(), String> {
+    let wire = decode_hex(wire_hex)?;
+    let path = decode_hex(path_hex)?;
+    println!("{}", explain_config_wire_json(&wire, &path)?);
+    Ok(())
+}
+
 fn run(command: Command) -> Result<(), String> {
     match command {
         Command::Version => println!("{}", version_json()),
@@ -274,9 +281,7 @@ fn run(command: Command) -> Result<(), String> {
             println!("{}", status_json(&snapshot));
         }
         Command::ConfigExplain { wire_hex, path_hex } => {
-            let wire = decode_hex(&wire_hex)?;
-            let path = decode_hex(&path_hex)?;
-            println!("{}", explain_config_wire_json(&wire, &path)?);
+            run_config_explain(&wire_hex, &path_hex)?;
         }
         Command::ConfigResolve(encoded) => {
             let wire = decode_hex(&encoded)?;
