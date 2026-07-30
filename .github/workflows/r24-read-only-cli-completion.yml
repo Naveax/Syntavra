@@ -1,0 +1,89 @@
+name: R24 Read-Only CLI Completion
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-read-only-completion-certification
+  pull_request:
+    paths:
+      - "contracts/parity/**"
+      - "crates/**"
+      - "syntavra_runtime/**"
+      - "tools/**"
+      - "tests/runtime/**"
+      - "docs/adr/0031-r24-read-only-cli-completion-certification.md"
+      - ".github/workflows/r24-read-only-cli-completion.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-cli-completion:
+    name: R24 completion certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Python test environment
+        run: |
+          python -m pip install --upgrade pip setuptools wheel pytest
+          python -m pip install -e .
+
+      - name: Set up pinned Rust 1.82
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r24-read-only-completion
+
+      - name: Run R24 completion regressions
+        run: python -m pytest -q tests/runtime/test_r24_read_only_completion_v001.py
+
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Rust workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Run strict Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Verify structural R24 completion contract
+        run: |
+          mkdir -p artifacts/r24-read-only-completion
+          python tools/verify_r24_read_only_completion.py \
+            | tee artifacts/r24-read-only-completion/structural.json
+
+      - name: Run all real-binary R24 parity verifiers
+        run: |
+          python tools/verify_r24_read_only_completion.py --run-real-verifiers \
+            | tee artifacts/r24-read-only-completion/real-binary.json
+
+      - name: Run aggregate R0-R24 parity
+        run: |
+          python tools/run_engine_parity_r24.py \
+            | tee artifacts/r24-read-only-completion/aggregate-r0-r24.json
+
+      - name: Upload R24 completion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r24-read-only-cli-completion
+          path: artifacts/r24-read-only-completion
+          if-no-files-found: warn
