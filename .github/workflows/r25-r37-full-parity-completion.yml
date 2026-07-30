@@ -65,5 +65,4 @@ jobs:
       - name: Run strict Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Run cross-engine R25-R37 parity
-        if: ${{ hashFiles('tools/verify_r25_r37_full_parity.py') != '' }}
         run: python tools/verify_r25_r37_full_parity.py
