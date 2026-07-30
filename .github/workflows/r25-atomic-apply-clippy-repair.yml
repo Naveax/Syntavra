@@ -1,0 +1,60 @@
+name: R25 Atomic Apply Clippy Repair
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r25-config-last-good-atomic-apply
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r25-config-last-good-atomic-apply
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - name: Apply exact Clippy repairs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/syntavra-cli/src/config_last_good_apply.rs')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              ('Ok(()) => created.push(path.to_path_buf()),', 'Ok(()) => created.push(path.clone()),'),
+              ('let mut value = Vec::with_capacity(metadata.len() as usize);', 'let capacity = usize::try_from(metadata.len())\n        .map_err(|_| "CONFIG_LAST_GOOD_APPLY_EXISTING_TOO_LARGE".to_owned())?;\n    let mut value = Vec::with_capacity(capacity);'),
+              ('.and_then(|_| lock_file.sync_all())', '.and_then(|()| lock_file.sync_all())'),
+              ('.and_then(|_| temp_file.sync_all())', '.and_then(|()| temp_file.sync_all())'),
+              ('pub fn apply_json(\n', '#[allow(clippy::too_many_lines)]\npub fn apply_json(\n'),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'exact replacement count mismatch: {old!r} -> {text.count(old)}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          cargo fmt --all
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          changed="$(git diff --name-only)"
+          [ "$changed" = "crates/syntavra-cli/src/config_last_good_apply.rs" ] || {
+            echo "unexpected changed files: $changed" >&2
+            exit 1
+          }
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/syntavra-cli/src/config_last_good_apply.rs
+          git commit -m "Resolve R25 atomic apply Clippy findings"
+          git push origin HEAD:feature/full-parity-r25-config-last-good-atomic-apply
