@@ -190,6 +190,8 @@ def verify() -> dict[str, object]:
         "pipeline.describe",
         "plugins.list",
         "receipt.inspect",
+        "scheduler.list",
+        "scheduler.stats",
         "state.broker-live-snapshot",
         "state.broker-snapshot",
         "state.inspect",
