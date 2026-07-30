@@ -155,8 +155,13 @@ def run_sequence(
     invoke("R33", "setup.plan", host="codex")
     invoke("R33", "setup.apply", host="codex")
     invoke("R33", "setup.verify", host="codex")
-    invoke("R33", "setup.repair", host="codex")
-    invoke("R33", "setup.rollback", host="codex")
+    repaired = invoke("R33", "setup.repair", host="codex")
+    invoke(
+    "R33",
+    "setup.rollback",
+    host="codex",
+    transaction_id=repaired["result"]["transaction_id"],
+)
 
     invoke("R34", "benchmark.compare", baseline=[{"work": 100, "quota": 10, "quality_ppm": 900000, "success": True}], candidate=[{"work": 120, "quota": 10, "quality_ppm": 910000, "success": True}])
     body = {"previous_hash": None, "value": 1}

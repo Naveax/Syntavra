@@ -9,6 +9,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -474,7 +475,7 @@ def _broker_rows(connection: sqlite3.Connection) -> list[dict[str, Any]]:
 
 def _phase_r27(operation: str, payload: Mapping[str, Any], root: Path) -> tuple[Any, dict[str, bool]]:
     state = _state(root)
-    with _broker_connection(state) as connection:
+    with closing(_broker_connection(state)) as connection:
         if operation == "broker.enqueue":
             job_id = _require_string(payload, "job_id", maximum=128)
             if IDENTIFIER.fullmatch(job_id) is None:
@@ -778,7 +779,7 @@ def _language(path: str) -> str:
 
 def _phase_r30(operation: str, payload: Mapping[str, Any], root: Path) -> tuple[Any, dict[str, bool]]:
     state = _state(root)
-    with _intelligence_connection(state) as connection:
+    with closing(_intelligence_connection(state)) as connection:
         if operation == "memory.add":
             memory_id = _require_string(payload, "memory_id", maximum=128)
             text = _require_string(payload, "text", maximum=MAX_TEXT_BYTES)
