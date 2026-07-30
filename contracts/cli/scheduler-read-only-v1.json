@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "phase": "R24",
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "reference_engine": "python",
+  "candidate_engine": "rust",
+  "routes": {
+    "scheduler.stats": {
+      "capability": "scheduler.stats",
+      "arguments": [],
+      "result_keys": ["database_integrity", "projects", "states"]
+    },
+    "scheduler.list": {
+      "capability": "scheduler.list",
+      "arguments": ["--state", "--limit"],
+      "result_keys": ["jobs"]
+    }
+  },
+  "input": {
+    "profile": "selected-state-root-quiescent-scheduler-sqlite-v1",
+    "database_name": "scheduler.sqlite3",
+    "maximum_database_bytes": 67108864,
+    "maximum_states": 16,
+    "limit": {"default": 100, "minimum": 1, "maximum": 1000},
+    "allowed_states": ["cancelled", "dead-letter", "failed", "queued", "running", "succeeded"]
+  },
+  "filesystem": {
+    "missing_database_result": "deterministic-empty",
+    "database_open_mode": "read-only",
+    "query_only": true,
+    "trusted_schema": false,
+    "database_symlink": "reject",
+    "state_root_symlink": "reject-when-present",
+    "sidecars": {"journal": "reject", "shm": "reject", "wal": "reject"},
+    "source_change_during_read": "reject",
+    "directory_creation": false,
+    "database_creation": false,
+    "sidecar_creation": false
+  },
+  "schema_validation": {
+    "required_tables": ["job_dependencies", "scheduled_jobs", "scheduler_events"],
+    "required_indexes": ["scheduled_jobs_project_idx", "scheduled_jobs_ready_idx"],
+    "foreign_keys": "exact",
+    "columns": "exact",
+    "json_columns": ["argv_json", "metadata_json", "result_json"]
+  },
+  "parity": {
+    "comparison": "complete-result-object",
+    "python_preflight_before_selection": true,
+    "rust_error_fallback": false,
+    "parity_error_fields": ["mismatched_keys", "expected_sha256", "actual_sha256"],
+    "absolute_paths_in_envelopes": false
+  },
+  "claim": "RUST_SCHEDULER_READ_ONLY_CLI_PARITY_PROVEN_R24_FIXTURES"
+}
