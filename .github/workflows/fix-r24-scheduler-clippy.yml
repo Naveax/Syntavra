@@ -1,0 +1,40 @@
+name: Repair R24 Scheduler Rust Clippy
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-scheduler-read-only-cli
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r24-scheduler-read-only-cli
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt
+      - name: Apply fail-closed repair
+        run: python tools/fix_r24_scheduler_clippy.py
+      - name: Format Rust workspace
+        run: cargo fmt --all
+      - name: Remove temporary repair files
+        run: |
+          git rm tools/fix_r24_scheduler_clippy.py
+          git rm .github/workflows/fix-r24-scheduler-clippy.yml
+      - name: Commit Clippy repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/syntavra-cli/src/main.rs crates/syntavra-cli/src/scheduler_read_only_contract.rs
+          git commit -m 'Refactor R24 scheduler Rust for strict Clippy'
+          git push origin HEAD:feature/full-parity-r24-scheduler-read-only-cli
