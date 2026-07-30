@@ -101,13 +101,13 @@ fn ensure_secure_parent(root: &Path) -> Result<(PathBuf, Vec<PathBuf>), String> 
 }
 
 fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
-    let metadata = fs::metadata(path)
-        .map_err(|_| "CONFIG_LAST_GOOD_APPLY_TARGET_READ_FAILED".to_owned())?;
+    let metadata =
+        fs::metadata(path).map_err(|_| "CONFIG_LAST_GOOD_APPLY_TARGET_READ_FAILED".to_owned())?;
     if metadata.len() > MAX_PAYLOAD_BYTES as u64 {
         return Err("CONFIG_LAST_GOOD_APPLY_EXISTING_TOO_LARGE".to_owned());
     }
-    let mut file = File::open(path)
-        .map_err(|_| "CONFIG_LAST_GOOD_APPLY_TARGET_READ_FAILED".to_owned())?;
+    let mut file =
+        File::open(path).map_err(|_| "CONFIG_LAST_GOOD_APPLY_TARGET_READ_FAILED".to_owned())?;
     let mut value = Vec::with_capacity(metadata.len() as usize);
     file.read_to_end(&mut value)
         .map_err(|_| "CONFIG_LAST_GOOD_APPLY_TARGET_READ_FAILED".to_owned())?;
