@@ -1,0 +1,192 @@
+name: Temporary R25 Clippy Refactor
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r25-config-last-good-lifecycle-apply
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r25-config-last-good-lifecycle-apply
+          fetch-depth: 0
+      - name: Refactor transaction and remove temporary workflow
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('crates/syntavra-cli/src/config_last_good_apply.rs')
+          source = path.read_text(encoding='utf-8')
+          start = source.index("impl Transaction<'_> {")
+          end = source.index("\npub fn apply_json(", start)
+          replacement = r'''impl Transaction<'_> {
+              fn candidate_string(&self, key: &str) -> Result<&str, ApplyFailure> {
+                  self.candidate
+                      .get(key)
+                      .and_then(Value::as_str)
+                      .ok_or_else(|| ApplyFailure::normal("CONFIG_LIFECYCLE_PLAN_INVALID"))
+              }
+
+              fn recover_temp(&self) -> Result<Option<String>, ApplyFailure> {
+                  if !self.temp.is_file() {
+                      return Ok(None);
+                  }
+
+                  let raw = read_bytes(self.temp, "CONFIG_LIFECYCLE_TEMP_READ_FAILED")?;
+                  let normalized = normalized_json_payload(&raw)?;
+                  let candidate_sha = self.candidate_string("payload_sha256")?;
+                  if sha256_hex(normalized.as_bytes()) == candidate_sha
+                      && !self.target.exists()
+                      && self.decision == "write"
+                  {
+                      map_io(
+                          fs::rename(self.temp, self.target),
+                          "CONFIG_LIFECYCLE_REPLACE_FAILED",
+                      )?;
+                      set_private_mode(self.target);
+                      sync_directory(self.release);
+                      let stored = validate_target_snapshot(
+                          &read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?,
+                          Some(self.candidate_string("config_hash")?),
+                      )?;
+                      return receipt_json(
+                          "recover-temp",
+                          self.decision,
+                          self.project_id,
+                          self.candidate,
+                          &stored,
+                          self.stale_recovered,
+                          true,
+                      )
+                      .map(Some);
+                  }
+
+                  map_io(
+                      fs::remove_file(self.temp),
+                      "CONFIG_LIFECYCLE_TEMP_REMOVE_FAILED",
+                  )?;
+                  Ok(None)
+              }
+
+              fn inspect_target(&self) -> Result<Option<String>, ApplyFailure> {
+                  if !self.target.is_file() {
+                      if self.decision == "retain-existing" {
+                          return Err(ApplyFailure::normal(
+                              "CONFIG_LIFECYCLE_RETAIN_TARGET_MISSING",
+                          ));
+                      }
+                      return Ok(None);
+                  }
+
+                  let raw = read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?;
+                  let expected_hash = if self.decision == "retain-existing" {
+                      Some(self.candidate_string("config_hash")?)
+                  } else {
+                      None
+                  };
+                  let current = validate_target_snapshot(&raw, expected_hash)?;
+                  if self.decision == "retain-existing" {
+                      return receipt_json(
+                          "retain-existing",
+                          self.decision,
+                          self.project_id,
+                          self.candidate,
+                          &current,
+                          self.stale_recovered,
+                          false,
+                      )
+                      .map(Some);
+                  }
+                  if sha256_hex(current.as_bytes()) == self.candidate_string("payload_sha256")? {
+                      return receipt_json(
+                          "already-current",
+                          self.decision,
+                          self.project_id,
+                          self.candidate,
+                          &current,
+                          self.stale_recovered,
+                          false,
+                      )
+                      .map(Some);
+                  }
+                  Ok(None)
+              }
+
+              fn write_candidate(&self) -> Result<String, ApplyFailure> {
+                  write_temp(self.temp, self.candidate_payload.as_bytes())?;
+                  fault(self.fault, "after-temp-sync")?;
+                  map_io(
+                      fs::rename(self.temp, self.target),
+                      "CONFIG_LIFECYCLE_REPLACE_FAILED",
+                  )?;
+                  set_private_mode(self.target);
+                  fault(self.fault, "after-replace")?;
+                  sync_directory(self.release);
+
+                  let stored = validate_target_snapshot(
+                      &read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?,
+                      Some(self.candidate_string("config_hash")?),
+                  )?;
+                  if sha256_hex(stored.as_bytes()) != self.candidate_string("payload_sha256")? {
+                      return Err(ApplyFailure::normal(
+                          "CONFIG_LIFECYCLE_POST_WRITE_VERIFY_FAILED",
+                      ));
+                  }
+                  receipt_json(
+                      "write",
+                      self.decision,
+                      self.project_id,
+                      self.candidate,
+                      &stored,
+                      self.stale_recovered,
+                      true,
+                  )
+              }
+
+              fn execute(&self) -> Result<String, ApplyFailure> {
+                  fault(self.fault, "after-lock")?;
+                  reject_symlink(self.target, "CONFIG_LIFECYCLE_TARGET_SYMLINK")?;
+                  reject_symlink(self.temp, "CONFIG_LIFECYCLE_TEMP_SYMLINK")?;
+                  if let Some(receipt) = self.recover_temp()? {
+                      return Ok(receipt);
+                  }
+                  if let Some(receipt) = self.inspect_target()? {
+                      return Ok(receipt);
+                  }
+                  self.write_candidate()
+              }
+          }
+          '''
+          source = source[:start] + replacement + source[end:]
+          source = source.replace(
+              '''    let crash_simulated = result
+                  .as_ref()
+                  .err()
+                  .map(|error| error.crash_simulated)
+                  .unwrap_or(false);''',
+              '''    let crash_simulated = result
+                  .as_ref()
+                  .err()
+                  .is_some_and(|error| error.crash_simulated);''',
+          )
+          path.write_text(source, encoding='utf-8', newline='\n')
+          Path('.github/workflows/temp-r25-clippy-refactor.yml').unlink()
+      - name: Format, verify and publish refactor
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo check --workspace --all-targets --locked
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add crates/syntavra-cli/src/config_last_good_apply.rs .github/workflows/temp-r25-clippy-refactor.yml
+          git commit -m "R25: refactor apply transaction for strict Clippy"
+          git pull --rebase origin feature/full-parity-r25-config-last-good-lifecycle-apply
+          git push origin HEAD:feature/full-parity-r25-config-last-good-lifecycle-apply
