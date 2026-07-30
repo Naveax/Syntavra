@@ -16,11 +16,11 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
-use crate::config_contract::{resolve_config_wire, snapshot_json};
+use crate::config_contract::resolve_config_wire;
 use crate::config_last_good_apply::apply_json as apply_last_good_json;
 use crate::state_snapshot_contract::project_id_for_root;
 
@@ -177,7 +177,7 @@ fn write_json(path: &Path, value: &Value) -> Result<()> {
     atomic_write(path, &payload)
 }
 
-fn object(value: &Value, code: &str) -> Result<&Map<String, Value>> {
+fn object<'a>(value: &'a Value, code: &str) -> Result<&'a Map<String, Value>> {
     value
         .as_object()
         .ok_or_else(|| FullParityFailure::new(code))
