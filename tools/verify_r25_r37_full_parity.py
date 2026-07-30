@@ -25,6 +25,7 @@ from syntavra_runtime.state_snapshot_contract import project_id_for_root
 RUST_SOURCE = ROOT / "crates" / "syntavra-cli" / "src" / "full_parity_runtime.rs"
 RUST_BIN_SOURCE = ROOT / "crates" / "syntavra-cli" / "src" / "bin" / "syntavra-full-parity.rs"
 SQLITE_RELATIVE = Path(".syntavra/pre-release/full-parity/broker.sqlite3")
+INTELLIGENCE_RELATIVE = Path(".syntavra/pre-release/full-parity/intelligence.sqlite3")
 
 
 def canonical(value: Any) -> bytes:
@@ -188,18 +189,39 @@ def logical_state(project: Path) -> dict[str, Any]:
         if not path.is_file():
             continue
         relative = path.relative_to(project)
-        if relative == SQLITE_RELATIVE or relative.name.endswith(("-wal", "-shm")):
+        if relative.name.endswith((".sqlite3", ".sqlite3-wal", ".sqlite3-shm")):
             continue
         files[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
-    database = project / SQLITE_RELATIVE
-    rows: list[list[Any]] = []
-    if database.exists():
-        with sqlite3.connect(database) as connection:
-            rows = [list(row) for row in connection.execute(
-                "SELECT job_id, argv_json, priority, state, worker, exit_code, stdout_hash FROM jobs ORDER BY job_id"
-            )]
-    return {"files": files, "jobs": rows}
 
+    def query_rows(database: Path, statement: str) -> list[list[Any]]:
+        if not database.exists():
+            return []
+        connection = sqlite3.connect(database)
+        try:
+            return [list(row) for row in connection.execute(statement)]
+        finally:
+            connection.close()
+
+    broker_rows = query_rows(
+        project / SQLITE_RELATIVE,
+        "SELECT job_id, argv_json, priority, state, worker, exit_code, stdout_hash "
+        "FROM jobs ORDER BY job_id",
+    )
+    memory_rows = query_rows(
+        project / INTELLIGENCE_RELATIVE,
+        "SELECT memory_id, text, tokens_json, tags_json FROM memories ORDER BY memory_id",
+    )
+    repository_rows = query_rows(
+        project / INTELLIGENCE_RELATIVE,
+        "SELECT path, content_sha256, tokens_json, language "
+        "FROM repository_files ORDER BY path",
+    )
+    return {
+        "files": files,
+        "jobs": broker_rows,
+        "memories": memory_rows,
+        "repository_files": repository_rows,
+    }
 
 def verify() -> dict[str, Any]:
     source = RUST_SOURCE.read_text(encoding="utf-8") + RUST_BIN_SOURCE.read_text(encoding="utf-8")
