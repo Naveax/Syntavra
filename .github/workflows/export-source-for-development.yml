@@ -1,4 +1,4 @@
-name: Temporary Source Export
+name: Apply R25-R37 Development Bundle
 
 on:
   push:
@@ -6,26 +6,29 @@ on:
       - feature/full-parity-r25-r37-completion
     paths:
       - ".github/workflows/export-source-for-development.yml"
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export:
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove transient repository metadata
-        shell: bash
-        run: rm -rf .git
-      - name: Upload source tree
-        uses: actions/upload-artifact@v4
         with:
-          name: syntavra-source-tree
-          path: .
-          include-hidden-files: true
-          retention-days: 1
+          ref: feature/full-parity-r25-r37-completion
+      - name: Apply source bundle
+        shell: bash
+        run: |
+          cat .bundle/part-* | base64 -d > /tmp/r25-r37-core.tar.xz
+          tar -xJf /tmp/r25-r37-core.tar.xz
+          rm -rf .bundle
+          rm -f .github/workflows/export-source-for-development.yml
+      - name: Commit source bundle
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "R25-R37: add full-parity runtime core" || exit 0
+          git push origin HEAD:feature/full-parity-r25-r37-completion
