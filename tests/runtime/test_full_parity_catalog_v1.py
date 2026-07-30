@@ -57,6 +57,8 @@ def test_current_proven_routes_include_r22_and_r24_surfaces() -> None:
         "route.state.broker-live-snapshot",
         "route.pipeline.describe",
         "route.plugins.list",
+        "route.scheduler.list",
+        "route.scheduler.stats",
     }
 
 

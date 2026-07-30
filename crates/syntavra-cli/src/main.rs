@@ -4,6 +4,7 @@ mod broker_live_snapshot_contract;
 mod broker_snapshot_contract;
 mod config_contract;
 mod read_only_cli_contract;
+mod scheduler_read_only_contract;
 mod state_layout_contract;
 mod state_receipt_contract;
 mod state_snapshot_contract;
@@ -18,6 +19,7 @@ use config_contract::{
     default_config_wire, explain_config_wire_json, resolve_config_wire, snapshot_json, status_json,
 };
 use read_only_cli_contract::result_json as static_cli_result_json;
+use scheduler_read_only_contract::{scheduler_list_json, scheduler_stats_json};
 use state_layout_contract::state_layout_json;
 use state_receipt_contract::inspect_receipt_json;
 use state_snapshot_contract::inspect_state_root_json;
@@ -40,6 +42,8 @@ const USAGE: &str = concat!(
     "  syntavra-rs config show <config-wire-hex>\n",
     "  syntavra-rs pipeline describe\n",
     "  syntavra-rs plugins list\n",
+    "  syntavra-rs scheduler stats <state-root>\n",
+    "  syntavra-rs scheduler list <state-root> <limit> <states-json-hex>\n",
     "  syntavra-rs state layout\n",
     "  syntavra-rs state inspect <expected-project-id> <project-root>\n",
     "  syntavra-rs state broker-live-snapshot <expected-project-id> <project-root> <database-path>\n",
@@ -65,6 +69,14 @@ enum Command {
     ConfigShow(String),
     PipelineDescribe,
     PluginsList,
+    SchedulerStats {
+        state_root: String,
+    },
+    SchedulerList {
+        state_root: String,
+        limit: usize,
+        states_hex: String,
+    },
     StateLayout,
     BrokerLiveSnapshot {
         expected_project_id: String,
@@ -99,7 +111,33 @@ enum Command {
     Help,
 }
 
+fn parse_scheduler_command(arguments: &[String]) -> Result<Option<Command>, String> {
+    match arguments {
+        [scheduler, action, state_root] if scheduler == "scheduler" && action == "stats" => {
+            Ok(Some(Command::SchedulerStats {
+                state_root: state_root.clone(),
+            }))
+        }
+        [scheduler, action, state_root, limit, states_hex]
+            if scheduler == "scheduler" && action == "list" =>
+        {
+            let limit = limit
+                .parse::<usize>()
+                .map_err(|_| "SCHEDULER_READ_ONLY_LIMIT_INVALID".to_owned())?;
+            Ok(Some(Command::SchedulerList {
+                state_root: state_root.clone(),
+                limit,
+                states_hex: states_hex.clone(),
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
 fn parse_command(arguments: &[String]) -> Result<Command, String> {
+    if let Some(command) = parse_scheduler_command(arguments)? {
+        return Ok(command);
+    }
     match arguments {
         [] => Ok(Command::Help),
         [value] if value == "version" || value == "--version" => Ok(Command::Version),
@@ -284,7 +322,81 @@ fn run_config_snapshot(encoded: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn run_scheduler(command: &Command) -> Result<bool, String> {
+    match command {
+        Command::SchedulerStats { state_root } => {
+            println!("{}", scheduler_stats_json(state_root)?);
+            Ok(true)
+        }
+        Command::SchedulerList {
+            state_root,
+            limit,
+            states_hex,
+        } => {
+            let states_json = decode_hex(states_hex)?;
+            println!("{}", scheduler_list_json(state_root, *limit, &states_json)?);
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+fn run_primitive(command: &Command) -> Result<bool, String> {
+    match command {
+        Command::PrimitiveSha256(input_hex) => {
+            let input = decode_hex(input_hex)?;
+            println!(
+                "{{\"algorithm\":\"sha256\",\"digest\":\"{}\",\"input_hex\":\"{}\"}}",
+                sha256_hex(&input),
+                bytes_to_hex(&input)
+            );
+            Ok(true)
+        }
+        Command::PrimitiveCanonicalize { path, input_hex } => {
+            let input = decode_hex(input_hex)?;
+            let normalized =
+                normalize_repository_path(path).map_err(|error| error.code().to_owned())?;
+            let canonical = canonical_manifest_bytes(&normalized, &input)
+                .map_err(|error| error.code().to_owned())?;
+            println!(
+                concat!(
+                    "{{\"path\":{},",
+                    "\"canonical_hex\":\"{}\",",
+                    "\"digest\":\"{}\"}}"
+                ),
+                json_string(&normalized),
+                bytes_to_hex(&canonical),
+                sha256_hex(&canonical)
+            );
+            Ok(true)
+        }
+        Command::PrimitiveManifestDigest { path, input_hex } => {
+            let input = decode_hex(input_hex)?;
+            let normalized =
+                normalize_repository_path(path).map_err(|error| error.code().to_owned())?;
+            let digest = manifest_digest_hex(&normalized, &input)
+                .map_err(|error| error.code().to_owned())?;
+            println!(
+                "{{\"path\":{},\"algorithm\":\"sha256\",\"digest\":\"{}\"}}",
+                json_string(&normalized),
+                digest
+            );
+            Ok(true)
+        }
+        Command::PrimitiveNormalizePath(path) => {
+            let normalized =
+                normalize_repository_path(path).map_err(|error| error.code().to_owned())?;
+            println!("{{\"path\":{}}}", json_string(&normalized));
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 fn run(command: Command) -> Result<(), String> {
+    if run_scheduler(&command)? || run_primitive(&command)? {
+        return Ok(());
+    }
     match command {
         Command::Version => println!("{}", version_json()),
         Command::Status(encoded) => {
@@ -337,47 +449,13 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::Capabilities => println!("{}", capabilities_json()),
         Command::ContractHash => println!("{}", contract_hash_json()),
-        Command::PrimitiveSha256(input_hex) => {
-            let input = decode_hex(&input_hex)?;
-            println!(
-                "{{\"algorithm\":\"sha256\",\"digest\":\"{}\",\"input_hex\":\"{}\"}}",
-                sha256_hex(&input),
-                bytes_to_hex(&input)
-            );
-        }
-        Command::PrimitiveCanonicalize { path, input_hex } => {
-            let input = decode_hex(&input_hex)?;
-            let normalized =
-                normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
-            let canonical = canonical_manifest_bytes(&normalized, &input)
-                .map_err(|error| error.code().to_owned())?;
-            println!(
-                concat!(
-                    "{{\"path\":{},",
-                    "\"canonical_hex\":\"{}\",",
-                    "\"digest\":\"{}\"}}"
-                ),
-                json_string(&normalized),
-                bytes_to_hex(&canonical),
-                sha256_hex(&canonical)
-            );
-        }
-        Command::PrimitiveManifestDigest { path, input_hex } => {
-            let input = decode_hex(&input_hex)?;
-            let normalized =
-                normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
-            let digest = manifest_digest_hex(&normalized, &input)
-                .map_err(|error| error.code().to_owned())?;
-            println!(
-                "{{\"path\":{},\"algorithm\":\"sha256\",\"digest\":\"{}\"}}",
-                json_string(&normalized),
-                digest
-            );
-        }
-        Command::PrimitiveNormalizePath(path) => {
-            let normalized =
-                normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
-            println!("{{\"path\":{}}}", json_string(&normalized));
+        Command::SchedulerStats { .. }
+        | Command::SchedulerList { .. }
+        | Command::PrimitiveSha256(_)
+        | Command::PrimitiveCanonicalize { .. }
+        | Command::PrimitiveManifestDigest { .. }
+        | Command::PrimitiveNormalizePath(_) => {
+            unreachable!("pre-dispatched commands are handled before the main match")
         }
         Command::Help => print!("{USAGE}"),
     }
@@ -525,6 +603,30 @@ mod tests {
         assert_eq!(
             parse_command(&args(&["plugins", "list"])),
             Ok(Command::PluginsList)
+        );
+    }
+
+    #[test]
+    fn parses_r24_scheduler_read_only_commands() {
+        assert_eq!(
+            parse_command(&args(&["scheduler", "stats", ".state"])),
+            Ok(Command::SchedulerStats {
+                state_root: ".state".to_owned(),
+            })
+        );
+        assert_eq!(
+            parse_command(&args(&[
+                "scheduler",
+                "list",
+                ".state",
+                "25",
+                "5b22717565756564225d",
+            ])),
+            Ok(Command::SchedulerList {
+                state_root: ".state".to_owned(),
+                limit: 25,
+                states_hex: "5b22717565756564225d".to_owned(),
+            })
         );
     }
 

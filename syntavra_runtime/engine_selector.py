@@ -27,6 +27,8 @@ RUST_CAPABILITIES = (
     "pipeline.describe",
     "plugins.list",
     "receipt.inspect",
+    "scheduler.list",
+    "scheduler.stats",
     "state.broker-live-snapshot",
     "state.broker-snapshot",
     "state.inspect",
@@ -52,6 +54,8 @@ ENGINE_CONTRACT_DESCRIPTOR = (
     "capability=pipeline.describe|preview|read-only\n"
     "capability=plugins.list|preview|read-only\n"
     "capability=receipt.inspect|preview|read-only\n"
+    "capability=scheduler.list|preview|read-only\n"
+    "capability=scheduler.stats|preview|read-only\n"
     "capability=state.broker-live-snapshot|preview|read-only\n"
     "capability=state.broker-snapshot|preview|read-only\n"
     "capability=state.inspect|preview|read-only\n"
