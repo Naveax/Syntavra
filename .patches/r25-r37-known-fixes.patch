@@ -1,0 +1,184 @@
+--- a/crates/syntavra-cli/src/full_parity_runtime.rs
++++ b/crates/syntavra-cli/src/full_parity_runtime.rs
+@@ -329,49 +329,89 @@
+     serde_json::from_str(&rendered).map_err(|_| FullParityFailure::new("PROFILE_LAST_GOOD_APPLY_INVALID"))
+ }
+ 
+-fn phase_r25(operation: &str, payload: &Map<String, Value>, root: &Path, project_id: &str) -> Result<(Value, Mutation)> {
++fn phase_r25(
++    operation: &str,
++    payload: &Map<String, Value>,
++    root: &Path,
++    project_id: &str,
++) -> Result<(Value, Mutation)> {
+     let state = state_root(root)?;
+     let mut value = profile_state(&state)?;
+     if operation == "profile.list" {
+-        return Ok((profile_result(&value)?, mutation(false, false, false, false, false)));
++        return Ok((
++            profile_result(&value)?,
++            mutation(false, false, false, false, false),
++        ));
+     }
+     let name = string(payload, "name", 64)?;
+     if !is_profile_name(name) {
+         return failure("PROFILE_NAME_INVALID");
+     }
+     let selected_before = value.get("selected").and_then(Value::as_str) == Some(name);
+-    let profiles = value.get_mut("profiles").and_then(Value::as_object_mut).ok_or_else(|| FullParityFailure::new("PROFILE_STATE_INVALID"))?;
+     let mut last_good = None;
+     match operation {
+         "profile.create" | "profile.update" => {
+-            let exists = profiles.contains_key(name);
+-            if operation == "profile.create" && exists {
+-                return failure("PROFILE_ALREADY_EXISTS");
+-            }
+-            if operation == "profile.update" && !exists {
+-                return failure("PROFILE_NOT_FOUND");
+-            }
+             let (wire_hex, config_hash, wire) = profile_config(payload)?;
+             let metadata = payload.get("metadata").cloned().unwrap_or_else(|| json!({}));
+             if !metadata.is_object() || canonical_bytes(&metadata)?.len() > 16_384 {
+                 return failure("PROFILE_METADATA_INVALID");
+             }
+-            profiles.insert(name.to_owned(), json!({"config_hash": config_hash, "config_wire_hex": wire_hex, "metadata": metadata}));
+-            if payload.get("select").and_then(Value::as_bool).unwrap_or(false) || selected_before {
++            {
++                let profiles = value
++                    .get_mut("profiles")
++                    .and_then(Value::as_object_mut)
++                    .ok_or_else(|| FullParityFailure::new("PROFILE_STATE_INVALID"))?;
++                let exists = profiles.contains_key(name);
++                if operation == "profile.create" && exists {
++                    return failure("PROFILE_ALREADY_EXISTS");
++                }
++                if operation == "profile.update" && !exists {
++                    return failure("PROFILE_NOT_FOUND");
++                }
++                profiles.insert(
++                    name.to_owned(),
++                    json!({
++                        "config_hash": config_hash,
++                        "config_wire_hex": wire_hex,
++                        "metadata": metadata,
++                    }),
++                );
++            }
++            if payload.get("select").and_then(Value::as_bool).unwrap_or(false)
++                || selected_before
++            {
+                 value["selected"] = Value::String(name.to_owned());
+                 last_good = Some(profile_apply(root, project_id, &wire)?);
+             }
+         }
+         "profile.select" => {
+-            let profile = profiles.get(name).and_then(Value::as_object).ok_or_else(|| FullParityFailure::new("PROFILE_NOT_FOUND"))?;
+-            let wire_hex = profile.get("config_wire_hex").and_then(Value::as_str).ok_or_else(|| FullParityFailure::new("PROFILE_STATE_INVALID"))?;
+-            let wire = decode_hex(wire_hex, "PROFILE_CONFIG_WIRE_INVALID")?;
++            let wire = {
++                let profiles = value
++                    .get("profiles")
++                    .and_then(Value::as_object)
++                    .ok_or_else(|| FullParityFailure::new("PROFILE_STATE_INVALID"))?;
++                let profile = profiles
++                    .get(name)
++                    .and_then(Value::as_object)
++                    .ok_or_else(|| FullParityFailure::new("PROFILE_NOT_FOUND"))?;
++                let wire_hex = profile
++                    .get("config_wire_hex")
++                    .and_then(Value::as_str)
++                    .ok_or_else(|| FullParityFailure::new("PROFILE_STATE_INVALID"))?;
++                decode_hex(wire_hex, "PROFILE_CONFIG_WIRE_INVALID")?
++            };
+             value["selected"] = Value::String(name.to_owned());
+             last_good = Some(profile_apply(root, project_id, &wire)?);
+         }
+         "profile.delete" => {
+-            if profiles.remove(name).is_none() {
+-                return failure("PROFILE_NOT_FOUND");
++            {
++                let profiles = value
++                    .get_mut("profiles")
++                    .and_then(Value::as_object_mut)
++                    .ok_or_else(|| FullParityFailure::new("PROFILE_STATE_INVALID"))?;
++                if profiles.remove(name).is_none() {
++                    return failure("PROFILE_NOT_FOUND");
++                }
+             }
+             if selected_before {
+                 value["selected"] = Value::Null;
+@@ -382,11 +422,17 @@
+     write_json(&state.join("profiles.json"), &value)?;
+     let mut result = profile_result(&value)?;
+     let last_good_value = if let Some(last_good) = last_good {
+-        let result = last_good.get("result").and_then(Value::as_object).ok_or_else(|| FullParityFailure::new("PROFILE_LAST_GOOD_APPLY_INVALID"))?;
++        let result = last_good
++            .get("result")
++            .and_then(Value::as_object)
++            .ok_or_else(|| FullParityFailure::new("PROFILE_LAST_GOOD_APPLY_INVALID"))?;
+         json!({
+             "action": result.get("action").cloned().unwrap_or(Value::Null),
+             "config_hash": result.get("config_hash").cloned().unwrap_or(Value::Null),
+-            "stored_payload_sha256": result.get("stored_payload_sha256").cloned().unwrap_or(Value::Null),
++            "stored_payload_sha256": result
++                .get("stored_payload_sha256")
++                .cloned()
++                .unwrap_or(Value::Null),
+         })
+     } else {
+         Value::Null
+@@ -694,7 +740,10 @@
+     while end > 0 && std::str::from_utf8(&raw[..end]).is_err() {
+         end -= 1;
+     }
+-    std::str::from_utf8(&raw[..end]).unwrap_or("")
++    match std::str::from_utf8(&raw[..end]) {
++        Ok(value) => value,
++        Err(_) => "",
++    }
+ }
+ 
+ fn utf8_suffix(raw: &[u8], limit: usize) -> &str {
+@@ -705,7 +754,10 @@
+     while start < raw.len() && std::str::from_utf8(&raw[start..]).is_err() {
+         start += 1;
+     }
+-    std::str::from_utf8(&raw[start..]).unwrap_or("")
++    match std::str::from_utf8(&raw[start..]) {
++        Ok(value) => value,
++        Err(_) => "",
++    }
+ }
+ 
+ fn compact_text(payload: &Map<String, Value>, state: &Path) -> Result<Value> {
+@@ -1020,7 +1072,7 @@
+     }
+     let port = integer(payload, "port", 1, 65_535)? as u16;
+     let path = string(payload, "path", 2048)?;
+-    if !path.starts_with('/') || path.contains(['\r', '\n']) {
++    if !path.starts_with('/') || path.contains('\r') || path.contains('\n') {
+         return failure("PROVIDER_NETWORK_PATH_INVALID");
+     }
+     let address = (host, port)
+@@ -1325,7 +1377,8 @@
+             let mut body = manifest.clone();
+             let digest_value = body.remove("distribution_sha256").and_then(|value| value.as_str().map(str::to_owned));
+             let forbidden = body.remove("forbidden_python_files");
+-            let valid = digest_value.as_deref().is_some_and(|value| digest(&canonical_bytes(&Value::Object(body.clone())).unwrap_or_default()) == value)
++            let actual_digest = digest(&canonical_bytes(&Value::Object(body.clone()))?);
++            let valid = digest_value.as_deref() == Some(actual_digest.as_str())
+                 && body.get("python_required") == Some(&Value::Bool(false))
+                 && forbidden == Some(json!([]));
+             Ok((json!({"distribution_sha256": digest_value, "python_invocation": false, "valid": valid}), mutation(false, false, false, false, false)))
+--- a/crates/syntavra-cli/src/bin/syntavra-full-parity.rs
++++ b/crates/syntavra-cli/src/bin/syntavra-full-parity.rs
+@@ -44,7 +44,8 @@
+     match arguments {
+         [flag, mode, value] if flag == "--child" => {
+             let code = full_parity_runtime::child_mode(mode, value)?;
+-            Ok(ExitCode::from(u8::try_from(code).unwrap_or(255)))
++            let exit_code = u8::try_from(code).unwrap_or(u8::MAX);
++            Ok(ExitCode::from(exit_code))
+         }
+         [project_root, expected_project_id, request_hex] => {
+             let request = decode_hex(request_hex)?;
