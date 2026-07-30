@@ -182,7 +182,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -195,7 +195,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -208,7 +208,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -221,7 +221,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -234,7 +234,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -247,7 +247,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -260,7 +260,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -273,7 +273,7 @@
       "rust_owner": "crates/syntavra-cli",
       "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": "contracts/engine/auto-routing-v1.json",
+      "contract": "contracts/engine/read-only-routing-v11.json",
       "parity_tests": [
         "tools/verify_r22_capability_aware_auto.py"
       ]
@@ -400,11 +400,13 @@
       "target_phase": "R24",
       "category": "cli",
       "python_owner": "syntavra_runtime",
-      "rust_owner": null,
-      "status": "PYTHON_ONLY",
+      "rust_owner": "tools/verify_r24_read_only_completion.py",
+      "status": "PARITY_PROVEN",
       "mutation": "read-only",
-      "contract": null,
-      "parity_tests": []
+      "contract": "contracts/parity/r24-read-only-cli-completion-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_read_only_completion.py"
+      ]
     },
     {
       "id": "config.profile.lifecycle",

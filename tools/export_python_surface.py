@@ -22,6 +22,7 @@ _ADD_SUBPARSERS = re.compile(
 _ARGUMENT = re.compile(r"\.add_argument\(\s*[\"'](?P<name>[^\"']+)[\"']")
 _ENV = re.compile(r"\bSYNTAVRA_[A-Z0-9_]+\b")
 _MCP_NAME = re.compile(r"[\"']name[\"']\s*:\s*[\"']([A-Za-z0-9_.:-]+)[\"']")
+_ROUTE_INVENTORY_NAME = "INSTALLED_READ_ONLY_ROUTE_COMMANDS"
 
 
 def _python_files() -> list[Path]:
@@ -39,6 +40,28 @@ def _literal_strings(tree: ast.AST) -> set[str]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             values.add(node.value)
     return values
+
+
+def _named_string_sequence(tree: ast.AST, name: str) -> tuple[str, ...]:
+    matches: list[tuple[str, ...]] = []
+    for node in getattr(tree, "body", []):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if not any(isinstance(target, ast.Name) and target.id == name for target in targets):
+            continue
+        value = node.value
+        if not isinstance(value, (ast.Tuple, ast.List)):
+            raise RuntimeError(f"{name} must be a literal tuple or list")
+        rows: list[str] = []
+        for element in value.elts:
+            if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+                raise RuntimeError(f"{name} must contain only literal strings")
+            rows.append(element.value)
+        matches.append(tuple(rows))
+    if len(matches) > 1:
+        raise RuntimeError(f"duplicate {name} definitions")
+    return matches[0] if matches else ()
 
 
 def _extract_cli_paths(source: str) -> set[str]:
@@ -80,6 +103,7 @@ def export_surface() -> dict[str, object]:
     environment_variables: set[str] = set()
     mcp_name_literals: set[str] = set()
     parse_failures: list[str] = []
+    route_inventory_definitions: list[str] = []
 
     for path in _python_files():
         modules.append(_module_name(path))
@@ -94,9 +118,19 @@ def export_surface() -> dict[str, object]:
         except SyntaxError:
             parse_failures.append(path.relative_to(ROOT).as_posix())
             continue
+        route_commands = _named_string_sequence(tree, _ROUTE_INVENTORY_NAME)
+        if route_commands:
+            route_inventory_definitions.append(path.relative_to(ROOT).as_posix())
+            cli_commands.update(f"engine route {command}" for command in route_commands)
         for value in _literal_strings(tree):
             if value.startswith("SYNTAVRA_") and re.fullmatch(r"SYNTAVRA_[A-Z0-9_]+", value):
                 environment_variables.add(value)
+
+    if len(route_inventory_definitions) != 1:
+        raise RuntimeError(
+            "expected exactly one installed route inventory definition, "
+            f"got {route_inventory_definitions!r}"
+        )
 
     return {
         "schema_version": 1,
@@ -109,13 +143,15 @@ def export_surface() -> dict[str, object]:
         "environment_variables": sorted(environment_variables),
         "mcp_name_literals": sorted(mcp_name_literals),
         "parse_failures": sorted(parse_failures),
+        "route_inventory_definitions": route_inventory_definitions,
         "authoritative": {
             "modules": True,
             "cli_commands": False,
             "cli_arguments": False,
             "environment_variables": False,
-            "mcp_name_literals": False
-        }
+            "mcp_name_literals": False,
+            "installed_engine_routes": True,
+        },
     }
 
 
