@@ -359,90 +359,99 @@ struct Transaction<'a> {
 }
 
 impl Transaction<'_> {
-    fn execute(&self) -> Result<String, ApplyFailure> {
-        fault(self.fault, "after-lock")?;
-        reject_symlink(self.target, "CONFIG_LIFECYCLE_TARGET_SYMLINK")?;
-        reject_symlink(self.temp, "CONFIG_LIFECYCLE_TEMP_SYMLINK")?;
+    fn candidate_string(&self, key: &str) -> Result<&str, ApplyFailure> {
+        self.candidate
+            .get(key)
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApplyFailure::normal("CONFIG_LIFECYCLE_PLAN_INVALID"))
+    }
 
-        if self.temp.is_file() {
-            let raw = read_bytes(self.temp, "CONFIG_LIFECYCLE_TEMP_READ_FAILED")?;
-            let normalized = normalized_json_payload(&raw)?;
-            let candidate_sha = self
-                .candidate
-                .get("payload_sha256")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ApplyFailure::normal("CONFIG_LIFECYCLE_PLAN_INVALID"))?;
-            if sha256_hex(normalized.as_bytes()) == candidate_sha
-                && !self.target.exists()
-                && self.decision == "write"
-            {
-                map_io(
-                    fs::rename(self.temp, self.target),
-                    "CONFIG_LIFECYCLE_REPLACE_FAILED",
-                )?;
-                set_private_mode(self.target);
-                sync_directory(self.release);
-                let stored = validate_target_snapshot(
-                    &read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?,
-                    self.candidate.get("config_hash").and_then(Value::as_str),
-                )?;
-                return receipt_json(
-                    "recover-temp",
-                    self.decision,
-                    self.project_id,
-                    self.candidate,
-                    &stored,
-                    self.stale_recovered,
-                    true,
-                );
-            }
+    fn recover_temp(&self) -> Result<Option<String>, ApplyFailure> {
+        if !self.temp.is_file() {
+            return Ok(None);
+        }
+
+        let raw = read_bytes(self.temp, "CONFIG_LIFECYCLE_TEMP_READ_FAILED")?;
+        let normalized = normalized_json_payload(&raw)?;
+        let candidate_sha = self.candidate_string("payload_sha256")?;
+        if sha256_hex(normalized.as_bytes()) == candidate_sha
+            && !self.target.exists()
+            && self.decision == "write"
+        {
             map_io(
-                fs::remove_file(self.temp),
-                "CONFIG_LIFECYCLE_TEMP_REMOVE_FAILED",
+                fs::rename(self.temp, self.target),
+                "CONFIG_LIFECYCLE_REPLACE_FAILED",
             )?;
+            set_private_mode(self.target);
+            sync_directory(self.release);
+            let stored = validate_target_snapshot(
+                &read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?,
+                Some(self.candidate_string("config_hash")?),
+            )?;
+            return receipt_json(
+                "recover-temp",
+                self.decision,
+                self.project_id,
+                self.candidate,
+                &stored,
+                self.stale_recovered,
+                true,
+            )
+            .map(Some);
         }
 
-        if self.target.is_file() {
-            let raw = read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?;
-            let expected_hash = if self.decision == "retain-existing" {
-                self.candidate.get("config_hash").and_then(Value::as_str)
-            } else {
-                None
-            };
-            let current = validate_target_snapshot(&raw, expected_hash)?;
+        map_io(
+            fs::remove_file(self.temp),
+            "CONFIG_LIFECYCLE_TEMP_REMOVE_FAILED",
+        )?;
+        Ok(None)
+    }
+
+    fn inspect_target(&self) -> Result<Option<String>, ApplyFailure> {
+        if !self.target.is_file() {
             if self.decision == "retain-existing" {
-                return receipt_json(
-                    "retain-existing",
-                    self.decision,
-                    self.project_id,
-                    self.candidate,
-                    &current,
-                    self.stale_recovered,
-                    false,
-                );
+                return Err(ApplyFailure::normal(
+                    "CONFIG_LIFECYCLE_RETAIN_TARGET_MISSING",
+                ));
             }
-            let candidate_sha = self
-                .candidate
-                .get("payload_sha256")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ApplyFailure::normal("CONFIG_LIFECYCLE_PLAN_INVALID"))?;
-            if sha256_hex(current.as_bytes()) == candidate_sha {
-                return receipt_json(
-                    "already-current",
-                    self.decision,
-                    self.project_id,
-                    self.candidate,
-                    &current,
-                    self.stale_recovered,
-                    false,
-                );
-            }
-        } else if self.decision == "retain-existing" {
-            return Err(ApplyFailure::normal(
-                "CONFIG_LIFECYCLE_RETAIN_TARGET_MISSING",
-            ));
+            return Ok(None);
         }
 
+        let raw = read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?;
+        let expected_hash = if self.decision == "retain-existing" {
+            Some(self.candidate_string("config_hash")?)
+        } else {
+            None
+        };
+        let current = validate_target_snapshot(&raw, expected_hash)?;
+        if self.decision == "retain-existing" {
+            return receipt_json(
+                "retain-existing",
+                self.decision,
+                self.project_id,
+                self.candidate,
+                &current,
+                self.stale_recovered,
+                false,
+            )
+            .map(Some);
+        }
+        if sha256_hex(current.as_bytes()) == self.candidate_string("payload_sha256")? {
+            return receipt_json(
+                "already-current",
+                self.decision,
+                self.project_id,
+                self.candidate,
+                &current,
+                self.stale_recovered,
+                false,
+            )
+            .map(Some);
+        }
+        Ok(None)
+    }
+
+    fn write_candidate(&self) -> Result<String, ApplyFailure> {
         write_temp(self.temp, self.candidate_payload.as_bytes())?;
         fault(self.fault, "after-temp-sync")?;
         map_io(
@@ -453,21 +462,11 @@ impl Transaction<'_> {
         fault(self.fault, "after-replace")?;
         sync_directory(self.release);
 
-        let candidate_hash = self
-            .candidate
-            .get("config_hash")
-            .and_then(Value::as_str)
-            .ok_or_else(|| ApplyFailure::normal("CONFIG_LIFECYCLE_PLAN_INVALID"))?;
         let stored = validate_target_snapshot(
             &read_bytes(self.target, "CONFIG_LIFECYCLE_TARGET_READ_FAILED")?,
-            Some(candidate_hash),
+            Some(self.candidate_string("config_hash")?),
         )?;
-        let candidate_sha = self
-            .candidate
-            .get("payload_sha256")
-            .and_then(Value::as_str)
-            .ok_or_else(|| ApplyFailure::normal("CONFIG_LIFECYCLE_PLAN_INVALID"))?;
-        if sha256_hex(stored.as_bytes()) != candidate_sha {
+        if sha256_hex(stored.as_bytes()) != self.candidate_string("payload_sha256")? {
             return Err(ApplyFailure::normal(
                 "CONFIG_LIFECYCLE_POST_WRITE_VERIFY_FAILED",
             ));
@@ -481,6 +480,19 @@ impl Transaction<'_> {
             self.stale_recovered,
             true,
         )
+    }
+
+    fn execute(&self) -> Result<String, ApplyFailure> {
+        fault(self.fault, "after-lock")?;
+        reject_symlink(self.target, "CONFIG_LIFECYCLE_TARGET_SYMLINK")?;
+        reject_symlink(self.temp, "CONFIG_LIFECYCLE_TEMP_SYMLINK")?;
+        if let Some(receipt) = self.recover_temp()? {
+            return Ok(receipt);
+        }
+        if let Some(receipt) = self.inspect_target()? {
+            return Ok(receipt);
+        }
+        self.write_candidate()
     }
 }
 
@@ -563,8 +575,7 @@ pub fn apply_json(
     let crash_simulated = result
         .as_ref()
         .err()
-        .map(|error| error.crash_simulated)
-        .unwrap_or(false);
+        .is_some_and(|error| error.crash_simulated);
     if !crash_simulated {
         let _ = fs::remove_file(&temp);
         let _ = fs::remove_file(&lock);
