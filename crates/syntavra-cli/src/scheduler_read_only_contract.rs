@@ -10,6 +10,7 @@ use serde_json::{json, Map, Value};
 const DATABASE_NAME: &str = "scheduler.sqlite3";
 const MAXIMUM_DATABASE_BYTES: u64 = 64 * 1024 * 1024;
 const MAXIMUM_LIMIT: usize = 1000;
+const MAXIMUM_STATES: usize = 16;
 const ALLOWED_STATES: &[&str] = &[
     "cancelled",
     "dead-letter",
@@ -228,7 +229,13 @@ fn validate_schema(connection: &Connection) -> Result<(), String> {
         .map_err(|_| "SCHEDULER_READ_ONLY_SCHEMA_QUERY_FAILED".to_owned())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| "SCHEDULER_READ_ONLY_SCHEMA_QUERY_FAILED".to_owned())?;
-    if rows != vec![("scheduled_jobs".to_owned(), "job_id".to_owned(), "job_id".to_owned())] {
+    if rows
+        != vec![(
+            "scheduled_jobs".to_owned(),
+            "job_id".to_owned(),
+            "job_id".to_owned(),
+        )]
+    {
         return Err("SCHEDULER_READ_ONLY_SCHEMA_FOREIGN_KEY_INVALID".to_owned());
     }
     Ok(())
@@ -249,7 +256,11 @@ fn sqlite_value(value: ValueRef<'_>) -> Result<Value, String> {
 }
 
 fn validate_job_json(job: &Map<String, Value>) -> Result<(), String> {
-    for (name, object) in [("argv_json", false), ("metadata_json", true), ("result_json", true)] {
+    for (name, object) in [
+        ("argv_json", false),
+        ("metadata_json", true),
+        ("result_json", true),
+    ] {
         let encoded = job
             .get(name)
             .and_then(Value::as_str)
@@ -266,7 +277,7 @@ fn validate_job_json(job: &Map<String, Value>) -> Result<(), String> {
 fn canonical_states(states_json: &[u8]) -> Result<Vec<String>, String> {
     let values: Vec<String> = serde_json::from_slice(states_json)
         .map_err(|_| "SCHEDULER_READ_ONLY_STATE_INVALID".to_owned())?;
-    if values.len() > 16 {
+    if values.len() > MAXIMUM_STATES {
         return Err("SCHEDULER_READ_ONLY_TOO_MANY_STATES".to_owned());
     }
     let allowed = ALLOWED_STATES.iter().copied().collect::<BTreeSet<_>>();
@@ -291,7 +302,6 @@ fn empty_result(stats: bool) -> Value {
 
 fn inspect(
     state_root: &Path,
-    *,
     stats: bool,
     states: &[String],
     limit: usize,
@@ -310,15 +320,22 @@ fn inspect(
             .prepare("SELECT state,COUNT(*) FROM scheduled_jobs GROUP BY state ORDER BY state")
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
         let rows = state_statement
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
         let mut counts = Map::new();
         for row in rows {
-            let (state, count) = row.map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
+            let (state, count) =
+                row.map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
             counts.insert(state, json!(count));
         }
         let projects: i64 = connection
-            .query_row("SELECT COUNT(DISTINCT project_id) FROM scheduled_jobs", [], |row| row.get(0))
+            .query_row(
+                "SELECT COUNT(DISTINCT project_id) FROM scheduled_jobs",
+                [],
+                |row| row.get(0),
+            )
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
         let integrity: String = connection
             .query_row("PRAGMA integrity_check", [], |row| row.get(0))
@@ -340,7 +357,9 @@ fn inspect(
             .iter()
             .map(|value| rusqlite::types::Value::Text(value.clone()))
             .collect::<Vec<_>>();
-        parameters.push(rusqlite::types::Value::Integer(limit.min(MAXIMUM_LIMIT).max(1) as i64));
+        parameters.push(rusqlite::types::Value::Integer(
+            limit.clamp(1, MAXIMUM_LIMIT) as i64,
+        ));
         let mut statement = connection
             .prepare(&query)
             .map_err(|_| "SCHEDULER_READ_ONLY_QUERY_FAILED".to_owned())?;
@@ -352,7 +371,10 @@ fn inspect(
                         rusqlite::Error::FromSqlConversionFailure(
                             index,
                             rusqlite::types::Type::Null,
-                            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, message)),
+                            Box::new(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                message,
+                            )),
                         )
                     })?;
                     job.insert((*name).to_owned(), value);
@@ -378,7 +400,7 @@ fn inspect(
 }
 
 pub fn scheduler_stats_json(state_root: &str) -> Result<String, String> {
-    serde_json::to_string(&inspect(Path::new(state_root), stats: true, states: &[], limit: 100)?)
+    serde_json::to_string(&inspect(Path::new(state_root), true, &[], 100)?)
         .map_err(|_| "SCHEDULER_READ_ONLY_JSON_FAILED".to_owned())
 }
 
@@ -390,9 +412,9 @@ pub fn scheduler_list_json(
     let states = canonical_states(states_json)?;
     serde_json::to_string(&inspect(
         Path::new(state_root),
-        stats: false,
-        states: &states,
-        limit: limit.min(MAXIMUM_LIMIT).max(1),
+        false,
+        &states,
+        limit.clamp(1, MAXIMUM_LIMIT),
     )?)
     .map_err(|_| "SCHEDULER_READ_ONLY_JSON_FAILED".to_owned())
 }
