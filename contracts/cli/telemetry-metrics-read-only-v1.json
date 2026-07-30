@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "phase": "R24",
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "reference_engine": "python",
+  "candidate_engine": "rust",
+  "route": "telemetry.metrics",
+  "capability": "telemetry.metrics",
+  "input": {
+    "profile": "process-local-empty-metrics-v1",
+    "format": "canonical-output-format",
+    "accepted_formats": ["json", "prometheus"]
+  },
+  "results": {
+    "json": {
+      "format": "json",
+      "metrics": {
+        "counters": [],
+        "gauges": [],
+        "histograms": []
+      }
+    },
+    "prometheus": {
+      "format": "prometheus",
+      "text": ""
+    }
+  },
+  "filesystem": {
+    "state_root_read": false,
+    "state_root_creation": false,
+    "observability_directory_creation": false,
+    "events_file_creation": false,
+    "database_creation": false
+  },
+  "parity": {
+    "python_preflight_before_selection": true,
+    "comparison": "complete-result-object",
+    "rust_error_fallback": false,
+    "parity_error_fields": ["mismatched_keys", "expected_sha256", "actual_sha256"]
+  },
+  "claim": "RUST_TELEMETRY_METRICS_READ_ONLY_CLI_PARITY_PROVEN_R24_FIXTURES"
+}

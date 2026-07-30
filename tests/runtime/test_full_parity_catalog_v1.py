@@ -60,6 +60,7 @@ def test_current_proven_routes_include_r22_and_r24_surfaces() -> None:
         "route.plugins.list",
         "route.scheduler.list",
         "route.scheduler.stats",
+        "route.telemetry.metrics",
     }
 
 

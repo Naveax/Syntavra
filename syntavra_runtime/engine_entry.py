@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .migration_plan_router_r24 import MigrationPlanRouterR24
+from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 
@@ -91,6 +91,10 @@ def _read_only_request(rest: list[str]) -> tuple[str, dict[str, Any]] | None:
         return "config.explain", {"explain_path": rest[2]}
     if len(rest) == 3 and rest[:2] == ["migrate", "plan"]:
         return "migration.plan", {"migration_database": rest[2]}
+    if rest == ["telemetry", "metrics"]:
+        return "telemetry.metrics", {}
+    if rest == ["telemetry", "metrics", "--prometheus"]:
+        return "telemetry.metrics", {"telemetry_prometheus": True}
     if rest == ["scheduler", "stats"]:
         return "scheduler.stats", {}
     if len(rest) >= 2 and rest[:2] == ["scheduler", "list"]:
@@ -149,13 +153,20 @@ def main(argv: list[str] | None = None) -> int:
         request = _read_only_request(rest)
         if request is not None:
             route, route_kwargs = request
-            router = MigrationPlanRouterR24(selector, project_input_root=project)
+            router = TelemetryMetricsRouterR24(selector, project_input_root=project)
             routed = router.route(
                 route,
                 cli_override=override,
                 **route_kwargs,
             )
-            _emit(routed["result"])
+            result = routed["result"]
+            if route == "telemetry.metrics":
+                if result["format"] == "prometheus":
+                    print(result["text"])
+                else:
+                    _emit(result["metrics"])
+            else:
+                _emit(result)
             return 0
         if command in SELECTOR_COMMANDS:
             return int(engine_main(values, selector=selector, cli_override=override))

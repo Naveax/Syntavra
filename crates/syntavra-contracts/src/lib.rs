@@ -96,6 +96,11 @@ pub const ENGINE_CAPABILITIES: &[Capability] = &[
         mutation: "read-only",
     },
     Capability {
+        name: "telemetry.metrics",
+        maturity: "preview",
+        mutation: "read-only",
+    },
+    Capability {
         name: "version",
         maturity: "preview",
         mutation: "read-only",
@@ -129,6 +134,7 @@ pub const CONTRACT_DESCRIPTOR: &str = concat!(
     "capability=state.inspect|preview|read-only\n",
     "capability=state.layout|preview|read-only\n",
     "capability=status|preview|read-only\n",
+    "capability=telemetry.metrics|preview|read-only\n",
     "capability=version|preview|read-only\n",
 );
 
@@ -207,5 +213,6 @@ mod tests {
         assert!(capabilities_json().contains("\"name\":\"state.inspect\""));
         assert!(capabilities_json().contains("\"name\":\"state.layout\""));
         assert!(capabilities_json().contains("\"name\":\"status\""));
+        assert!(capabilities_json().contains("\"name\":\"telemetry.metrics\""));
     }
 }

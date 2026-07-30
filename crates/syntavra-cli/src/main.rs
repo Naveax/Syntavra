@@ -9,6 +9,7 @@ mod scheduler_read_only_contract;
 mod state_layout_contract;
 mod state_receipt_contract;
 mod state_snapshot_contract;
+mod telemetry_metrics_contract;
 
 use std::env;
 use std::fmt::Write as _;
@@ -33,6 +34,7 @@ use syntavra_core::{
     bytes_to_hex, canonical_manifest_bytes, manifest_digest_hex, normalize_repository_path,
     sha256_hex,
 };
+use telemetry_metrics_contract::telemetry_metrics_json;
 
 const USAGE: &str = concat!(
     "Syntavra native Rust engine (experimental)\n\n",
@@ -47,6 +49,7 @@ const USAGE: &str = concat!(
     "  syntavra-rs plugins list\n",
     "  syntavra-rs scheduler stats <state-root>\n",
     "  syntavra-rs scheduler list <state-root> <limit> <states-json-hex>\n",
+    "  syntavra-rs telemetry metrics <json|prometheus>\n",
     "  syntavra-rs state layout\n",
     "  syntavra-rs state inspect <expected-project-id> <project-root>\n",
     "  syntavra-rs state broker-live-snapshot <expected-project-id> <project-root> <database-path>\n",
@@ -83,6 +86,9 @@ enum Command {
         state_root: String,
         limit: usize,
         states_hex: String,
+    },
+    TelemetryMetrics {
+        output_format: String,
     },
     StateLayout,
     BrokerLiveSnapshot {
@@ -183,6 +189,11 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
             Ok(Command::PipelineDescribe)
         }
         [plugins, action] if plugins == "plugins" && action == "list" => Ok(Command::PluginsList),
+        [telemetry, action, output_format] if telemetry == "telemetry" && action == "metrics" => {
+            Ok(Command::TelemetryMetrics {
+                output_format: output_format.clone(),
+            })
+        }
         [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
         [state, action, expected_project_id, project_root, database_path]
             if state == "state" && action == "broker-live-snapshot" =>
@@ -451,6 +462,9 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::PipelineDescribe => println!("{}", static_cli_result_json("pipeline.describe")?),
         Command::PluginsList => println!("{}", static_cli_result_json("plugins.list")?),
+        Command::TelemetryMetrics { output_format } => {
+            println!("{}", telemetry_metrics_json(&output_format)?);
+        }
         Command::StateLayout => println!("{}", state_layout_json()),
         Command::BrokerLiveSnapshot {
             expected_project_id,

@@ -35,6 +35,7 @@ RUST_CAPABILITIES = (
     "state.inspect",
     "state.layout",
     "status",
+    "telemetry.metrics",
     "version",
 )
 RUST_CAPABILITY_ROWS = {
@@ -63,6 +64,7 @@ ENGINE_CONTRACT_DESCRIPTOR = (
     "capability=state.inspect|preview|read-only\n"
     "capability=state.layout|preview|read-only\n"
     "capability=status|preview|read-only\n"
+    "capability=telemetry.metrics|preview|read-only\n"
     "capability=version|preview|read-only\n"
 )
 ENGINE_CONTRACT_SHA256 = hashlib.sha256(ENGINE_CONTRACT_DESCRIPTOR.encode("utf-8")).hexdigest()

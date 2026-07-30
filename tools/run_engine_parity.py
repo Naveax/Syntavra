@@ -198,6 +198,7 @@ def verify() -> dict[str, object]:
         "state.inspect",
         "state.layout",
         "status",
+        "telemetry.metrics",
         "version",
     ]
     if capability_names != expected:

@@ -7,8 +7,20 @@
   "reference_engine": "python",
   "candidate_engine": "rust",
   "claim": "FULL_PARITY_NOT_PROVEN",
-  "status_values": ["PYTHON_ONLY", "RUST_SCAFFOLDED", "RUST_SHADOW", "PARITY_PROVEN", "RUST_PRODUCTION_READY"],
-  "parity_dimensions": ["cli", "mcp", "state_mutation", "host_setup", "platform_packaging"],
+  "status_values": [
+    "PYTHON_ONLY",
+    "RUST_SCAFFOLDED",
+    "RUST_SHADOW",
+    "PARITY_PROVEN",
+    "RUST_PRODUCTION_READY"
+  ],
+  "parity_dimensions": [
+    "cli",
+    "mcp",
+    "state_mutation",
+    "host_setup",
+    "platform_packaging"
+  ],
   "policy": {
     "python_public_surface_requires_catalog_entry": true,
     "rust_must_not_shell_out_to_python": true,
@@ -20,52 +32,522 @@
     "version_change_requires_owner_instruction": true
   },
   "workstreams": [
-    {"phase":"R23","name":"Full parity catalog and freeze gate","status":"ACTIVE","depends_on":["R22"]},
-    {"phase":"R24","name":"Complete read-only CLI parity","status":"ACTIVE","depends_on":["R23"]},
-    {"phase":"R25","name":"Config and profile lifecycle parity","status":"ACTIVE","depends_on":["R23"]},
-    {"phase":"R26","name":"State and receipt write parity","status":"ACTIVE","depends_on":["R25"]},
-    {"phase":"R27","name":"Broker SQLite mutation parity","status":"ACTIVE","depends_on":["R26"]},
-    {"phase":"R28","name":"Process broker parity","status":"ACTIVE","depends_on":["R26"]},
-    {"phase":"R29","name":"Context rewrite and compaction parity","status":"ACTIVE","depends_on":["R23"]},
-    {"phase":"R30","name":"Memory and repository intelligence parity","status":"ACTIVE","depends_on":["R29"]},
-    {"phase":"R31","name":"Provider gateway and routing parity","status":"ACTIVE","depends_on":["R28"]},
-    {"phase":"R32","name":"Complete MCP parity","status":"ACTIVE","depends_on":["R26","R28","R31"]},
-    {"phase":"R33","name":"Setup install repair and host parity","status":"ACTIVE","depends_on":["R26","R32"]},
-    {"phase":"R34","name":"Benchmark SignalBench and evidence parity","status":"ACTIVE","depends_on":["R29","R30","R31"]},
-    {"phase":"R35","name":"Publication and registry parity","status":"ACTIVE","depends_on":["R33","R34"]},
-    {"phase":"R36","name":"Rust standalone distribution","status":"ACTIVE","depends_on":["R32","R33","R35"]},
-    {"phase":"R37","name":"Production parity certification","status":"ACTIVE","depends_on":["R24","R25","R26","R27","R28","R29","R30","R31","R32","R33","R34","R35","R36"]}
+    {
+      "phase": "R23",
+      "name": "Full parity catalog and freeze gate",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R22"
+      ]
+    },
+    {
+      "phase": "R24",
+      "name": "Complete read-only CLI parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R23"
+      ]
+    },
+    {
+      "phase": "R25",
+      "name": "Config and profile lifecycle parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R23"
+      ]
+    },
+    {
+      "phase": "R26",
+      "name": "State and receipt write parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R25"
+      ]
+    },
+    {
+      "phase": "R27",
+      "name": "Broker SQLite mutation parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R26"
+      ]
+    },
+    {
+      "phase": "R28",
+      "name": "Process broker parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R26"
+      ]
+    },
+    {
+      "phase": "R29",
+      "name": "Context rewrite and compaction parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R23"
+      ]
+    },
+    {
+      "phase": "R30",
+      "name": "Memory and repository intelligence parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R29"
+      ]
+    },
+    {
+      "phase": "R31",
+      "name": "Provider gateway and routing parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R28"
+      ]
+    },
+    {
+      "phase": "R32",
+      "name": "Complete MCP parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R26",
+        "R28",
+        "R31"
+      ]
+    },
+    {
+      "phase": "R33",
+      "name": "Setup install repair and host parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R26",
+        "R32"
+      ]
+    },
+    {
+      "phase": "R34",
+      "name": "Benchmark SignalBench and evidence parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R29",
+        "R30",
+        "R31"
+      ]
+    },
+    {
+      "phase": "R35",
+      "name": "Publication and registry parity",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R33",
+        "R34"
+      ]
+    },
+    {
+      "phase": "R36",
+      "name": "Rust standalone distribution",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R32",
+        "R33",
+        "R35"
+      ]
+    },
+    {
+      "phase": "R37",
+      "name": "Production parity certification",
+      "status": "ACTIVE",
+      "depends_on": [
+        "R24",
+        "R25",
+        "R26",
+        "R27",
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32",
+        "R33",
+        "R34",
+        "R35",
+        "R36"
+      ]
+    }
   ],
   "features": [
-    {"id":"route.version","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.status","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.config.resolve","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.state.layout","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.state.inspect","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.receipt.inspect","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.state.broker-snapshot","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.state.broker-live-snapshot","target_phase":"R22","category":"cli","python_owner":"syntavra_runtime","rust_owner":"crates/syntavra-cli","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/engine/auto-routing-v1.json","parity_tests":["tools/verify_r22_capability_aware_auto.py"]},
-    {"id":"route.pipeline.describe","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/read_only_cli_contract.py","rust_owner":"crates/syntavra-cli/src/read_only_cli_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/read-only-static-v1.json","parity_tests":["tools/verify_r24_static_cli_parity.py"]},
-    {"id":"route.plugins.list","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/read_only_cli_contract.py","rust_owner":"crates/syntavra-cli/src/read_only_cli_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/read-only-static-v1.json","parity_tests":["tools/verify_r24_static_cli_parity.py"]},
-    {"id":"route.config.validate","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/config_validate_contract.py","rust_owner":"crates/syntavra-cli/src/config_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/config-validate-v1.json","parity_tests":["tools/verify_r24_config_validate.py"]},
-    {"id":"route.config.explain","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/config_explain_contract.py","rust_owner":"crates/syntavra-cli/src/config_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/config-explain-v1.json","parity_tests":["tools/verify_r24_config_explain.py"]},
-    {"id":"route.config.show","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/config_show_contract.py","rust_owner":"crates/syntavra-cli/src/config_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/config-show-v1.json","parity_tests":["tools/verify_r24_config_show.py"]},
-    {"id":"route.migration.plan","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/migration_plan_read_only_contract.py","rust_owner":"crates/syntavra-cli/src/migration_plan_read_only_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/migration-plan-read-only-v1.json","parity_tests":["tools/verify_r24_migration_plan.py"]},
-    {"id":"route.scheduler.list","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/scheduler_read_only_contract.py","rust_owner":"crates/syntavra-cli/src/scheduler_read_only_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/scheduler-read-only-v1.json","parity_tests":["tools/verify_r24_scheduler_read_only.py"]},
-    {"id":"route.scheduler.stats","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime/scheduler_read_only_contract.py","rust_owner":"crates/syntavra-cli/src/scheduler_read_only_contract.rs","status":"PARITY_PROVEN","mutation":"read-only","contract":"contracts/cli/scheduler-read-only-v1.json","parity_tests":["tools/verify_r24_scheduler_read_only.py"]},
-    {"id":"cli.read-only.complete","target_phase":"R24","category":"cli","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"read-only","contract":null,"parity_tests":[]},
-    {"id":"config.profile.lifecycle","target_phase":"R25","category":"config","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"mixed","contract":null,"parity_tests":[]},
-    {"id":"state.receipt.write","target_phase":"R26","category":"state_mutation","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"write","contract":null,"parity_tests":[]},
-    {"id":"broker.sqlite.mutation","target_phase":"R27","category":"state_mutation","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"write","contract":null,"parity_tests":[]},
-    {"id":"process.broker","target_phase":"R28","category":"process","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"external-process","contract":null,"parity_tests":[]},
-    {"id":"context.rewrite.compaction","target_phase":"R29","category":"optimization","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"mixed","contract":null,"parity_tests":[]},
-    {"id":"memory.repository-intelligence","target_phase":"R30","category":"intelligence","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"mixed","contract":null,"parity_tests":[]},
-    {"id":"provider.gateway","target_phase":"R31","category":"provider","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"network","contract":null,"parity_tests":[]},
-    {"id":"mcp.complete","target_phase":"R32","category":"mcp","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"mixed","contract":null,"parity_tests":[]},
-    {"id":"setup.install.repair.hosts","target_phase":"R33","category":"host_setup","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"write","contract":null,"parity_tests":[]},
-    {"id":"benchmark.signalbench.evidence","target_phase":"R34","category":"benchmark","python_owner":"syntavra_runtime","rust_owner":null,"status":"PYTHON_ONLY","mutation":"mixed","contract":null,"parity_tests":[]},
-    {"id":"publication.registry","target_phase":"R35","category":"publication","python_owner":"tools","rust_owner":null,"status":"PYTHON_ONLY","mutation":"network-write","contract":null,"parity_tests":[]},
-    {"id":"distribution.rust-standalone","target_phase":"R36","category":"platform_packaging","python_owner":"packaging","rust_owner":"crates","status":"RUST_SCAFFOLDED","mutation":"install","contract":null,"parity_tests":[]},
-    {"id":"certification.production-parity","target_phase":"R37","category":"certification","python_owner":"repository","rust_owner":"repository","status":"RUST_SCAFFOLDED","mutation":"none","contract":"contracts/parity/python-rust-full-parity-v1.json","parity_tests":[]}
+    {
+      "id": "route.version",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.status",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.config.resolve",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.state.layout",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.state.inspect",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.receipt.inspect",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.state.broker-snapshot",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.state.broker-live-snapshot",
+      "target_phase": "R22",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": "crates/syntavra-cli",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/engine/auto-routing-v1.json",
+      "parity_tests": [
+        "tools/verify_r22_capability_aware_auto.py"
+      ]
+    },
+    {
+      "id": "route.pipeline.describe",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/read_only_cli_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/read_only_cli_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/read-only-static-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_static_cli_parity.py"
+      ]
+    },
+    {
+      "id": "route.plugins.list",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/read_only_cli_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/read_only_cli_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/read-only-static-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_static_cli_parity.py"
+      ]
+    },
+    {
+      "id": "route.config.validate",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/config_validate_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/config_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/config-validate-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_config_validate.py"
+      ]
+    },
+    {
+      "id": "route.config.explain",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/config_explain_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/config_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/config-explain-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_config_explain.py"
+      ]
+    },
+    {
+      "id": "route.config.show",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/config_show_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/config_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/config-show-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_config_show.py"
+      ]
+    },
+    {
+      "id": "route.migration.plan",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/migration_plan_read_only_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/migration_plan_read_only_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/migration-plan-read-only-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_migration_plan.py"
+      ]
+    },
+    {
+      "id": "route.scheduler.list",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/scheduler_read_only_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/scheduler_read_only_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/scheduler-read-only-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_scheduler_read_only.py"
+      ]
+    },
+    {
+      "id": "route.scheduler.stats",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/scheduler_read_only_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/scheduler_read_only_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/scheduler-read-only-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_scheduler_read_only.py"
+      ]
+    },
+    {
+      "id": "route.telemetry.metrics",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime/telemetry_metrics_contract.py",
+      "rust_owner": "crates/syntavra-cli/src/telemetry_metrics_contract.rs",
+      "status": "PARITY_PROVEN",
+      "mutation": "read-only",
+      "contract": "contracts/cli/telemetry-metrics-read-only-v1.json",
+      "parity_tests": [
+        "tools/verify_r24_telemetry_metrics.py"
+      ]
+    },
+    {
+      "id": "cli.read-only.complete",
+      "target_phase": "R24",
+      "category": "cli",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "read-only",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "config.profile.lifecycle",
+      "target_phase": "R25",
+      "category": "config",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "mixed",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "state.receipt.write",
+      "target_phase": "R26",
+      "category": "state_mutation",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "write",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "broker.sqlite.mutation",
+      "target_phase": "R27",
+      "category": "state_mutation",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "write",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "process.broker",
+      "target_phase": "R28",
+      "category": "process",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "external-process",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "context.rewrite.compaction",
+      "target_phase": "R29",
+      "category": "optimization",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "mixed",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "memory.repository-intelligence",
+      "target_phase": "R30",
+      "category": "intelligence",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "mixed",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "provider.gateway",
+      "target_phase": "R31",
+      "category": "provider",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "network",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "mcp.complete",
+      "target_phase": "R32",
+      "category": "mcp",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "mixed",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "setup.install.repair.hosts",
+      "target_phase": "R33",
+      "category": "host_setup",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "write",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "benchmark.signalbench.evidence",
+      "target_phase": "R34",
+      "category": "benchmark",
+      "python_owner": "syntavra_runtime",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "mixed",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "publication.registry",
+      "target_phase": "R35",
+      "category": "publication",
+      "python_owner": "tools",
+      "rust_owner": null,
+      "status": "PYTHON_ONLY",
+      "mutation": "network-write",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "distribution.rust-standalone",
+      "target_phase": "R36",
+      "category": "platform_packaging",
+      "python_owner": "packaging",
+      "rust_owner": "crates",
+      "status": "RUST_SCAFFOLDED",
+      "mutation": "install",
+      "contract": null,
+      "parity_tests": []
+    },
+    {
+      "id": "certification.production-parity",
+      "target_phase": "R37",
+      "category": "certification",
+      "python_owner": "repository",
+      "rust_owner": "repository",
+      "status": "RUST_SCAFFOLDED",
+      "mutation": "none",
+      "contract": "contracts/parity/python-rust-full-parity-v1.json",
+      "parity_tests": []
+    }
   ]
 }
