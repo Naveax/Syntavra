@@ -48,6 +48,7 @@ def test_current_proven_routes_include_r22_and_r24_surfaces() -> None:
         "route.status",
         "route.config.explain",
         "route.config.resolve",
+        "route.config.show",
         "route.config.validate",
         "route.state.layout",
         "route.state.inspect",
