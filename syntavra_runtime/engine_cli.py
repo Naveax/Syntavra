@@ -10,6 +10,19 @@ from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 
 
+INSTALLED_READ_ONLY_ROUTE_COMMANDS = (
+    "config.resolve",
+    "receipt.inspect",
+    "state.broker-live-snapshot",
+    "state.broker-snapshot",
+    "state.inspect",
+    "state.layout",
+    "status",
+    "telemetry.metrics",
+    "version",
+)
+
+
 def _emit(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=str))
 
