@@ -11,6 +11,10 @@ repository.workspace = true
 name = "syntavra-rs"
 path = "src/main.rs"
 
+[[bin]]
+name = "syntavra-config-lifecycle-plan"
+path = "src/bin/syntavra-config-lifecycle-plan.rs"
+
 [dependencies]
 rusqlite = { version = "0.32.1", features = ["backup", "bundled"] }
 serde_json = "1.0"
