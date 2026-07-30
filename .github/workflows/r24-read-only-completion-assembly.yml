@@ -1,0 +1,98 @@
+name: R24 Read-Only Completion Assembly
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-read-only-completion-certification
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r24-read-only-completion-certification
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Promote completion catalog entry
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("contracts/parity/python-rust-full-parity-v1.json")
+          catalog = json.loads(path.read_text(encoding="utf-8"))
+          rows = catalog.get("features")
+          if not isinstance(rows, list):
+              raise SystemExit("catalog features must be a list")
+
+          matches = [row for row in rows if isinstance(row, dict) and row.get("id") == "cli.read-only.complete"]
+          if len(matches) != 1:
+              raise SystemExit(f"expected one cli.read-only.complete row, got {len(matches)}")
+
+          row = matches[0]
+          expected_old = {
+              "target_phase": "R24",
+              "category": "cli",
+              "python_owner": "syntavra_runtime",
+              "rust_owner": None,
+              "status": "PYTHON_ONLY",
+              "mutation": "read-only",
+              "contract": None,
+              "parity_tests": [],
+          }
+          desired = {
+              "target_phase": "R24",
+              "category": "cli",
+              "python_owner": "syntavra_runtime",
+              "rust_owner": "tools/verify_r24_read_only_completion.py",
+              "status": "PARITY_PROVEN",
+              "mutation": "read-only",
+              "contract": "contracts/parity/r24-read-only-cli-completion-v1.json",
+              "parity_tests": ["tools/verify_r24_read_only_completion.py"],
+          }
+
+          current = {key: row.get(key) for key in desired}
+          if current == desired:
+              print("completion catalog row already current")
+          elif current == expected_old:
+              row.update(desired)
+              path.write_text(
+                  json.dumps(catalog, indent=2, sort_keys=False) + "\n",
+                  encoding="utf-8",
+                  newline="\n",
+              )
+              print("completion catalog row promoted")
+          else:
+              raise SystemExit(f"completion catalog row drifted: {current!r}")
+          PY
+
+      - name: Remove one-time assembly workflow
+        run: git rm .github/workflows/r24-read-only-completion-assembly.yml
+
+      - name: Refresh exact repository manifest
+        run: python -m tools.refresh_manifest
+
+      - name: Verify structural completion gate
+        run: python tools/verify_r24_read_only_completion.py
+
+      - name: Commit assembled tree
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add contracts/parity/python-rust-full-parity-v1.json MANIFEST.sha256
+          git diff --cached --check
+          git commit -m "Finalize R24 read-only CLI completion catalog"
+          git push origin HEAD:feature/full-parity-r24-read-only-completion-certification
