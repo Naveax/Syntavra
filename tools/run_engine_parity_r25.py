@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import io
 import json
 import sys
+from collections.abc import Callable
+from contextlib import redirect_stdout
 from pathlib import Path
+from typing import TypeVar
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
@@ -14,11 +18,19 @@ from run_engine_parity_r24 import verify as verify_r0_r24
 from verify_r25_config_last_good_apply import verify as verify_r25_apply
 from verify_r25_config_last_good_plan import verify as verify_r25_plan
 
+T = TypeVar("T")
+
+
+def _without_stdout(callback: Callable[[], T]) -> T:
+    """Keep nested verifier diagnostics out of the canonical aggregate JSON stream."""
+    with redirect_stdout(io.StringIO()):
+        return callback()
+
 
 def verify() -> dict[str, object]:
-    previous = verify_r0_r24()
-    lifecycle_plan = verify_r25_plan()
-    lifecycle_apply = verify_r25_apply()
+    previous = _without_stdout(verify_r0_r24)
+    lifecycle_plan = _without_stdout(verify_r25_plan)
+    lifecycle_apply = _without_stdout(verify_r25_apply)
 
     if previous.get("ok") is not True or previous.get("phase") != "R0-R24":
         raise RuntimeError("R0-R24 aggregate parity regression")
