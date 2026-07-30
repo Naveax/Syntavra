@@ -159,23 +159,6 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
             Ok(Command::PipelineDescribe)
         }
         [plugins, action] if plugins == "plugins" && action == "list" => Ok(Command::PluginsList),
-        [scheduler, action, state_root] if scheduler == "scheduler" && action == "stats" => {
-            Ok(Command::SchedulerStats {
-                state_root: state_root.clone(),
-            })
-        }
-        [scheduler, action, state_root, limit, states_hex]
-            if scheduler == "scheduler" && action == "list" =>
-        {
-            let limit = limit
-                .parse::<usize>()
-                .map_err(|_| "SCHEDULER_READ_ONLY_LIMIT_INVALID".to_owned())?;
-            Ok(Command::SchedulerList {
-                state_root: state_root.clone(),
-                limit,
-                states_hex: states_hex.clone(),
-            })
-        }
         [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
         [state, action, expected_project_id, project_root, database_path]
             if state == "state" && action == "broker-live-snapshot" =>
@@ -377,17 +360,6 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::PipelineDescribe => println!("{}", static_cli_result_json("pipeline.describe")?),
         Command::PluginsList => println!("{}", static_cli_result_json("plugins.list")?),
-        Command::SchedulerStats { state_root } => {
-            println!("{}", scheduler_stats_json(&state_root)?);
-        }
-        Command::SchedulerList {
-            state_root,
-            limit,
-            states_hex,
-        } => {
-            let states_json = decode_hex(&states_hex)?;
-            println!("{}", scheduler_list_json(&state_root, limit, &states_json)?);
-        }
         Command::StateLayout => println!("{}", state_layout_json()),
         Command::BrokerLiveSnapshot {
             expected_project_id,
