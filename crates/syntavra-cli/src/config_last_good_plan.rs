@@ -33,8 +33,8 @@ fn contains_ephemeral_scope(input: &[u8]) -> Result<bool, String> {
     }
     for line in text.lines().skip(1) {
         let fields = line.split('\t').collect::<Vec<_>>();
-        if fields.first() == Some(&"a") && matches!(fields.get(1), Some(&"session") | Some(&"task"))
-        {
+        let scope = fields.get(1).copied();
+        if fields.first() == Some(&"a") && (scope == Some("session") || scope == Some("task")) {
             return Ok(true);
         }
     }
@@ -63,7 +63,7 @@ fn canonical_snapshot_payload(
     serde_json::to_string(&value).map_err(|_| "CONFIG_LIFECYCLE_SNAPSHOT_JSON_INVALID".to_owned())
 }
 
-pub fn config_last_good_plan_json(
+pub fn plan_json(
     project_root: &str,
     expected_project_id: &str,
     config_wire: &[u8],
