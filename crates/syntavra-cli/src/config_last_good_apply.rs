@@ -137,6 +137,7 @@ fn set_private_permissions(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 fn set_private_permissions(_path: &Path) -> Result<(), String> {
     Ok(())
 }
@@ -150,6 +151,7 @@ fn sync_directory(path: &Path) -> Result<bool, String> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 fn sync_directory(_path: &Path) -> Result<bool, String> {
     Ok(false)
 }
