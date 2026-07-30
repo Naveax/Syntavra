@@ -6,12 +6,16 @@ on:
       - feature/full-parity-r25-r37-completion
     paths:
       - ".github/workflows/export-source-for-development.yml"
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.head_ref == 'feature/full-parity-r25-r37-completion' || github.ref_name == 'feature/full-parity-r25-r37-completion'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
