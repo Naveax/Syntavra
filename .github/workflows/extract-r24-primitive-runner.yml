@@ -1,0 +1,40 @@
+name: Extract R24 Primitive Command Runner
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r24-scheduler-read-only-cli
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r24-scheduler-read-only-cli
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt
+      - name: Extract primitive command runner
+        run: python tools/extract_r24_primitive_runner.py
+      - name: Format Rust workspace
+        run: cargo fmt --all
+      - name: Remove temporary extraction files
+        run: |
+          git rm tools/extract_r24_primitive_runner.py
+          git rm .github/workflows/extract-r24-primitive-runner.yml
+      - name: Commit structural extraction
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/syntavra-cli/src/main.rs
+          git commit -m 'Extract primitive runner from R24 command dispatch'
+          git push origin HEAD:feature/full-parity-r24-scheduler-read-only-cli
