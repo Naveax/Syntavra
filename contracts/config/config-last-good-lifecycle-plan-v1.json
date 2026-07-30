@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "contract_version": 1,
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "phase": "R25",
+  "plan_id": "syntavra-config-last-good-plan-v1",
+  "input_format": "R6CFG1",
+  "maximum_input_bytes": 262144,
+  "target": {
+    "relative_path": ".syntavra/pre-release/config-last-good.json",
+    "file_mode": "0600",
+    "atomic_replace_required": true
+  },
+  "scope_policy": {
+    "persistent": [
+      "user",
+      "project",
+      "environment"
+    ],
+    "ephemeral_forbidden": [
+      "session",
+      "task"
+    ]
+  },
+  "decisions": {
+    "valid_current_config": "write",
+    "invalid_current_with_prior_valid_phase": "retain-existing",
+    "invalid_without_prior_valid_phase": "fail-closed"
+  },
+  "output_exclusions": [
+    "project_root",
+    "absolute_target_path",
+    "raw_config_wire",
+    "raw_secret_material",
+    "loaded_at"
+  ],
+  "mutation": {
+    "filesystem": false,
+    "database_opened": false,
+    "apply_authority": "blocked"
+  },
+  "claim": "RUST_CONFIG_LAST_GOOD_PLAN_PARITY_PROVEN_R25_FIXTURES",
+  "full_product_parity": "FULL_PARITY_NOT_PROVEN"
+}
