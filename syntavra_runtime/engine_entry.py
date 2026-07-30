@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .config_show_router_r24 import ConfigShowRouterR24
+from .scheduler_read_only_router_r24 import SchedulerReadOnlyRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 
@@ -83,12 +83,57 @@ def _find_command(rest: list[str]) -> str:
     return ""
 
 
-def _read_only_request(rest: list[str]) -> tuple[str, str | None] | None:
+def _read_only_request(rest: list[str]) -> tuple[str, dict[str, Any]] | None:
     route = READ_ONLY_COMMANDS.get(tuple(rest))
     if route is not None:
-        return route, None
+        return route, {}
     if len(rest) == 3 and rest[0] == "config" and rest[1] == "explain":
-        return "config.explain", rest[2]
+        return "config.explain", {"explain_path": rest[2]}
+    if rest == ["scheduler", "stats"]:
+        return "scheduler.stats", {}
+    if len(rest) >= 2 and rest[:2] == ["scheduler", "list"]:
+        states: list[str] = []
+        limit = 100
+        index = 2
+        while index < len(rest):
+            value = rest[index]
+            if value == "--state":
+                if index + 1 >= len(rest):
+                    raise EngineSelectionError(
+                        "SCHEDULER_READ_ONLY_STATE_MISSING_R24",
+                        "--state requires a scheduler state",
+                    )
+                states.append(rest[index + 1])
+                index += 2
+                continue
+            if value.startswith("--state="):
+                states.append(value.split("=", 1)[1])
+                index += 1
+                continue
+            if value == "--limit":
+                if index + 1 >= len(rest):
+                    raise EngineSelectionError(
+                        "SCHEDULER_READ_ONLY_LIMIT_MISSING_R24",
+                        "--limit requires an integer",
+                    )
+                raw_limit = rest[index + 1]
+                index += 2
+            elif value.startswith("--limit="):
+                raw_limit = value.split("=", 1)[1]
+                index += 1
+            else:
+                return None
+            try:
+                limit = int(raw_limit)
+            except ValueError as exc:
+                raise EngineSelectionError(
+                    "SCHEDULER_READ_ONLY_LIMIT_INVALID_R24",
+                    "--limit requires an integer",
+                ) from exc
+        return "scheduler.list", {
+            "scheduler_states": tuple(states),
+            "scheduler_limit": limit,
+        }
     return None
 
 
@@ -101,12 +146,12 @@ def main(argv: list[str] | None = None) -> int:
         selector = EngineSelector(project_root=project, state_root=state)
         request = _read_only_request(rest)
         if request is not None:
-            route, explain_path = request
-            router = ConfigShowRouterR24(selector, project_input_root=project)
+            route, route_kwargs = request
+            router = SchedulerReadOnlyRouterR24(selector, project_input_root=project)
             routed = router.route(
                 route,
                 cli_override=override,
-                explain_path=explain_path,
+                **route_kwargs,
             )
             _emit(routed["result"])
             return 0

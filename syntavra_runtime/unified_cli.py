@@ -18,6 +18,7 @@ from .job_scheduler import DurableJobScheduler
 from .migrations import MigrationManager
 from .observability import Observability
 from .read_only_cli_contract import pipeline_description, plugin_inventory
+from .scheduler_read_only_contract import scheduler_read_only_result
 from .prerelease_cli import PRE_RELEASE_COMMANDS, main as prerelease_main
 from .platform import SyntavraPlatform
 from .autonomous_agent import AgentMode, AgentTask, PatchProposal
@@ -168,6 +169,16 @@ def _core_main(argv: list[str]) -> int:
     if args.command == "config" and args.action == "show":
         wire = discover_live_config_wire(project_root=project)
         _emit(show_result(resolve_config_wire(wire)))
+        return 0
+    if args.command == "scheduler" and args.action in {"stats", "list"}:
+        _emit(
+            scheduler_read_only_result(
+                state,
+                f"scheduler.{args.action}",
+                states=tuple(args.state) if args.action == "list" else (),
+                limit=args.limit if args.action == "list" else 100,
+            )
+        )
         return 0
 
     evidence = EvidenceStore(state / "evidence", project_id=project_id)

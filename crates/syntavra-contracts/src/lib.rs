@@ -56,6 +56,16 @@ pub const ENGINE_CAPABILITIES: &[Capability] = &[
         mutation: "read-only",
     },
     Capability {
+        name: "scheduler.list",
+        maturity: "preview",
+        mutation: "read-only",
+    },
+    Capability {
+        name: "scheduler.stats",
+        maturity: "preview",
+        mutation: "read-only",
+    },
+    Capability {
         name: "state.broker-live-snapshot",
         maturity: "preview",
         mutation: "read-only",
@@ -106,6 +116,8 @@ pub const CONTRACT_DESCRIPTOR: &str = concat!(
     "capability=pipeline.describe|preview|read-only\n",
     "capability=plugins.list|preview|read-only\n",
     "capability=receipt.inspect|preview|read-only\n",
+    "capability=scheduler.list|preview|read-only\n",
+    "capability=scheduler.stats|preview|read-only\n",
     "capability=state.broker-live-snapshot|preview|read-only\n",
     "capability=state.broker-snapshot|preview|read-only\n",
     "capability=state.inspect|preview|read-only\n",
@@ -181,6 +193,8 @@ mod tests {
         assert!(capabilities_json().contains("\"name\":\"pipeline.describe\""));
         assert!(capabilities_json().contains("\"name\":\"plugins.list\""));
         assert!(capabilities_json().contains("\"name\":\"receipt.inspect\""));
+        assert!(capabilities_json().contains("\"name\":\"scheduler.list\""));
+        assert!(capabilities_json().contains("\"name\":\"scheduler.stats\""));
         assert!(capabilities_json().contains("\"name\":\"state.broker-live-snapshot\""));
         assert!(capabilities_json().contains("\"name\":\"state.broker-snapshot\""));
         assert!(capabilities_json().contains("\"name\":\"state.inspect\""));

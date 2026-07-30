@@ -4,6 +4,7 @@ mod broker_live_snapshot_contract;
 mod broker_snapshot_contract;
 mod config_contract;
 mod read_only_cli_contract;
+mod scheduler_read_only_contract;
 mod state_layout_contract;
 mod state_receipt_contract;
 mod state_snapshot_contract;
@@ -18,6 +19,7 @@ use config_contract::{
     default_config_wire, explain_config_wire_json, resolve_config_wire, snapshot_json, status_json,
 };
 use read_only_cli_contract::result_json as static_cli_result_json;
+use scheduler_read_only_contract::{scheduler_list_json, scheduler_stats_json};
 use state_layout_contract::state_layout_json;
 use state_receipt_contract::inspect_receipt_json;
 use state_snapshot_contract::inspect_state_root_json;
@@ -40,6 +42,8 @@ const USAGE: &str = concat!(
     "  syntavra-rs config show <config-wire-hex>\n",
     "  syntavra-rs pipeline describe\n",
     "  syntavra-rs plugins list\n",
+    "  syntavra-rs scheduler stats <state-root>\n",
+    "  syntavra-rs scheduler list <state-root> <limit> <states-json-hex>\n",
     "  syntavra-rs state layout\n",
     "  syntavra-rs state inspect <expected-project-id> <project-root>\n",
     "  syntavra-rs state broker-live-snapshot <expected-project-id> <project-root> <database-path>\n",
@@ -65,6 +69,14 @@ enum Command {
     ConfigShow(String),
     PipelineDescribe,
     PluginsList,
+    SchedulerStats {
+        state_root: String,
+    },
+    SchedulerList {
+        state_root: String,
+        limit: usize,
+        states_hex: String,
+    },
     StateLayout,
     BrokerLiveSnapshot {
         expected_project_id: String,
@@ -121,6 +133,23 @@ fn parse_command(arguments: &[String]) -> Result<Command, String> {
             Ok(Command::PipelineDescribe)
         }
         [plugins, action] if plugins == "plugins" && action == "list" => Ok(Command::PluginsList),
+        [scheduler, action, state_root] if scheduler == "scheduler" && action == "stats" => {
+            Ok(Command::SchedulerStats {
+                state_root: state_root.clone(),
+            })
+        }
+        [scheduler, action, state_root, limit, states_hex]
+            if scheduler == "scheduler" && action == "list" =>
+        {
+            let limit = limit
+                .parse::<usize>()
+                .map_err(|_| "SCHEDULER_READ_ONLY_LIMIT_INVALID".to_owned())?;
+            Ok(Command::SchedulerList {
+                state_root: state_root.clone(),
+                limit,
+                states_hex: states_hex.clone(),
+            })
+        }
         [state, action] if state == "state" && action == "layout" => Ok(Command::StateLayout),
         [state, action, expected_project_id, project_root, database_path]
             if state == "state" && action == "broker-live-snapshot" =>
@@ -300,6 +329,17 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::PipelineDescribe => println!("{}", static_cli_result_json("pipeline.describe")?),
         Command::PluginsList => println!("{}", static_cli_result_json("plugins.list")?),
+        Command::SchedulerStats { state_root } => {
+            println!("{}", scheduler_stats_json(&state_root)?);
+        }
+        Command::SchedulerList {
+            state_root,
+            limit,
+            states_hex,
+        } => {
+            let states_json = decode_hex(&states_hex)?;
+            println!("{}", scheduler_list_json(&state_root, limit, &states_json)?);
+        }
         Command::StateLayout => println!("{}", state_layout_json()),
         Command::BrokerLiveSnapshot {
             expected_project_id,
@@ -525,6 +565,30 @@ mod tests {
         assert_eq!(
             parse_command(&args(&["plugins", "list"])),
             Ok(Command::PluginsList)
+        );
+    }
+
+    #[test]
+    fn parses_r24_scheduler_read_only_commands() {
+        assert_eq!(
+            parse_command(&args(&["scheduler", "stats", ".state"])),
+            Ok(Command::SchedulerStats {
+                state_root: ".state".to_owned(),
+            })
+        );
+        assert_eq!(
+            parse_command(&args(&[
+                "scheduler",
+                "list",
+                ".state",
+                "25",
+                "5b22717565756564225d",
+            ])),
+            Ok(Command::SchedulerList {
+                state_root: ".state".to_owned(),
+                limit: 25,
+                states_hex: "5b22717565756564225d".to_owned(),
+            })
         );
     }
 
