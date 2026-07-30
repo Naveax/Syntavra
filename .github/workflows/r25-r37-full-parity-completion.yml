@@ -38,6 +38,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
+      PYTHONHASHSEED: "0"
       RUSTUP_TOOLCHAIN: "1.82.0"
       RUST_BACKTRACE: "1"
       CARGO_INCREMENTAL: "0"
