@@ -20,6 +20,7 @@ from .migrations import MigrationManager
 from .observability import Observability
 from .read_only_cli_contract import pipeline_description, plugin_inventory
 from .scheduler_read_only_contract import scheduler_read_only_result
+from .telemetry_metrics_contract import telemetry_metrics_result
 from .prerelease_cli import PRE_RELEASE_COMMANDS, main as prerelease_main
 from .platform import SyntavraPlatform
 from .autonomous_agent import AgentMode, AgentTask, PatchProposal
@@ -183,6 +184,13 @@ def _core_main(argv: list[str]) -> int:
         return 0
     if args.command == "migrate" and args.action == "plan":
         _emit(migration_plan_read_only_result(project, args.database))
+        return 0
+    if args.command == "telemetry" and args.action == "metrics":
+        result = telemetry_metrics_result("prometheus" if args.prometheus else "json")
+        if result["format"] == "prometheus":
+            print(result["text"])
+        else:
+            _emit(result["metrics"])
         return 0
 
     evidence = EvidenceStore(state / "evidence", project_id=project_id)

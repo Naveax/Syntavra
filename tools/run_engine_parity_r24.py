@@ -16,6 +16,7 @@ from verify_r24_config_show import verify as verify_r24_config_show
 from verify_r24_config_validate import verify as verify_r24_config_validate
 from verify_r24_migration_plan import verify as verify_r24_migration_plan
 from verify_r24_scheduler_read_only import verify as verify_r24_scheduler_read_only
+from verify_r24_telemetry_metrics import verify as verify_r24_telemetry_metrics
 from verify_r24_static_cli_parity import verify as verify_r24_static_cli
 
 
@@ -27,6 +28,7 @@ def verify() -> dict[str, object]:
     config_show = verify_r24_config_show()
     migration_plan = verify_r24_migration_plan()
     scheduler_read_only = verify_r24_scheduler_read_only()
+    telemetry_metrics = verify_r24_telemetry_metrics()
     if previous.get("ok") is not True or previous.get("phase") != "R0-R23":
         raise RuntimeError("R0-R23 aggregate parity regression")
     if static_cli.get("ok") is not True or static_cli.get("phase") != "R24":
@@ -65,6 +67,13 @@ def verify() -> dict[str, object]:
         != ["scheduler.list", "scheduler.stats"]
     ):
         raise RuntimeError("R24 scheduler read-only parity regression")
+    if (
+        telemetry_metrics.get("ok") is not True
+        or telemetry_metrics.get("phase") != "R24"
+        or telemetry_metrics.get("command") != "telemetry.metrics"
+        or telemetry_metrics.get("capability") != "telemetry.metrics"
+    ):
+        raise RuntimeError("R24 telemetry.metrics parity regression")
     return {
         "ok": True,
         "phase": "R0-R24",
@@ -77,6 +86,7 @@ def verify() -> dict[str, object]:
         "config_show": config_show,
         "migration_plan": migration_plan,
         "scheduler_read_only": scheduler_read_only,
+        "telemetry_metrics": telemetry_metrics,
         "claim": "RUST_READ_ONLY_CLI_PARITY_EXPANDED_R24",
         "full_parity_claim": "FULL_PARITY_NOT_PROVEN",
     }
