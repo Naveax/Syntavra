@@ -31,6 +31,7 @@ permissions:
 jobs:
   quality:
     name: R25-R37 quality (${{ matrix.os }})
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -38,6 +39,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RUSTUP_TOOLCHAIN: "1.82.0"
+      RUST_BACKTRACE: "1"
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
     steps:
@@ -50,7 +52,6 @@ jobs:
         run: python -m pip install -e . pytest
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
-          toolchain: 1.82.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
