@@ -14,6 +14,7 @@ from run_engine_parity_r23 import verify as verify_r0_r23
 from verify_r24_config_explain import verify as verify_r24_config_explain
 from verify_r24_config_show import verify as verify_r24_config_show
 from verify_r24_config_validate import verify as verify_r24_config_validate
+from verify_r24_migration_plan import verify as verify_r24_migration_plan
 from verify_r24_scheduler_read_only import verify as verify_r24_scheduler_read_only
 from verify_r24_static_cli_parity import verify as verify_r24_static_cli
 
@@ -24,6 +25,7 @@ def verify() -> dict[str, object]:
     config_validate = verify_r24_config_validate()
     config_explain = verify_r24_config_explain()
     config_show = verify_r24_config_show()
+    migration_plan = verify_r24_migration_plan()
     scheduler_read_only = verify_r24_scheduler_read_only()
     if previous.get("ok") is not True or previous.get("phase") != "R0-R23":
         raise RuntimeError("R0-R23 aggregate parity regression")
@@ -50,6 +52,13 @@ def verify() -> dict[str, object]:
     ):
         raise RuntimeError("R24 config.show parity regression")
     if (
+        migration_plan.get("ok") is not True
+        or migration_plan.get("phase") != "R24"
+        or migration_plan.get("command") != "migration.plan"
+        or migration_plan.get("capability") != "migration.plan"
+    ):
+        raise RuntimeError("R24 migration.plan parity regression")
+    if (
         scheduler_read_only.get("ok") is not True
         or scheduler_read_only.get("phase") != "R24"
         or scheduler_read_only.get("commands")
@@ -66,6 +75,7 @@ def verify() -> dict[str, object]:
         "config_validate": config_validate,
         "config_explain": config_explain,
         "config_show": config_show,
+        "migration_plan": migration_plan,
         "scheduler_read_only": scheduler_read_only,
         "claim": "RUST_READ_ONLY_CLI_PARITY_EXPANDED_R24",
         "full_parity_claim": "FULL_PARITY_NOT_PROVEN",
