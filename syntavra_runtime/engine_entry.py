@@ -6,12 +6,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .config_explain_router_r24 import ConfigExplainRouterR24
+from .config_show_router_r24 import ConfigShowRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 
 SELECTOR_COMMANDS = frozenset({"engine"})
 READ_ONLY_COMMANDS = {
+    ("config", "show"): "config.show",
     ("config", "validate"): "config.validate",
     ("pipeline", "describe"): "pipeline.describe",
     ("plugins", "list"): "plugins.list",
@@ -101,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         request = _read_only_request(rest)
         if request is not None:
             route, explain_path = request
-            router = ConfigExplainRouterR24(selector, project_input_root=project)
+            router = ConfigShowRouterR24(selector, project_input_root=project)
             routed = router.route(
                 route,
                 cli_override=override,
