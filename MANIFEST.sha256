@@ -26,6 +26,7 @@ db8ba5d5780f4d129bbae640248cc989c64aa6ad1520fc991a4b0651dc0fa13e  .github/workfl
 fe4c9d2d01c919280e94060470e52f43db498cbda09291f0fd5eec8abb8425a9  .github/workflows/r24-migration-plan-read-only.yml
 8ada06954afcbbff1da7c70712c30b8f17c6c18de0a467ce4127e7318a58f512  .github/workflows/r24-scheduler-read-only.yml
 df25fe36043eb556dc84f09e11346652380068792d9b31e019849b5c9ed31f21  .github/workflows/r24-static-read-only-cli.yml
+3cbb1bc1365a634b9b38309e285f36a57e7ebff8ad7eb838367434539bc67388  .github/workflows/r24-telemetry-metrics-assemble.yml
 f4d17d1c5d1ba749c4784eafe5c16b84134af2accf4d009b3a64c3bd0861931a  .github/workflows/refresh-branch-manifest.yml
 162b4420cd918279527ecd64ddb9bcc6ee936e1c4c08532852b6c0f1907934bf  .github/workflows/refresh-manifest.yml
 a9d4c51d4720d2515663bd20d81fd1d41d27787bdb76d0df91842c7bd33354a2  .github/workflows/repository-hardening.yml
