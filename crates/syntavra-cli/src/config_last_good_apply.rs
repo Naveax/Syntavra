@@ -84,7 +84,7 @@ fn ensure_secure_parent(root: &Path) -> Result<(PathBuf, Vec<PathBuf>), String> 
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 match fs::create_dir(path) {
-                    Ok(()) => created.push(path.to_path_buf()),
+                    Ok(()) => created.push(path.clone()),
                     Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
                     Err(_) => return Err("CONFIG_LAST_GOOD_APPLY_PARENT_CREATE_FAILED".to_owned()),
                 }
@@ -108,7 +108,9 @@ fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
     }
     let mut file =
         File::open(path).map_err(|_| "CONFIG_LAST_GOOD_APPLY_TARGET_READ_FAILED".to_owned())?;
-    let mut value = Vec::with_capacity(metadata.len() as usize);
+    let capacity = usize::try_from(metadata.len())
+        .map_err(|_| "CONFIG_LAST_GOOD_APPLY_EXISTING_TOO_LARGE".to_owned())?;
+    let mut value = Vec::with_capacity(capacity);
     file.read_to_end(&mut value)
         .map_err(|_| "CONFIG_LAST_GOOD_APPLY_TARGET_READ_FAILED".to_owned())?;
     Ok(value)
@@ -158,6 +160,7 @@ fn cleanup_directories(created: &[PathBuf]) {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn apply_json(
     project_root: &str,
     expected_project_id: &str,
@@ -249,7 +252,7 @@ pub fn apply_json(
         lock_owned = true;
         mutation["lock_created"] = Value::Bool(true);
         writeln!(lock_file, "{}", std::process::id())
-            .and_then(|_| lock_file.sync_all())
+            .and_then(|()| lock_file.sync_all())
             .map_err(|_| "CONFIG_LAST_GOOD_APPLY_LOCK_SYNC_FAILED".to_owned())?;
 
         if target_exists && read_bounded(&target)? == payload {
@@ -280,7 +283,7 @@ pub fn apply_json(
         mutation["temporary_created"] = Value::Bool(true);
         temp_file
             .write_all(&payload)
-            .and_then(|_| temp_file.sync_all())
+            .and_then(|()| temp_file.sync_all())
             .map_err(|_| "CONFIG_LAST_GOOD_APPLY_TEMP_SYNC_FAILED".to_owned())?;
         set_private_permissions(&path)?;
         inspect_optional(
