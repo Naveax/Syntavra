@@ -12,7 +12,8 @@ use std::process::ExitCode;
 
 use config_last_good_plan::config_last_good_plan_json;
 
-const USAGE: &str = "USAGE: syntavra-config-lifecycle-plan <expected-project-id> <project-root> <config-wire-hex>";
+const USAGE: &str =
+    "USAGE: syntavra-config-lifecycle-plan <expected-project-id> <project-root> <config-wire-hex>";
 
 fn hex_nibble(value: u8) -> Result<u8, String> {
     match value {
