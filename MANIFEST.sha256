@@ -23,6 +23,7 @@ a161e460e0f0f5ec9c3198fc9a1d1c5e454c913803c994b5009a7d1626e252a5  .github/workfl
 db8ba5d5780f4d129bbae640248cc989c64aa6ad1520fc991a4b0651dc0fa13e  .github/workflows/r24-config-show-clippy-repair.yml
 9766887e34148494b4dfa1893ce39a108c98b4a1bcca44d9d9d7deade91c1da1  .github/workflows/r24-config-show.yml
 30818803c3d42f01db5c289ff31e1cac008cc367a307a7af20a0bd5c4dec15a3  .github/workflows/r24-config-validate.yml
+fe4c9d2d01c919280e94060470e52f43db498cbda09291f0fd5eec8abb8425a9  .github/workflows/r24-migration-plan-read-only.yml
 8ada06954afcbbff1da7c70712c30b8f17c6c18de0a467ce4127e7318a58f512  .github/workflows/r24-scheduler-read-only.yml
 df25fe36043eb556dc84f09e11346652380068792d9b31e019849b5c9ed31f21  .github/workflows/r24-static-read-only-cli.yml
 f4d17d1c5d1ba749c4784eafe5c16b84134af2accf4d009b3a64c3bd0861931a  .github/workflows/refresh-branch-manifest.yml
