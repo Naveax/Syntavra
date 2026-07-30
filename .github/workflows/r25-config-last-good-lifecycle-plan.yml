@@ -1,0 +1,87 @@
+name: R25 Config Last-Good Lifecycle Plan
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r25-config-last-good-lifecycle-plan
+  pull_request:
+    paths:
+      - "contracts/config/config-last-good-lifecycle-plan-v1.json"
+      - "crates/syntavra-cli/**"
+      - "syntavra_runtime/config_contract.py"
+      - "syntavra_runtime/config_last_good_plan.py"
+      - "syntavra_runtime/state_snapshot_contract.py"
+      - "tools/verify_r25_config_last_good_plan.py"
+      - "tools/run_engine_parity_r25.py"
+      - "tests/runtime/test_config_last_good_plan_r25.py"
+      - "docs/adr/0032-r25-config-last-good-lifecycle-plan.md"
+      - ".github/workflows/r25-config-last-good-lifecycle-plan.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  config-last-good-plan:
+    name: R25 lifecycle plan parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Python test environment
+        run: |
+          python -m pip install --upgrade pip setuptools wheel pytest
+          python -m pip install -e .
+
+      - name: Set up pinned Rust 1.82
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r25-config-last-good-plan
+
+      - name: Run R25 Python regressions
+        run: python -m pytest -q tests/runtime/test_config_last_good_plan_r25.py
+
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Rust workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Run strict Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run Cargo-backed Python/Rust plan parity
+        run: |
+          mkdir -p artifacts/r25-config-last-good-plan
+          python tools/verify_r25_config_last_good_plan.py \
+            | tee artifacts/r25-config-last-good-plan/parity.json
+
+      - name: Run aggregate R0-R25 plan parity
+        run: |
+          python tools/run_engine_parity_r25.py \
+            | tee artifacts/r25-config-last-good-plan/aggregate-r0-r25.json
+
+      - name: Upload R25 plan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r25-config-last-good-lifecycle-plan
+          path: artifacts/r25-config-last-good-plan
+          if-no-files-found: warn
