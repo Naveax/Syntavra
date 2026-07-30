@@ -11,8 +11,16 @@ from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 
 
 INSTALLED_READ_ONLY_ROUTE_COMMANDS = (
+    "config.explain",
     "config.resolve",
+    "config.show",
+    "config.validate",
+    "migration.plan",
+    "pipeline.describe",
+    "plugins.list",
     "receipt.inspect",
+    "scheduler.list",
+    "scheduler.stats",
     "state.broker-live-snapshot",
     "state.broker-snapshot",
     "state.inspect",
