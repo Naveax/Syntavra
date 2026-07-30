@@ -33,8 +33,7 @@ fn contains_ephemeral_scope(input: &[u8]) -> Result<bool, String> {
     }
     for line in text.lines().skip(1) {
         let fields = line.split('\t').collect::<Vec<_>>();
-        if fields.first() == Some(&"a")
-            && matches!(fields.get(1), Some(&"session") | Some(&"task"))
+        if fields.first() == Some(&"a") && matches!(fields.get(1), Some(&"session") | Some(&"task"))
         {
             return Ok(true);
         }
