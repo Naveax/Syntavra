@@ -14,13 +14,16 @@ on:
       - "tools/verify_r24_config_validate.py"
       - "tools/verify_r24_config_explain.py"
       - "tools/verify_r24_config_show.py"
+      - "tools/verify_r24_migration_plan.py"
       - "tools/verify_r24_scheduler_read_only.py"
+      - "tools/run_engine_parity.py"
       - "tools/run_engine_parity_r24.py"
       - "tests/runtime/test_full_parity_catalog_v1.py"
       - "tests/runtime/test_read_only_cli_r24.py"
       - "tests/runtime/test_config_validate_r24.py"
       - "tests/runtime/test_config_explain_r24.py"
       - "tests/runtime/test_config_show_r24.py"
+      - "tests/runtime/test_migration_plan_read_only_r24.py"
       - "tests/runtime/test_scheduler_read_only_r24.py"
       - ".github/workflows/full-engine-parity.yml"
       - "docs/PYTHON_RUST_FULL_PARITY_PLAN.md"
@@ -30,6 +33,7 @@ on:
       - "docs/adr/0026-config-explain-native-parity.md"
       - "docs/adr/0027-canonical-config-show-parity.md"
       - "docs/adr/0028-scheduler-read-only-cli-parity.md"
+      - "docs/adr/0029-migration-plan-read-only-cli-parity.md"
   push:
     branches:
       - main
@@ -42,7 +46,7 @@ jobs:
   parity-program:
     name: R23-R37 Full Parity Freeze Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,6 +76,7 @@ jobs:
           tests/runtime/test_config_validate_r24.py
           tests/runtime/test_config_explain_r24.py
           tests/runtime/test_config_show_r24.py
+          tests/runtime/test_migration_plan_read_only_r24.py
           tests/runtime/test_scheduler_read_only_r24.py
 
       - name: Set up pinned Rust 1.82
@@ -88,6 +93,9 @@ jobs:
       - name: Lint Rust workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      - name: Run R24 migration plan parity
+        run: python tools/verify_r24_migration_plan.py | tee r24-migration-plan-parity.json
+
       - name: Run aggregate R0-R24 parity
         run: python tools/run_engine_parity_r24.py | tee aggregate-r0-r24.json
 
@@ -100,5 +108,6 @@ jobs:
             python-surface.json
             rust-surface.json
             full-parity-report.json
+            r24-migration-plan-parity.json
             aggregate-r0-r24.json
           if-no-files-found: warn
