@@ -41,7 +41,9 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
-fn parse_arguments(arguments: &[String]) -> Result<(&str, &str, Vec<u8>, Option<&str>), String> {
+type ParsedArguments<'a> = (&'a str, &'a str, Vec<u8>, Option<&'a str>);
+
+fn parse_arguments(arguments: &[String]) -> Result<ParsedArguments<'_>, String> {
     match arguments {
         [expected_project_id, project_root, wire_hex] => Ok((
             expected_project_id,
