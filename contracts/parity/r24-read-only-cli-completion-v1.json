@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "phase": "R24",
+  "claim": "READ_ONLY_CLI_PARITY_PROVEN",
+  "full_product_parity": "FULL_PARITY_NOT_PROVEN",
+  "completion_feature": "cli.read-only.complete",
+  "catalog_scope": {
+    "target_phases": [
+      "R22",
+      "R24"
+    ],
+    "category": "cli",
+    "mutation": "read-only",
+    "exclude_feature_ids": [
+      "cli.read-only.complete"
+    ]
+  },
+  "routes": [
+    {
+      "feature_id": "route.version",
+      "python_command": "engine route version",
+      "rust_capability": "version"
+    },
+    {
+      "feature_id": "route.status",
+      "python_command": "engine route status",
+      "rust_capability": "status"
+    },
+    {
+      "feature_id": "route.config.resolve",
+      "python_command": "engine route config.resolve",
+      "rust_capability": "config.resolve"
+    },
+    {
+      "feature_id": "route.state.layout",
+      "python_command": "engine route state.layout",
+      "rust_capability": "state.layout"
+    },
+    {
+      "feature_id": "route.state.inspect",
+      "python_command": "engine route state.inspect",
+      "rust_capability": "state.inspect"
+    },
+    {
+      "feature_id": "route.receipt.inspect",
+      "python_command": "engine route receipt.inspect",
+      "rust_capability": "receipt.inspect"
+    },
+    {
+      "feature_id": "route.state.broker-snapshot",
+      "python_command": "engine route state.broker-snapshot",
+      "rust_capability": "state.broker-snapshot"
+    },
+    {
+      "feature_id": "route.state.broker-live-snapshot",
+      "python_command": "engine route state.broker-live-snapshot",
+      "rust_capability": "state.broker-live-snapshot"
+    },
+    {
+      "feature_id": "route.pipeline.describe",
+      "python_command": "pipeline describe",
+      "rust_capability": "pipeline.describe"
+    },
+    {
+      "feature_id": "route.plugins.list",
+      "python_command": "plugins list",
+      "rust_capability": "plugins.list"
+    },
+    {
+      "feature_id": "route.config.validate",
+      "python_command": "config validate",
+      "rust_capability": "config.resolve"
+    },
+    {
+      "feature_id": "route.config.explain",
+      "python_command": "config explain",
+      "rust_capability": "config.explain"
+    },
+    {
+      "feature_id": "route.config.show",
+      "python_command": "config show",
+      "rust_capability": "config.show"
+    },
+    {
+      "feature_id": "route.scheduler.stats",
+      "python_command": "scheduler stats",
+      "rust_capability": "scheduler.stats"
+    },
+    {
+      "feature_id": "route.scheduler.list",
+      "python_command": "scheduler list",
+      "rust_capability": "scheduler.list"
+    },
+    {
+      "feature_id": "route.migration.plan",
+      "python_command": "migrate plan",
+      "rust_capability": "migration.plan"
+    },
+    {
+      "feature_id": "route.telemetry.metrics",
+      "python_command": "telemetry metrics",
+      "rust_capability": "telemetry.metrics"
+    }
+  ],
+  "real_binary_verifiers": [
+    "tools/verify_r22_capability_aware_auto.py",
+    "tools/verify_r24_static_cli_parity.py",
+    "tools/verify_r24_config_validate.py",
+    "tools/verify_r24_config_explain.py",
+    "tools/verify_r24_config_show.py",
+    "tools/verify_r24_scheduler_read_only.py",
+    "tools/verify_r24_migration_plan.py",
+    "tools/verify_r24_telemetry_metrics.py"
+  ],
+  "safety_requirements": {
+    "python_is_reference": true,
+    "rust_must_not_shell_out_to_python": true,
+    "hidden_fallback_forbidden": true,
+    "explicit_rust_fail_closed": true,
+    "auto_is_route_scoped": true,
+    "read_only_commands_must_not_create_product_state": true,
+    "mutation_process_mcp_and_setup_authority_excluded": true
+  }
+}
