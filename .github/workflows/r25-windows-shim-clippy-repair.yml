@@ -1,0 +1,58 @@
+name: R25 Windows Shim Clippy Repair
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r25-config-last-good-atomic-apply
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-parity-r25-config-last-good-atomic-apply
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Patch only cfg-not-unix API shims
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/syntavra-cli/src/config_last_good_apply.rs')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  '#[cfg(not(unix))]\nfn set_private_permissions',
+                  '#[cfg(not(unix))]\n#[allow(clippy::unnecessary_wraps)]\nfn set_private_permissions',
+              ),
+              (
+                  '#[cfg(not(unix))]\nfn sync_directory',
+                  '#[cfg(not(unix))]\n#[allow(clippy::unnecessary_wraps)]\nfn sync_directory',
+              ),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'exact replacement count mismatch: {old!r} -> {text.count(old)}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          changed="$(git diff --name-only)"
+          [ "$changed" = "crates/syntavra-cli/src/config_last_good_apply.rs" ] || {
+            echo "unexpected changed files: $changed" >&2
+            exit 1
+          }
+      - name: Commit platform shim annotations
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/syntavra-cli/src/config_last_good_apply.rs
+          git commit -m "Document R25 platform shim fallibility"
+          git push origin HEAD:feature/full-parity-r25-config-last-good-atomic-apply
