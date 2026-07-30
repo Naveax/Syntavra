@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Promote completion catalog entry
+      - name: Promote and repair completion catalog entries
         run: |
           python - <<'PY'
           import json
@@ -44,17 +44,16 @@ jobs:
           if not isinstance(rows, list):
               raise SystemExit("catalog features must be a list")
 
-          matches = [
-              row
+          by_id = {
+              row.get("id"): row
               for row in rows
-              if isinstance(row, dict) and row.get("id") == "cli.read-only.complete"
-          ]
-          if len(matches) != 1:
-              raise SystemExit(
-                  f"expected one cli.read-only.complete row, got {len(matches)}"
-              )
+              if isinstance(row, dict) and isinstance(row.get("id"), str)
+          }
 
-          row = matches[0]
+          completion = by_id.get("cli.read-only.complete")
+          if completion is None:
+              raise SystemExit("missing cli.read-only.complete catalog row")
+
           expected_old = {
               "target_phase": "R24",
               "category": "cli",
@@ -75,20 +74,42 @@ jobs:
               "contract": "contracts/parity/r24-read-only-cli-completion-v1.json",
               "parity_tests": ["tools/verify_r24_read_only_completion.py"],
           }
-
-          current = {key: row.get(key) for key in desired}
-          if current == desired:
-              print("completion catalog row already current")
-          elif current == expected_old:
-              row.update(desired)
-              path.write_text(
-                  json.dumps(catalog, indent=2, sort_keys=False) + "\n",
-                  encoding="utf-8",
-                  newline="\n",
-              )
-              print("completion catalog row promoted")
-          else:
+          current = {key: completion.get(key) for key in desired}
+          if current == expected_old:
+              completion.update(desired)
+          elif current != desired:
               raise SystemExit(f"completion catalog row drifted: {current!r}")
+
+          r22_ids = {
+              "route.version",
+              "route.status",
+              "route.config.resolve",
+              "route.state.layout",
+              "route.state.inspect",
+              "route.receipt.inspect",
+              "route.state.broker-snapshot",
+              "route.state.broker-live-snapshot",
+          }
+          old_contract = "contracts/engine/auto-routing-v1.json"
+          canonical_contract = "contracts/engine/read-only-routing-v11.json"
+          for identifier in sorted(r22_ids):
+              row = by_id.get(identifier)
+              if row is None:
+                  raise SystemExit(f"missing R22 catalog row: {identifier}")
+              contract = row.get("contract")
+              if contract == old_contract:
+                  row["contract"] = canonical_contract
+              elif contract != canonical_contract:
+                  raise SystemExit(
+                      f"unexpected R22 contract for {identifier}: {contract!r}"
+                  )
+
+          path.write_text(
+              json.dumps(catalog, indent=2, sort_keys=False) + "\n",
+              encoding="utf-8",
+              newline="\n",
+          )
+          print("completion row and R22 contract paths are canonical")
           PY
 
       - name: Remove one-time assembly workflow
