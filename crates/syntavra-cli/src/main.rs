@@ -277,6 +277,13 @@ fn run_config_explain(wire_hex: &str, path_hex: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn run_config_snapshot(encoded: &str) -> Result<(), String> {
+    let wire = decode_hex(encoded)?;
+    let snapshot = resolve_config_wire(&wire)?;
+    println!("{}", snapshot_json(&snapshot)?);
+    Ok(())
+}
+
 fn run(command: Command) -> Result<(), String> {
     match command {
         Command::Version => println!("{}", version_json()),
@@ -288,15 +295,8 @@ fn run(command: Command) -> Result<(), String> {
         Command::ConfigExplain { wire_hex, path_hex } => {
             run_config_explain(&wire_hex, &path_hex)?;
         }
-        Command::ConfigResolve(encoded) => {
-            let wire = decode_hex(&encoded)?;
-            let snapshot = resolve_config_wire(&wire)?;
-            println!("{}", snapshot_json(&snapshot)?);
-        }
-        Command::ConfigShow(encoded) => {
-            let wire = decode_hex(&encoded)?;
-            let snapshot = resolve_config_wire(&wire)?;
-            println!("{}", snapshot_json(&snapshot)?);
+        Command::ConfigResolve(encoded) | Command::ConfigShow(encoded) => {
+            run_config_snapshot(&encoded)?;
         }
         Command::PipelineDescribe => println!("{}", static_cli_result_json("pipeline.describe")?),
         Command::PluginsList => println!("{}", static_cli_result_json("plugins.list")?),
