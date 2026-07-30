@@ -9,6 +9,7 @@ capability=config.resolve|preview|read-only
 capability=config.show|preview|read-only
 capability=engine.capabilities|preview|read-only
 capability=engine.contract-hash|preview|read-only
+capability=migration.plan|preview|read-only
 capability=pipeline.describe|preview|read-only
 capability=plugins.list|preview|read-only
 capability=receipt.inspect|preview|read-only

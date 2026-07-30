@@ -15,6 +15,7 @@ from .unified_config import ConfigManager
 from .evidence import EvidenceStore
 from .janitor import RuntimeJanitor
 from .job_scheduler import DurableJobScheduler
+from .migration_plan_read_only_contract import migration_plan_read_only_result
 from .migrations import MigrationManager
 from .observability import Observability
 from .read_only_cli_contract import pipeline_description, plugin_inventory
@@ -179,6 +180,9 @@ def _core_main(argv: list[str]) -> int:
                 limit=args.limit if args.action == "list" else 100,
             )
         )
+        return 0
+    if args.command == "migrate" and args.action == "plan":
+        _emit(migration_plan_read_only_result(project, args.database))
         return 0
 
     evidence = EvidenceStore(state / "evidence", project_id=project_id)

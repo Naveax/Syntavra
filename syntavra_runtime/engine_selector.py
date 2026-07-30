@@ -24,6 +24,7 @@ RUST_CAPABILITIES = (
     "config.show",
     "engine.capabilities",
     "engine.contract-hash",
+    "migration.plan",
     "pipeline.describe",
     "plugins.list",
     "receipt.inspect",
@@ -51,6 +52,7 @@ ENGINE_CONTRACT_DESCRIPTOR = (
     "capability=config.show|preview|read-only\n"
     "capability=engine.capabilities|preview|read-only\n"
     "capability=engine.contract-hash|preview|read-only\n"
+    "capability=migration.plan|preview|read-only\n"
     "capability=pipeline.describe|preview|read-only\n"
     "capability=plugins.list|preview|read-only\n"
     "capability=receipt.inspect|preview|read-only\n"

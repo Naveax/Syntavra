@@ -3,6 +3,7 @@
 mod broker_live_snapshot_contract;
 mod broker_snapshot_contract;
 mod config_contract;
+mod migration_plan_read_only_contract;
 mod read_only_cli_contract;
 mod scheduler_read_only_contract;
 mod state_layout_contract;
@@ -18,6 +19,7 @@ use broker_snapshot_contract::snapshot_broker_database_json;
 use config_contract::{
     default_config_wire, explain_config_wire_json, resolve_config_wire, snapshot_json, status_json,
 };
+use migration_plan_read_only_contract::migration_plan_json;
 use read_only_cli_contract::result_json as static_cli_result_json;
 use scheduler_read_only_contract::{scheduler_list_json, scheduler_stats_json};
 use state_layout_contract::state_layout_json;
@@ -40,6 +42,7 @@ const USAGE: &str = concat!(
     "  syntavra-rs config explain <config-wire-hex> <path-utf8-hex>\n",
     "  syntavra-rs config resolve <config-wire-hex>\n",
     "  syntavra-rs config show <config-wire-hex>\n",
+    "  syntavra-rs migration plan <project-root> <database-path-utf8-hex>\n",
     "  syntavra-rs pipeline describe\n",
     "  syntavra-rs plugins list\n",
     "  syntavra-rs scheduler stats <state-root>\n",
@@ -67,6 +70,10 @@ enum Command {
     },
     ConfigResolve(String),
     ConfigShow(String),
+    MigrationPlan {
+        project_root: String,
+        database_path_hex: String,
+    },
     PipelineDescribe,
     PluginsList,
     SchedulerStats {
@@ -134,7 +141,24 @@ fn parse_scheduler_command(arguments: &[String]) -> Result<Option<Command>, Stri
     }
 }
 
+fn parse_migration_command(arguments: &[String]) -> Option<Command> {
+    match arguments {
+        [migration, action, project_root, database_path_hex]
+            if migration == "migration" && action == "plan" =>
+        {
+            Some(Command::MigrationPlan {
+                project_root: project_root.clone(),
+                database_path_hex: database_path_hex.clone(),
+            })
+        }
+        _ => None,
+    }
+}
+
 fn parse_command(arguments: &[String]) -> Result<Command, String> {
+    if let Some(command) = parse_migration_command(arguments) {
+        return Ok(command);
+    }
     if let Some(command) = parse_scheduler_command(arguments)? {
         return Ok(command);
     }
@@ -322,6 +346,21 @@ fn run_config_snapshot(encoded: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn run_migration(command: &Command) -> Result<bool, String> {
+    match command {
+        Command::MigrationPlan {
+            project_root,
+            database_path_hex,
+        } => {
+            let database_path = String::from_utf8(decode_hex(database_path_hex)?)
+                .map_err(|_| "MIGRATION_PLAN_DATABASE_PATH_UTF8_INVALID".to_owned())?;
+            println!("{}", migration_plan_json(project_root, &database_path)?);
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 fn run_scheduler(command: &Command) -> Result<bool, String> {
     match command {
         Command::SchedulerStats { state_root } => {
@@ -394,7 +433,7 @@ fn run_primitive(command: &Command) -> Result<bool, String> {
 }
 
 fn run(command: Command) -> Result<(), String> {
-    if run_scheduler(&command)? || run_primitive(&command)? {
+    if run_migration(&command)? || run_scheduler(&command)? || run_primitive(&command)? {
         return Ok(());
     }
     match command {
@@ -449,7 +488,8 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::Capabilities => println!("{}", capabilities_json()),
         Command::ContractHash => println!("{}", contract_hash_json()),
-        Command::SchedulerStats { .. }
+        Command::MigrationPlan { .. }
+        | Command::SchedulerStats { .. }
         | Command::SchedulerList { .. }
         | Command::PrimitiveSha256(_)
         | Command::PrimitiveCanonicalize { .. }
@@ -491,6 +531,17 @@ mod tests {
         assert_eq!(
             parse_command(&args(&["engine", "contract-hash"])),
             Ok(Command::ContractHash)
+        );
+    }
+
+    #[test]
+    fn parses_r24_migration_plan_command() {
+        assert_eq!(
+            parse_command(&args(&["migration", "plan", ".", "64622e73716c69746533"])),
+            Ok(Command::MigrationPlan {
+                project_root: ".".to_owned(),
+                database_path_hex: "64622e73716c69746533".to_owned(),
+            })
         );
     }
 
