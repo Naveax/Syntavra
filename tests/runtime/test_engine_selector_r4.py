@@ -52,6 +52,7 @@ def _rust_runner(_binary: Path, arguments: tuple[str, ...]):
                     "state.inspect",
                     "state.layout",
                     "status",
+                    "telemetry.metrics",
                     "version",
                 )
             ],
@@ -152,6 +153,7 @@ def test_rust_verification_and_persisted_selection(tmp_path: Path) -> None:
         "state.inspect",
         "state.layout",
         "status",
+        "telemetry.metrics",
         "version",
     )
 
