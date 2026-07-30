@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import os
 import re
@@ -13,6 +15,7 @@ SCHEMA_VERSION: Final = 1
 CAPABILITY: Final = "migration.plan"
 ROUTE: Final = "migration.plan"
 MAXIMUM_DATABASE_BYTES: Final = 64 * 1024 * 1024
+MAXIMUM_PATH_BYTES: Final = 4096
 INPUT_PROFILE: Final = "project-bound-quiescent-migration-sqlite-v1"
 INPUT_FORMAT: Final = "canonical-project-relative-path"
 
@@ -60,7 +63,8 @@ def _project_root(project_root: Path) -> Path:
 def resolve_database(project_root: Path, database_input: str | Path) -> tuple[Path, str]:
     root = _project_root(project_root)
     raw = str(database_input).strip()
-    if not raw or "\x00" in raw:
+    encoded = raw.encode("utf-8", errors="strict")
+    if not raw or "\x00" in raw or len(encoded) > MAXIMUM_PATH_BYTES:
         raise _error("MIGRATION_PLAN_DATABASE_PATH_INVALID")
     candidate = Path(raw)
     selected = candidate if candidate.is_absolute() else root / candidate
@@ -82,6 +86,25 @@ def resolve_database(project_root: Path, database_input: str | Path) -> tuple[Pa
             raise _error("MIGRATION_PLAN_DATABASE_PARENT_NOT_DIRECTORY")
     logical = relative.as_posix()
     return selected, logical
+
+
+def canonical_request_bytes(project_root: Path, database_input: str | Path) -> bytes:
+    _database, logical = resolve_database(project_root, database_input)
+    return json.dumps(
+        {"route": ROUTE, "database": logical},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def rust_argv(project_root: Path, database_input: str | Path) -> tuple[str, ...]:
+    _database, logical = resolve_database(project_root, database_input)
+    return ("migration", "plan", str(_project_root(project_root)), logical.encode("utf-8").hex())
+
+
+def request_digest(project_root: Path, database_input: str | Path) -> str:
+    return hashlib.sha256(canonical_request_bytes(project_root, database_input)).hexdigest()
 
 
 def _reject_sidecars(database: Path) -> None:
@@ -232,9 +255,13 @@ __all__ = [
     "INPUT_FORMAT",
     "INPUT_PROFILE",
     "MAXIMUM_DATABASE_BYTES",
+    "MAXIMUM_PATH_BYTES",
     "MigrationPlanReadOnlyError",
     "ROUTE",
     "SCHEMA_VERSION",
+    "canonical_request_bytes",
     "migration_plan_read_only_result",
+    "request_digest",
     "resolve_database",
+    "rust_argv",
 ]
