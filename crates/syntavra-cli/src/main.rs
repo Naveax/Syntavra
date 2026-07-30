@@ -439,6 +439,9 @@ fn run(command: Command) -> Result<(), String> {
                 normalize_repository_path(&path).map_err(|error| error.code().to_owned())?;
             println!("{{\"path\":{}}}", json_string(&normalized));
         }
+        Command::SchedulerStats { .. } | Command::SchedulerList { .. } => {
+            unreachable!("scheduler commands are handled before the main match")
+        }
         Command::Help => print!("{USAGE}"),
     }
     Ok(())
