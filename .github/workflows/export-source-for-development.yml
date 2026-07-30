@@ -1,0 +1,28 @@
+name: Temporary Source Export
+
+on:
+  push:
+    branches:
+      - feature/full-parity-r25-r37-completion
+    paths:
+      - ".github/workflows/export-source-for-development.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove transient repository metadata
+        shell: bash
+        run: rm -rf .git
+      - name: Upload source tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntavra-source-tree
+          path: .
+          include-hidden-files: true
+          retention-days: 1
