@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from syntavra_runtime.engine_cli import INSTALLED_READ_ONLY_ROUTE_COMMANDS
+from syntavra_runtime.telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 from tools.verify_r24_read_only_completion import CONTRACT_PATH, ROOT, verify
 
 
@@ -17,6 +19,10 @@ def test_r24_completion_contract_has_unique_routes() -> None:
     assert len(commands) == len(set(commands))
     assert contract["claim"] == "READ_ONLY_CLI_PARITY_PROVEN"
     assert contract["full_product_parity"] == "FULL_PARITY_NOT_PROVEN"
+
+
+def test_installed_route_inventory_matches_router() -> None:
+    assert INSTALLED_READ_ONLY_ROUTE_COMMANDS == TelemetryMetricsRouterR24.supported_commands()
 
 
 def test_r24_completion_verifier_passes_structural_gate() -> None:
