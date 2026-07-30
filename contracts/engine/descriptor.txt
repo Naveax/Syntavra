@@ -6,6 +6,7 @@ engine=rust
 engine_stability=experimental
 capability=config.explain|preview|read-only
 capability=config.resolve|preview|read-only
+capability=config.show|preview|read-only
 capability=engine.capabilities|preview|read-only
 capability=engine.contract-hash|preview|read-only
 capability=pipeline.describe|preview|read-only

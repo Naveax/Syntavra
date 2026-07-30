@@ -38,6 +38,7 @@ def _rust_runner(_binary: Path, arguments: tuple[str, ...]):
                 for name in (
                     "config.explain",
                     "config.resolve",
+                    "config.show",
                     "engine.capabilities",
                     "engine.contract-hash",
                     "pipeline.describe",
@@ -134,6 +135,7 @@ def test_rust_verification_and_persisted_selection(tmp_path: Path) -> None:
     assert verification.capabilities == (
         "config.explain",
         "config.resolve",
+        "config.show",
         "engine.capabilities",
         "engine.contract-hash",
         "pipeline.describe",

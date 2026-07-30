@@ -184,6 +184,7 @@ def verify() -> dict[str, object]:
     expected = [
         "config.explain",
         "config.resolve",
+        "config.show",
         "engine.capabilities",
         "engine.contract-hash",
         "pipeline.describe",
