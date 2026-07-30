@@ -25,7 +25,7 @@ db8ba5d5780f4d129bbae640248cc989c64aa6ad1520fc991a4b0651dc0fa13e  .github/workfl
 30818803c3d42f01db5c289ff31e1cac008cc367a307a7af20a0bd5c4dec15a3  .github/workflows/r24-config-validate.yml
 fe4c9d2d01c919280e94060470e52f43db498cbda09291f0fd5eec8abb8425a9  .github/workflows/r24-migration-plan-read-only.yml
 b2c6b2a5a6490d0cb3b0daf01f69920ddae12bfbd3ac66d558d257dffb992e45  .github/workflows/r24-read-only-cli-completion.yml
-fa637675912e5c1040d5d41c8e59e07f55c3153ea158441cda4745df05776976  .github/workflows/r24-read-only-completion-assembly.yml
+4d4ccce35837a4e83ef4ca604608114de89ac0ce25f8a4b017369e0926881346  .github/workflows/r24-read-only-completion-assembly.yml
 8ada06954afcbbff1da7c70712c30b8f17c6c18de0a467ce4127e7318a58f512  .github/workflows/r24-scheduler-read-only.yml
 df25fe36043eb556dc84f09e11346652380068792d9b31e019849b5c9ed31f21  .github/workflows/r24-static-read-only-cli.yml
 164630e629dafd48568a73e9417176c23d866452092420871f0d52b7dcbbf2d2  .github/workflows/r24-telemetry-metrics-read-only.yml
