@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           path = Path('crates/syntavra-cli/src/full_parity_runtime.rs')
@@ -174,18 +175,29 @@ jobs:
                   Err(_) => "",
               }''': '''    std::str::from_utf8(&raw[start..]).unwrap_or_default()''',
               '''            (None, Some(Value::Null)) | (None, None) => true,''': '''            (None, Some(Value::Null) | None) => true,''',
-              '''            item.ends_with(".py")
-                  || item.contains("site-packages")
-                  || item.to_ascii_lowercase().ends_with("python.exe")''': '''            Path::new(item)
-                  .extension()
-                  .is_some_and(|extension| extension.eq_ignore_ascii_case("py"))
-                  || item.contains("site-packages")
-                  || item.to_ascii_lowercase().ends_with("python.exe")''',
           }
           for old_fragment, new_fragment in replacements.items():
               if old_fragment not in source:
                   raise SystemExit(f'missing expected source fragment:\n{old_fragment}')
               source = source.replace(old_fragment, new_fragment, 1)
+
+          extension_pattern = re.compile(
+              r'(?m)^(?P<indent>\s*)item\.ends_with\("\.py"\)\n'
+              r'\s*\|\| item\.contains\("site-packages"\)\n'
+              r'\s*\|\| item\.to_ascii_lowercase\(\)\.ends_with\("python\.exe"\)'
+          )
+          def replace_extension(match: re.Match[str]) -> str:
+              indent = match.group('indent')
+              return (
+                  f'{indent}Path::new(item)\n'
+                  f'{indent}    .extension()\n'
+                  f'{indent}    .is_some_and(|extension| extension.eq_ignore_ascii_case("py"))\n'
+                  f'{indent}    || item.contains("site-packages")\n'
+                  f'{indent}    || item.to_ascii_lowercase().ends_with("python.exe")'
+              )
+          source, count = extension_pattern.subn(replace_extension, source, count=1)
+          if count != 1:
+              raise SystemExit('distribution extension predicate not found')
 
           path.write_text(source, encoding='utf-8')
           PY
