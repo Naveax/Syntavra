@@ -56,7 +56,6 @@ jobs:
               raise SystemExit('mutation helper block not found')
           source = source.replace(old, new, 1)
 
-          # Wrap every five-argument mutation call in an array without touching the definition.
           cursor = 0
           pieces = []
           while True:
@@ -149,10 +148,10 @@ jobs:
           ) -> Result<String> {''',
               '''        "receipt": receipt(phase, operation, project_id, request, &result)?,''': '''        "receipt": receipt(phase, operation, project_id, request, result)?,''',
               '''        result,
-              mutation_value,
-          )''': '''        &result,
-              &mutation_value,
-          )''',
+                  mutation_value,
+              )''': '''        &result,
+                  &mutation_value,
+              )''',
               '''    Ok(json!({
                   "bytes_delta": text.len() as i64 - normalized.len() as i64,
                   "rewritten": normalized,
