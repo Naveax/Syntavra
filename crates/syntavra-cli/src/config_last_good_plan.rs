@@ -26,27 +26,38 @@ fn map_project_error(error: &str) -> String {
 }
 
 fn contains_ephemeral_scope(input: &[u8]) -> Result<bool, String> {
-    let text = std::str::from_utf8(input).map_err(|_| "CONFIG_LIFECYCLE_WIRE_INVALID".to_owned())?;
+    let text =
+        std::str::from_utf8(input).map_err(|_| "CONFIG_LIFECYCLE_WIRE_INVALID".to_owned())?;
     if !text.ends_with('\n') || text.lines().next() != Some("R6CFG1") {
         return Err("CONFIG_LIFECYCLE_WIRE_INVALID".to_owned());
     }
     for line in text.lines().skip(1) {
         let fields = line.split('\t').collect::<Vec<_>>();
-        if matches!(fields.as_slice(), ["a", "session" | "task", ..]) {
+        if fields.first() == Some(&"a")
+            && matches!(fields.get(1), Some(&"session") | Some(&"task"))
+        {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-fn canonical_snapshot_payload(snapshot: &crate::config_contract::ConfigSnapshot) -> Result<String, String> {
+fn canonical_snapshot_payload(
+    snapshot: &crate::config_contract::ConfigSnapshot,
+) -> Result<String, String> {
     let rendered = snapshot_json(snapshot)?;
     let value: Value = serde_json::from_str(&rendered)
         .map_err(|_| "CONFIG_LIFECYCLE_SNAPSHOT_JSON_INVALID".to_owned())?;
     let Some(object) = value.as_object() else {
         return Err("CONFIG_LIFECYCLE_SNAPSHOT_KEYS_INVALID".to_owned());
     };
-    let expected = ["config_hash", "provenance", "schema_version", "values", "warnings"];
+    let expected = [
+        "config_hash",
+        "provenance",
+        "schema_version",
+        "values",
+        "warnings",
+    ];
     if object.len() != expected.len() || expected.iter().any(|key| !object.contains_key(*key)) {
         return Err("CONFIG_LIFECYCLE_SNAPSHOT_KEYS_INVALID".to_owned());
     }
@@ -65,7 +76,8 @@ pub fn config_last_good_plan_json(
         return Err("CONFIG_LIFECYCLE_WIRE_TOO_LARGE".to_owned());
     }
 
-    let actual_project_id = project_id_for_root(project_root).map_err(|error| map_project_error(&error))?;
+    let actual_project_id =
+        project_id_for_root(project_root).map_err(|error| map_project_error(&error))?;
     if actual_project_id != expected_project_id {
         return Err("CONFIG_LIFECYCLE_PROJECT_MISMATCH".to_owned());
     }
@@ -78,7 +90,11 @@ pub fn config_last_good_plan_json(
     let payload = canonical_snapshot_payload(&snapshot)?;
     let warnings = snapshot.warnings.clone();
     let fallback_used = !warnings.is_empty();
-    let decision = if fallback_used { "retain-existing" } else { "write" };
+    let decision = if fallback_used {
+        "retain-existing"
+    } else {
+        "write"
+    };
 
     let plan = json!({
         "apply_authority": "blocked",
