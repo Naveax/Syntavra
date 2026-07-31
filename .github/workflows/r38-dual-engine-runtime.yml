@@ -9,6 +9,7 @@ on:
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
       - "tools/verify_dual_engine_public_surface.py"
+      - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
       - ".github/workflows/r38-dual-engine-runtime.yml"
   push:
@@ -19,6 +20,7 @@ on:
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
       - "tools/verify_dual_engine_public_surface.py"
+      - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
       - ".github/workflows/r38-dual-engine-runtime.yml"
   workflow_dispatch:
@@ -62,6 +64,8 @@ jobs:
           cache-on-failure: false
       - name: Verify complete public-command inventory
         run: python tools/verify_dual_engine_public_surface.py | tee dual-engine-coverage.json
+      - name: Run dual-engine contract regressions
+        run: python -m pytest -q tests/runtime/test_dual_engine_public_surface_r38.py
       - name: Verify Rust formatting
         run: cargo fmt --all -- --check
       - name: Run launcher unit tests
