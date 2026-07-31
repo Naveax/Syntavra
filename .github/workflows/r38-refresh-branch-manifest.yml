@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-17-cache-repair-final
+  group: r38-generated-metadata-17-strict-clippy
   cancel-in-progress: false
 
 jobs:
@@ -36,85 +36,73 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Repair selector management error propagation
+      - name: Repair selector strict-Clippy findings
         run: |
           python - <<'PY'
           from pathlib import Path
 
           path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
           text = path.read_text(encoding="utf-8")
-          old = '''fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
-              if parsed.forwarded.first().map(String::as_str) != Some("engine") {
-                  return None;
-              }
-              let action = parsed.forwarded.get(1).map(String::as_str).unwrap_or("status");
-              Some(match action {
-                  "status" | "list" => Ok(engine_status(parsed)),
-                  "verify" => {
-                      let engine = parsed
-                          .forwarded
-                          .get(2)
-                          .ok_or_else(|| "ENGINE_VERIFY_MISSING_ENGINE".to_owned())
-                          .and_then(|value| Engine::parse(value))?;
-                      Ok(verify_engine(engine))
-                  }
-                  "use" => {
-                      let engine = parsed
-                          .forwarded
-                          .get(2)
-                          .ok_or_else(|| "ENGINE_USE_MISSING_ENGINE".to_owned())
-                          .and_then(|value| Engine::parse(value))?;
-                      let scope = parsed
-                          .forwarded
-                          .iter()
-                          .position(|value| value == "--scope")
-                          .and_then(|index| parsed.forwarded.get(index + 1))
-                          .map(String::as_str)
-                          .unwrap_or("project");
-                      use_engine(parsed, scope, engine)
-                  }
-                  _ => Err("ENGINE_MANAGEMENT_ACTION_INVALID".to_owned()),
-              })
-          }
-          '''
-          new = '''fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
-              if parsed.forwarded.first().map(String::as_str) != Some("engine") {
-                  return None;
-              }
-              let action = parsed.forwarded.get(1).map(String::as_str).unwrap_or("status");
-              let result = match action {
-                  "status" | "list" => Ok(engine_status(parsed)),
-                  "verify" => parsed
+
+          rust_start = "fn discover_rust_program() -> Option<Program> {"
+          python_start = "fn discover_python_program() -> Option<Program> {"
+          if rust_start in text:
+              start = text.index(rust_start)
+              end = text.index(python_start, start)
+              text = text[:start] + text[end:]
+
+          replacements = [
+              (
+                  '''    let available = match engine {
+                      Engine::Python => discover_python_program().is_some(),
+                      Engine::Rust => true,
+                      Engine::Auto => discover_python_program().is_some(),
+                  };''',
+                  '''    let available = match engine {
+                      Engine::Auto | Engine::Python => discover_python_program().is_some(),
+                      Engine::Rust => true,
+                  };''',
+              ),
+              (
+                  '''    let action = parsed
                       .forwarded
-                      .get(2)
-                      .ok_or_else(|| "ENGINE_VERIFY_MISSING_ENGINE".to_owned())
-                      .and_then(|value| Engine::parse(value))
-                      .map(verify_engine),
-                  "use" => {
-                      let scope = parsed
+                      .get(1)
+                      .map(String::as_str)
+                      .unwrap_or("status");''',
+                  '''    let action = parsed.forwarded.get(1).map_or("status", String::as_str);''',
+              ),
+              (
+                  '''            let scope = parsed
                           .forwarded
                           .iter()
                           .position(|value| value == "--scope")
                           .and_then(|index| parsed.forwarded.get(index + 1))
                           .map(String::as_str)
-                          .unwrap_or("project");
-                      parsed
+                          .unwrap_or("project");''',
+                  '''            let scope = parsed
                           .forwarded
-                          .get(2)
-                          .ok_or_else(|| "ENGINE_USE_MISSING_ENGINE".to_owned())
-                          .and_then(|value| Engine::parse(value))
-                          .and_then(|engine| use_engine(parsed, scope, engine))
-                  }
-                  _ => Err("ENGINE_MANAGEMENT_ACTION_INVALID".to_owned()),
-              };
-              Some(result)
-          }
-          '''
-          old_count = text.count(old)
-          new_count = text.count(new)
-          assert (old_count, new_count) in {(1, 0), (0, 1)}, (old_count, new_count)
-          if old_count == 1:
-              path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+                          .iter()
+                          .position(|value| value == "--scope")
+                          .and_then(|index| parsed.forwarded.get(index + 1))
+                          .map_or("project", String::as_str);''',
+              ),
+              (
+                  '''    Ok(ExitCode::from(status.code().unwrap_or(1) as u8))''',
+                  '''    let code = status
+                      .code()
+                      .and_then(|value| u8::try_from(value).ok())
+                      .unwrap_or(1);
+                  Ok(ExitCode::from(code))''',
+              ),
+          ]
+          for old, new in replacements:
+              old_count = text.count(old)
+              new_count = text.count(new)
+              assert (old_count, new_count) in {(1, 0), (0, 1)}, (old_count, new_count, old)
+              if old_count == 1:
+                  text = text.replace(old, new)
+
+          path.write_text(text, encoding="utf-8", newline="\n")
           PY
       - name: Format Rust workspace
         run: cargo fmt --all
@@ -135,6 +123,7 @@ jobs:
               "crates/syntavra-cli/src/bin/syntavra.rs",
               "crates/syntavra-cli/src/native_cache_amortize.rs",
               "crates/syntavra-cli/src/native_product.rs",
+              "crates/syntavra-cli/src/native_prove_plan.rs",
           }
           assert changed <= allowed, changed
           PY
@@ -149,6 +138,7 @@ jobs:
           git add MANIFEST.sha256 \
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_cache_amortize.rs \
-            crates/syntavra-cli/src/native_product.rs
-          git commit -m "fix: restore native cache amortization parity"
+            crates/syntavra-cli/src/native_product.rs \
+            crates/syntavra-cli/src/native_prove_plan.rs
+          git commit -m "fix: satisfy strict Clippy for native-17"
           git push origin HEAD:agent/full-dual-engine-runtime
