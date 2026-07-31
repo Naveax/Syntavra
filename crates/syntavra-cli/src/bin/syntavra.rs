@@ -354,12 +354,10 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
     let action = parsed.forwarded.get(1).map_or("status", String::as_str);
     let result = match action {
         "status" | "list" => Ok(engine_status(parsed)),
-        "verify" => parsed
-            .forwarded
-            .get(2)
-            .ok_or_else(|| "ENGINE_VERIFY_MISSING_ENGINE".to_owned())
-            .and_then(|value| Engine::parse(value))
-            .map(verify_engine),
+        "verify" => match parsed.forwarded.get(2) {
+            Some(value) => Engine::parse(value).map(verify_engine),
+            None => Ok(engine_status(parsed)),
+        },
         "use" => {
             let scope = parsed
                 .forwarded
@@ -502,7 +500,7 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{command_path, parse_arguments, Engine};
+    use super::{command_path, engine_command, parse_arguments, Engine};
 
     #[test]
     fn parses_command_override() {
@@ -525,5 +523,16 @@ mod tests {
             "cache-health".to_owned(),
         ]);
         assert_eq!(path, vec!["run", "cache-health"]);
+    }
+
+    #[test]
+    fn aggregate_engine_verify_returns_status() {
+        let parsed = parse_arguments(&["engine".to_owned(), "verify".to_owned()]).expect("parse");
+        let result = engine_command(&parsed)
+            .expect("engine command")
+            .expect("engine status");
+        assert_eq!(result["selector"], "native-rust");
+        assert_eq!(result["fallback"], "forbidden");
+        assert_eq!(result["engines"]["rust"]["available"], true);
     }
 }
