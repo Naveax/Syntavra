@@ -8,10 +8,13 @@ use std::process::{Command, ExitCode, Stdio};
 
 use serde_json::{json, Value};
 
+#[path = "../native_product.rs"]
+mod native_product;
+
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
 const PUBLIC_COMMAND_COUNT: u64 = 257;
-const NATIVE_COMMAND_COUNT: u64 = 12;
+const NATIVE_COMMAND_COUNT: u64 = 13;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Engine {
@@ -483,11 +486,16 @@ fn required_integer_flag(arguments: &[String], flag: &str, label: &str) -> Resul
 
 fn has_direct_rust_route(parsed: &Parsed) -> bool {
     let tokens = command_tokens(&parsed.forwarded);
-    tokens.len() == 2 && tokens[0] == "run" && tokens[1] == "cache-amortize"
+    (tokens.len() == 2 && tokens[0] == "run" && tokens[1] == "cache-amortize")
+        || native_product::supports(&tokens)
 }
 
 fn direct_rust_result(parsed: &Parsed) -> Result<Option<Value>, String> {
-    if !has_direct_rust_route(parsed) {
+    let tokens = command_tokens(&parsed.forwarded);
+    if native_product::supports(&tokens) {
+        return native_product::execute(&tokens, &parsed.state_root);
+    }
+    if tokens.len() != 2 || tokens[0] != "run" || tokens[1] != "cache-amortize" {
         return Ok(None);
     }
     let cache_write_tokens = required_integer_flag(&parsed.forwarded, "--write", "WRITE")?;
