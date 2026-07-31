@@ -46,7 +46,8 @@ fn health_from_plans(plans: Option<&Map<String, Value>>, now: f64) -> Value {
         if now < refresh_after {
             active += 1;
         }
-        cacheable_tokens = cacheable_tokens.saturating_add(number_as_i64(row.get("cacheable_tokens")));
+        cacheable_tokens =
+            cacheable_tokens.saturating_add(number_as_i64(row.get("cacheable_tokens")));
     }
     json!({
         "plans": plans_count,
