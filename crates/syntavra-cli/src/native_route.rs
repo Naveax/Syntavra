@@ -8,7 +8,13 @@ const WRITE_PREFIXES: &[&str] = &[
     "write", "edit", "patch", "update", "create", "delete", "move", "rename",
 ];
 const EXEC_PREFIXES: &[&str] = &[
-    "run", "exec", "shell", "terminal", "bash", "powershell", "cmd",
+    "run",
+    "exec",
+    "shell",
+    "terminal",
+    "bash",
+    "powershell",
+    "cmd",
 ];
 const NETWORK_PREFIXES: &[&str] = &["http", "web", "browser", "download", "upload", "request"];
 const PROFILES: &[&str] = &["minimal", "balanced", "audit"];
@@ -28,15 +34,9 @@ fn category(tool: &str) -> &'static str {
     let leaf = normalized.rsplit('.').next().unwrap_or(normalized.as_str());
     if READ_PREFIXES.iter().any(|prefix| leaf.starts_with(prefix)) {
         "read"
-    } else if WRITE_PREFIXES
-        .iter()
-        .any(|prefix| leaf.starts_with(prefix))
-    {
+    } else if WRITE_PREFIXES.iter().any(|prefix| leaf.starts_with(prefix)) {
         "write"
-    } else if EXEC_PREFIXES
-        .iter()
-        .any(|prefix| leaf.starts_with(prefix))
-    {
+    } else if EXEC_PREFIXES.iter().any(|prefix| leaf.starts_with(prefix)) {
         "execute"
     } else if NETWORK_PREFIXES
         .iter()
@@ -177,8 +177,8 @@ mod tests {
 
     #[test]
     fn read_route_is_allowed_with_exact_receipt() {
-        let decision = decide("syntavra.output.search", "minimal", false, true, false)
-            .expect("decision");
+        let decision =
+            decide("syntavra.output.search", "minimal", false, true, false).expect("decision");
         assert_eq!(decision.exit_code, 0);
         assert_eq!(decision.value["allowed"], true);
         assert_eq!(decision.value["category"], "read");
@@ -205,8 +205,7 @@ mod tests {
             ])
         );
 
-        let allowed =
-            decide("host.shell", "audit", true, true, true).expect("allowed decision");
+        let allowed = decide("host.shell", "audit", true, true, true).expect("allowed decision");
         assert_eq!(allowed.exit_code, 0);
         assert_eq!(allowed.value["allowed"], true);
     }
