@@ -19,7 +19,8 @@ def verify() -> dict[str, object]:
     catalog = verify_r23_catalog()
     if engine.get("ok") is not True or engine.get("phase") != "R0-R22":
         raise RuntimeError("R0-R22 aggregate parity regression")
-    if catalog.get("ok") is not True or catalog.get("phase") != "R23":
+    catalog_phase = catalog.get("phase")
+    if catalog.get("ok") is not True or catalog_phase not in {"R23", "R37"}:
         raise RuntimeError("R23 full parity catalog regression")
     return {
         "ok": True,
@@ -28,6 +29,7 @@ def verify() -> dict[str, object]:
         "candidate_engine": "rust",
         "engine_parity": engine,
         "full_parity_program": catalog,
+        "catalog_certification_phase": catalog_phase,
         "claim": "FULL_PARITY_PROGRAM_ACTIVE_R23_R37",
         "full_parity_claim": "FULL_PARITY_NOT_PROVEN",
     }
