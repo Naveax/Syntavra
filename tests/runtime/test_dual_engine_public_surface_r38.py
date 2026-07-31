@@ -74,8 +74,8 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 257
-    assert result["rust"]["native_public_command_count"] == 14
-    assert result["rust"]["missing_native_public_command_count"] == 243
+    assert result["rust"]["native_public_command_count"] == 15
+    assert result["rust"]["missing_native_public_command_count"] == 242
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 
@@ -146,4 +146,24 @@ def test_native_provider_route_matches_python_exactly(tmp_path: Path) -> None:
         "--tokens",
         "20000",
     )
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_delegate_matches_python_exactly() -> None:
+    arguments = (
+        "run",
+        "delegate",
+        "Implement the API layer. Verify coverage and benchmark results. Audit security permissions. Update database migration and memory index.",
+        "--context-path",
+        "src/lib.rs",
+        "--context-path",
+        "tests/runtime",
+        "--max-tasks",
+        "4",
+    )
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_delegate_small_task_matches_python_exactly() -> None:
+    arguments = ("run", "delegate", "Rename the variable carefully.")
     assert _rust_engine(*arguments) == _python_engine(*arguments)
