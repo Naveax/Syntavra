@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use std::fs;
 use std::path::Path;
 
 use serde_json::Value;
@@ -49,6 +50,44 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 2 && command[0] == "prove" && command[1] == "plan")
 }
 
+fn normalize_universal_newlines(text: &str) -> String {
+    if !text.contains('\r') {
+        return text.to_owned();
+    }
+    let mut normalized = String::with_capacity(text.len());
+    let mut characters = text.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character == '\r' {
+            if characters.peek() == Some(&'\n') {
+                characters.next();
+            }
+            normalized.push('\n');
+        } else {
+            normalized.push(character);
+        }
+    }
+    normalized
+}
+
+fn normalized_redact_arguments(arguments: &[String]) -> Result<Vec<String>, String> {
+    let mut normalized = arguments.to_vec();
+    let source_index = normalized
+        .windows(2)
+        .position(|window| window[0] == "run" && window[1] == "redact")
+        .and_then(|index| index.checked_add(2))
+        .ok_or_else(|| "REDACT_SOURCE_MISSING".to_owned())?;
+    let source = normalized
+        .get(source_index)
+        .ok_or_else(|| "REDACT_SOURCE_MISSING".to_owned())?;
+    let path = Path::new(source);
+    if path.is_file() {
+        let raw = fs::read_to_string(path)
+            .map_err(|error| format!("REDACT_SOURCE_READ_FAILED:{error}"))?;
+        normalized[source_index] = normalize_universal_newlines(&raw);
+    }
+    Ok(normalized)
+}
+
 pub fn execute(
     command: &[String],
     project_root: &Path,
@@ -78,7 +117,8 @@ pub fn execute(
         return native_mode::execute(&arguments, state_root).map(Some);
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "redact" {
-        return native_redact::execute(&arguments).map(Some);
+        let normalized = normalized_redact_arguments(&arguments)?;
+        return native_redact::execute(&normalized).map(Some);
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "route" {
         let decision = native_route::execute(&arguments)?;
@@ -105,4 +145,14 @@ pub fn execute(
         return Ok(Some(native_prove_plan::execute()));
     }
     legacy::execute(command, state_root)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_universal_newlines;
+
+    #[test]
+    fn normalizes_windows_and_legacy_newlines() {
+        assert_eq!(normalize_universal_newlines("a\r\nb\rc\n"), "a\nb\nc\n");
+    }
 }
