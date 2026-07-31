@@ -74,8 +74,8 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 257
-    assert result["rust"]["native_public_command_count"] == 15
-    assert result["rust"]["missing_native_public_command_count"] == 242
+    assert result["rust"]["native_public_command_count"] == 16
+    assert result["rust"]["missing_native_public_command_count"] == 241
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 
@@ -167,3 +167,51 @@ def test_native_delegate_matches_python_exactly() -> None:
 def test_native_delegate_small_task_matches_python_exactly() -> None:
     arguments = ("run", "delegate", "Rename the variable carefully.")
     assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_read_route_matches_python_exactly() -> None:
+    arguments = ("run", "route", "syntavra.output.search")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_denied_route_matches_python_output_and_exit_code() -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("Cargo is required for the real Rust binary differential")
+    arguments = ("run", "route", "host.shell", "--profile", "audit")
+    python_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "syntavra_runtime.engine_entry",
+            "--engine",
+            "python",
+            *arguments,
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    rust_result = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--quiet",
+            "--locked",
+            "--bin",
+            "syntavra",
+            "--",
+            "--engine",
+            "rust",
+            *arguments,
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert python_result.returncode == 5, python_result.stderr
+    assert rust_result.returncode == 5, rust_result.stderr
+    assert json.loads(rust_result.stdout) == json.loads(python_result.stdout)
