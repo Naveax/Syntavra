@@ -51,7 +51,7 @@ fn add_token(values: &mut BTreeSet<String>, token: &str) {
     if normalized.len() > 1 {
         values.insert(normalized.clone());
     }
-    for part in normalized.split(|character| matches!(character, '.' | '_' | '/' | ':' | '-')) {
+    for part in normalized.split(['.', '_', '/', ':', '-']) {
         if part.len() > 1 {
             values.insert(part.to_owned());
         }
