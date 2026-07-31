@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-refresh-branch-manifest
+  group: r38-finalize-native-15-metadata
   cancel-in-progress: false
 
 jobs:
