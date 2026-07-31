@@ -107,39 +107,40 @@ def test_native_empty_cache_health_matches_python_exactly(tmp_path: Path) -> Non
     assert _rust_engine(*arguments) == _python_engine(*arguments)
 
 
-def test_native_provider_route_matches_python_exactly() -> None:
-    candidates = json.dumps(
-        [
-            {
-                "provider": "openai",
-                "model": "gpt-x",
-                "quality": 0.9,
-                "quota_remaining": 0.8,
-                "latency_ms": 100.0,
-                "subscription": True,
-                "priority": 4,
-                "max_complexity": "reasoning",
-                "context_window": 200000,
-            },
-            {
-                "provider": "local",
-                "model": "qwen",
-                "quality": 0.7,
-                "quota_remaining": 1.0,
-                "latency_ms": 30.0,
-                "priority": 1,
-                "max_complexity": "complex",
-                "context_window": 64000,
-            },
-        ],
-        ensure_ascii=False,
-        separators=(",", ":"),
+def test_native_provider_route_matches_python_exactly(tmp_path: Path) -> None:
+    candidates = [
+        {
+            "provider": "openai",
+            "model": "gpt-x",
+            "quality": 0.9,
+            "quota_remaining": 0.8,
+            "latency_ms": 100.0,
+            "subscription": True,
+            "priority": 4,
+            "max_complexity": "reasoning",
+            "context_window": 200000,
+        },
+        {
+            "provider": "local",
+            "model": "qwen",
+            "quality": 0.7,
+            "quota_remaining": 1.0,
+            "latency_ms": 30.0,
+            "priority": 1,
+            "max_complexity": "complex",
+            "context_window": 64000,
+        },
+    ]
+    candidate_path = tmp_path / "provider-candidates.json"
+    candidate_path.write_text(
+        json.dumps(candidates, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
     )
     arguments = (
         "run",
         "provider-route",
         "architecture migration proof",
-        candidates,
+        str(candidate_path),
         "--changed-files",
         "9",
         "--tokens",
