@@ -234,6 +234,7 @@ pub fn execute(arguments: &[String]) -> Result<ProxyPlanDecision, String> {
 #[cfg(test)]
 mod tests {
     use super::execute;
+    use serde_json::json;
 
     #[test]
     fn openai_default_is_ready() {
