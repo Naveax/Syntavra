@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-19-context-stress
+  group: r38-generated-metadata-19-context-stress-path-fix
   cancel-in-progress: false
 
 jobs:
@@ -39,6 +39,75 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
+      - name: Repair selector option-value parsing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
+          text = path.read_text(encoding="utf-8")
+          old = '''fn command_path(arguments: &[String]) -> Vec<String> {
+              let mut positional = Vec::new();
+              let mut index = 0usize;
+              while index < arguments.len() {
+                  let value = &arguments[index];
+                  if matches!(value.as_str(), "--project" | "--state-root") {
+                      index += 2;
+                      continue;
+                  }
+                  if value.starts_with("--project=") || value.starts_with("--state-root=") {
+                      index += 1;
+                      continue;
+                  }
+                  if value.starts_with('-') {
+                      index += 1;
+                      continue;
+                  }
+                  positional.push(value.clone());
+                  index += 1;
+              }
+              positional.into_iter().take(2).collect()
+          }
+          '''
+          new = '''fn command_path(arguments: &[String]) -> Vec<String> {
+              let mut positional = Vec::new();
+              let mut index = 0usize;
+              while index < arguments.len() {
+                  let value = &arguments[index];
+                  if matches!(
+                      value.as_str(),
+                      "--project" | "--state-root" | "--budget" | "--max-tier"
+                  ) {
+                      index += 2;
+                      continue;
+                  }
+                  if value.starts_with("--project=")
+                      || value.starts_with("--state-root=")
+                      || value.starts_with("--budget=")
+                      || value.starts_with("--max-tier=")
+                  {
+                      index += 1;
+                      continue;
+                  }
+                  if value.starts_with('-') {
+                      index += 1;
+                      continue;
+                  }
+                  positional.push(value.clone());
+                  index += 1;
+              }
+              if positional.first().map(String::as_str) == Some("context-stress") {
+                  positional.truncate(1);
+              } else {
+                  positional.truncate(2);
+              }
+              positional
+          }
+          '''
+          count = text.count(old)
+          assert count == 1, f"command_path replacement count: {count}"
+          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize native command metadata
@@ -65,6 +134,7 @@ jobs:
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
+          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -78,5 +148,5 @@ jobs:
             crates/syntavra-cli/src/native_proof_status.rs \
             crates/syntavra-cli/src/native_prove_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs
-          git commit -m "R38: synchronize native context stress metadata"
+          git commit -m "fix: preserve one-level command paths with options"
           git push origin HEAD:agent/full-dual-engine-runtime
