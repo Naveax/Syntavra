@@ -60,7 +60,8 @@ fn emit(value: &Value) {
     );
 }
 
-fn fail(code: &str, message: &str, details: Value) -> ExitCode {
+fn fail(code: &str, message: &str, details: impl Into<Value>) -> ExitCode {
+    let details = details.into();
     emit(&json!({
         "ok": false,
         "error": {
@@ -209,8 +210,7 @@ fn user_engine_path() -> PathBuf {
     }
     let home = env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
+        .map_or_else(|| PathBuf::from("."), PathBuf::from);
     home.join(".config").join("syntavra").join("engine.json")
 }
 
