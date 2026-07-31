@@ -112,7 +112,6 @@ fn capability_title(value: &str) -> &'static str {
     match value {
         "code-intelligence" => "Code Intelligence",
         "data" => "Data",
-        "implementation" => "Implementation",
         "interface" => "Interface",
         "provider" => "Provider",
         "security" => "Security",
@@ -159,15 +158,8 @@ fn plan(objective: &str, context_paths: &[String], max_tasks: i64) -> Result<Val
             break;
         }
         let task_id = format!("T{:02}", index + 1);
-        let dependencies = previous
-            .iter()
-            .rev()
-            .take(2)
-            .cloned()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>();
+        let dependency_start = previous.len().saturating_sub(2);
+        let dependencies = previous[dependency_start..].to_vec();
         let handoff = format!(
             "{task_id} {capability_name}: return decisions, changed paths, verification commands, blockers; omit narration."
         );
@@ -283,7 +275,7 @@ mod tests {
     #[test]
     fn small_task_stays_with_one_agent() {
         let value = plan("Rename the variable carefully.", &[], 8).expect("plan");
-        assert_eq!(value["delegated"], false);
+        assert!(!value["delegated"].as_bool().expect("delegated"));
         assert_eq!(value["reason"], "task is small enough for one agent");
         assert_eq!(value["tasks"], json!([]));
         assert_eq!(
@@ -300,7 +292,7 @@ mod tests {
             4,
         )
         .expect("plan");
-        assert_eq!(value["delegated"], true);
+        assert!(value["delegated"].as_bool().expect("delegated"));
         assert_eq!(
             value["tasks"]
                 .as_array()
