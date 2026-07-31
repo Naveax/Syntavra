@@ -1,0 +1,106 @@
+name: R38 Full Dual-Engine Runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "crates/syntavra-cli/**"
+      - "tools/export_python_surface.py"
+      - "tools/export_rust_surface.py"
+      - "tools/verify_dual_engine_public_surface.py"
+      - "docs/adr/0035-full-dual-engine-product-runtime.md"
+      - ".github/workflows/r38-dual-engine-runtime.yml"
+  push:
+    branches: [main, "agent/full-dual-engine-runtime"]
+    paths:
+      - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "crates/syntavra-cli/**"
+      - "tools/export_python_surface.py"
+      - "tools/export_rust_surface.py"
+      - "tools/verify_dual_engine_public_surface.py"
+      - "docs/adr/0035-full-dual-engine-product-runtime.md"
+      - ".github/workflows/r38-dual-engine-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dual-engine:
+    name: Dual engine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            extension: ""
+          - os: windows-latest
+            extension: ".exe"
+          - os: macos-latest
+            extension: ""
+    env:
+      PYTHONHASHSEED: "0"
+      PYTHONUNBUFFERED: "1"
+      RUSTUP_TOOLCHAIN: "1.82.0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Python engine
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r38-dual-engine
+          cache-on-failure: false
+      - name: Verify complete public-command inventory
+        run: python tools/verify_dual_engine_public_surface.py | tee dual-engine-coverage.json
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Run launcher unit tests
+        run: cargo test --locked --bin syntavra
+      - name: Run strict Rust lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Build both engines and selector
+        run: cargo build --locked --bins
+      - name: Verify explicit Rust execution and no fallback
+        shell: bash
+        run: |
+          selector="target/debug/syntavra${{ matrix.extension }}"
+          "$selector" --engine rust version > rust-version.json
+          set +e
+          "$selector" --engine rust run rewrite -- git status > rust-missing.json
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q 'RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED' rust-missing.json
+      - name: Verify explicit Python execution
+        shell: bash
+        run: |
+          selector="target/debug/syntavra${{ matrix.extension }}"
+          "$selector" --engine python version > python-version.json
+      - name: Verify engine inspection
+        shell: bash
+        run: |
+          selector="target/debug/syntavra${{ matrix.extension }}"
+          "$selector" engine status > engine-status.json
+          grep -q '"fallback": "forbidden"' engine-status.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r38-dual-engine-${{ matrix.os }}
+          path: |
+            dual-engine-coverage.json
+            rust-version.json
+            rust-missing.json
+            python-version.json
+            engine-status.json
+          if-no-files-found: warn
+          retention-days: 90
