@@ -186,7 +186,6 @@ impl ProviderCandidate {
 
 fn complexity_rank(value: &str) -> i32 {
     match value {
-        "simple" => 0,
         "medium" => 1,
         "complex" => 2,
         "reasoning" => 3,
