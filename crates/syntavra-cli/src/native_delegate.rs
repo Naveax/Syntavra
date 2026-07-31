@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
 const DEFAULT_MAX_TASKS: i64 = 8;
@@ -117,9 +117,9 @@ fn capability_title(value: &str) -> &'static str {
     }
 }
 
-fn add_receipt(body: Value) -> Result<Value, String> {
+fn add_receipt(body: &Value) -> Result<Value, String> {
     let canonical =
-        serde_json::to_vec(&body).map_err(|_| "DELEGATION_PLAN_RENDER_FAILED".to_owned())?;
+        serde_json::to_vec(body).map_err(|_| "DELEGATION_PLAN_RENDER_FAILED".to_owned())?;
     let mut output = body
         .as_object()
         .cloned()
@@ -141,7 +141,7 @@ fn plan(objective: &str, context_paths: &[String], max_tasks: i64) -> Result<Val
             .push(sentence.clone());
     }
     if groups.len() <= 1 && sentence_rows.len() <= 3 {
-        return add_receipt(json!({
+        return add_receipt(&json!({
             "delegated": false,
             "reason": "task is small enough for one agent",
             "tasks": [],
@@ -172,7 +172,7 @@ fn plan(objective: &str, context_paths: &[String], max_tasks: i64) -> Result<Val
         }));
         previous.push(format!("T{:02}", index + 1));
     }
-    add_receipt(json!({
+    add_receipt(&json!({
         "delegated": true,
         "reason": "independent capability groups detected",
         "tasks": tasks,
