@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 235,
-    "module_count": 32,
-    "native_coverage_ppm": 85603,
-    "native_public_command_count": 22,
+    "missing_native_public_command_count": 234,
+    "module_count": 33,
+    "native_coverage_ppm": 89494,
+    "native_public_command_count": 23,
     "native_public_commands": [
       "context-stress",
       "engine list",
@@ -42,6 +42,7 @@
       "run redact",
       "run route",
       "run statusline",
+      "run wire",
       "scheduler list",
       "scheduler stats",
       "telemetry metrics",
