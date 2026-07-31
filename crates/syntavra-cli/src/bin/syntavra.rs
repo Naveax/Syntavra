@@ -492,12 +492,11 @@ fn direct_rust_result(parsed: &Parsed) -> Result<Option<Value>, String> {
     }
     let cache_write_tokens = required_integer_flag(&parsed.forwarded, "--write", "WRITE")?;
     let cache_read_tokens = required_integer_flag(&parsed.forwarded, "--read", "READ")?;
-    let uncached_input_tokens =
-        required_integer_flag(&parsed.forwarded, "--uncached", "UNCACHED")?;
+    let uncached_input_tokens = required_integer_flag(&parsed.forwarded, "--uncached", "UNCACHED")?;
     let requests = required_integer_flag(&parsed.forwarded, "--requests", "REQUESTS")?.max(1);
     let baseline = uncached_input_tokens as f64 * requests as f64;
-    let optimized = cache_write_tokens as f64 * 1.25
-        + cache_read_tokens as f64 * 0.1 * (requests - 1) as f64;
+    let optimized =
+        cache_write_tokens as f64 * 1.25 + cache_read_tokens as f64 * 0.1 * (requests - 1) as f64;
     let saved = (baseline - optimized).max(0.0);
     let savings_ratio = if baseline == 0.0 {
         0.0
