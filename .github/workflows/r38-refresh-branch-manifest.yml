@@ -38,16 +38,10 @@ jobs:
           from pathlib import Path
           path = Path('crates/syntavra-cli/src/native_product.rs')
           source = path.read_text(encoding='utf-8')
-          old = '''    match value {
-                  "simple" => 0,
-                  "medium" => 1,
-'''
-          new = '''    match value {
-                  "medium" => 1,
-'''
+          old = '        "simple" => 0,\n'
           if source.count(old) != 1:
               raise SystemExit('complexity rank source pattern drifted')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8', newline='\n')
+          path.write_text(source.replace(old, '', 1), encoding='utf-8', newline='\n')
           PY
       - name: Format native Rust sources
         run: cargo fmt --all
