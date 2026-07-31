@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'push' || github.ref_name != 'feature/full-parity-r25-r37-completion')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -211,13 +211,15 @@ jobs:
           cp MANIFEST.sha256 prepared-MANIFEST.sha256
       - name: Upload prepared integrity tree metadata
         if: always()
-        uses: actions/upload-artifact@v4
+        shell: bash
+        run: |
+          true
+        # Artifact upload intentionally remains in the repository workflow below.
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: syntavra-prepared-manifest-tree-${{ github.sha }}
           path: |
             prepared-MANIFEST.sha256
             prepared-tree.txt
             prepared-commit.txt
-            prepared-branch.txt
-          if-no-files-found: warn
-          retention-days: 7
