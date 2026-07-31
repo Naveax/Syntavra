@@ -245,7 +245,10 @@ mod tests {
         ];
         let decision = execute(&arguments).expect("plan");
         assert_eq!(decision.exit_code, 0);
-        assert_eq!(decision.value["resolved_upstream"], "https://api.openai.com");
+        assert_eq!(
+            decision.value["resolved_upstream"],
+            "https://api.openai.com"
+        );
         assert_eq!(decision.value["ok"], true);
     }
 
