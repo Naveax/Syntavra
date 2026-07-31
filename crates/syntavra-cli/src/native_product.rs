@@ -4,6 +4,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
+#[path = "native_cache_amortize.rs"]
+mod native_cache_amortize;
 #[path = "native_product_legacy.rs"]
 mod legacy;
 #[path = "native_prove_plan.rs"]
@@ -13,11 +15,16 @@ mod native_route;
 
 pub fn supports(command: &[String]) -> bool {
     legacy::supports(command)
+        || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
         || (command.len() == 2 && command[0] == "prove" && command[1] == "plan")
 }
 
 pub fn execute(command: &[String], state_root: &Path) -> Result<Option<Value>, String> {
+    if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
+        let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+        return native_cache_amortize::execute(&arguments).map(Some);
+    }
     if command.len() == 2 && command[0] == "run" && command[1] == "route" {
         let arguments = std::env::args().skip(1).collect::<Vec<_>>();
         let decision = native_route::execute(&arguments)?;
