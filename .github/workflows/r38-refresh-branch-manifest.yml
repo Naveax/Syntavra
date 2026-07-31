@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-wire-native-route-16
+  group: r38-wire-native-route-16-final
   cancel-in-progress: false
 
 jobs:
