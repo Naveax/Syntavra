@@ -449,7 +449,7 @@ fn value_after_command(arguments: &[String], command: &str, action: &str) -> Opt
     None
 }
 
-fn required_integer_flag(arguments: &[String], flag: &str, label: &str) -> Result<i64, String> {
+fn required_integer_flag(arguments: &[String], flag: &str, label: &str) -> Result<i32, String> {
     let mut found = None;
     let mut index = 0usize;
     while index < arguments.len() {
@@ -472,7 +472,7 @@ fn required_integer_flag(arguments: &[String], flag: &str, label: &str) -> Resul
             }
             found = Some(
                 value
-                    .parse::<i64>()
+                    .parse::<i32>()
                     .map_err(|_| format!("CACHE_AMORTIZE_{label}_INVALID"))?,
             );
         }
@@ -494,9 +494,9 @@ fn direct_rust_result(parsed: &Parsed) -> Result<Option<Value>, String> {
     let cache_read_tokens = required_integer_flag(&parsed.forwarded, "--read", "READ")?;
     let uncached_input_tokens = required_integer_flag(&parsed.forwarded, "--uncached", "UNCACHED")?;
     let requests = required_integer_flag(&parsed.forwarded, "--requests", "REQUESTS")?.max(1);
-    let baseline = uncached_input_tokens as f64 * requests as f64;
-    let optimized =
-        cache_write_tokens as f64 * 1.25 + cache_read_tokens as f64 * 0.1 * (requests - 1) as f64;
+    let baseline = f64::from(uncached_input_tokens) * f64::from(requests);
+    let optimized = f64::from(cache_write_tokens) * 1.25
+        + f64::from(cache_read_tokens) * 0.1 * f64::from(requests - 1);
     let saved = (baseline - optimized).max(0.0);
     let savings_ratio = if baseline == 0.0 {
         0.0
@@ -504,13 +504,13 @@ fn direct_rust_result(parsed: &Parsed) -> Result<Option<Value>, String> {
         ((baseline - optimized) / baseline).max(0.0)
     };
     let break_even_denominator =
-        (uncached_input_tokens as f64 - cache_read_tokens as f64 * 0.1).max(1.0);
+        (f64::from(uncached_input_tokens) - f64::from(cache_read_tokens) * 0.1).max(1.0);
     Ok(Some(json!({
         "baseline_equivalent": baseline,
         "optimized_equivalent": optimized,
         "saved_equivalent": saved,
         "savings_ratio": savings_ratio,
-        "break_even_requests": cache_write_tokens as f64 * 1.25 / break_even_denominator,
+        "break_even_requests": f64::from(cache_write_tokens) * 1.25 / break_even_denominator,
     })))
 }
 
