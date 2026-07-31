@@ -23,7 +23,8 @@ fn category(tool: &str) -> &'static str {
     let normalized = tool
         .trim()
         .to_lowercase()
-        .replace(['-', '_'], ".");
+        .replace('-', ".")
+        .replace('_', ".");
     let leaf = normalized.rsplit('.').next().unwrap_or(normalized.as_str());
     if READ_PREFIXES.iter().any(|prefix| leaf.starts_with(prefix)) {
         "read"
@@ -190,13 +191,10 @@ mod tests {
 
     #[test]
     fn execute_route_requires_authorization_and_sandbox() {
-        let unauthorized = decide("host.shell", "audit", false, true, false)
-            .expect("unauthorized decision");
+        let unauthorized =
+            decide("host.shell", "audit", false, true, false).expect("unauthorized decision");
         assert_eq!(unauthorized.exit_code, 5);
-        assert_eq!(
-            unauthorized.value["reason"],
-            "sandbox-required"
-        );
+        assert_eq!(unauthorized.value["reason"], "sandbox-required");
         assert_eq!(
             unauthorized.value["requirements"],
             json!([
@@ -207,8 +205,8 @@ mod tests {
             ])
         );
 
-        let allowed = decide("host.shell", "audit", true, true, true)
-            .expect("allowed decision");
+        let allowed =
+            decide("host.shell", "audit", true, true, true).expect("allowed decision");
         assert_eq!(allowed.exit_code, 0);
         assert_eq!(allowed.value["allowed"], true);
     }
