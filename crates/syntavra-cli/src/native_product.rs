@@ -4,10 +4,10 @@ use std::path::Path;
 
 use serde_json::Value;
 
-#[path = "native_cache_amortize.rs"]
-mod native_cache_amortize;
 #[path = "native_product_legacy.rs"]
 mod legacy;
+#[path = "native_cache_amortize.rs"]
+mod native_cache_amortize;
 #[path = "native_prove_plan.rs"]
 mod native_prove_plan;
 #[path = "native_route.rs"]

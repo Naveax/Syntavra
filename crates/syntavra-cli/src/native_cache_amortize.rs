@@ -14,12 +14,33 @@ fn parse_i64(arguments: &[String], flag: &str) -> Result<i64, String> {
     let index = arguments
         .iter()
         .position(|value| value == flag)
-        .ok_or_else(|| format!("CACHE_AMORTIZE_{}_MISSING", flag.trim_start_matches('-').replace('-', "_").to_ascii_uppercase()))?;
+        .ok_or_else(|| {
+            format!(
+                "CACHE_AMORTIZE_{}_MISSING",
+                flag.trim_start_matches('-')
+                    .replace('-', "_")
+                    .to_ascii_uppercase()
+            )
+        })?;
     arguments
         .get(index + 1)
-        .ok_or_else(|| format!("CACHE_AMORTIZE_{}_VALUE_MISSING", flag.trim_start_matches('-').replace('-', "_").to_ascii_uppercase()))?
+        .ok_or_else(|| {
+            format!(
+                "CACHE_AMORTIZE_{}_VALUE_MISSING",
+                flag.trim_start_matches('-')
+                    .replace('-', "_")
+                    .to_ascii_uppercase()
+            )
+        })?
         .parse::<i64>()
-        .map_err(|_| format!("CACHE_AMORTIZE_{}_INVALID", flag.trim_start_matches('-').replace('-', "_").to_ascii_uppercase()))
+        .map_err(|_| {
+            format!(
+                "CACHE_AMORTIZE_{}_INVALID",
+                flag.trim_start_matches('-')
+                    .replace('-', "_")
+                    .to_ascii_uppercase()
+            )
+        })
 }
 
 fn parse(arguments: &[String]) -> Result<Inputs, String> {
@@ -83,7 +104,16 @@ mod tests {
     #[test]
     fn parses_required_flags() {
         let arguments = [
-            "run", "cache-amortize", "--write", "100", "--read", "20", "--uncached", "1000", "--requests", "3",
+            "run",
+            "cache-amortize",
+            "--write",
+            "100",
+            "--read",
+            "20",
+            "--uncached",
+            "1000",
+            "--requests",
+            "3",
         ]
         .into_iter()
         .map(str::to_owned)

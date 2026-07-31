@@ -149,7 +149,8 @@ fn parse_arguments(arguments: &[String]) -> Result<Parsed, String> {
         forwarded.push(value.clone());
         index += 1;
     }
-    let state_root = state_root.unwrap_or_else(|| project_root.join(".syntavra").join("pre-release"));
+    let state_root =
+        state_root.unwrap_or_else(|| project_root.join(".syntavra").join("pre-release"));
     Ok(Parsed {
         engine_override,
         forwarded,
@@ -285,7 +286,9 @@ fn resolve_engine(parsed: &Parsed) -> (Engine, &'static str) {
             return (engine, "environment");
         }
     }
-    if let Some(value) = read_engine_file(&parsed.project_root.join(".syntavra").join("engine.json")) {
+    if let Some(value) =
+        read_engine_file(&parsed.project_root.join(".syntavra").join("engine.json"))
+    {
         return (value, "project");
     }
     if let Some(home) = home_dir() {
@@ -335,7 +338,8 @@ fn use_engine(parsed: &Parsed, scope: &str, engine: Engine) -> Result<Value, Str
         _ => return Err("ENGINE_SCOPE_INVALID".to_owned()),
     };
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("ENGINE_SCOPE_CREATE_FAILED:{error}"))?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("ENGINE_SCOPE_CREATE_FAILED:{error}"))?;
     }
     let payload = json!({
         "engine": engine.as_str(),
@@ -372,7 +376,11 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
     if parsed.forwarded.first().map(String::as_str) != Some("engine") {
         return None;
     }
-    let action = parsed.forwarded.get(1).map(String::as_str).unwrap_or("status");
+    let action = parsed
+        .forwarded
+        .get(1)
+        .map(String::as_str)
+        .unwrap_or("status");
     let result = match action {
         "status" | "list" => Ok(engine_status(parsed)),
         "verify" => parsed
@@ -401,7 +409,11 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
     Some(result)
 }
 
-fn execute_program(program: &Program, forwarded: &[String], engine: Engine) -> Result<ExitCode, String> {
+fn execute_program(
+    program: &Program,
+    forwarded: &[String],
+    engine: Engine,
+) -> Result<ExitCode, String> {
     let mut command = Command::new(&program.executable);
     command
         .args(&program.prefix)
@@ -447,15 +459,14 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
             }
         }
         Engine::Python => match discover_python_program() {
-            Some(program) => execute_program(&program, &parsed.forwarded, Engine::Python).unwrap_or_else(
-                |error| {
+            Some(program) => execute_program(&program, &parsed.forwarded, Engine::Python)
+                .unwrap_or_else(|error| {
                     fail(
                         "PYTHON_ENGINE_EXECUTION_FAILED",
                         "The selected Python engine could not be executed.",
                         json!({"error": error, "fallback": "forbidden"}),
                     )
-                },
-            ),
+                }),
             None => fail(
                 "PYTHON_ENGINE_NOT_AVAILABLE",
                 "The selected Python engine is not available.",
