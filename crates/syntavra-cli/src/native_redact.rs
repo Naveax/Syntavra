@@ -172,7 +172,7 @@ fn ascii_case_starts_with(bytes: &[u8], start: usize, candidate: &[u8]) -> bool 
 }
 
 fn scan_authorization(text: &str, matches: &mut Vec<RedactionMatch>) {
-    const LABELS: [&str; 9] = [
+    const LABELS: [&str; 8] = [
         "authorization",
         "api-key",
         "api_key",
@@ -181,7 +181,6 @@ fn scan_authorization(text: &str, matches: &mut Vec<RedactionMatch>) {
         "token",
         "secret",
         "password",
-        "api key",
     ];
     let bytes = text.as_bytes();
     for start in 0..bytes.len() {
@@ -275,6 +274,10 @@ fn scan_connection_uris(text: &str, matches: &mut Vec<RedactionMatch>) {
     }
 }
 
+fn bounded_f64(value: usize) -> f64 {
+    f64::from(u32::try_from(value).unwrap_or(u32::MAX))
+}
+
 fn entropy(value: &[u8]) -> f64 {
     if value.is_empty() {
         return 0.0;
@@ -283,12 +286,12 @@ fn entropy(value: &[u8]) -> f64 {
     for byte in value {
         counts[usize::from(*byte)] += 1;
     }
-    let length = value.len() as f64;
+    let length = bounded_f64(value.len());
     counts
         .into_iter()
         .filter(|count| *count > 0)
         .map(|count| {
-            let probability = count as f64 / length;
+            let probability = bounded_f64(count) / length;
             -probability * probability.log2()
         })
         .sum()
