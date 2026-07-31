@@ -20,6 +20,8 @@ mod native_prove_plan;
 mod native_read_only_product;
 #[path = "native_route.rs"]
 mod native_route;
+#[path = "native_statusline.rs"]
+mod native_statusline;
 #[path = "read_only_cli_contract.rs"]
 mod read_only_cli_contract;
 #[path = "scheduler_read_only_contract.rs"]
@@ -33,6 +35,7 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 1 && command[0] == "context-stress")
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
+        || (command.len() == 2 && command[0] == "run" && command[1] == "statusline")
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
         || (command.len() == 2 && command[0] == "prove" && command[1] == "plan")
 }
@@ -73,6 +76,9 @@ pub fn execute(
             std::process::exit(i32::from(decision.exit_code));
         }
         return Ok(Some(decision.value));
+    }
+    if command.len() == 2 && command[0] == "run" && command[1] == "statusline" {
+        return native_statusline::execute(&arguments, state_root).map(Some);
     }
     if command.len() == 2 && command[0] == "proof" && command[1] == "status" {
         return Ok(Some(native_proof_status::execute()));
