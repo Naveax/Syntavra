@@ -85,6 +85,52 @@ def test_full_claim_cannot_open_while_native_commands_are_missing() -> None:
         MODULE.verify(require_full=True)
 
 
+def test_native_version_matches_python_exactly() -> None:
+    assert _rust_engine("version") == _python_engine("version")
+
+
+def test_native_migration_plan_matches_python_exactly(tmp_path: Path) -> None:
+    arguments = (
+        "--project",
+        str(tmp_path),
+        "migrate",
+        "plan",
+        "state/missing.sqlite3",
+    )
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_pipeline_description_matches_python_exactly() -> None:
+    assert _rust_engine("pipeline", "describe") == _python_engine("pipeline", "describe")
+
+
+def test_native_plugin_inventory_matches_python_exactly() -> None:
+    assert _rust_engine("plugins", "list") == _python_engine("plugins", "list")
+
+
+def test_native_empty_scheduler_stats_matches_python_exactly(tmp_path: Path) -> None:
+    arguments = ("--state-root", str(tmp_path / "state"), "scheduler", "stats")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_empty_scheduler_list_matches_python_exactly(tmp_path: Path) -> None:
+    arguments = (
+        "--state-root",
+        str(tmp_path / "state"),
+        "scheduler",
+        "list",
+        "--state",
+        "queued",
+        "--limit",
+        "7",
+    )
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_empty_telemetry_metrics_matches_python_exactly() -> None:
+    assert _rust_engine("telemetry", "metrics") == _python_engine("telemetry", "metrics")
+
+
 def test_native_prove_plan_matches_python_exactly() -> None:
     arguments = ("prove", "plan")
     assert _rust_engine(*arguments) == _python_engine(*arguments)
