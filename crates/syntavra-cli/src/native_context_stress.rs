@@ -39,11 +39,11 @@ fn argument_value(arguments: &[String], flag: &str) -> Option<String> {
         })
 }
 
-fn parse_u64(arguments: &[String], flag: &str, default: u64) -> Result<u64, String> {
+fn parse_i64(arguments: &[String], flag: &str, default: i64) -> Result<i64, String> {
     argument_value(arguments, flag).map_or(Ok(default), |value| {
         value
-            .parse::<u64>()
-            .map_err(|_| format!("{flag} must be a non-negative integer"))
+            .parse::<i64>()
+            .map_err(|_| format!("{flag} must be an integer"))
     })
 }
 
@@ -72,9 +72,7 @@ fn tier_report(tier: u64, active_budget: u64) -> Value {
         if index % 5 == 0 {
             latest_by_temporal_key[index % 97] = Some(index);
         }
-        let summary = format!(
-            "virtual history segment {index} covering {size} tokens"
-        );
+        let summary = format!("virtual history segment {index} covering {size} tokens");
         let visible_cost = ((summary.len() as u64 + 3) / 4 + 12).clamp(16, 256);
         segments.push(Segment {
             index,
@@ -120,14 +118,15 @@ fn tier_report(tier: u64, active_budget: u64) -> Value {
 }
 
 pub fn execute(arguments: &[String]) -> Result<Decision, String> {
-    let active_budget = parse_u64(arguments, "--budget", 4096)?;
+    let active_budget = parse_i64(arguments, "--budget", 4096)?;
     if active_budget < 256 {
         return Err("active_budget is too small".to_owned());
     }
-    let max_tier = parse_u64(arguments, "--max-tier", 10_000_000)?;
+    let active_budget = active_budget as u64;
+    let max_tier = parse_i64(arguments, "--max-tier", 10_000_000)?;
     let reports = CONTEXT_TIERS
         .into_iter()
-        .filter(|tier| *tier <= max_tier)
+        .filter(|tier| (*tier as i64) <= max_tier)
         .map(|tier| tier_report(tier, active_budget))
         .collect::<Vec<_>>();
     let ok = !reports.is_empty()
@@ -161,7 +160,7 @@ mod tests {
         let arguments = vec![
             "context-stress".to_owned(),
             "--max-tier".to_owned(),
-            "1000".to_owned(),
+            "-1".to_owned(),
         ];
         let decision = execute(&arguments).expect("filtered stress plan");
         assert_eq!(decision.exit_code, 3);
