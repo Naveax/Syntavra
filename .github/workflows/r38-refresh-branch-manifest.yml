@@ -6,13 +6,18 @@ on:
     paths:
       - ".github/workflows/r38-refresh-branch-manifest.yml"
       - ".github/workflows/validate-fusion-runtime.yml"
+      - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "crates/syntavra-cli/src/bin/syntavra.rs"
+      - "crates/syntavra-cli/src/native_product.rs"
+      - "crates/syntavra-cli/src/native_prove_plan.rs"
+      - "tests/runtime/test_dual_engine_public_surface_r38.py"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-16-final
+  group: r38-generated-metadata-17
   cancel-in-progress: false
 
 jobs:
@@ -51,5 +56,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MANIFEST.sha256 crates/syntavra-cli/src/bin/syntavra.rs
-          git commit -m "chore: synchronize R38 native-16 metadata"
+          git commit -m "chore: synchronize R38 native-17 metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
