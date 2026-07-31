@@ -1,12 +1,16 @@
 [package]
 name = "syntavra-cli"
-default-run = "syntavra-rs"
+default-run = "syntavra"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+
+[[bin]]
+name = "syntavra"
+path = "src/bin/syntavra.rs"
 
 [[bin]]
 name = "syntavra-rs"
