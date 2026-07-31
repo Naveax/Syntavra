@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
 const PUBLIC_COMMAND_COUNT: u64 = 257;
-const NATIVE_COMMAND_COUNT: u64 = 11;
+const NATIVE_COMMAND_COUNT: u64 = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Engine {
@@ -317,31 +317,56 @@ fn program_works(program: &Program, probe: &[&str]) -> bool {
         .is_ok_and(|status| status.success())
 }
 
+fn python_at_root(root: &Path, virtual_environment: bool) -> PathBuf {
+    if cfg!(windows) {
+        if virtual_environment {
+            root.join("Scripts").join("python.exe")
+        } else {
+            root.join("python.exe")
+        }
+    } else {
+        root.join("bin").join("python")
+    }
+}
+
+fn checked_python(executable: PathBuf, prefix: Vec<String>) -> Option<Program> {
+    let program = Program { executable, prefix };
+    program_works(&program, &["--version"]).then_some(program)
+}
+
 fn python_program() -> Option<Program> {
     if let Some(value) = env::var_os("SYNTAVRA_PYTHON") {
-        let program = Program {
-            executable: PathBuf::from(value),
-            prefix: Vec::new(),
-        };
-        if program_works(&program, &["--version"]) {
+        if let Some(program) = checked_python(PathBuf::from(value), Vec::new()) {
             return Some(program);
+        }
+    }
+    if let Some(value) = env::var_os("VIRTUAL_ENV") {
+        if let Some(program) =
+            checked_python(python_at_root(&PathBuf::from(value), true), Vec::new())
+        {
+            return Some(program);
+        }
+    }
+    for variable in ["pythonLocation", "Python3_ROOT_DIR", "Python_ROOT_DIR"] {
+        if let Some(value) = env::var_os(variable) {
+            if let Some(program) =
+                checked_python(python_at_root(&PathBuf::from(value), false), Vec::new())
+            {
+                return Some(program);
+            }
         }
     }
     let candidates: &[(&str, &[&str])] = if cfg!(windows) {
-        &[("py", &["-3"]), ("python", &[])]
+        &[("python", &[]), ("py", &["-3"])]
     } else {
         &[("python3", &[]), ("python", &[])]
     };
-    for (executable, prefix) in candidates {
-        let program = Program {
-            executable: PathBuf::from(executable),
-            prefix: prefix.iter().map(|value| (*value).to_owned()).collect(),
-        };
-        if program_works(&program, &["--version"]) {
-            return Some(program);
-        }
-    }
-    None
+    candidates.iter().find_map(|(executable, prefix)| {
+        checked_python(
+            PathBuf::from(*executable),
+            prefix.iter().map(|value| (*value).to_owned()).collect(),
+        )
+    })
 }
 
 fn exit_code(status: std::process::ExitStatus) -> ExitCode {
@@ -424,6 +449,72 @@ fn value_after_command(arguments: &[String], command: &str, action: &str) -> Opt
     None
 }
 
+fn required_integer_flag(arguments: &[String], flag: &str, label: &str) -> Result<i64, String> {
+    let mut found = None;
+    let mut index = 0usize;
+    while index < arguments.len() {
+        let item = &arguments[index];
+        let raw = if item == flag {
+            index += 1;
+            Some(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("CACHE_AMORTIZE_{label}_MISSING"))?
+                    .as_str(),
+            )
+        } else {
+            item.strip_prefix(flag)
+                .and_then(|suffix| suffix.strip_prefix('='))
+        };
+        if let Some(value) = raw {
+            if found.is_some() {
+                return Err(format!("CACHE_AMORTIZE_{label}_DUPLICATE"));
+            }
+            found = Some(
+                value
+                    .parse::<i64>()
+                    .map_err(|_| format!("CACHE_AMORTIZE_{label}_INVALID"))?,
+            );
+        }
+        index += 1;
+    }
+    found.ok_or_else(|| format!("CACHE_AMORTIZE_{label}_MISSING"))
+}
+
+fn has_direct_rust_route(parsed: &Parsed) -> bool {
+    let tokens = command_tokens(&parsed.forwarded);
+    tokens.len() == 2 && tokens[0] == "run" && tokens[1] == "cache-amortize"
+}
+
+fn direct_rust_result(parsed: &Parsed) -> Result<Option<Value>, String> {
+    if !has_direct_rust_route(parsed) {
+        return Ok(None);
+    }
+    let cache_write_tokens = required_integer_flag(&parsed.forwarded, "--write", "WRITE")?;
+    let cache_read_tokens = required_integer_flag(&parsed.forwarded, "--read", "READ")?;
+    let uncached_input_tokens =
+        required_integer_flag(&parsed.forwarded, "--uncached", "UNCACHED")?;
+    let requests = required_integer_flag(&parsed.forwarded, "--requests", "REQUESTS")?.max(1);
+    let baseline = uncached_input_tokens as f64 * requests as f64;
+    let optimized = cache_write_tokens as f64 * 1.25
+        + cache_read_tokens as f64 * 0.1 * (requests - 1) as f64;
+    let saved = (baseline - optimized).max(0.0);
+    let savings_ratio = if baseline == 0.0 {
+        0.0
+    } else {
+        ((baseline - optimized) / baseline).max(0.0)
+    };
+    let break_even_denominator =
+        (uncached_input_tokens as f64 - cache_read_tokens as f64 * 0.1).max(1.0);
+    Ok(Some(json!({
+        "baseline_equivalent": baseline,
+        "optimized_equivalent": optimized,
+        "saved_equivalent": saved,
+        "savings_ratio": savings_ratio,
+        "break_even_requests": cache_write_tokens as f64 * 1.25 / break_even_denominator,
+    })))
+}
+
 fn translate_rust(parsed: &Parsed) -> Result<Option<Vec<String>>, String> {
     let tokens = command_tokens(&parsed.forwarded);
     let key = tokens.join(" ");
@@ -488,6 +579,10 @@ fn run_python(parsed: &Parsed) -> Result<ExitCode, String> {
 }
 
 fn run_rust(parsed: &Parsed) -> Result<ExitCode, String> {
+    if let Some(value) = direct_rust_result(parsed)? {
+        emit(&value);
+        return Ok(ExitCode::SUCCESS);
+    }
     let arguments = translate_rust(parsed)?.ok_or_else(|| {
         format!(
             "RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED:{}",
@@ -598,10 +693,14 @@ fn run(arguments: &[String]) -> ExitCode {
         Err(code) => return fail(&code, "engine selection failed", json!({})),
     };
     let resolved = if requested == Engine::Auto {
-        match translate_rust(&parsed) {
-            Ok(Some(_)) if program_works(&rust_program(), &["version"]) => Engine::Rust,
-            Ok(_) => Engine::Python,
-            Err(code) => return fail(&code, "auto routing failed", json!({})),
+        if has_direct_rust_route(&parsed) {
+            Engine::Rust
+        } else {
+            match translate_rust(&parsed) {
+                Ok(Some(_)) if program_works(&rust_program(), &["version"]) => Engine::Rust,
+                Ok(_) => Engine::Python,
+                Err(code) => return fail(&code, "auto routing failed", json!({})),
+            }
         }
     } else {
         requested
@@ -633,7 +732,7 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{command_tokens, parse_arguments, translate_rust, Engine};
+    use super::{command_tokens, direct_rust_result, parse_arguments, translate_rust, Engine};
 
     fn values(items: &[&str]) -> Vec<String> {
         items.iter().map(|value| (*value).to_owned()).collect()
@@ -675,6 +774,31 @@ mod tests {
             .expect("native route");
         assert_eq!(&translated[..2], values(&["scheduler", "list"]));
         assert_eq!(translated[3], "7");
+    }
+
+    #[test]
+    fn cache_amortization_is_a_native_exact_route() {
+        let parsed = parse_arguments(&values(&[
+            "run",
+            "cache-amortize",
+            "--write",
+            "100",
+            "--read",
+            "0",
+            "--uncached",
+            "1000",
+            "--requests",
+            "1",
+        ]))
+        .expect("arguments");
+        let result = direct_rust_result(&parsed)
+            .expect("native execution")
+            .expect("native result");
+        assert_eq!(result["baseline_equivalent"].as_f64(), Some(1000.0));
+        assert_eq!(result["optimized_equivalent"].as_f64(), Some(125.0));
+        assert_eq!(result["saved_equivalent"].as_f64(), Some(875.0));
+        assert_eq!(result["savings_ratio"].as_f64(), Some(0.875));
+        assert_eq!(result["break_even_requests"].as_f64(), Some(0.125));
     }
 
     #[test]
