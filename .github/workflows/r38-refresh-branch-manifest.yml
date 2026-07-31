@@ -5,11 +5,13 @@ on:
     branches: ["agent/full-dual-engine-runtime"]
     paths:
       - ".github/workflows/r38-refresh-branch-manifest.yml"
+      - ".github/workflows/r38-dual-engine-runtime.yml"
       - ".github/workflows/validate-fusion-runtime.yml"
       - "contracts/engine/dual-engine-public-surface-v2.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
       - "crates/syntavra-cli/src/native_cache_amortize.rs"
       - "crates/syntavra-cli/src/native_context_stress.rs"
+      - "crates/syntavra-cli/src/native_mode.rs"
       - "crates/syntavra-cli/src/native_product.rs"
       - "crates/syntavra-cli/src/native_proof_status.rs"
       - "crates/syntavra-cli/src/native_prove_plan.rs"
@@ -17,13 +19,14 @@ on:
       - "crates/syntavra-cli/src/native_statusline.rs"
       - "syntavra_runtime/engine_entry.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
+      - "tests/runtime/test_native_mode_r38.py"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-20-statusline-final
+  group: r38-generated-metadata-21-mode
   cancel-in-progress: false
 
 jobs:
@@ -41,6 +44,32 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
+      - name: Synchronize R38 inventory assertions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/runtime/test_dual_engine_public_surface_r38.py")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              'assert result["rust"]["native_public_command_count"] == 20':
+                  'assert result["rust"]["native_public_command_count"] == 21',
+              'assert result["rust"]["missing_native_public_command_count"] == 237':
+                  'assert result["rust"]["missing_native_public_command_count"] == 236',
+          }
+          for old, new in replacements.items():
+              old_count = text.count(old)
+              new_count = text.count(new)
+              if old_count == 1 and new_count == 0:
+                  text = text.replace(old, new)
+              elif old_count == 0 and new_count == 1:
+                  pass
+              else:
+                  raise AssertionError(
+                      f"unexpected inventory assertion state: {old_count=}, {new_count=}, {old=}, {new=}"
+                  )
+          path.write_text(text, encoding="utf-8", newline="\n")
+          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize native command metadata
@@ -60,14 +89,17 @@ jobs:
               "crates/syntavra-cli/src/bin/syntavra.rs",
               "crates/syntavra-cli/src/native_cache_amortize.rs",
               "crates/syntavra-cli/src/native_context_stress.rs",
+              "crates/syntavra-cli/src/native_mode.rs",
               "crates/syntavra-cli/src/native_product.rs",
               "crates/syntavra-cli/src/native_proof_status.rs",
               "crates/syntavra-cli/src/native_prove_plan.rs",
               "crates/syntavra-cli/src/native_read_only_product.rs",
               "crates/syntavra-cli/src/native_statusline.rs",
+              "tests/runtime/test_dual_engine_public_surface_r38.py",
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
+          assert "tests/runtime/test_dual_engine_public_surface_r38.py" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -77,10 +109,12 @@ jobs:
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_cache_amortize.rs \
             crates/syntavra-cli/src/native_context_stress.rs \
+            crates/syntavra-cli/src/native_mode.rs \
             crates/syntavra-cli/src/native_product.rs \
             crates/syntavra-cli/src/native_proof_status.rs \
             crates/syntavra-cli/src/native_prove_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs \
-            crates/syntavra-cli/src/native_statusline.rs
-          git commit -m "R38: synchronize native statusline metadata"
+            crates/syntavra-cli/src/native_statusline.rs \
+            tests/runtime/test_dual_engine_public_surface_r38.py
+          git commit -m "R38: synchronize native mode metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
