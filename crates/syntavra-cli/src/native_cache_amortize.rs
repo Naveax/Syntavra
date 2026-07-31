@@ -72,6 +72,10 @@ pub fn execute(arguments: &[String]) -> Result<Value, String> {
 mod tests {
     use super::{amortization, parse, Inputs};
 
+    fn assert_close(actual: f64, expected: f64) {
+        assert!((actual - expected).abs() <= f64::EPSILON);
+    }
+
     #[test]
     fn matches_reference_example() {
         let value = amortization(Inputs {
@@ -105,9 +109,9 @@ mod tests {
         .map(str::to_owned)
         .collect::<Vec<_>>();
         let inputs = parse(&arguments).expect("parse");
-        assert_eq!(inputs.cache_write_tokens, 100.0);
-        assert_eq!(inputs.cache_read_tokens, 20.0);
-        assert_eq!(inputs.uncached_input_tokens, 1000.0);
-        assert_eq!(inputs.requests, 3.0);
+        assert_close(inputs.cache_write_tokens, 100.0);
+        assert_close(inputs.cache_read_tokens, 20.0);
+        assert_close(inputs.uncached_input_tokens, 1000.0);
+        assert_close(inputs.requests, 3.0);
     }
 }
