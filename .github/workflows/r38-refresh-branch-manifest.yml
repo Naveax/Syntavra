@@ -32,6 +32,23 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
+      - name: Normalize strict-Clippy source structure
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/syntavra-cli/src/native_product.rs')
+          source = path.read_text(encoding='utf-8')
+          old = '''    match value {
+                  "simple" => 0,
+                  "medium" => 1,
+'''
+          new = '''    match value {
+                  "medium" => 1,
+'''
+          if source.count(old) != 1:
+              raise SystemExit('complexity rank source pattern drifted')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8', newline='\n')
+          PY
       - name: Format native Rust sources
         run: cargo fmt --all
       - name: Synchronize native command metadata
@@ -56,5 +73,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MANIFEST.sha256 crates/syntavra-cli/src/bin/syntavra.rs crates/syntavra-cli/src/native_product.rs
-          git commit -m "chore: format and sync R38 generated files"
+          git commit -m "chore: normalize and sync R38 generated files"
           git push origin HEAD:agent/full-dual-engine-runtime
