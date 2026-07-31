@@ -13,6 +13,8 @@ mod migration_plan_read_only_contract;
 mod native_cache_amortize;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
+#[path = "native_integrations.rs"]
+mod native_integrations;
 #[path = "native_mode.rs"]
 mod native_mode;
 #[path = "native_proof_status.rs"]
@@ -51,6 +53,7 @@ pub fn supports(command: &[String]) -> bool {
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
         || (command.len() == 1 && command[0] == "context-stress")
+        || (command.len() == 1 && command[0] == "integrations")
         || (command.len() == 1 && command[0] == "upgrade")
         || (command.len() == 2
             && matches!(command[0].as_str(), "semantic-demo" | "structural-v2")
@@ -131,6 +134,9 @@ pub fn execute(
             std::process::exit(i32::from(decision.exit_code));
         }
         return Ok(Some(decision.value));
+    }
+    if command.len() == 1 && command[0] == "integrations" {
+        return native_integrations::execute(&arguments).map(Some);
     }
     if command.len() == 1 && command[0] == "upgrade" {
         return native_upgrade::execute(&arguments).map(Some);
