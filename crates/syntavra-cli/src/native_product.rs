@@ -19,6 +19,8 @@ mod native_mode;
 mod native_proof_status;
 #[path = "native_prove_plan.rs"]
 mod native_prove_plan;
+#[path = "native_proxy_plan.rs"]
+mod native_proxy_plan;
 #[path = "native_read_only_product.rs"]
 mod native_read_only_product;
 #[path = "native_redact.rs"]
@@ -42,6 +44,7 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 1 && command[0] == "context-stress")
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
+        || (command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan")
         || (command.len() == 2 && command[0] == "run" && command[1] == "redact")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
         || (command.len() == 2 && command[0] == "run" && command[1] == "statusline")
@@ -115,6 +118,18 @@ pub fn execute(
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
         return native_mode::execute(&arguments, state_root).map(Some);
+    }
+    if command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan" {
+        let decision = native_proxy_plan::execute(&arguments)?;
+        if decision.exit_code != 0 {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&decision.value)
+                    .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
+            );
+            std::process::exit(i32::from(decision.exit_code));
+        }
+        return Ok(Some(decision.value));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "redact" {
         let normalized = normalized_redact_arguments(&arguments)?;
