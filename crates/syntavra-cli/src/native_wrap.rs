@@ -61,9 +61,7 @@ fn wrapper_text(host: &str) -> Result<String, String> {
 
 fn default_output(state_root: &Path, host: &str) -> PathBuf {
     let suffix = if cfg!(windows) { ".cmd" } else { "" };
-    state_root
-        .join("wrappers")
-        .join(format!("{host}{suffix}"))
+    state_root.join("wrappers").join(format!("{host}{suffix}"))
 }
 
 #[cfg(unix)]
@@ -125,7 +123,9 @@ mod tests {
         let value = execute(&arguments, &root).expect("wrapper");
         assert_eq!(value["ok"], true);
         assert_eq!(value["host"], "codex");
-        assert!(value["path"].as_str().is_some_and(|path| path.contains("codex")));
+        assert!(value["path"]
+            .as_str()
+            .is_some_and(|path| path.contains("codex")));
         let _ = fs::remove_dir_all(&root);
     }
 }
