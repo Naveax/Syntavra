@@ -20,6 +20,8 @@ mod native_proof_status;
 mod native_prove_plan;
 #[path = "native_read_only_product.rs"]
 mod native_read_only_product;
+#[path = "native_redact.rs"]
+mod native_redact;
 #[path = "native_route.rs"]
 mod native_route;
 #[path = "native_statusline.rs"]
@@ -37,6 +39,7 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 1 && command[0] == "context-stress")
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
+        || (command.len() == 2 && command[0] == "run" && command[1] == "redact")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
         || (command.len() == 2 && command[0] == "run" && command[1] == "statusline")
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
@@ -70,6 +73,9 @@ pub fn execute(
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
         return native_mode::execute(&arguments, state_root).map(Some);
+    }
+    if command.len() == 2 && command[0] == "run" && command[1] == "redact" {
+        return native_redact::execute(&arguments).map(Some);
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "route" {
         let decision = native_route::execute(&arguments)?;
