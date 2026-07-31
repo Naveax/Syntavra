@@ -479,7 +479,7 @@ mod tests {
                 "subscription": true,
                 "priority": 4,
                 "max_complexity": "reasoning",
-                "context_window": 200000
+                "context_window": 200_000
             },
             {
                 "provider": "local",
@@ -489,7 +489,7 @@ mod tests {
                 "latency_ms": 30.0,
                 "priority": 1,
                 "max_complexity": "complex",
-                "context_window": 64000
+                "context_window": 64_000
             }
         ]);
         assert_eq!(
