@@ -164,11 +164,18 @@ fn command_path(arguments: &[String]) -> Vec<String> {
     let mut index = 0usize;
     while index < arguments.len() {
         let value = &arguments[index];
-        if matches!(value.as_str(), "--project" | "--state-root") {
+        if matches!(
+            value.as_str(),
+            "--project" | "--state-root" | "--budget" | "--max-tier"
+        ) {
             index += 2;
             continue;
         }
-        if value.starts_with("--project=") || value.starts_with("--state-root=") {
+        if value.starts_with("--project=")
+            || value.starts_with("--state-root=")
+            || value.starts_with("--budget=")
+            || value.starts_with("--max-tier=")
+        {
             index += 1;
             continue;
         }
@@ -179,7 +186,12 @@ fn command_path(arguments: &[String]) -> Vec<String> {
         positional.push(value.clone());
         index += 1;
     }
-    positional.into_iter().take(2).collect()
+    if positional.first().map(String::as_str) == Some("context-stress") {
+        positional.truncate(1);
+    } else {
+        positional.truncate(2);
+    }
+    positional
 }
 
 fn executable_exists(path: &Path) -> bool {
