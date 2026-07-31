@@ -39,15 +39,17 @@ def smoke(binary: Path) -> dict[str, object]:
     environment = os.environ.copy()
     environment["PYTHONHOME"] = str(binary.parent / "missing-python-home")
     environment["PYTHONPATH"] = str(binary.parent / "missing-python-path")
+    expected = "standalone-rust"
+    value_hex = expected.encode("utf-8").hex()
     completed = subprocess.run(
-        [str(binary), "--child", "echo", "standalone-rust"],
+        [str(binary), "--child", "echo", value_hex],
         capture_output=True,
         text=True,
         env=environment,
         timeout=15,
         check=False,
     )
-    if completed.returncode != 0 or completed.stdout != "standalone-rust":
+    if completed.returncode != 0 or completed.stdout != expected:
         raise RuntimeError(
             f"standalone smoke failed: code={completed.returncode} stdout={completed.stdout!r} stderr={completed.stderr!r}"
         )
