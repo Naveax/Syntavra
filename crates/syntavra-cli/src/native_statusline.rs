@@ -133,6 +133,9 @@ fn current_mode(state_root: &Path) -> Result<Mode, String> {
         &fs::read(&path).map_err(|error| format!("STATUSLINE_MODE_READ_FAILED:{error}"))?,
     )
     .map_err(|error| format!("STATUSLINE_MODE_JSON_INVALID:{error}"))?;
+    if !value.is_object() {
+        return Err("STATUSLINE_MODE_DOCUMENT_INVALID".to_owned());
+    }
     let selected = value
         .get("mode")
         .and_then(Value::as_str)
@@ -145,6 +148,7 @@ fn current_mode(state_root: &Path) -> Result<Mode, String> {
         .unwrap_or(MODES[0]))
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn integer(value: Option<&Value>) -> i64 {
     value
         .and_then(Value::as_i64)
@@ -160,14 +164,13 @@ fn number(value: Option<&Value>) -> f64 {
 fn source_name(value: Option<&Value>) -> String {
     match value {
         Some(Value::String(value)) if !value.is_empty() => value.clone(),
-        Some(Value::Bool(value)) => {
-            if *value { "True" } else { "False" }.to_owned()
-        }
-        Some(Value::Number(value)) => value.to_string(),
+        Some(Value::Bool(true)) => "True".to_owned(),
+        Some(Value::Number(value)) if value.as_f64() != Some(0.0) => value.to_string(),
         _ => "unknown".to_owned(),
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn savings_summary(state_root: &Path) -> Result<Value, String> {
     let path = state_root.join("analytics").join("savings.jsonl");
     let mut rows = Vec::new();
@@ -175,8 +178,10 @@ fn savings_summary(state_root: &Path) -> Result<Value, String> {
         let text = fs::read_to_string(&path)
             .map_err(|error| format!("STATUSLINE_SAVINGS_READ_FAILED:{error}"))?;
         for line in text.lines() {
-            if let Ok(Value::Object(row)) = serde_json::from_str::<Value>(line) {
-                rows.push(row);
+            match serde_json::from_str::<Value>(line) {
+                Ok(Value::Object(row)) => rows.push(row),
+                Ok(_) => return Err("STATUSLINE_SAVINGS_ROW_INVALID".to_owned()),
+                Err(_) => {}
             }
         }
     }
@@ -226,6 +231,7 @@ fn savings_summary(state_root: &Path) -> Result<Value, String> {
     }))
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn compact_saved(saved: i64) -> String {
     if saved >= 1_000_000 {
         format!("{:.1}m", saved as f64 / 1_000_000.0)
