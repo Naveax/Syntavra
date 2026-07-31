@@ -83,8 +83,7 @@ fn make_executable(_path: &Path) -> Result<(), String> {
 pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String> {
     let host = host_argument(arguments)?;
     let output = argument_after(arguments, "--output")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| default_output(state_root, host));
+        .map_or_else(|| default_output(state_root, host), PathBuf::from);
     let text = wrapper_text(host)?;
     if let Some(parent) = output
         .parent()
