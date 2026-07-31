@@ -20,6 +20,7 @@ env:
   OMP_NUM_THREADS: "1"
   MKL_NUM_THREADS: "1"
   NUMEXPR_NUM_THREADS: "1"
+  CARGO_TARGET_DIR: ".syntavra/ci/cargo-target"
 
 jobs:
   runtime-matrix:
