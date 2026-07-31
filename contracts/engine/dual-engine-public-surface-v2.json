@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 240,
-    "module_count": 27,
-    "native_coverage_ppm": 66147,
-    "native_public_command_count": 17,
+    "missing_native_public_command_count": 239,
+    "module_count": 28,
+    "native_coverage_ppm": 70038,
+    "native_public_command_count": 18,
     "native_public_commands": [
       "engine list",
       "engine status",
@@ -31,6 +31,7 @@
       "migrate plan",
       "pipeline describe",
       "plugins list",
+      "proof status",
       "prove plan",
       "run cache-amortize",
       "run cache-health",
