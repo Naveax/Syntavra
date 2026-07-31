@@ -33,6 +33,8 @@ mod native_semantic_demo;
 mod native_signalbench_plan;
 #[path = "native_statusline.rs"]
 mod native_statusline;
+#[path = "native_upgrade.rs"]
+mod native_upgrade;
 #[path = "native_wire.rs"]
 mod native_wire;
 #[path = "native_wrap.rs"]
@@ -49,6 +51,7 @@ pub fn supports(command: &[String]) -> bool {
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
         || (command.len() == 1 && command[0] == "context-stress")
+        || (command.len() == 1 && command[0] == "upgrade")
         || (command.len() == 2
             && matches!(command[0].as_str(), "semantic-demo" | "structural-v2")
             && command[1] == "demo")
@@ -128,6 +131,9 @@ pub fn execute(
             std::process::exit(i32::from(decision.exit_code));
         }
         return Ok(Some(decision.value));
+    }
+    if command.len() == 1 && command[0] == "upgrade" {
+        return native_upgrade::execute(&arguments).map(Some);
     }
     if command.len() == 2
         && matches!(command[0].as_str(), "semantic-demo" | "structural-v2")
