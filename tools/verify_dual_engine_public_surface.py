@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
-from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,13 +16,17 @@ from export_python_surface import export_surface as export_python_surface
 from export_rust_surface import export_surface as export_rust_surface
 
 CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
-VALID_STATUSES = {
-    "PYTHON_ONLY",
-    "RUST_VIA_PYTHON_LAUNCHER",
-    "RUST_NATIVE_PUBLIC",
-}
 FULL_CLAIM = "FULL_DUAL_ENGINE_PARITY_PROVEN"
 INCOMPLETE_CLAIM = "DUAL_ENGINE_PARITY_INCOMPLETE"
+
+
+def _command_digest(commands: list[str]) -> str:
+    payload = json.dumps(
+        commands,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def verify(*, require_full: bool = False) -> dict[str, object]:
@@ -39,62 +43,62 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
     if contract.get("release_channel") != "pre-release":
         raise RuntimeError("release channel must remain pre-release")
 
-    rows = contract.get("commands")
-    if not isinstance(rows, list) or not rows:
-        raise RuntimeError("dual-engine command inventory is missing")
+    commands = list(python_surface.get("cli_commands", []))
+    python_row = contract.get("python_surface")
+    rust_row = contract.get("rust_surface")
+    if not isinstance(python_row, dict) or not isinstance(rust_row, dict):
+        raise RuntimeError("dual-engine surface summaries are missing")
 
-    command_rows: dict[str, dict[str, object]] = {}
-    for row in rows:
-        if not isinstance(row, dict):
-            raise RuntimeError("every dual-engine command row must be an object")
-        command = row.get("command")
-        status = row.get("rust_status")
-        if not isinstance(command, str) or not command:
-            raise RuntimeError("every dual-engine command requires a command path")
-        if command in command_rows:
-            raise RuntimeError(f"duplicate command path: {command}")
-        if row.get("python") is not True:
-            raise RuntimeError(f"Python ownership missing for {command}")
-        if status not in VALID_STATUSES:
-            raise RuntimeError(f"invalid Rust status for {command}: {status!r}")
-        if status != "PYTHON_ONLY" and not row.get("rust_owner"):
-            raise RuntimeError(f"Rust-owned command lacks rust_owner: {command}")
-        command_rows[command] = row
-
-    exported_commands = set(python_surface.get("cli_commands", []))
-    catalog_commands = set(command_rows)
-    if catalog_commands != exported_commands:
-        missing = sorted(exported_commands - catalog_commands)
-        stale = sorted(catalog_commands - exported_commands)
-        raise RuntimeError(
-            f"dual-engine command inventory drifted: missing={missing!r}, stale={stale!r}"
-        )
-
-    statuses = Counter(str(row["rust_status"]) for row in command_rows.values())
-    native = statuses["RUST_NATIVE_PUBLIC"]
-    bridged = statuses["RUST_VIA_PYTHON_LAUNCHER"]
-    missing = statuses["PYTHON_ONLY"]
-    total = len(command_rows)
-    full = native == total and bridged == 0 and missing == 0
-
-    inventory = contract.get("inventory")
-    if not isinstance(inventory, dict):
-        raise RuntimeError("dual-engine inventory summary is missing")
-    expected_inventory = {
-        "python_module_count": python_surface["module_count"],
-        "python_public_command_count": total,
-        "rust_module_count": rust_surface["module_count"],
-        "rust_native_public_command_count": native,
-        "rust_launcher_bridge_command_count": bridged,
-        "rust_missing_public_command_count": total - native,
-        "rust_native_coverage_ppm": native * 1_000_000 // total,
+    expected_python = {
+        "module_count": python_surface["module_count"],
+        "public_command_count": len(commands),
+        "command_paths_sha256": _command_digest(commands),
+        "digest_encoding": "canonical-json-array-utf8",
     }
-    for key, value in expected_inventory.items():
-        if inventory.get(key) != value:
+    for key, value in expected_python.items():
+        if python_row.get(key) != value:
             raise RuntimeError(
-                f"dual-engine inventory drift for {key}: expected {value!r}, got {inventory.get(key)!r}"
+                f"Python public surface drift for {key}: expected {value!r}, got {python_row.get(key)!r}"
             )
 
+    native = rust_row.get("native_public_commands")
+    bridged = rust_row.get("python_launcher_bridge_commands")
+    if not isinstance(native, list) or not all(isinstance(value, str) for value in native):
+        raise RuntimeError("native Rust command inventory is invalid")
+    if not isinstance(bridged, list) or not all(isinstance(value, str) for value in bridged):
+        raise RuntimeError("Python-launcher bridge inventory is invalid")
+    if native != sorted(set(native)):
+        raise RuntimeError("native Rust command inventory must be sorted and unique")
+    if bridged != sorted(set(bridged)):
+        raise RuntimeError("bridge command inventory must be sorted and unique")
+
+    command_set = set(commands)
+    native_set = set(native)
+    bridge_set = set(bridged)
+    if native_set - command_set:
+        raise RuntimeError(f"unknown native Rust commands: {sorted(native_set - command_set)!r}")
+    if bridge_set - command_set:
+        raise RuntimeError(f"unknown bridge commands: {sorted(bridge_set - command_set)!r}")
+    if native_set & bridge_set:
+        raise RuntimeError("native and bridge command inventories overlap")
+
+    total = len(commands)
+    native_count = len(native)
+    bridge_count = len(bridged)
+    expected_rust = {
+        "module_count": rust_surface["module_count"],
+        "native_public_command_count": native_count,
+        "python_launcher_bridge_command_count": bridge_count,
+        "missing_native_public_command_count": total - native_count,
+        "native_coverage_ppm": native_count * 1_000_000 // total,
+    }
+    for key, value in expected_rust.items():
+        if rust_row.get(key) != value:
+            raise RuntimeError(
+                f"Rust public surface drift for {key}: expected {value!r}, got {rust_row.get(key)!r}"
+            )
+
+    full = native_set == command_set and not bridge_set
     claim = contract.get("claim")
     if full and claim != FULL_CLAIM:
         raise RuntimeError("complete dual-engine coverage must carry the full claim")
@@ -102,7 +106,8 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
         raise RuntimeError("incomplete dual-engine coverage must fail closed")
     if require_full and not full:
         raise RuntimeError(
-            f"full dual-engine parity not reached: native={native}/{total}, bridged={bridged}, python_only={missing}"
+            f"full dual-engine parity not reached: native={native_count}/{total}, "
+            f"bridged={bridge_count}, missing_native={total - native_count}"
         )
 
     return {
@@ -112,13 +117,14 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
         "python": {
             "module_count": python_surface["module_count"],
             "public_command_count": total,
+            "command_paths_sha256": _command_digest(commands),
         },
         "rust": {
             "module_count": rust_surface["module_count"],
-            "native_public_command_count": native,
-            "launcher_bridge_command_count": bridged,
-            "python_only_command_count": missing,
-            "native_coverage_ppm": native * 1_000_000 // total,
+            "native_public_command_count": native_count,
+            "launcher_bridge_command_count": bridge_count,
+            "missing_native_public_command_count": total - native_count,
+            "native_coverage_ppm": native_count * 1_000_000 // total,
         },
         "policy": contract["policy"],
     }
