@@ -1,4 +1,4 @@
-name: Refresh R38 Branch Manifest
+name: Refresh R38 Generated Files
 
 on:
   push:
@@ -26,16 +26,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Synchronize native command metadata
+        run: python tools/sync_r38_native_command_count.py
       - name: Refresh deterministic root manifest
         run: python tools/refresh_manifest.py
-      - name: Validate isolated manifest change
+      - name: Validate isolated generated changes
         run: |
-          changed="$(git diff --name-only)"
-          test "$changed" = "MANIFEST.sha256"
-      - name: Commit refreshed manifest
+          python - <<'PY'
+          import subprocess
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          allowed = {
+              'MANIFEST.sha256',
+              'crates/syntavra-cli/src/bin/syntavra.rs',
+          }
+          assert changed <= allowed, changed
+          assert 'MANIFEST.sha256' in changed, changed
+          PY
+      - name: Commit refreshed generated files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MANIFEST.sha256
-          git commit -m "chore: refresh R38 repository manifest"
+          git add MANIFEST.sha256 crates/syntavra-cli/src/bin/syntavra.rs
+          git commit -m "chore: sync R38 generated metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
