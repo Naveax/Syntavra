@@ -10,6 +10,8 @@ mod legacy;
 mod migration_plan_read_only_contract;
 #[path = "native_cache_amortize.rs"]
 mod native_cache_amortize;
+#[path = "native_context_stress.rs"]
+mod native_context_stress;
 #[path = "native_proof_status.rs"]
 mod native_proof_status;
 #[path = "native_prove_plan.rs"]
@@ -28,6 +30,7 @@ mod telemetry_metrics_contract;
 pub fn supports(command: &[String]) -> bool {
     native_read_only_product::supports(command)
         || legacy::supports(command)
+        || (command.len() == 1 && command[0] == "context-stress")
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
@@ -43,6 +46,18 @@ pub fn execute(
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
             .map(Some);
+    }
+    if command.len() == 1 && command[0] == "context-stress" {
+        let decision = native_context_stress::execute(&arguments)?;
+        if decision.exit_code != 0 {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&decision.value)
+                    .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
+            );
+            std::process::exit(i32::from(decision.exit_code));
+        }
+        return Ok(Some(decision.value));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
         return native_cache_amortize::execute(&arguments).map(Some);
