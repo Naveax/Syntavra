@@ -74,8 +74,8 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 257
-    assert result["rust"]["native_public_command_count"] == 16
-    assert result["rust"]["missing_native_public_command_count"] == 241
+    assert result["rust"]["native_public_command_count"] == 17
+    assert result["rust"]["missing_native_public_command_count"] == 240
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 
@@ -83,6 +83,11 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
 def test_full_claim_cannot_open_while_native_commands_are_missing() -> None:
     with pytest.raises(RuntimeError, match="full dual-engine parity not reached"):
         MODULE.verify(require_full=True)
+
+
+def test_native_prove_plan_matches_python_exactly() -> None:
+    arguments = ("prove", "plan")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
 
 
 def test_native_cache_amortization_matches_python_exactly() -> None:
