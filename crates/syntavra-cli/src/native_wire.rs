@@ -88,9 +88,10 @@ fn compact(
                 .map(|child| compact(child, key_index, path_index))
                 .collect(),
         ),
-        Value::String(value) => path_index
-            .get(value)
-            .map_or_else(|| Value::String(value.clone()), |index| json!({"@path": index})),
+        Value::String(value) => path_index.get(value).map_or_else(
+            || Value::String(value.clone()),
+            |index| json!({"@path": index}),
+        ),
         other => other.clone(),
     }
 }
@@ -204,7 +205,10 @@ fn decode(encoded: &Value) -> Result<Value, String> {
         .as_object()
         .ok_or_else(|| "WIRE_DOCUMENT_INVALID".to_owned())?;
     if encoded_object.get("encoding").and_then(Value::as_str) == Some("json") {
-        return Ok(encoded_object.get("payload").cloned().unwrap_or(Value::Null));
+        return Ok(encoded_object
+            .get("payload")
+            .cloned()
+            .unwrap_or(Value::Null));
     }
     let envelope = encoded_object.get("payload").unwrap_or(encoded);
     let envelope = envelope
@@ -287,8 +291,8 @@ pub fn execute(arguments: &[String]) -> Result<Value, String> {
     let value = load_json(source)?;
     match action {
         "encode" => {
-            let minimum_savings = argument_after(arguments, "--minimum-savings")
-                .map_or(Ok(0.08), |value| {
+            let minimum_savings =
+                argument_after(arguments, "--minimum-savings").map_or(Ok(0.08), |value| {
                     value
                         .parse::<f64>()
                         .map_err(|error| format!("WIRE_SAVINGS_INVALID:{error}"))

@@ -87,9 +87,8 @@ fn scan_prefixed(
             end += 1;
         }
         let tail_length = end - tail_start;
-        let accepted = exact_tail.map_or(tail_length >= minimum_tail, |length| {
-            tail_length == length
-        });
+        let accepted =
+            exact_tail.map_or(tail_length >= minimum_tail, |length| tail_length == length);
         if accepted && right_boundary(bytes, end) {
             push_match(matches, text, start, end, kind);
         }
@@ -297,11 +296,7 @@ fn entropy(value: &[u8]) -> f64 {
         .sum()
 }
 
-fn scan_high_entropy(
-    text: &str,
-    existing: &[RedactionMatch],
-    matches: &mut Vec<RedactionMatch>,
-) {
+fn scan_high_entropy(text: &str, existing: &[RedactionMatch], matches: &mut Vec<RedactionMatch>) {
     let bytes = text.as_bytes();
     let mut cursor = 0usize;
     while cursor < bytes.len() {
@@ -436,10 +431,7 @@ fn redact_text(text: &str) -> (String, Vec<RedactionMatch>) {
     let mut cursor = 0usize;
     for item in &matches {
         rendered.push_str(&text[cursor..item.start]);
-        rendered.push_str(&format!(
-            "<redacted:{}:{}>",
-            item.kind, item.fingerprint
-        ));
+        rendered.push_str(&format!("<redacted:{}:{}>", item.kind, item.fingerprint));
         cursor = item.end;
     }
     rendered.push_str(&text[cursor..]);
@@ -453,7 +445,9 @@ fn visit(value: &Value, records: &mut Vec<RedactionMatch>) -> Value {
             records.extend(found);
             Value::String(redacted)
         }
-        Value::Array(items) => Value::Array(items.iter().map(|item| visit(item, records)).collect()),
+        Value::Array(items) => {
+            Value::Array(items.iter().map(|item| visit(item, records)).collect())
+        }
         Value::Object(items) => Value::Object(
             items
                 .iter()
@@ -537,11 +531,7 @@ mod tests {
     #[test]
     fn nested_json_receipt_is_deterministic() {
         let source = r#"{"token":"AKIAABCDEFGHIJKLMNOP","safe":true}"#;
-        let arguments = vec![
-            "run".to_owned(),
-            "redact".to_owned(),
-            source.to_owned(),
-        ];
+        let arguments = vec!["run".to_owned(), "redact".to_owned(), source.to_owned()];
         let value = execute(&arguments).expect("redact");
         assert_eq!(value["receipt"]["count"], 1);
         assert_eq!(value["receipt"]["types"][0], "aws-access-key");

@@ -228,10 +228,13 @@ fn atomic_write(path: &Path, payload: &[u8]) -> Result<(), String> {
     fs::create_dir_all(parent).map_err(|error| format!("MODE_PARENT_CREATE_FAILED:{error}"))?;
     let temporary = parent.join(format!(
         ".{}.{}.tmp",
-        path.file_name().and_then(|value| value.to_str()).unwrap_or("mode"),
+        path.file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("mode"),
         std::process::id()
     ));
-    let mut file = File::create(&temporary).map_err(|error| format!("MODE_TEMP_CREATE_FAILED:{error}"))?;
+    let mut file =
+        File::create(&temporary).map_err(|error| format!("MODE_TEMP_CREATE_FAILED:{error}"))?;
     file.write_all(payload)
         .map_err(|error| format!("MODE_TEMP_WRITE_FAILED:{error}"))?;
     file.sync_all()
