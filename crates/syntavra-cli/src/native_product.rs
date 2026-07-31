@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::cmp::Ordering;
+use std::env;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
@@ -401,17 +402,16 @@ fn provider_route(arguments: &[String]) -> Result<Value, String> {
     )
 }
 
-pub fn execute(
-    command: &[String],
-    arguments: &[String],
-    state_root: &Path,
-) -> Result<Option<Value>, String> {
+pub fn execute(command: &[String], state_root: &Path) -> Result<Option<Value>, String> {
     if !supports(command) {
         return Ok(None);
     }
     match command[1].as_str() {
         "cache-health" => cache_health(state_root).map(Some),
-        "provider-route" => provider_route(arguments).map(Some),
+        "provider-route" => {
+            let arguments = env::args().skip(1).collect::<Vec<_>>();
+            provider_route(&arguments).map(Some)
+        }
         _ => Ok(None),
     }
 }
