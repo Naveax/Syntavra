@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-17-finalize
+  group: r38-generated-metadata-17-engine-verify
   cancel-in-progress: false
 
 jobs:
@@ -36,6 +36,76 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
+      - name: Preserve aggregate engine verification
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
+          text = path.read_text(encoding="utf-8")
+
+          old_verify = '''        "verify" => parsed
+              .forwarded
+              .get(2)
+              .ok_or_else(|| "ENGINE_VERIFY_MISSING_ENGINE".to_owned())
+              .and_then(|value| Engine::parse(value))
+              .map(verify_engine),'''
+          new_verify = '''        "verify" => match parsed.forwarded.get(2) {
+              Some(value) => Engine::parse(value).map(verify_engine),
+              None => Ok(engine_status(parsed)),
+          },'''
+          verify_counts = (text.count(old_verify), text.count(new_verify))
+          assert verify_counts in {(1, 0), (0, 1)}, verify_counts
+          if verify_counts == (1, 0):
+              text = text.replace(old_verify, new_verify)
+
+          old_import = '''    use super::{command_path, parse_arguments, Engine};'''
+          new_import = '''    use super::{command_path, engine_command, parse_arguments, Engine};'''
+          import_counts = (text.count(old_import), text.count(new_import))
+          assert import_counts in {(1, 0), (0, 1)}, import_counts
+          if import_counts == (1, 0):
+              text = text.replace(old_import, new_import)
+
+          old_test = '''    #[test]
+    fn command_path_ignores_global_paths() {
+        let path = command_path(&[
+            "--project".to_owned(),
+            "repo".to_owned(),
+            "run".to_owned(),
+            "cache-health".to_owned(),
+        ]);
+        assert_eq!(path, vec!["run", "cache-health"]);
+    }
+}'''
+          new_test = '''    #[test]
+    fn command_path_ignores_global_paths() {
+        let path = command_path(&[
+            "--project".to_owned(),
+            "repo".to_owned(),
+            "run".to_owned(),
+            "cache-health".to_owned(),
+        ]);
+        assert_eq!(path, vec!["run", "cache-health"]);
+    }
+
+    #[test]
+    fn aggregate_engine_verify_returns_status() {
+        let parsed = parse_arguments(&["engine".to_owned(), "verify".to_owned()]).expect("parse");
+        let result = engine_command(&parsed)
+            .expect("engine command")
+            .expect("engine status");
+        assert_eq!(result["selector"], "native-rust");
+        assert_eq!(result["fallback"], "forbidden");
+        assert_eq!(result["engines"]["rust"]["available"], true);
+    }
+}'''
+          test_counts = (text.count(old_test), text.count(new_test))
+          assert test_counts in {(1, 0), (0, 1)}, test_counts
+          if test_counts == (1, 0):
+              text = text.replace(old_test, new_test)
+
+          path.write_text(text, encoding="utf-8", newline="\n")
+          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize native command metadata
@@ -59,6 +129,7 @@ jobs:
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
+          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -69,5 +140,5 @@ jobs:
             crates/syntavra-cli/src/native_cache_amortize.rs \
             crates/syntavra-cli/src/native_product.rs \
             crates/syntavra-cli/src/native_prove_plan.rs
-          git commit -m "chore: finalize R38 native-17 metadata"
+          git commit -m "fix: preserve aggregate engine verification"
           git push origin HEAD:agent/full-dual-engine-runtime
