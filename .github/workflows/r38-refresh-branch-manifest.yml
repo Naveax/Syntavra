@@ -38,10 +38,21 @@ jobs:
           from pathlib import Path
           path = Path('crates/syntavra-cli/src/native_product.rs')
           source = path.read_text(encoding='utf-8')
-          old = '        "simple" => 0,\n'
-          if source.count(old) != 1:
-              raise SystemExit('complexity rank source pattern drifted')
-          path.write_text(source.replace(old, '', 1), encoding='utf-8', newline='\n')
+
+          def normalize(old: str, new: str) -> None:
+              global source
+              count = source.count(old)
+              if count > 1:
+                  raise SystemExit(f'normalization pattern duplicated: {old!r}')
+              if count == 1:
+                  source = source.replace(old, new, 1)
+              elif new and new not in source:
+                  raise SystemExit(f'normalization target missing: {new!r}')
+
+          normalize('        "simple" => 0,\n', '')
+          normalize('"context_window": 200000', '"context_window": 200_000')
+          normalize('"context_window": 64000', '"context_window": 64_000')
+          path.write_text(source, encoding='utf-8', newline='\n')
           PY
       - name: Format native Rust sources
         run: cargo fmt --all
