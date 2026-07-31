@@ -29,8 +29,7 @@ fn category(tool: &str) -> &'static str {
     let normalized = tool
         .trim()
         .to_lowercase()
-        .replace('-', ".")
-        .replace('_', ".");
+        .replace(['-', '_'], ".");
     let leaf = normalized.rsplit('.').next().unwrap_or(normalized.as_str());
     if READ_PREFIXES.iter().any(|prefix| leaf.starts_with(prefix)) {
         "read"
