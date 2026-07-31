@@ -14,6 +14,7 @@ on:
       - "crates/syntavra-cli/src/native_proof_status.rs"
       - "crates/syntavra-cli/src/native_prove_plan.rs"
       - "crates/syntavra-cli/src/native_read_only_product.rs"
+      - "crates/syntavra-cli/src/native_statusline.rs"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
   workflow_dispatch:
 
@@ -21,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-19-context-stress-checked-conversions
+  group: r38-generated-metadata-20-statusline
   cancel-in-progress: false
 
 jobs:
@@ -139,6 +140,7 @@ jobs:
               "crates/syntavra-cli/src/native_proof_status.rs",
               "crates/syntavra-cli/src/native_prove_plan.rs",
               "crates/syntavra-cli/src/native_read_only_product.rs",
+              "crates/syntavra-cli/src/native_statusline.rs",
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
@@ -154,6 +156,7 @@ jobs:
             crates/syntavra-cli/src/native_product.rs \
             crates/syntavra-cli/src/native_proof_status.rs \
             crates/syntavra-cli/src/native_prove_plan.rs \
-            crates/syntavra-cli/src/native_read_only_product.rs
-          git commit -m "fix: synchronize checked context stress metadata"
+            crates/syntavra-cli/src/native_read_only_product.rs \
+            crates/syntavra-cli/src/native_statusline.rs
+          git commit -m "R38: synchronize native statusline metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
