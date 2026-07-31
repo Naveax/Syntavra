@@ -74,8 +74,8 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 257
-    assert result["rust"]["native_public_command_count"] == 13
-    assert result["rust"]["missing_native_public_command_count"] == 244
+    assert result["rust"]["native_public_command_count"] == 14
+    assert result["rust"]["missing_native_public_command_count"] == 243
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 
@@ -104,4 +104,45 @@ def test_native_cache_amortization_matches_python_exactly() -> None:
 def test_native_empty_cache_health_matches_python_exactly(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     arguments = ("--state-root", str(state_root), "run", "cache-health")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_provider_route_matches_python_exactly() -> None:
+    candidates = json.dumps(
+        [
+            {
+                "provider": "openai",
+                "model": "gpt-x",
+                "quality": 0.9,
+                "quota_remaining": 0.8,
+                "latency_ms": 100.0,
+                "subscription": True,
+                "priority": 4,
+                "max_complexity": "reasoning",
+                "context_window": 200000,
+            },
+            {
+                "provider": "local",
+                "model": "qwen",
+                "quality": 0.7,
+                "quota_remaining": 1.0,
+                "latency_ms": 30.0,
+                "priority": 1,
+                "max_complexity": "complex",
+                "context_window": 64000,
+            },
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    arguments = (
+        "run",
+        "provider-route",
+        "architecture migration proof",
+        candidates,
+        "--changed-files",
+        "9",
+        "--tokens",
+        "20000",
+    )
     assert _rust_engine(*arguments) == _python_engine(*arguments)
