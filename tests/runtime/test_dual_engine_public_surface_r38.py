@@ -68,14 +68,52 @@ def _rust_engine(*arguments: str) -> Any:
     )
 
 
+def _write_statusline_state(state_root: Path) -> None:
+    state_root.mkdir(parents=True, exist_ok=True)
+    (state_root / "optimization-mode.json").write_text(
+        json.dumps({"mode": "review"}, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    analytics = state_root / "analytics"
+    analytics.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "source": "build",
+            "original_tokens": 2000,
+            "visible_tokens": 500,
+            "saved_tokens": 1500,
+            "provider_cost_before": 1.25,
+            "provider_cost_after": 0.25,
+        },
+        {
+            "source": "cache",
+            "original_tokens": 1000,
+            "visible_tokens": 800,
+            "saved_tokens": 200,
+            "provider_cost_before": 0.5,
+            "provider_cost_after": 0.4,
+        },
+    ]
+    (analytics / "savings.jsonl").write_text(
+        "\n".join(
+            [
+                *(json.dumps(row, separators=(",", ":")) for row in rows),
+                "not-json",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     result = MODULE.verify()
     assert result["ok"] is True
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 257
-    assert result["rust"]["native_public_command_count"] == 19
-    assert result["rust"]["missing_native_public_command_count"] == 238
+    assert result["rust"]["native_public_command_count"] == 20
+    assert result["rust"]["missing_native_public_command_count"] == 237
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 
@@ -218,6 +256,31 @@ def test_native_cache_amortization_matches_python_exactly() -> None:
 def test_native_empty_cache_health_matches_python_exactly(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     arguments = ("--state-root", str(state_root), "run", "cache-health")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_empty_statusline_matches_python_exactly(tmp_path: Path) -> None:
+    arguments = ("--state-root", str(tmp_path / "state"), "run", "statusline")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_populated_statusline_matches_python_exactly(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    _write_statusline_state(state_root)
+    arguments = ("--state-root", str(state_root), "run", "statusline")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_verbose_statusline_matches_python_exactly(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    _write_statusline_state(state_root)
+    arguments = (
+        "--state-root",
+        str(state_root),
+        "run",
+        "statusline",
+        "--verbose",
+    )
     assert _rust_engine(*arguments) == _python_engine(*arguments)
 
 
