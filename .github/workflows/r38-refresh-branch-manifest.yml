@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-17-cache-repair
+  group: r38-generated-metadata-17-cache-repair-final
   cancel-in-progress: false
 
 jobs:
