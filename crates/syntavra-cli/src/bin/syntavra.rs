@@ -373,22 +373,15 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
         return None;
     }
     let action = parsed.forwarded.get(1).map(String::as_str).unwrap_or("status");
-    Some(match action {
+    let result = match action {
         "status" | "list" => Ok(engine_status(parsed)),
-        "verify" => {
-            let engine = parsed
-                .forwarded
-                .get(2)
-                .ok_or_else(|| "ENGINE_VERIFY_MISSING_ENGINE".to_owned())
-                .and_then(|value| Engine::parse(value))?;
-            Ok(verify_engine(engine))
-        }
+        "verify" => parsed
+            .forwarded
+            .get(2)
+            .ok_or_else(|| "ENGINE_VERIFY_MISSING_ENGINE".to_owned())
+            .and_then(|value| Engine::parse(value))
+            .map(verify_engine),
         "use" => {
-            let engine = parsed
-                .forwarded
-                .get(2)
-                .ok_or_else(|| "ENGINE_USE_MISSING_ENGINE".to_owned())
-                .and_then(|value| Engine::parse(value))?;
             let scope = parsed
                 .forwarded
                 .iter()
@@ -396,10 +389,16 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
                 .and_then(|index| parsed.forwarded.get(index + 1))
                 .map(String::as_str)
                 .unwrap_or("project");
-            use_engine(parsed, scope, engine)
+            parsed
+                .forwarded
+                .get(2)
+                .ok_or_else(|| "ENGINE_USE_MISSING_ENGINE".to_owned())
+                .and_then(|value| Engine::parse(value))
+                .and_then(|engine| use_engine(parsed, scope, engine))
         }
         _ => Err("ENGINE_MANAGEMENT_ACTION_INVALID".to_owned()),
-    })
+    };
+    Some(result)
 }
 
 fn execute_program(program: &Program, forwarded: &[String], engine: Engine) -> Result<ExitCode, String> {
