@@ -74,8 +74,8 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 257
-    assert result["rust"]["native_public_command_count"] == 17
-    assert result["rust"]["missing_native_public_command_count"] == 240
+    assert result["rust"]["native_public_command_count"] == 18
+    assert result["rust"]["missing_native_public_command_count"] == 239
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 
@@ -129,6 +129,11 @@ def test_native_empty_scheduler_list_matches_python_exactly(tmp_path: Path) -> N
 
 def test_native_empty_telemetry_metrics_matches_python_exactly() -> None:
     assert _rust_engine("telemetry", "metrics") == _python_engine("telemetry", "metrics")
+
+
+def test_native_proof_status_matches_python_exactly() -> None:
+    arguments = ("proof", "status")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
 
 
 def test_native_prove_plan_matches_python_exactly() -> None:
