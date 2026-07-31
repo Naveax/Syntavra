@@ -14,7 +14,7 @@ mod native_product;
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
 const PUBLIC_COMMAND_COUNT: u64 = 257;
-const NATIVE_COMMAND_COUNT: u64 = 16;
+const NATIVE_COMMAND_COUNT: u64 = 17;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Engine {
@@ -149,8 +149,7 @@ fn parse_arguments(arguments: &[String]) -> Result<Parsed, String> {
         forwarded.push(value.clone());
         index += 1;
     }
-    let state_root =
-        state_root.unwrap_or_else(|| project_root.join(".syntavra").join("pre-release"));
+    let state_root = state_root.unwrap_or_else(|| project_root.join(".syntavra").join("pre-release"));
     Ok(Parsed {
         engine_override,
         forwarded,
@@ -159,29 +158,16 @@ fn parse_arguments(arguments: &[String]) -> Result<Parsed, String> {
     })
 }
 
-fn command_tokens(arguments: &[String]) -> Vec<String> {
-    let options_with_values = [
-        "--project",
-        "--state-root",
-        "--skill-root",
-        "--codex-home",
-        "--host",
-    ];
-    let mut output = Vec::new();
+fn command_path(arguments: &[String]) -> Vec<String> {
+    let mut positional = Vec::new();
     let mut index = 0usize;
     while index < arguments.len() {
         let value = &arguments[index];
-        if options_with_values.contains(&value.as_str()) {
+        if matches!(value.as_str(), "--project" | "--state-root") {
             index += 2;
             continue;
         }
-        if value.starts_with("--project=")
-            || value.starts_with("--state-root=")
-            || value.starts_with("--skill-root=")
-            || value.starts_with("--codex-home=")
-            || value.starts_with("--host=")
-            || value == "--json"
-        {
+        if value.starts_with("--project=") || value.starts_with("--state-root=") {
             index += 1;
             continue;
         }
@@ -189,629 +175,371 @@ fn command_tokens(arguments: &[String]) -> Vec<String> {
             index += 1;
             continue;
         }
-        output.push(value.clone());
-        if output.len() == 2 {
-            break;
-        }
+        positional.push(value.clone());
         index += 1;
     }
-    output
+    positional.into_iter().take(2).collect()
 }
 
-fn project_engine_path(project_root: &Path) -> PathBuf {
-    project_root.join(".syntavra").join("engine.json")
+fn executable_exists(path: &Path) -> bool {
+    path.is_file()
 }
 
-fn user_engine_path() -> PathBuf {
-    if cfg!(windows) {
-        if let Some(value) = env::var_os("APPDATA") {
-            return PathBuf::from(value).join("Syntavra").join("engine.json");
+fn discover_selector_dir() -> PathBuf {
+    env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| lexical_absolute("."))
+}
+
+fn discover_rust_program() -> Option<Program> {
+    if let Ok(value) = env::var("SYNTAVRA_RUST_BIN") {
+        let path = lexical_absolute(value);
+        if executable_exists(&path) {
+            return Some(Program {
+                executable: path,
+                prefix: Vec::new(),
+            });
         }
     }
-    if let Some(value) = env::var_os("XDG_CONFIG_HOME") {
-        return PathBuf::from(value).join("syntavra").join("engine.json");
-    }
-    let home = env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
-        .map_or_else(|| PathBuf::from("."), PathBuf::from);
-    home.join(".config").join("syntavra").join("engine.json")
-}
-
-fn read_engine(path: &Path) -> Result<Option<Engine>, String> {
-    let raw = match fs::read(path) {
-        Ok(value) => value,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err("ENGINE_CONFIG_READ_FAILED".to_owned()),
-    };
-    if raw.len() > 4096 {
-        return Err("ENGINE_CONFIG_TOO_LARGE".to_owned());
-    }
-    let value: Value =
-        serde_json::from_slice(&raw).map_err(|_| "ENGINE_CONFIG_INVALID".to_owned())?;
-    if value.get("schema_version").and_then(Value::as_u64) != Some(1) {
-        return Err("ENGINE_CONFIG_SCHEMA_UNSUPPORTED".to_owned());
-    }
-    let engine = value
-        .get("engine")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "ENGINE_CONFIG_INVALID".to_owned())?;
-    Engine::parse(engine).map(Some)
-}
-
-fn persist_engine(path: &Path, engine: Engine) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| "ENGINE_CONFIG_PARENT_INVALID".to_owned())?;
-    fs::create_dir_all(parent).map_err(|_| "ENGINE_CONFIG_CREATE_FAILED".to_owned())?;
-    let temporary = parent.join(".engine.json.tmp");
-    let payload = serde_json::to_vec_pretty(&json!({
-        "schema_version": 1,
-        "engine": engine.as_str(),
-    }))
-    .map_err(|_| "ENGINE_CONFIG_RENDER_FAILED".to_owned())?;
-    fs::write(&temporary, payload).map_err(|_| "ENGINE_CONFIG_WRITE_FAILED".to_owned())?;
-    fs::rename(&temporary, path).map_err(|_| "ENGINE_CONFIG_REPLACE_FAILED".to_owned())?;
-    Ok(())
-}
-
-fn selected_engine(parsed: &Parsed) -> Result<(Engine, &'static str), String> {
-    if let Some(engine) = parsed.engine_override {
-        return Ok((engine, "command"));
-    }
-    if let Ok(value) = env::var("SYNTAVRA_ENGINE") {
-        if !value.trim().is_empty() {
-            return Ok((Engine::parse(&value)?, "environment"));
-        }
-    }
-    if let Some(engine) = read_engine(&project_engine_path(&parsed.project_root))? {
-        return Ok((engine, "project"));
-    }
-    if let Some(engine) = read_engine(&user_engine_path())? {
-        return Ok((engine, "user"));
-    }
-    Ok((Engine::Auto, "builtin"))
-}
-
-fn sibling_binary(name: &str) -> Option<PathBuf> {
-    let executable = env::current_exe().ok()?;
-    let directory = executable.parent()?;
-    let filename = if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.to_owned()
-    };
-    let candidate = directory.join(filename);
-    candidate.is_file().then_some(candidate)
-}
-
-fn rust_program() -> Program {
-    if let Some(value) = env::var_os("SYNTAVRA_RUST_BIN") {
-        let candidate = PathBuf::from(value);
-        if candidate.is_file() {
-            return Program {
+    let directory = discover_selector_dir();
+    let suffix = env::consts::EXE_SUFFIX;
+    for name in ["syntavra-rs", "syntavra-full-parity"] {
+        let candidate = directory.join(format!("{name}{suffix}"));
+        if executable_exists(&candidate) {
+            return Some(Program {
                 executable: candidate,
                 prefix: Vec::new(),
-            };
-        }
-    }
-    if let Some(candidate) = sibling_binary("syntavra-rs") {
-        return Program {
-            executable: candidate,
-            prefix: Vec::new(),
-        };
-    }
-    Program {
-        executable: PathBuf::from(if cfg!(windows) {
-            "syntavra-rs.exe"
-        } else {
-            "syntavra-rs"
-        }),
-        prefix: Vec::new(),
-    }
-}
-
-fn program_works(program: &Program, probe: &[&str]) -> bool {
-    let mut command = Command::new(&program.executable);
-    command.args(&program.prefix).args(probe);
-    command
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
-fn python_at_root(root: &Path, virtual_environment: bool) -> PathBuf {
-    if cfg!(windows) {
-        if virtual_environment {
-            root.join("Scripts").join("python.exe")
-        } else {
-            root.join("python.exe")
-        }
-    } else {
-        root.join("bin").join("python")
-    }
-}
-
-fn checked_python(executable: PathBuf, prefix: Vec<String>) -> Option<Program> {
-    let program = Program { executable, prefix };
-    program_works(&program, &["--version"]).then_some(program)
-}
-
-fn python_program() -> Option<Program> {
-    if let Some(value) = env::var_os("SYNTAVRA_PYTHON") {
-        if let Some(program) = checked_python(PathBuf::from(value), Vec::new()) {
-            return Some(program);
-        }
-    }
-    if let Some(value) = env::var_os("VIRTUAL_ENV") {
-        if let Some(program) =
-            checked_python(python_at_root(&PathBuf::from(value), true), Vec::new())
-        {
-            return Some(program);
-        }
-    }
-    for variable in ["pythonLocation", "Python3_ROOT_DIR", "Python_ROOT_DIR"] {
-        if let Some(value) = env::var_os(variable) {
-            if let Some(program) =
-                checked_python(python_at_root(&PathBuf::from(value), false), Vec::new())
-            {
-                return Some(program);
-            }
-        }
-    }
-    let candidates: &[(&str, &[&str])] = if cfg!(windows) {
-        &[("python", &[]), ("py", &["-3"])]
-    } else {
-        &[("python3", &[]), ("python", &[])]
-    };
-    candidates.iter().find_map(|(executable, prefix)| {
-        checked_python(
-            PathBuf::from(*executable),
-            prefix.iter().map(|value| (*value).to_owned()).collect(),
-        )
-    })
-}
-
-fn exit_code(status: std::process::ExitStatus) -> ExitCode {
-    let value = status
-        .code()
-        .and_then(|code| u8::try_from(code).ok())
-        .unwrap_or(1);
-    ExitCode::from(value)
-}
-
-fn execute(program: &Program, arguments: &[String]) -> Result<ExitCode, String> {
-    let status = Command::new(&program.executable)
-        .args(&program.prefix)
-        .args(arguments)
-        .status()
-        .map_err(|_| "ENGINE_EXECUTION_FAILED".to_owned())?;
-    Ok(exit_code(status))
-}
-
-fn encode_hex(value: &[u8]) -> String {
-    const TABLE: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(value.len() * 2);
-    for byte in value {
-        output.push(char::from(TABLE[usize::from(byte >> 4)]));
-        output.push(char::from(TABLE[usize::from(byte & 0x0f)]));
-    }
-    output
-}
-
-fn parse_scheduler_list(arguments: &[String]) -> Result<(u64, Vec<String>), String> {
-    let mut limit = 100u64;
-    let mut states = Vec::new();
-    let mut index = 0usize;
-    while index < arguments.len() {
-        let value = &arguments[index];
-        if value == "--state" {
-            let state = arguments
-                .get(index + 1)
-                .ok_or_else(|| "SCHEDULER_STATE_MISSING".to_owned())?;
-            states.push(state.clone());
-            index += 2;
-            continue;
-        }
-        if let Some(state) = value.strip_prefix("--state=") {
-            states.push(state.to_owned());
-            index += 1;
-            continue;
-        }
-        if value == "--limit" {
-            let raw = arguments
-                .get(index + 1)
-                .ok_or_else(|| "SCHEDULER_LIMIT_MISSING".to_owned())?;
-            limit = raw
-                .parse()
-                .map_err(|_| "SCHEDULER_LIMIT_INVALID".to_owned())?;
-            index += 2;
-            continue;
-        }
-        if let Some(raw) = value.strip_prefix("--limit=") {
-            limit = raw
-                .parse()
-                .map_err(|_| "SCHEDULER_LIMIT_INVALID".to_owned())?;
-            index += 1;
-            continue;
-        }
-        index += 1;
-    }
-    Ok((limit, states))
-}
-
-fn value_after_command(arguments: &[String], command: &str, action: &str) -> Option<String> {
-    let mut tokens = arguments.iter();
-    while let Some(value) = tokens.next() {
-        if value == command && tokens.next().is_some_and(|next| next == action) {
-            return tokens
-                .find(|item| !item.starts_with('-'))
-                .map(ToOwned::to_owned);
+            });
         }
     }
     None
 }
 
-fn required_integer_flag(arguments: &[String], flag: &str, label: &str) -> Result<i32, String> {
-    let mut found = None;
-    let mut index = 0usize;
-    while index < arguments.len() {
-        let item = &arguments[index];
-        let raw = if item == flag {
-            index += 1;
-            Some(
-                arguments
-                    .get(index)
-                    .ok_or_else(|| format!("CACHE_AMORTIZE_{label}_MISSING"))?
-                    .as_str(),
-            )
-        } else {
-            item.strip_prefix(flag)
-                .and_then(|suffix| suffix.strip_prefix('='))
-        };
-        if let Some(value) = raw {
-            if found.is_some() {
-                return Err(format!("CACHE_AMORTIZE_{label}_DUPLICATE"));
-            }
-            found = Some(
-                value
-                    .parse::<i32>()
-                    .map_err(|_| format!("CACHE_AMORTIZE_{label}_INVALID"))?,
-            );
+fn discover_python_program() -> Option<Program> {
+    if let Ok(value) = env::var("SYNTAVRA_PYTHON_BIN") {
+        let path = lexical_absolute(value);
+        if executable_exists(&path) {
+            return Some(Program {
+                executable: path,
+                prefix: vec!["-m".to_owned(), "syntavra_runtime.engine_entry".to_owned()],
+            });
         }
-        index += 1;
     }
-    found.ok_or_else(|| format!("CACHE_AMORTIZE_{label}_MISSING"))
+    let directory = discover_selector_dir();
+    let suffix = env::consts::EXE_SUFFIX;
+    let compatibility = directory.join(format!("syntavra-python{suffix}"));
+    if executable_exists(&compatibility) {
+        return Some(Program {
+            executable: compatibility,
+            prefix: Vec::new(),
+        });
+    }
+    for name in ["python3", "python"] {
+        if let Ok(path) = which(name) {
+            return Some(Program {
+                executable: path,
+                prefix: vec!["-m".to_owned(), "syntavra_runtime.engine_entry".to_owned()],
+            });
+        }
+    }
+    None
 }
 
-fn has_direct_rust_route(parsed: &Parsed) -> bool {
-    let tokens = command_tokens(&parsed.forwarded);
-    (tokens.len() == 2 && tokens[0] == "run" && tokens[1] == "cache-amortize")
-        || native_product::supports(&tokens)
-}
-
-fn direct_rust_result(parsed: &Parsed) -> Result<Option<Value>, String> {
-    let tokens = command_tokens(&parsed.forwarded);
-    if native_product::supports(&tokens) {
-        return native_product::execute(&tokens, &parsed.state_root);
-    }
-    if tokens.len() != 2 || tokens[0] != "run" || tokens[1] != "cache-amortize" {
-        return Ok(None);
-    }
-    let cache_write_tokens = required_integer_flag(&parsed.forwarded, "--write", "WRITE")?;
-    let cache_read_tokens = required_integer_flag(&parsed.forwarded, "--read", "READ")?;
-    let uncached_input_tokens = required_integer_flag(&parsed.forwarded, "--uncached", "UNCACHED")?;
-    let requests = required_integer_flag(&parsed.forwarded, "--requests", "REQUESTS")?.max(1);
-    let baseline = f64::from(uncached_input_tokens) * f64::from(requests);
-    let optimized = f64::from(cache_write_tokens) * 1.25
-        + f64::from(cache_read_tokens) * 0.1 * f64::from(requests - 1);
-    let saved = (baseline - optimized).max(0.0);
-    let savings_ratio = if baseline == 0.0 {
-        0.0
+fn which(name: &str) -> Result<PathBuf, std::io::Error> {
+    let path = env::var_os("PATH").unwrap_or_default();
+    let suffixes: Vec<&str> = if cfg!(windows) {
+        vec![".exe", ".cmd", ".bat", ""]
     } else {
-        ((baseline - optimized) / baseline).max(0.0)
+        vec![""]
     };
-    let break_even_denominator =
-        (f64::from(uncached_input_tokens) - f64::from(cache_read_tokens) * 0.1).max(1.0);
-    Ok(Some(json!({
-        "baseline_equivalent": baseline,
-        "optimized_equivalent": optimized,
-        "saved_equivalent": saved,
-        "savings_ratio": savings_ratio,
-        "break_even_requests": f64::from(cache_write_tokens) * 1.25 / break_even_denominator,
-    })))
-}
-
-fn translate_rust(parsed: &Parsed) -> Result<Option<Vec<String>>, String> {
-    let tokens = command_tokens(&parsed.forwarded);
-    let key = tokens.join(" ");
-    let translated = match key.as_str() {
-        "version" => vec!["version".to_owned()],
-        "pipeline describe" => vec!["pipeline".to_owned(), "describe".to_owned()],
-        "plugins list" => vec!["plugins".to_owned(), "list".to_owned()],
-        "telemetry metrics" => {
-            let format = if parsed.forwarded.iter().any(|value| value == "--prometheus") {
-                "prometheus"
-            } else {
-                "json"
-            };
-            vec![
-                "telemetry".to_owned(),
-                "metrics".to_owned(),
-                format.to_owned(),
-            ]
+    for directory in env::split_paths(&path) {
+        for suffix in &suffixes {
+            let candidate = directory.join(format!("{name}{suffix}"));
+            match fs::metadata(&candidate) {
+                Ok(metadata) if metadata.is_file() => return Ok(candidate),
+                Ok(_) => {}
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
         }
-        "scheduler stats" => vec![
-            "scheduler".to_owned(),
-            "stats".to_owned(),
-            parsed.state_root.to_string_lossy().into_owned(),
-        ],
-        "scheduler list" => {
-            let (limit, states) = parse_scheduler_list(&parsed.forwarded)?;
-            let states_json =
-                serde_json::to_vec(&states).map_err(|_| "SCHEDULER_STATES_INVALID".to_owned())?;
-            vec![
-                "scheduler".to_owned(),
-                "list".to_owned(),
-                parsed.state_root.to_string_lossy().into_owned(),
-                limit.to_string(),
-                encode_hex(&states_json),
-            ]
-        }
-        "migrate plan" => {
-            let database = value_after_command(&parsed.forwarded, "migrate", "plan")
-                .ok_or_else(|| "MIGRATION_DATABASE_MISSING".to_owned())?;
-            vec![
-                "migration".to_owned(),
-                "plan".to_owned(),
-                parsed.project_root.to_string_lossy().into_owned(),
-                encode_hex(database.as_bytes()),
-            ]
-        }
-        _ => return Ok(None),
-    };
-    Ok(Some(translated))
-}
-
-fn run_python(parsed: &Parsed) -> Result<ExitCode, String> {
-    let program = python_program().ok_or_else(|| "PYTHON_ENGINE_NOT_FOUND".to_owned())?;
-    let mut arguments = vec![
-        "-m".to_owned(),
-        "syntavra_runtime.engine_entry".to_owned(),
-        "--engine".to_owned(),
-        "python".to_owned(),
-    ];
-    arguments.extend(parsed.forwarded.iter().cloned());
-    execute(&program, &arguments)
-}
-
-fn run_rust(parsed: &Parsed) -> Result<ExitCode, String> {
-    if let Some(value) = direct_rust_result(parsed)? {
-        emit(&value);
-        return Ok(ExitCode::SUCCESS);
     }
-    let arguments = translate_rust(parsed)?.ok_or_else(|| {
+    Err(std::io::Error::new(ErrorKind::NotFound, name.to_owned()))
+}
+
+fn read_engine_file(path: &Path) -> Option<Engine> {
+    let value = fs::read_to_string(path).ok()?;
+    let parsed: Value = serde_json::from_str(&value).ok()?;
+    parsed
+        .get("engine")
+        .and_then(Value::as_str)
+        .and_then(|value| Engine::parse(value).ok())
+}
+
+fn resolve_engine(parsed: &Parsed) -> (Engine, &'static str) {
+    if let Some(value) = parsed.engine_override {
+        return (value, "command");
+    }
+    if let Ok(value) = env::var("SYNTAVRA_ENGINE") {
+        if let Ok(engine) = Engine::parse(&value) {
+            return (engine, "environment");
+        }
+    }
+    if let Some(value) = read_engine_file(&parsed.project_root.join(".syntavra").join("engine.json")) {
+        return (value, "project");
+    }
+    if let Some(home) = home_dir() {
+        if let Some(value) = read_engine_file(&home.join(".syntavra").join("engine.json")) {
+            return (value, "user");
+        }
+    }
+    (Engine::Auto, "default")
+}
+
+fn home_dir() -> Option<PathBuf> {
+    env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+}
+
+fn engine_status(parsed: &Parsed) -> Value {
+    let (selected, source) = resolve_engine(parsed);
+    json!({
+        "product": "Syntavra",
+        "version": PRODUCT_VERSION,
+        "channel": RELEASE_CHANNEL,
+        "selector": "native-rust",
+        "selected": selected.as_str(),
+        "source": source,
+        "fallback": "forbidden",
+        "engines": {
+            "python": {
+                "available": discover_python_program().is_some(),
+                "independent": true,
+            },
+            "rust": {
+                "available": true,
+                "independent": true,
+                "native_public_commands": NATIVE_COMMAND_COUNT,
+                "missing_public_commands": PUBLIC_COMMAND_COUNT - NATIVE_COMMAND_COUNT,
+            }
+        }
+    })
+}
+
+fn use_engine(parsed: &Parsed, scope: &str, engine: Engine) -> Result<Value, String> {
+    let path = match scope {
+        "project" => parsed.project_root.join(".syntavra").join("engine.json"),
+        "user" => home_dir()
+            .ok_or_else(|| "USER_HOME_UNAVAILABLE".to_owned())?
+            .join(".syntavra")
+            .join("engine.json"),
+        _ => return Err("ENGINE_SCOPE_INVALID".to_owned()),
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| format!("ENGINE_SCOPE_CREATE_FAILED:{error}"))?;
+    }
+    let payload = json!({
+        "engine": engine.as_str(),
+        "scope": scope,
+        "version": 1,
+    });
+    fs::write(
+        &path,
         format!(
-            "RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED:{}",
-            command_tokens(&parsed.forwarded).join(" ")
-        )
-    })?;
-    execute(&rust_program(), &arguments)
+            "{}\n",
+            serde_json::to_string_pretty(&payload)
+                .map_err(|error| format!("ENGINE_SCOPE_SERIALIZE_FAILED:{error}"))?
+        ),
+    )
+    .map_err(|error| format!("ENGINE_SCOPE_WRITE_FAILED:{error}"))?;
+    Ok(json!({"ok": true, "path": path, "selection": payload}))
 }
 
-fn engine_management(parsed: &Parsed) -> Result<Option<ExitCode>, String> {
-    let tokens = command_tokens(&parsed.forwarded);
-    if tokens.first().map(String::as_str) != Some("engine") {
-        return Ok(None);
+fn verify_engine(engine: Engine) -> Value {
+    let available = match engine {
+        Engine::Python => discover_python_program().is_some(),
+        Engine::Rust => true,
+        Engine::Auto => discover_python_program().is_some(),
+    };
+    json!({
+        "ok": available,
+        "engine": engine.as_str(),
+        "available": available,
+        "fallback": "forbidden",
+    })
+}
+
+fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
+    if parsed.forwarded.first().map(String::as_str) != Some("engine") {
+        return None;
     }
-    match tokens.get(1).map(String::as_str) {
-        Some("use") => {
-            let position = parsed
-                .forwarded
-                .iter()
-                .position(|value| value == "use")
-                .ok_or_else(|| "ENGINE_USE_INVALID".to_owned())?;
+    let action = parsed.forwarded.get(1).map(String::as_str).unwrap_or("status");
+    Some(match action {
+        "status" | "list" => Ok(engine_status(parsed)),
+        "verify" => {
             let engine = parsed
                 .forwarded
-                .get(position + 1)
-                .ok_or_else(|| "ENGINE_USE_MISSING".to_owned())
+                .get(2)
+                .ok_or_else(|| "ENGINE_VERIFY_MISSING_ENGINE".to_owned())
+                .and_then(|value| Engine::parse(value))?;
+            Ok(verify_engine(engine))
+        }
+        "use" => {
+            let engine = parsed
+                .forwarded
+                .get(2)
+                .ok_or_else(|| "ENGINE_USE_MISSING_ENGINE".to_owned())
                 .and_then(|value| Engine::parse(value))?;
             let scope = parsed
                 .forwarded
-                .windows(2)
-                .find(|window| window[0] == "--scope")
-                .map(|window| window[1].as_str())
-                .or_else(|| {
-                    parsed
-                        .forwarded
-                        .iter()
-                        .find_map(|value| value.strip_prefix("--scope="))
-                })
+                .iter()
+                .position(|value| value == "--scope")
+                .and_then(|index| parsed.forwarded.get(index + 1))
+                .map(String::as_str)
                 .unwrap_or("project");
-            let path = match scope {
-                "project" => project_engine_path(&parsed.project_root),
-                "user" => user_engine_path(),
-                _ => return Err("ENGINE_SCOPE_INVALID".to_owned()),
-            };
-            persist_engine(&path, engine)?;
-            emit(&json!({
-                "ok": true,
-                "persisted": {
-                    "engine": engine.as_str(),
-                    "scope": scope,
-                    "path": path,
-                }
-            }));
-            Ok(Some(ExitCode::SUCCESS))
+            use_engine(parsed, scope, engine)
         }
-        Some("list" | "status" | "verify") => {
-            let (selected, source) = selected_engine(parsed)?;
-            let python = python_program();
-            let rust = rust_program();
-            let rust_available = program_works(&rust, &["version"]);
-            let value = json!({
-                "ok": python.is_some() && rust_available,
-                "product": "Syntavra",
-                "product_version": PRODUCT_VERSION,
-                "release_channel": RELEASE_CHANNEL,
-                "selection": {
-                    "requested": selected.as_str(),
-                    "source": source,
-                    "auto_policy": "rust-for-native-command-else-python",
-                    "fallback": "forbidden",
-                },
-                "engines": {
-                    "python": {
-                        "available": python.is_some(),
-                        "independent": true,
-                    },
-                    "rust": {
-                        "available": rust_available,
-                        "independent": true,
-                        "native_public_commands": NATIVE_COMMAND_COUNT,
-                        "target_public_commands": PUBLIC_COMMAND_COUNT,
-                        "full_dual_engine_parity": false,
-                    }
-                }
-            });
-            emit(&value);
-            Ok(Some(if value["ok"] == Value::Bool(true) {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::from(4)
-            }))
-        }
-        _ => Ok(None),
-    }
+        _ => Err("ENGINE_MANAGEMENT_ACTION_INVALID".to_owned()),
+    })
 }
 
-fn run(arguments: &[String]) -> ExitCode {
-    let parsed = match parse_arguments(arguments) {
-        Ok(value) => value,
-        Err(code) => return fail(&code, "invalid launcher arguments", json!({})),
-    };
-    match engine_management(&parsed) {
-        Ok(Some(code)) => return code,
-        Ok(None) => {}
-        Err(code) => return fail(&code, "engine management failed", json!({})),
-    }
-    let (requested, source) = match selected_engine(&parsed) {
-        Ok(value) => value,
-        Err(code) => return fail(&code, "engine selection failed", json!({})),
-    };
-    let resolved = if requested == Engine::Auto {
-        if has_direct_rust_route(&parsed) {
-            Engine::Rust
-        } else {
-            match translate_rust(&parsed) {
-                Ok(Some(_)) if program_works(&rust_program(), &["version"]) => Engine::Rust,
-                Ok(_) => Engine::Python,
-                Err(code) => return fail(&code, "auto routing failed", json!({})),
+fn execute_program(program: &Program, forwarded: &[String], engine: Engine) -> Result<ExitCode, String> {
+    let mut command = Command::new(&program.executable);
+    command
+        .args(&program.prefix)
+        .arg("--engine")
+        .arg(engine.as_str())
+        .args(forwarded)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    let status = command
+        .status()
+        .map_err(|error| format!("ENGINE_EXECUTION_FAILED:{error}"))?;
+    Ok(ExitCode::from(status.code().unwrap_or(1) as u8))
+}
+
+fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
+    let path = command_path(&parsed.forwarded);
+    match selected {
+        Engine::Rust => {
+            if native_product::supports(&path) {
+                match native_product::execute(&path, &parsed.state_root) {
+                    Ok(Some(value)) => {
+                        emit(&value);
+                        ExitCode::SUCCESS
+                    }
+                    Ok(None) => fail(
+                        "RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED",
+                        "The selected Rust engine does not implement this public command.",
+                        json!({"command_path": path, "fallback": "forbidden"}),
+                    ),
+                    Err(error) => fail(
+                        "RUST_PUBLIC_COMMAND_FAILED",
+                        "The selected Rust engine failed while executing the public command.",
+                        json!({"command_path": path, "error": error, "fallback": "forbidden"}),
+                    ),
+                }
+            } else {
+                fail(
+                    "RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED",
+                    "The selected Rust engine does not implement this public command.",
+                    json!({"command_path": path, "fallback": "forbidden"}),
+                )
             }
         }
-    } else {
-        requested
-    };
-    let result = match resolved {
-        Engine::Python => run_python(&parsed),
-        Engine::Rust => run_rust(&parsed),
-        Engine::Auto => unreachable!(),
-    };
-    match result {
-        Ok(code) => code,
-        Err(code) => fail(
-            &code,
-            "selected engine could not execute the command",
-            json!({
-                "requested": requested.as_str(),
-                "resolved": resolved.as_str(),
-                "source": source,
-                "fallback": "forbidden",
-                "command": command_tokens(&parsed.forwarded).join(" "),
-            }),
-        ),
+        Engine::Python => match discover_python_program() {
+            Some(program) => execute_program(&program, &parsed.forwarded, Engine::Python).unwrap_or_else(
+                |error| {
+                    fail(
+                        "PYTHON_ENGINE_EXECUTION_FAILED",
+                        "The selected Python engine could not be executed.",
+                        json!({"error": error, "fallback": "forbidden"}),
+                    )
+                },
+            ),
+            None => fail(
+                "PYTHON_ENGINE_NOT_AVAILABLE",
+                "The selected Python engine is not available.",
+                json!({"fallback": "forbidden"}),
+            ),
+        },
+        Engine::Auto => {
+            if native_product::supports(&path) {
+                run_selected(parsed, Engine::Rust)
+            } else {
+                match discover_python_program() {
+                    Some(program) => execute_program(&program, &parsed.forwarded, Engine::Python)
+                        .unwrap_or_else(|error| {
+                            fail(
+                                "AUTO_ENGINE_EXECUTION_FAILED",
+                                "The automatic engine policy could not execute the selected Python engine.",
+                                json!({"error": error, "fallback": "forbidden"}),
+                            )
+                        }),
+                    None => fail(
+                        "AUTO_ENGINE_NOT_AVAILABLE",
+                        "The automatic engine policy has no available engine for this command.",
+                        json!({"command_path": path, "fallback": "forbidden"}),
+                    ),
+                }
+            }
+        }
     }
 }
 
 fn main() -> ExitCode {
-    run(&env::args().skip(1).collect::<Vec<_>>())
+    let arguments = env::args().skip(1).collect::<Vec<_>>();
+    let parsed = match parse_arguments(&arguments) {
+        Ok(value) => value,
+        Err(error) => {
+            return fail(
+                "SELECTOR_ARGUMENT_INVALID",
+                "The native selector could not parse the command arguments.",
+                json!({"error": error}),
+            );
+        }
+    };
+    if let Some(result) = engine_command(&parsed) {
+        return match result {
+            Ok(value) => {
+                emit(&value);
+                ExitCode::SUCCESS
+            }
+            Err(error) => fail(
+                "ENGINE_MANAGEMENT_FAILED",
+                "The engine management command failed.",
+                json!({"error": error}),
+            ),
+        };
+    }
+    let (selected, _) = resolve_engine(&parsed);
+    run_selected(&parsed, selected)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{command_tokens, direct_rust_result, parse_arguments, translate_rust, Engine};
-
-    fn values(items: &[&str]) -> Vec<String> {
-        items.iter().map(|value| (*value).to_owned()).collect()
-    }
+    use super::{command_path, parse_arguments, Engine};
 
     #[test]
-    fn engine_override_is_removed_from_forwarded_arguments() {
-        let parsed = parse_arguments(&values(&[
-            "--engine",
-            "rust",
-            "--project",
-            "demo",
-            "pipeline",
-            "describe",
-        ]))
-        .expect("arguments");
+    fn parses_command_override() {
+        let parsed = parse_arguments(&[
+            "--engine".to_owned(),
+            "rust".to_owned(),
+            "version".to_owned(),
+        ])
+        .expect("parse");
         assert_eq!(parsed.engine_override, Some(Engine::Rust));
-        assert_eq!(
-            command_tokens(&parsed.forwarded),
-            values(&["pipeline", "describe"])
-        );
+        assert_eq!(parsed.forwarded, vec!["version"]);
     }
 
     #[test]
-    fn scheduler_translation_uses_state_root() {
-        let parsed = parse_arguments(&values(&[
-            "--state-root",
-            "state",
-            "scheduler",
-            "list",
-            "--state",
-            "queued",
-            "--limit",
-            "7",
-        ]))
-        .expect("arguments");
-        let translated = translate_rust(&parsed)
-            .expect("translation")
-            .expect("native route");
-        assert_eq!(&translated[..2], values(&["scheduler", "list"]));
-        assert_eq!(translated[3], "7");
-    }
-
-    #[test]
-    fn cache_amortization_is_a_native_exact_route() {
-        let parsed = parse_arguments(&values(&[
-            "run",
-            "cache-amortize",
-            "--write",
-            "100",
-            "--read",
-            "0",
-            "--uncached",
-            "1000",
-            "--requests",
-            "1",
-        ]))
-        .expect("arguments");
-        let result = direct_rust_result(&parsed)
-            .expect("native execution")
-            .expect("native result");
-        assert_eq!(result["baseline_equivalent"].as_f64(), Some(1000.0));
-        assert_eq!(result["optimized_equivalent"].as_f64(), Some(125.0));
-        assert_eq!(result["saved_equivalent"].as_f64(), Some(875.0));
-        assert_eq!(result["savings_ratio"].as_f64(), Some(0.875));
-        assert_eq!(result["break_even_requests"].as_f64(), Some(0.125));
-    }
-
-    #[test]
-    fn unsupported_rust_command_is_not_silently_fallbacked() {
-        let parsed = parse_arguments(&values(&["run", "rewrite", "--", "git", "status"]))
-            .expect("arguments");
-        assert!(translate_rust(&parsed).expect("translation").is_none());
+    fn command_path_ignores_global_paths() {
+        let path = command_path(&[
+            "--project".to_owned(),
+            "repo".to_owned(),
+            "run".to_owned(),
+            "cache-health".to_owned(),
+        ]);
+        assert_eq!(path, vec!["run", "cache-health"]);
     }
 }
