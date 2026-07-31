@@ -15,6 +15,7 @@ on:
       - "crates/syntavra-cli/src/native_prove_plan.rs"
       - "crates/syntavra-cli/src/native_read_only_product.rs"
       - "crates/syntavra-cli/src/native_statusline.rs"
+      - "syntavra_runtime/engine_entry.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
   workflow_dispatch:
 
@@ -22,7 +23,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-20-statusline-windows-utf8
+  group: r38-generated-metadata-20-statusline-final
   cancel-in-progress: false
 
 jobs:
@@ -40,127 +41,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Preserve selector option-value parsing
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
-          text = path.read_text(encoding="utf-8")
-          old = '''fn command_path(arguments: &[String]) -> Vec<String> {
-              let mut positional = Vec::new();
-              let mut index = 0usize;
-              while index < arguments.len() {
-                  let value = &arguments[index];
-                  if matches!(value.as_str(), "--project" | "--state-root") {
-                      index += 2;
-                      continue;
-                  }
-                  if value.starts_with("--project=") || value.starts_with("--state-root=") {
-                      index += 1;
-                      continue;
-                  }
-                  if value.starts_with('-') {
-                      index += 1;
-                      continue;
-                  }
-                  positional.push(value.clone());
-                  index += 1;
-              }
-              positional.into_iter().take(2).collect()
-          }
-          '''
-          new = '''fn command_path(arguments: &[String]) -> Vec<String> {
-              let mut positional = Vec::new();
-              let mut index = 0usize;
-              while index < arguments.len() {
-                  let value = &arguments[index];
-                  if matches!(
-                      value.as_str(),
-                      "--project" | "--state-root" | "--budget" | "--max-tier"
-                  ) {
-                      index += 2;
-                      continue;
-                  }
-                  if value.starts_with("--project=")
-                      || value.starts_with("--state-root=")
-                      || value.starts_with("--budget=")
-                      || value.starts_with("--max-tier=")
-                  {
-                      index += 1;
-                      continue;
-                  }
-                  if value.starts_with('-') {
-                      index += 1;
-                      continue;
-                  }
-                  positional.push(value.clone());
-                  index += 1;
-              }
-              if positional.first().map(String::as_str) == Some("context-stress") {
-                  positional.truncate(1);
-              } else {
-                  positional.truncate(2);
-              }
-              positional
-          }
-          '''
-          old_count = text.count(old)
-          new_count = text.count(new)
-          if old_count == 1 and new_count == 0:
-              text = text.replace(old, new)
-          elif old_count == 0 and new_count == 1:
-              pass
-          else:
-              raise AssertionError(
-                  f"unexpected command_path state: old={old_count}, new={new_count}"
-              )
-          path.write_text(text, encoding="utf-8", newline="\n")
-          PY
-      - name: Preserve UTF-8 Python engine output
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
-          text = path.read_text(encoding="utf-8")
-          old = '''    let mut command = Command::new(&program.executable);
-              command
-                  .args(&program.prefix)
-                  .arg("--engine")
-                  .arg(engine.as_str())
-                  .args(forwarded)
-                  .stdin(Stdio::inherit())
-                  .stdout(Stdio::inherit())
-                  .stderr(Stdio::inherit());
-          '''
-          new = '''    let mut command = Command::new(&program.executable);
-              if engine == Engine::Python {
-                  command
-                      .env("PYTHONIOENCODING", "utf-8")
-                      .env("PYTHONUTF8", "1");
-              }
-              command
-                  .args(&program.prefix)
-                  .arg("--engine")
-                  .arg(engine.as_str())
-                  .args(forwarded)
-                  .stdin(Stdio::inherit())
-                  .stdout(Stdio::inherit())
-                  .stderr(Stdio::inherit());
-          '''
-          old_count = text.count(old)
-          new_count = text.count(new)
-          if old_count == 1 and new_count == 0:
-              text = text.replace(old, new)
-          elif old_count == 0 and new_count == 1:
-              pass
-          else:
-              raise AssertionError(
-                  f"unexpected execute_program state: old={old_count}, new={new_count}"
-              )
-          path.write_text(text, encoding="utf-8", newline="\n")
-          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize native command metadata
@@ -188,7 +68,6 @@ jobs:
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
-          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -203,5 +82,5 @@ jobs:
             crates/syntavra-cli/src/native_prove_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs \
             crates/syntavra-cli/src/native_statusline.rs
-          git commit -m "fix: force UTF-8 for Python engine output"
+          git commit -m "R38: synchronize native statusline metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
