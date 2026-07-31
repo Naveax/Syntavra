@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-17-read-only-adapter
+  group: r38-generated-metadata-17-read-only-final
   cancel-in-progress: false
 
 jobs:
@@ -37,20 +37,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Connect project and state roots to native product
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
-          text = path.read_text(encoding="utf-8")
-          old = "native_product::execute(&path, &parsed.state_root)"
-          new = "native_product::execute(&path, &parsed.project_root, &parsed.state_root)"
-          counts = (text.count(old), text.count(new))
-          assert counts in {(1, 0), (0, 1)}, counts
-          if counts == (1, 0):
-              path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
-          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize native command metadata
@@ -75,7 +61,6 @@ jobs:
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
-          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -87,5 +72,5 @@ jobs:
             crates/syntavra-cli/src/native_product.rs \
             crates/syntavra-cli/src/native_prove_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs
-          git commit -m "fix: wire catalogued native read-only commands"
+          git commit -m "fix: certify catalogued native read-only commands"
           git push origin HEAD:agent/full-dual-engine-runtime
