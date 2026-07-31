@@ -87,10 +87,7 @@ fn contains_bounded_phrase(corpus: &str, phrase: &str) -> bool {
             .chars()
             .next_back()
             .is_some_and(is_word_character);
-        let right_is_word = corpus[end..]
-            .chars()
-            .next()
-            .is_some_and(is_word_character);
+        let right_is_word = corpus[end..].chars().next().is_some_and(is_word_character);
         !left_is_word && !right_is_word
     })
 }
@@ -278,10 +275,7 @@ mod tests {
         assert!(!value["delegated"].as_bool().expect("delegated"));
         assert_eq!(value["reason"], "task is small enough for one agent");
         assert_eq!(value["tasks"], json!([]));
-        assert_eq!(
-            value["receipt_hash"].as_str().map(str::len),
-            Some(64)
-        );
+        assert_eq!(value["receipt_hash"].as_str().map(str::len), Some(64));
     }
 
     #[test]
@@ -304,14 +298,8 @@ mod tests {
         );
         assert_eq!(value["tasks"][0]["dependencies"], json!([]));
         assert_eq!(value["tasks"][1]["dependencies"], json!(["T01"]));
-        assert_eq!(
-            value["tasks"][2]["dependencies"],
-            json!(["T01", "T02"])
-        );
-        assert_eq!(
-            value["tasks"][3]["dependencies"],
-            json!(["T02", "T03"])
-        );
+        assert_eq!(value["tasks"][2]["dependencies"], json!(["T01", "T02"]));
+        assert_eq!(value["tasks"][3]["dependencies"], json!(["T02", "T03"]));
         assert_eq!(
             value["tasks"][0]["context_paths"],
             json!(["src/lib.rs", "tests/runtime"])
