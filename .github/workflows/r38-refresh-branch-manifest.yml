@@ -9,35 +9,17 @@ on:
       - ".github/workflows/validate-fusion-runtime.yml"
       - "contracts/engine/dual-engine-public-surface-v2.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
-      - "crates/syntavra-cli/src/native_cache_amortize.rs"
-      - "crates/syntavra-cli/src/native_context_stress.rs"
-      - "crates/syntavra-cli/src/native_mode.rs"
-      - "crates/syntavra-cli/src/native_product.rs"
-      - "crates/syntavra-cli/src/native_proof_status.rs"
-      - "crates/syntavra-cli/src/native_prove_plan.rs"
-      - "crates/syntavra-cli/src/native_proxy_plan.rs"
-      - "crates/syntavra-cli/src/native_read_only_product.rs"
-      - "crates/syntavra-cli/src/native_redact.rs"
-      - "crates/syntavra-cli/src/native_semantic_demo.rs"
-      - "crates/syntavra-cli/src/native_signalbench_plan.rs"
-      - "crates/syntavra-cli/src/native_statusline.rs"
-      - "crates/syntavra-cli/src/native_wire.rs"
-      - "crates/syntavra-cli/src/native_wrap.rs"
+      - "crates/syntavra-cli/src/native_*.rs"
       - "syntavra_runtime/engine_entry.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
-      - "tests/runtime/test_native_mode_r38.py"
-      - "tests/runtime/test_native_proxy_plan_r38.py"
-      - "tests/runtime/test_native_redact_r38.py"
-      - "tests/runtime/test_native_semantic_signalbench_r38.py"
-      - "tests/runtime/test_native_wire_r38.py"
-      - "tests/runtime/test_native_wrap_r38.py"
+      - "tests/runtime/test_native_*_r38.py"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-29-semantic-signalbench
+  group: r38-generated-metadata-current
   cancel-in-progress: false
 
 jobs:
@@ -58,46 +40,31 @@ jobs:
       - name: Synchronize R38 inventory assertions
         run: |
           python - <<'PY'
+          import json
+          import re
           from pathlib import Path
 
+          contract = json.loads(
+              Path("contracts/engine/dual-engine-public-surface-v2.json").read_text(encoding="utf-8")
+          )
+          expected = int(contract["rust_surface"]["native_public_command_count"])
+          missing = int(contract["rust_surface"]["missing_native_public_command_count"])
           path = Path("tests/runtime/test_dual_engine_public_surface_r38.py")
           text = path.read_text(encoding="utf-8")
-          count_candidates = [
-              'assert result["rust"]["native_public_command_count"] == 20',
-              'assert result["rust"]["native_public_command_count"] == 21',
-              'assert result["rust"]["native_public_command_count"] == 22',
-              'assert result["rust"]["native_public_command_count"] == 23',
-              'assert result["rust"]["native_public_command_count"] == 24',
-              'assert result["rust"]["native_public_command_count"] == 25',
-              'assert result["rust"]["native_public_command_count"] == 26',
-              'assert result["rust"]["native_public_command_count"] == 27',
-              'assert result["rust"]["native_public_command_count"] == 28',
-              'assert result["rust"]["native_public_command_count"] == 29',
-          ]
-          missing_candidates = [
-              'assert result["rust"]["missing_native_public_command_count"] == 237',
-              'assert result["rust"]["missing_native_public_command_count"] == 236',
-              'assert result["rust"]["missing_native_public_command_count"] == 235',
-              'assert result["rust"]["missing_native_public_command_count"] == 234',
-              'assert result["rust"]["missing_native_public_command_count"] == 233',
-              'assert result["rust"]["missing_native_public_command_count"] == 232',
-              'assert result["rust"]["missing_native_public_command_count"] == 231',
-              'assert result["rust"]["missing_native_public_command_count"] == 230',
-              'assert result["rust"]["missing_native_public_command_count"] == 229',
-              'assert result["rust"]["missing_native_public_command_count"] == 228',
-          ]
-          count_matches = [candidate for candidate in count_candidates if candidate in text]
-          missing_matches = [candidate for candidate in missing_candidates if candidate in text]
-          assert len(count_matches) == 1, count_matches
-          assert len(missing_matches) == 1, missing_matches
-          text = text.replace(
-              count_matches[0],
-              'assert result["rust"]["native_public_command_count"] == 29',
+          text, count_changes = re.subn(
+              r'assert result\["rust"\]\["native_public_command_count"\] == [0-9]+',
+              f'assert result["rust"]["native_public_command_count"] == {expected}',
+              text,
+              count=1,
           )
-          text = text.replace(
-              missing_matches[0],
-              'assert result["rust"]["missing_native_public_command_count"] == 228',
+          text, missing_changes = re.subn(
+              r'assert result\["rust"\]\["missing_native_public_command_count"\] == [0-9]+',
+              f'assert result["rust"]["missing_native_public_command_count"] == {missing}',
+              text,
+              count=1,
           )
+          assert count_changes == 1, count_changes
+          assert missing_changes == 1, missing_changes
           path.write_text(text, encoding="utf-8", newline="\n")
           PY
       - name: Format Rust workspace
@@ -114,29 +81,22 @@ jobs:
           changed = set(
               subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
           )
-          allowed = {
+          fixed = {
               "MANIFEST.sha256",
               "crates/syntavra-cli/src/bin/syntavra.rs",
-              "crates/syntavra-cli/src/native_cache_amortize.rs",
-              "crates/syntavra-cli/src/native_context_stress.rs",
-              "crates/syntavra-cli/src/native_mode.rs",
-              "crates/syntavra-cli/src/native_product.rs",
-              "crates/syntavra-cli/src/native_proof_status.rs",
-              "crates/syntavra-cli/src/native_prove_plan.rs",
-              "crates/syntavra-cli/src/native_proxy_plan.rs",
-              "crates/syntavra-cli/src/native_read_only_product.rs",
-              "crates/syntavra-cli/src/native_redact.rs",
-              "crates/syntavra-cli/src/native_semantic_demo.rs",
-              "crates/syntavra-cli/src/native_signalbench_plan.rs",
-              "crates/syntavra-cli/src/native_statusline.rs",
-              "crates/syntavra-cli/src/native_wire.rs",
-              "crates/syntavra-cli/src/native_wrap.rs",
               "tests/runtime/test_dual_engine_public_surface_r38.py",
           }
-          assert changed <= allowed, changed
+          unexpected = {
+              path
+              for path in changed
+              if path not in fixed
+              and not (
+                  path.startswith("crates/syntavra-cli/src/native_")
+                  and path.endswith(".rs")
+              )
+          }
+          assert not unexpected, unexpected
           assert "MANIFEST.sha256" in changed, changed
-          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
-          assert "tests/runtime/test_dual_engine_public_surface_r38.py" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -144,20 +104,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MANIFEST.sha256 \
             crates/syntavra-cli/src/bin/syntavra.rs \
-            crates/syntavra-cli/src/native_cache_amortize.rs \
-            crates/syntavra-cli/src/native_context_stress.rs \
-            crates/syntavra-cli/src/native_mode.rs \
-            crates/syntavra-cli/src/native_product.rs \
-            crates/syntavra-cli/src/native_proof_status.rs \
-            crates/syntavra-cli/src/native_prove_plan.rs \
-            crates/syntavra-cli/src/native_proxy_plan.rs \
-            crates/syntavra-cli/src/native_read_only_product.rs \
-            crates/syntavra-cli/src/native_redact.rs \
-            crates/syntavra-cli/src/native_semantic_demo.rs \
-            crates/syntavra-cli/src/native_signalbench_plan.rs \
-            crates/syntavra-cli/src/native_statusline.rs \
-            crates/syntavra-cli/src/native_wire.rs \
-            crates/syntavra-cli/src/native_wrap.rs \
+            crates/syntavra-cli/src/native_*.rs \
             tests/runtime/test_dual_engine_public_surface_r38.py
-          git commit -m "R38: synchronize semantic and SignalBench coverage metadata"
+          git diff --cached --quiet && exit 0
+          git commit -m "R38: synchronize current native coverage metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
