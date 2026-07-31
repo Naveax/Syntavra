@@ -1,0 +1,45 @@
+name: Apply R38 Native Slice
+
+on:
+  push:
+    branches: ["agent/full-dual-engine-runtime"]
+    paths:
+      - "tools/apply_r38_native_slice.py"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - name: Apply deterministic source changes
+        run: python tools/apply_r38_native_slice.py
+      - name: Remove one-shot applicator
+        run: rm tools/apply_r38_native_slice.py .github/workflows/r38-apply-native-slice.yml
+      - name: Refresh repository manifest
+        run: python tools/refresh_manifest.py
+      - name: Validate modified architecture
+        run: |
+          python tools/verify_dual_engine_public_surface.py
+          cargo fmt --all -- --check
+          cargo test --locked --bin syntavra
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Commit applied slice
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "R38: add first native product command and repair dual-engine CI"
+          git push origin HEAD:agent/full-dual-engine-runtime
