@@ -88,7 +88,10 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
         .map(PathBuf::from)
         .unwrap_or_else(|| default_output(state_root, host));
     let text = wrapper_text(host)?;
-    if let Some(parent) = output.parent() {
+    if let Some(parent) = output
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent).map_err(|error| format!("WRAP_DIRECTORY_FAILED:{error}"))?;
     }
     fs::write(&output, text.as_bytes()).map_err(|error| format!("WRAP_WRITE_FAILED:{error}"))?;
