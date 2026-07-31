@@ -18,21 +18,12 @@ fn number_as_i64(value: Option<&Value>) -> i64 {
         .and_then(|item| {
             item.as_i64()
                 .or_else(|| item.as_u64().and_then(|number| i64::try_from(number).ok()))
-                .or_else(|| item.as_f64().map(|number| number as i64))
-                .or_else(|| item.as_str().and_then(|text| text.parse::<i64>().ok()))
         })
         .unwrap_or(0)
 }
 
 fn number_as_f64(value: Option<&Value>) -> f64 {
-    value
-        .and_then(|item| {
-            item.as_f64()
-                .or_else(|| item.as_i64().map(|number| number as f64))
-                .or_else(|| item.as_u64().map(|number| number as f64))
-                .or_else(|| item.as_str().and_then(|text| text.parse::<f64>().ok()))
-        })
-        .unwrap_or(0.0)
+    value.and_then(Value::as_f64).unwrap_or(0.0)
 }
 
 fn health_from_plans(plans: Option<&Map<String, Value>>, now: f64) -> Value {
@@ -92,10 +83,7 @@ fn cache_health(state_root: &Path) -> Result<Value, String> {
     ))
 }
 
-pub fn execute(
-    command: &[String],
-    state_root: &Path,
-) -> Result<Option<Value>, String> {
+pub fn execute(command: &[String], state_root: &Path) -> Result<Option<Value>, String> {
     if !supports(command) {
         return Ok(None);
     }
