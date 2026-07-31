@@ -32,6 +32,17 @@ def exact(binary: Path, project: Path, project_id: str, raw: bytes, *, supplied_
     return python_value
 
 
+def is_semantic_rejection(value: dict[str, Any]) -> bool:
+    if "error" in value:
+        return True
+    return (
+        value.get("phase") == "R36"
+        and value.get("operation") == "distribution.verify"
+        and isinstance(value.get("result"), dict)
+        and value["result"].get("valid") is False
+    )
+
+
 def negative_matrix(binary: Path, project: Path, project_id: str) -> int:
     cases = [
         b"",
@@ -51,7 +62,7 @@ def negative_matrix(binary: Path, project: Path, project_id: str) -> int:
     cases.append(request("R25", "profile.create", name="bad", config_wire_hex=ephemeral, metadata={}, select=True))
     for raw in cases:
         value = exact(binary, project, project_id, raw)
-        if "error" not in value:
+        if not is_semantic_rejection(value):
             raise RuntimeError(f"negative fixture unexpectedly succeeded: {value}")
     mismatch = exact(binary, project, project_id, request("R25", "profile.list"), supplied_id="0" * 64)
     if "error" not in mismatch:
