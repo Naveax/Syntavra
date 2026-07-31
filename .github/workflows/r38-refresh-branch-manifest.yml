@@ -32,27 +32,96 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Normalize strict-Clippy source structure
+      - name: Normalize native command sources and parity tests
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('crates/syntavra-cli/src/native_product.rs')
-          source = path.read_text(encoding='utf-8')
 
-          def normalize(old: str, new: str) -> None:
-              global source
+          native_path = Path('crates/syntavra-cli/src/native_product.rs')
+          native = native_path.read_text(encoding='utf-8')
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
               count = source.count(old)
               if count > 1:
-                  raise SystemExit(f'normalization pattern duplicated: {old!r}')
+                  raise SystemExit(f'{label} pattern duplicated')
               if count == 1:
-                  source = source.replace(old, new, 1)
-              elif new and new not in source:
-                  raise SystemExit(f'normalization target missing: {new!r}')
+                  return source.replace(old, new, 1)
+              if new not in source:
+                  raise SystemExit(f'{label} target missing')
+              return source
 
-          normalize('        "simple" => 0,\n', '')
-          normalize('"context_window": 200000', '"context_window": 200_000')
-          normalize('"context_window": 64000', '"context_window": 64_000')
-          path.write_text(source, encoding='utf-8', newline='\n')
+          native = replace_once(
+              native,
+              'use syntavra_core::sha256_hex;\n\n',
+              'use syntavra_core::sha256_hex;\n\n#[path = "native_delegate.rs"]\nmod native_delegate;\n\n',
+              'delegate module',
+          )
+          native = replace_once(
+              native,
+              'matches!(command[1].as_str(), "cache-health" | "provider-route")',
+              'matches!(\n            command[1].as_str(),\n            "cache-health" | "delegate" | "provider-route"\n        )',
+              'delegate support',
+          )
+          native = replace_once(
+              native,
+              '        "cache-health" => cache_health(state_root).map(Some),\n        "provider-route" => {',
+              '        "cache-health" => cache_health(state_root).map(Some),\n        "delegate" => {\n            let arguments = env::args().skip(1).collect::<Vec<_>>();\n            native_delegate::execute(&arguments).map(Some)\n        }\n        "provider-route" => {',
+              'delegate execution',
+          )
+          native = replace_once(native, '        "simple" => 0,\n', '', 'simple match arm')
+          native = replace_once(
+              native,
+              '"context_window": 200000',
+              '"context_window": 200_000',
+              'large context literal',
+          )
+          native = replace_once(
+              native,
+              '"context_window": 64000',
+              '"context_window": 64_000',
+              'small context literal',
+          )
+          native_path.write_text(native, encoding='utf-8', newline='\n')
+
+          test_path = Path('tests/runtime/test_dual_engine_public_surface_r38.py')
+          tests = test_path.read_text(encoding='utf-8')
+          tests = replace_once(
+              tests,
+              'assert result["rust"]["native_public_command_count"] == 14',
+              'assert result["rust"]["native_public_command_count"] == 15',
+              'native command count',
+          )
+          tests = replace_once(
+              tests,
+              'assert result["rust"]["missing_native_public_command_count"] == 243',
+              'assert result["rust"]["missing_native_public_command_count"] == 242',
+              'missing command count',
+          )
+          delegate_tests = '''
+
+
+def test_native_delegate_matches_python_exactly() -> None:
+    arguments = (
+        "run",
+        "delegate",
+        "Implement the API layer. Verify coverage and benchmark results. Audit security permissions. Update database migration and memory index.",
+        "--context-path",
+        "src/lib.rs",
+        "--context-path",
+        "tests/runtime",
+        "--max-tasks",
+        "4",
+    )
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_delegate_small_task_matches_python_exactly() -> None:
+    arguments = ("run", "delegate", "Rename the variable carefully.")
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+'''
+          if 'def test_native_delegate_matches_python_exactly()' not in tests:
+              tests = tests.rstrip() + delegate_tests
+          test_path.write_text(tests, encoding='utf-8', newline='\n')
           PY
       - name: Format native Rust sources
         run: cargo fmt --all
@@ -69,14 +138,20 @@ jobs:
               'MANIFEST.sha256',
               'crates/syntavra-cli/src/bin/syntavra.rs',
               'crates/syntavra-cli/src/native_product.rs',
+              'tests/runtime/test_dual_engine_public_surface_r38.py',
           }
           assert changed <= allowed, changed
           assert 'MANIFEST.sha256' in changed, changed
+          assert 'crates/syntavra-cli/src/native_product.rs' in changed, changed
+          assert 'tests/runtime/test_dual_engine_public_surface_r38.py' in changed, changed
           PY
       - name: Commit refreshed generated files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MANIFEST.sha256 crates/syntavra-cli/src/bin/syntavra.rs crates/syntavra-cli/src/native_product.rs
-          git commit -m "chore: normalize and sync R38 generated files"
+          git add MANIFEST.sha256 \
+            crates/syntavra-cli/src/bin/syntavra.rs \
+            crates/syntavra-cli/src/native_product.rs \
+            tests/runtime/test_dual_engine_public_surface_r38.py
+          git commit -m "chore: wire and sync native delegate command"
           git push origin HEAD:agent/full-dual-engine-runtime
