@@ -7,16 +7,28 @@ use std::path::Path;
 use serde_json::{json, Map, Value};
 
 #[derive(Clone, Copy)]
+enum FeatureToggle {
+    Enabled,
+    Disabled,
+}
+
+impl FeatureToggle {
+    const fn enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Mode {
     name: &'static str,
     description: &'static str,
     output_budget_bytes: u64,
     context_budget_tokens: u64,
     schema_profile: &'static str,
-    rewrite_commands: bool,
-    cache_optimize: bool,
-    memory_extract: bool,
-    auto_delegate: bool,
+    rewrite_commands: FeatureToggle,
+    cache_optimize: FeatureToggle,
+    memory_extract: FeatureToggle,
+    auto_delegate: FeatureToggle,
     style: &'static str,
 }
 
@@ -27,10 +39,10 @@ const MODES: [Mode; 6] = [
         output_budget_bytes: 24_000,
         context_budget_tokens: 8_000,
         schema_profile: "balanced",
-        rewrite_commands: true,
-        cache_optimize: true,
-        memory_extract: true,
-        auto_delegate: true,
+        rewrite_commands: FeatureToggle::Enabled,
+        cache_optimize: FeatureToggle::Enabled,
+        memory_extract: FeatureToggle::Enabled,
+        auto_delegate: FeatureToggle::Enabled,
         style: "normal",
     },
     Mode {
@@ -39,10 +51,10 @@ const MODES: [Mode; 6] = [
         output_budget_bytes: 48_000,
         context_budget_tokens: 4_000,
         schema_profile: "balanced",
-        rewrite_commands: true,
-        cache_optimize: true,
-        memory_extract: false,
-        auto_delegate: false,
+        rewrite_commands: FeatureToggle::Enabled,
+        cache_optimize: FeatureToggle::Enabled,
+        memory_extract: FeatureToggle::Disabled,
+        auto_delegate: FeatureToggle::Disabled,
         style: "normal",
     },
     Mode {
@@ -51,10 +63,10 @@ const MODES: [Mode; 6] = [
         output_budget_bytes: 8_000,
         context_budget_tokens: 1_500,
         schema_profile: "minimal",
-        rewrite_commands: true,
-        cache_optimize: true,
-        memory_extract: true,
-        auto_delegate: true,
+        rewrite_commands: FeatureToggle::Enabled,
+        cache_optimize: FeatureToggle::Enabled,
+        memory_extract: FeatureToggle::Enabled,
+        auto_delegate: FeatureToggle::Enabled,
         style: "terse",
     },
     Mode {
@@ -63,10 +75,10 @@ const MODES: [Mode; 6] = [
         output_budget_bytes: 12_000,
         context_budget_tokens: 1_500,
         schema_profile: "minimal",
-        rewrite_commands: true,
-        cache_optimize: true,
-        memory_extract: false,
-        auto_delegate: false,
+        rewrite_commands: FeatureToggle::Enabled,
+        cache_optimize: FeatureToggle::Enabled,
+        memory_extract: FeatureToggle::Disabled,
+        auto_delegate: FeatureToggle::Disabled,
         style: "commit",
     },
     Mode {
@@ -75,10 +87,10 @@ const MODES: [Mode; 6] = [
         output_budget_bytes: 32_000,
         context_budget_tokens: 3_000,
         schema_profile: "balanced",
-        rewrite_commands: true,
-        cache_optimize: true,
-        memory_extract: true,
-        auto_delegate: true,
+        rewrite_commands: FeatureToggle::Enabled,
+        cache_optimize: FeatureToggle::Enabled,
+        memory_extract: FeatureToggle::Enabled,
+        auto_delegate: FeatureToggle::Enabled,
         style: "review",
     },
     Mode {
@@ -87,10 +99,10 @@ const MODES: [Mode; 6] = [
         output_budget_bytes: 10_000,
         context_budget_tokens: 1_500,
         schema_profile: "minimal",
-        rewrite_commands: false,
-        cache_optimize: false,
-        memory_extract: false,
-        auto_delegate: false,
+        rewrite_commands: FeatureToggle::Disabled,
+        cache_optimize: FeatureToggle::Disabled,
+        memory_extract: FeatureToggle::Disabled,
+        auto_delegate: FeatureToggle::Disabled,
         style: "terse",
     },
 ];
@@ -102,10 +114,10 @@ fn mode_json(mode: Mode) -> Value {
         "output_budget_bytes": mode.output_budget_bytes,
         "context_budget_tokens": mode.context_budget_tokens,
         "schema_profile": mode.schema_profile,
-        "rewrite_commands": mode.rewrite_commands,
-        "cache_optimize": mode.cache_optimize,
-        "memory_extract": mode.memory_extract,
-        "auto_delegate": mode.auto_delegate,
+        "rewrite_commands": mode.rewrite_commands.enabled(),
+        "cache_optimize": mode.cache_optimize.enabled(),
+        "memory_extract": mode.memory_extract.enabled(),
+        "auto_delegate": mode.auto_delegate.enabled(),
         "style": mode.style,
     })
 }
