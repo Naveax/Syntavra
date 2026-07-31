@@ -10,6 +10,7 @@ on:
       - "crates/syntavra-cli/src/bin/syntavra.rs"
       - "crates/syntavra-cli/src/native_cache_amortize.rs"
       - "crates/syntavra-cli/src/native_product.rs"
+      - "crates/syntavra-cli/src/native_proof_status.rs"
       - "crates/syntavra-cli/src/native_prove_plan.rs"
       - "crates/syntavra-cli/src/native_read_only_product.rs"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
@@ -19,7 +20,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-17-read-only-final
+  group: r38-generated-metadata-18-proof-status
   cancel-in-progress: false
 
 jobs:
@@ -56,6 +57,7 @@ jobs:
               "crates/syntavra-cli/src/bin/syntavra.rs",
               "crates/syntavra-cli/src/native_cache_amortize.rs",
               "crates/syntavra-cli/src/native_product.rs",
+              "crates/syntavra-cli/src/native_proof_status.rs",
               "crates/syntavra-cli/src/native_prove_plan.rs",
               "crates/syntavra-cli/src/native_read_only_product.rs",
           }
@@ -70,7 +72,8 @@ jobs:
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_cache_amortize.rs \
             crates/syntavra-cli/src/native_product.rs \
+            crates/syntavra-cli/src/native_proof_status.rs \
             crates/syntavra-cli/src/native_prove_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs
-          git commit -m "fix: certify catalogued native read-only commands"
+          git commit -m "R38: synchronize native proof status metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
