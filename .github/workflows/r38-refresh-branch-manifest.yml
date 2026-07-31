@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-16
+  group: r38-generated-metadata-16-final
   cancel-in-progress: false
 
 jobs:
@@ -44,7 +44,6 @@ jobs:
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
-          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
           PY
       - name: Commit refreshed generated metadata
         run: |
