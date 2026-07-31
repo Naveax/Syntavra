@@ -121,7 +121,7 @@ fn encode(value: &Value, minimum_savings: f64) -> Result<Value, String> {
         "k": keys,
         "p": paths,
         "d": compact(value, &key_index, &path_index),
-        "h": original_hash,
+        "h": original_hash.clone(),
     });
     let encoded = canonical_bytes(&envelope)?;
     let ratio = if original.is_empty() {
