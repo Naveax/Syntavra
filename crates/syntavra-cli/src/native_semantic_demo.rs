@@ -51,7 +51,7 @@ fn add_token(values: &mut BTreeSet<String>, token: &str) {
     if normalized.len() > 1 {
         values.insert(normalized.clone());
     }
-    for part in normalized.split(['.', '_', '/', ':', '-']) {
+    for part in normalized.split(|character| matches!(character, '.' | '_' | '/' | ':' | '-')) {
         if part.len() > 1 {
             values.insert(part.to_owned());
         }
@@ -102,12 +102,16 @@ fn query_argument(arguments: &[String]) -> Result<&str, String> {
         .ok_or_else(|| "SEMANTIC_DEMO_QUERY_MISSING".to_owned())
 }
 
-fn edge_counts(node_id: &str) -> (u64, u64) {
+fn edge_counts(node_id: &str) -> (u32, u32) {
     match node_id {
         "auth" => (1, 0),
         "test" => (0, 1),
         _ => (0, 0),
     }
+}
+
+fn count_as_f64(value: usize) -> f64 {
+    f64::from(u32::try_from(value).unwrap_or(u32::MAX))
 }
 
 fn query_results(query: &str) -> Vec<Value> {
@@ -127,14 +131,18 @@ fn query_results(query: &str) -> Vec<Value> {
         if !query_terms.is_empty() && matched.is_empty() {
             continue;
         }
-        let lexical = matched.len() as f64 / query_terms.len().max(1) as f64;
-        let exact = f64::from(
-            node.qualified_name
-                .to_ascii_lowercase()
-                .contains(&lowered_query),
-        );
+        let lexical = count_as_f64(matched.len()) / count_as_f64(query_terms.len().max(1));
+        let exact = if node
+            .qualified_name
+            .to_ascii_lowercase()
+            .contains(&lowered_query)
+        {
+            1.0
+        } else {
+            0.0
+        };
         let (inbound, outbound) = edge_counts(node.node_id);
-        let centrality = ((inbound + outbound) as f64).ln_1p() / 5.0;
+        let centrality = f64::from(inbound + outbound).ln_1p() / 5.0;
         let change = node.change_frequency.clamp(0.0, 1.0);
         let score = lexical * 50.0 + exact * 20.0 + centrality * 8.0 + change * 7.0;
         let mut reasons = Vec::new();
