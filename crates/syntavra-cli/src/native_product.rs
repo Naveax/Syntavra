@@ -26,6 +26,8 @@ mod native_redact;
 mod native_route;
 #[path = "native_statusline.rs"]
 mod native_statusline;
+#[path = "native_wire.rs"]
+mod native_wire;
 #[path = "read_only_cli_contract.rs"]
 mod read_only_cli_contract;
 #[path = "scheduler_read_only_contract.rs"]
@@ -42,6 +44,7 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 2 && command[0] == "run" && command[1] == "redact")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
         || (command.len() == 2 && command[0] == "run" && command[1] == "statusline")
+        || (command.len() == 2 && command[0] == "run" && command[1] == "wire")
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
         || (command.len() == 2 && command[0] == "prove" && command[1] == "plan")
 }
@@ -91,6 +94,9 @@ pub fn execute(
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "statusline" {
         return native_statusline::execute(&arguments, state_root).map(Some);
+    }
+    if command.len() == 2 && command[0] == "run" && command[1] == "wire" {
+        return native_wire::execute(&arguments).map(Some);
     }
     if command.len() == 2 && command[0] == "proof" && command[1] == "status" {
         return Ok(Some(native_proof_status::execute()));
