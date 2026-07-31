@@ -152,7 +152,11 @@ fn current_mode(state_root: &Path) -> Result<Mode, String> {
 fn integer(value: Option<&Value>) -> i64 {
     value
         .and_then(Value::as_i64)
-        .or_else(|| value.and_then(Value::as_u64).and_then(|item| i64::try_from(item).ok()))
+        .or_else(|| {
+            value
+                .and_then(Value::as_u64)
+                .and_then(|item| i64::try_from(item).ok())
+        })
         .or_else(|| value.and_then(Value::as_f64).map(|item| item as i64))
         .unwrap_or(0)
 }
@@ -290,13 +294,10 @@ mod tests {
 
     #[test]
     fn empty_state_uses_full_mode() {
-        let root = std::env::temp_dir().join(format!(
-            "syntavra-statusline-{}",
-            std::process::id()
-        ));
+        let root = std::env::temp_dir().join(format!("syntavra-statusline-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        let value = execute(&["run".to_owned(), "statusline".to_owned()], &root)
-            .expect("statusline");
+        let value =
+            execute(&["run".to_owned(), "statusline".to_owned()], &root).expect("statusline");
         assert_eq!(value["statusline"], "[SYN:FULL] ⇩0");
         assert_eq!(value["mode"]["active"]["name"], "full");
         assert_eq!(value["savings"]["events"], 0);
