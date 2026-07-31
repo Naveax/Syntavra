@@ -193,30 +193,6 @@ fn discover_selector_dir() -> PathBuf {
         .unwrap_or_else(|| lexical_absolute("."))
 }
 
-fn discover_rust_program() -> Option<Program> {
-    if let Ok(value) = env::var("SYNTAVRA_RUST_BIN") {
-        let path = lexical_absolute(value);
-        if executable_exists(&path) {
-            return Some(Program {
-                executable: path,
-                prefix: Vec::new(),
-            });
-        }
-    }
-    let directory = discover_selector_dir();
-    let suffix = env::consts::EXE_SUFFIX;
-    for name in ["syntavra-rs", "syntavra-full-parity"] {
-        let candidate = directory.join(format!("{name}{suffix}"));
-        if executable_exists(&candidate) {
-            return Some(Program {
-                executable: candidate,
-                prefix: Vec::new(),
-            });
-        }
-    }
-    None
-}
-
 fn discover_python_program() -> Option<Program> {
     if let Ok(value) = env::var("SYNTAVRA_PYTHON_BIN") {
         let path = lexical_absolute(value);
@@ -360,9 +336,8 @@ fn use_engine(parsed: &Parsed, scope: &str, engine: Engine) -> Result<Value, Str
 
 fn verify_engine(engine: Engine) -> Value {
     let available = match engine {
-        Engine::Python => discover_python_program().is_some(),
+        Engine::Auto | Engine::Python => discover_python_program().is_some(),
         Engine::Rust => true,
-        Engine::Auto => discover_python_program().is_some(),
     };
     json!({
         "ok": available,
@@ -376,11 +351,7 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
     if parsed.forwarded.first().map(String::as_str) != Some("engine") {
         return None;
     }
-    let action = parsed
-        .forwarded
-        .get(1)
-        .map(String::as_str)
-        .unwrap_or("status");
+    let action = parsed.forwarded.get(1).map_or("status", String::as_str);
     let result = match action {
         "status" | "list" => Ok(engine_status(parsed)),
         "verify" => parsed
@@ -395,8 +366,7 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
                 .iter()
                 .position(|value| value == "--scope")
                 .and_then(|index| parsed.forwarded.get(index + 1))
-                .map(String::as_str)
-                .unwrap_or("project");
+                .map_or("project", String::as_str);
             parsed
                 .forwarded
                 .get(2)
@@ -426,7 +396,11 @@ fn execute_program(
     let status = command
         .status()
         .map_err(|error| format!("ENGINE_EXECUTION_FAILED:{error}"))?;
-    Ok(ExitCode::from(status.code().unwrap_or(1) as u8))
+    let code = status
+        .code()
+        .and_then(|value| u8::try_from(value).ok())
+        .unwrap_or(1);
+    Ok(ExitCode::from(code))
 }
 
 fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
