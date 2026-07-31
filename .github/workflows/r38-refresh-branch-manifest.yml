@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-19-context-stress-path-fix
+  group: r38-generated-metadata-19-context-stress-checked-conversions
   cancel-in-progress: false
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Repair selector option-value parsing
+      - name: Preserve selector option-value parsing
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -104,9 +104,17 @@ jobs:
               positional
           }
           '''
-          count = text.count(old)
-          assert count == 1, f"command_path replacement count: {count}"
-          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          old_count = text.count(old)
+          new_count = text.count(new)
+          if old_count == 1 and new_count == 0:
+              text = text.replace(old, new)
+          elif old_count == 0 and new_count == 1:
+              pass
+          else:
+              raise AssertionError(
+                  f"unexpected command_path state: old={old_count}, new={new_count}"
+              )
+          path.write_text(text, encoding="utf-8", newline="\n")
           PY
       - name: Format Rust workspace
         run: cargo fmt --all
@@ -134,7 +142,6 @@ jobs:
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
-          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -148,5 +155,5 @@ jobs:
             crates/syntavra-cli/src/native_proof_status.rs \
             crates/syntavra-cli/src/native_prove_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs
-          git commit -m "fix: preserve one-level command paths with options"
+          git commit -m "fix: synchronize checked context stress metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
