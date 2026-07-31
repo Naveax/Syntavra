@@ -54,7 +54,11 @@ fn text(row: &Value, key: &str) -> String {
         None | Some(Value::Null) => "None".to_owned(),
         Some(Value::String(value)) => value.clone(),
         Some(Value::Bool(value)) => {
-            if *value { "True" } else { "False" }.to_owned()
+            if *value {
+                "True".to_owned()
+            } else {
+                "False".to_owned()
+            }
         }
         Some(Value::Number(value)) => value.to_string(),
         Some(value) => value.to_string(),
