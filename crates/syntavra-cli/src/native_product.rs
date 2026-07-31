@@ -12,6 +12,8 @@ mod migration_plan_read_only_contract;
 mod native_cache_amortize;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
+#[path = "native_mode.rs"]
+mod native_mode;
 #[path = "native_proof_status.rs"]
 mod native_proof_status;
 #[path = "native_prove_plan.rs"]
@@ -34,6 +36,7 @@ pub fn supports(command: &[String]) -> bool {
         || legacy::supports(command)
         || (command.len() == 1 && command[0] == "context-stress")
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
+        || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
         || (command.len() == 2 && command[0] == "run" && command[1] == "statusline")
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
@@ -64,6 +67,9 @@ pub fn execute(
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
         return native_cache_amortize::execute(&arguments).map(Some);
+    }
+    if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
+        return native_mode::execute(&arguments, state_root).map(Some);
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "route" {
         let decision = native_route::execute(&arguments)?;
