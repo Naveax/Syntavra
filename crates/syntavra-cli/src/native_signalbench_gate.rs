@@ -23,8 +23,7 @@ fn receipts_path(arguments: &[String]) -> Result<&Path, String> {
     arguments
         .windows(3)
         .find(|window| {
-            matches!(window[0].as_str(), "signalbench" | "signalbench2")
-                && window[1] == "gate"
+            matches!(window[0].as_str(), "signalbench" | "signalbench2") && window[1] == "gate"
         })
         .map(|window| Path::new(&window[2]))
         .ok_or_else(|| "SIGNALBENCH_RECEIPTS_MISSING".to_owned())
@@ -76,11 +75,7 @@ fn percentile_95(values: &[f64]) -> f64 {
     if values.is_empty() {
         return 0.0;
     }
-    let rank = values
-        .len()
-        .saturating_mul(95)
-        .saturating_add(99)
-        / 100;
+    let rank = values.len().saturating_mul(95).saturating_add(99) / 100;
     values[rank.saturating_sub(1).min(values.len() - 1)]
 }
 
@@ -134,7 +129,13 @@ fn evaluate(rows: &[Value]) -> Result<GateDecision, String> {
     let success = mean(
         &candidate
             .iter()
-            .map(|row| if python_truthy(row.get("success")) { 1.0 } else { 0.0 })
+            .map(|row| {
+                if python_truthy(row.get("success")) {
+                    1.0
+                } else {
+                    0.0
+                }
+            })
             .collect::<Vec<_>>(),
     );
     let candidate_tokens = mean(
