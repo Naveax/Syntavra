@@ -74,8 +74,8 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 257
-    assert result["rust"]["native_public_command_count"] == 18
-    assert result["rust"]["missing_native_public_command_count"] == 239
+    assert result["rust"]["native_public_command_count"] == 19
+    assert result["rust"]["missing_native_public_command_count"] == 238
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 
@@ -87,6 +87,64 @@ def test_full_claim_cannot_open_while_native_commands_are_missing() -> None:
 
 def test_native_version_matches_python_exactly() -> None:
     assert _rust_engine("version") == _python_engine("version")
+
+
+def test_native_context_stress_matches_python_exactly() -> None:
+    assert _rust_engine("context-stress") == _python_engine("context-stress")
+
+
+def test_native_context_stress_custom_window_matches_python_exactly() -> None:
+    arguments = (
+        "context-stress",
+        "--budget",
+        "1024",
+        "--max-tier",
+        "256000",
+    )
+    assert _rust_engine(*arguments) == _python_engine(*arguments)
+
+
+def test_native_context_stress_empty_tiers_matches_exit_code() -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("Cargo is required for the real Rust binary differential")
+    arguments = ("context-stress", "--max-tier", "-1")
+    python_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "syntavra_runtime.engine_entry",
+            "--engine",
+            "python",
+            *arguments,
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    rust_result = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--quiet",
+            "--locked",
+            "--bin",
+            "syntavra",
+            "--",
+            "--engine",
+            "rust",
+            *arguments,
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert python_result.returncode == 3, python_result.stderr
+    assert rust_result.returncode == 3, rust_result.stderr
+    assert json.loads(rust_result.stdout) == json.loads(python_result.stdout)
 
 
 def test_native_migration_plan_matches_python_exactly(tmp_path: Path) -> None:
