@@ -21,7 +21,7 @@ pub fn execute() -> Value {
             "channel": "pre-release",
             "name": "Syntavra Long-Context Quality Protocol",
             "style": "OOLONG-like evidence-intensive long-context evaluation",
-            "tiers": [32000, 64000, 128000, 256000, 512000, 1000000, 2000000, 10000000],
+            "tiers": [32_000, 64_000, 128_000, 256_000, 512_000, 1_000_000, 2_000_000, 10_000_000],
             "task_families": [
                 "needle-retrieval",
                 "temporal-supersession",
