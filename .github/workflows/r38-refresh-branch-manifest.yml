@@ -5,6 +5,7 @@ on:
     branches: ["agent/full-dual-engine-runtime"]
     paths:
       - ".github/workflows/r38-refresh-branch-manifest.yml"
+      - ".github/workflows/validate-fusion-runtime.yml"
   workflow_dispatch:
 
 permissions:
