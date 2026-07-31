@@ -27,6 +27,10 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_route.rs"]
 mod native_route;
+#[path = "native_semantic_demo.rs"]
+mod native_semantic_demo;
+#[path = "native_signalbench_plan.rs"]
+mod native_signalbench_plan;
 #[path = "native_statusline.rs"]
 mod native_statusline;
 #[path = "native_wire.rs"]
@@ -45,6 +49,12 @@ pub fn supports(command: &[String]) -> bool {
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
         || (command.len() == 1 && command[0] == "context-stress")
+        || (command.len() == 2
+            && matches!(command[0].as_str(), "semantic-demo" | "structural-v2")
+            && command[1] == "demo")
+        || (command.len() == 2
+            && matches!(command[0].as_str(), "signalbench" | "signalbench2")
+            && command[1] == "plan")
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
         || (command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan")
@@ -118,6 +128,18 @@ pub fn execute(
             std::process::exit(i32::from(decision.exit_code));
         }
         return Ok(Some(decision.value));
+    }
+    if command.len() == 2
+        && matches!(command[0].as_str(), "semantic-demo" | "structural-v2")
+        && command[1] == "demo"
+    {
+        return native_semantic_demo::execute(&arguments).map(Some);
+    }
+    if command.len() == 2
+        && matches!(command[0].as_str(), "signalbench" | "signalbench2")
+        && command[1] == "plan"
+    {
+        return native_signalbench_plan::execute(&arguments).map(Some);
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
         return native_cache_amortize::execute(&arguments).map(Some);
