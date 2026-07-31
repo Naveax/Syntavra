@@ -7,11 +7,7 @@ const CHANNEL: &str = "pre-release";
 const WORKLOAD_MANIFEST_HASH: &str =
     "9e5e427c0b0ef72b6a5c06880e3649f887332d327a6107dd8172b85a5c8e90c3";
 
-fn workload(
-    workload_id: &str,
-    family: &str,
-    quality_verifier: &str,
-) -> Value {
+fn workload(workload_id: &str, family: &str, quality_verifier: &str) -> Value {
     json!({
         "workload_id": workload_id,
         "family": family,
@@ -42,12 +38,12 @@ fn workloads() -> Vec<Value> {
             "tool-output",
             "failure-root-cause-verifier",
         ),
+        workload("test-failure-triage", "coding", "test-repair-verifier"),
         workload(
-            "test-failure-triage",
-            "coding",
-            "test-repair-verifier",
+            "sre-incident",
+            "operations",
+            "timeline-and-remediation-verifier",
         ),
-        workload("sre-incident", "operations", "timeline-and-remediation-verifier"),
         workload(
             "github-issue-triage",
             "operations",
@@ -60,11 +56,7 @@ fn workloads() -> Vec<Value> {
             "structured-data",
             "schema-and-answer-verifier",
         ),
-        workload(
-            "multi-agent-handoff",
-            "agents",
-            "state-continuity-verifier",
-        ),
+        workload("multi-agent-handoff", "agents", "state-continuity-verifier"),
         workload(
             "long-coding-session",
             "long-context",
