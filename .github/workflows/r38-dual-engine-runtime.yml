@@ -12,6 +12,7 @@ on:
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_mode_r38.py"
       - "tests/runtime/test_native_redact_r38.py"
+      - "tests/runtime/test_native_wire_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
       - ".github/workflows/r38-dual-engine-runtime.yml"
   push:
@@ -25,6 +26,7 @@ on:
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_mode_r38.py"
       - "tests/runtime/test_native_redact_r38.py"
+      - "tests/runtime/test_native_wire_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
       - ".github/workflows/r38-dual-engine-runtime.yml"
   workflow_dispatch:
@@ -74,6 +76,7 @@ jobs:
           tests/runtime/test_dual_engine_public_surface_r38.py
           tests/runtime/test_native_mode_r38.py
           tests/runtime/test_native_redact_r38.py
+          tests/runtime/test_native_wire_r38.py
       - name: Verify Rust formatting
         run: cargo fmt --all -- --check
       - name: Run launcher unit tests
