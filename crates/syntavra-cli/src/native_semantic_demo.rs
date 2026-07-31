@@ -95,8 +95,7 @@ fn query_argument(arguments: &[String]) -> Result<&str, String> {
     arguments
         .windows(3)
         .find(|window| {
-            matches!(window[0].as_str(), "semantic-demo" | "structural-v2")
-                && window[1] == "demo"
+            matches!(window[0].as_str(), "semantic-demo" | "structural-v2") && window[1] == "demo"
         })
         .map(|window| window[2].as_str())
         .ok_or_else(|| "SEMANTIC_DEMO_QUERY_MISSING".to_owned())
@@ -158,14 +157,18 @@ fn query_results(query: &str) -> Vec<Value> {
         if change != 0.0 {
             reasons.push("change-frequency");
         }
-        rows.push((score, node, json!({
-            "node": node_json(node),
-            "score": score,
-            "matched_terms": matched,
-            "inbound_edges": inbound,
-            "outbound_edges": outbound,
-            "reasons": reasons,
-        })));
+        rows.push((
+            score,
+            node,
+            json!({
+                "node": node_json(node),
+                "score": score,
+                "matched_terms": matched,
+                "inbound_edges": inbound,
+                "outbound_edges": outbound,
+                "reasons": reasons,
+            }),
+        ));
     }
 
     rows.sort_by(|left, right| {

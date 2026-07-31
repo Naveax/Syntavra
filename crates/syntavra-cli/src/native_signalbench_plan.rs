@@ -99,8 +99,7 @@ fn tasks() -> Value {
 
 fn arms() -> Value {
     Value::Array(
-        ARMS
-            .into_iter()
+        ARMS.into_iter()
             .map(|arm| {
                 json!({
                     "arm_id": arm,
@@ -168,7 +167,10 @@ mod tests {
         let value = execute(&arguments).expect("signalbench plan");
         assert_eq!(value["corpus"]["tasks"], 150);
         assert_eq!(value["schedule"]["runs"], 27_000);
-        assert_eq!(value["manifest"]["tasks"].as_array().map(Vec::len), Some(150));
+        assert_eq!(
+            value["manifest"]["tasks"].as_array().map(Vec::len),
+            Some(150)
+        );
         assert!(value["manifest"]["manifest_hash"].as_str().is_some());
     }
 }
