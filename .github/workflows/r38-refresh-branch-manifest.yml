@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-20-statusline
+  group: r38-generated-metadata-20-statusline-windows-utf8
   cancel-in-progress: false
 
 jobs:
@@ -117,6 +117,50 @@ jobs:
               )
           path.write_text(text, encoding="utf-8", newline="\n")
           PY
+      - name: Preserve UTF-8 Python engine output
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
+          text = path.read_text(encoding="utf-8")
+          old = '''    let mut command = Command::new(&program.executable);
+              command
+                  .args(&program.prefix)
+                  .arg("--engine")
+                  .arg(engine.as_str())
+                  .args(forwarded)
+                  .stdin(Stdio::inherit())
+                  .stdout(Stdio::inherit())
+                  .stderr(Stdio::inherit());
+          '''
+          new = '''    let mut command = Command::new(&program.executable);
+              if engine == Engine::Python {
+                  command
+                      .env("PYTHONIOENCODING", "utf-8")
+                      .env("PYTHONUTF8", "1");
+              }
+              command
+                  .args(&program.prefix)
+                  .arg("--engine")
+                  .arg(engine.as_str())
+                  .args(forwarded)
+                  .stdin(Stdio::inherit())
+                  .stdout(Stdio::inherit())
+                  .stderr(Stdio::inherit());
+          '''
+          old_count = text.count(old)
+          new_count = text.count(new)
+          if old_count == 1 and new_count == 0:
+              text = text.replace(old, new)
+          elif old_count == 0 and new_count == 1:
+              pass
+          else:
+              raise AssertionError(
+                  f"unexpected execute_program state: old={old_count}, new={new_count}"
+              )
+          path.write_text(text, encoding="utf-8", newline="\n")
+          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize native command metadata
@@ -144,6 +188,7 @@ jobs:
           }
           assert changed <= allowed, changed
           assert "MANIFEST.sha256" in changed, changed
+          assert "crates/syntavra-cli/src/bin/syntavra.rs" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -158,5 +203,5 @@ jobs:
             crates/syntavra-cli/src/native_prove_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs \
             crates/syntavra-cli/src/native_statusline.rs
-          git commit -m "R38: synchronize native statusline metadata"
+          git commit -m "fix: force UTF-8 for Python engine output"
           git push origin HEAD:agent/full-dual-engine-runtime
