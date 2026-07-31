@@ -10,6 +10,8 @@ mod legacy;
 mod migration_plan_read_only_contract;
 #[path = "native_cache_amortize.rs"]
 mod native_cache_amortize;
+#[path = "native_proof_status.rs"]
+mod native_proof_status;
 #[path = "native_prove_plan.rs"]
 mod native_prove_plan;
 #[path = "native_read_only_product.rs"]
@@ -28,6 +30,7 @@ pub fn supports(command: &[String]) -> bool {
         || legacy::supports(command)
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "route")
+        || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
         || (command.len() == 2 && command[0] == "prove" && command[1] == "plan")
 }
 
@@ -55,6 +58,9 @@ pub fn execute(
             std::process::exit(i32::from(decision.exit_code));
         }
         return Ok(Some(decision.value));
+    }
+    if command.len() == 2 && command[0] == "proof" && command[1] == "status" {
+        return Ok(Some(native_proof_status::execute()));
     }
     if command.len() == 2 && command[0] == "prove" && command[1] == "plan" {
         return Ok(Some(native_prove_plan::execute()));
