@@ -31,6 +31,8 @@ mod native_route;
 mod native_statusline;
 #[path = "native_wire.rs"]
 mod native_wire;
+#[path = "native_wrap.rs"]
+mod native_wrap;
 #[path = "read_only_cli_contract.rs"]
 mod read_only_cli_contract;
 #[path = "scheduler_read_only_contract.rs"]
@@ -41,6 +43,7 @@ mod telemetry_metrics_contract;
 pub fn supports(command: &[String]) -> bool {
     native_read_only_product::supports(command)
         || legacy::supports(command)
+        || command.first().is_some_and(|item| item == "wrap")
         || (command.len() == 1 && command[0] == "context-stress")
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
@@ -100,6 +103,9 @@ pub fn execute(
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
             .map(Some);
+    }
+    if command.first().is_some_and(|item| item == "wrap") {
+        return native_wrap::execute(&arguments, state_root).map(Some);
     }
     if command.len() == 1 && command[0] == "context-stress" {
         let decision = native_context_stress::execute(&arguments)?;
