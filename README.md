@@ -30,6 +30,28 @@ npx github:Naveax/Syntavra
 
 The installer prefers checksum-verified portable binaries, falls back to Python 3.11+, configures detected hosts transactionally and runs a final health check.
 
+## Engine selection
+
+Syntavra is migrating to one dual-engine bundle containing the Python runtime, native Rust runtime and a native selector. Engine preference is explicit and persisted without hidden fallback:
+
+```bash
+syntavra engine status
+syntavra engine use python --scope project
+syntavra engine use rust --scope project
+syntavra engine use auto --scope project
+
+syntavra --engine python version
+syntavra --engine rust version
+```
+
+Selection precedence is command override, `SYNTAVRA_ENGINE`, project configuration, user configuration and then the explicit `auto` policy. Selecting `python` never invokes Rust. Selecting `rust` never invokes Python; a command without an independent native Rust handler fails closed.
+
+The complete Python surface currently contains 257 public command paths. Full dual-engine parity is tracked against all 257 paths in `contracts/engine/dual-engine-public-surface-v2.json`; bounded R23–R37 contract parity is not treated as a complete native product rewrite. The full claim remains:
+
+```text
+DUAL_ENGINE_PARITY_INCOMPLETE
+```
+
 ## Product surface
 
 ```bash
@@ -131,6 +153,7 @@ Missing competitors, provider usage or verifier output fail closed; they are nev
 ## Current claim boundary
 
 ```text
+DUAL_ENGINE_PARITY_INCOMPLETE
 EXTERNAL_SUPERIORITY_NOT_PROVEN
 LONG_CONTEXT_QUALITY_NOT_PROVEN
 MEASURED_AGENT_BENCHMARK_NOT_PROVEN
