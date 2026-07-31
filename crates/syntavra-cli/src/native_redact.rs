@@ -194,20 +194,20 @@ fn scan_authorization(text: &str, matches: &mut Vec<RedactionMatch>) {
             while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
                 cursor += 1;
             }
-            if !matches!(bytes.get(cursor), Some(b':') | Some(b'=')) {
+            if !matches!(bytes.get(cursor), Some(b':' | b'=')) {
                 continue;
             }
             cursor += 1;
             while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
                 cursor += 1;
             }
-            if matches!(bytes.get(cursor), Some(b'\"') | Some(b'\'')) {
+            if matches!(bytes.get(cursor), Some(b'"' | b'\'')) {
                 cursor += 1;
             }
             let value_start = cursor;
             while bytes
                 .get(cursor)
-                .is_some_and(|byte| !byte.is_ascii_whitespace() && !matches!(byte, b'\"' | b'\''))
+                .is_some_and(|byte| !byte.is_ascii_whitespace() && !matches!(byte, b'"' | b'\''))
             {
                 cursor += 1;
             }
