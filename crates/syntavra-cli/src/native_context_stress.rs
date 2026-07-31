@@ -115,8 +115,8 @@ pub fn execute(arguments: &[String]) -> Result<Decision, String> {
     if active_budget < 256 {
         return Err("active_budget is too small".to_owned());
     }
-    let active_budget = u64::try_from(active_budget)
-        .map_err(|_| "active_budget is too small".to_owned())?;
+    let active_budget =
+        u64::try_from(active_budget).map_err(|_| "active_budget is too small".to_owned())?;
     let max_tier = parse_i64(arguments, "--max-tier", 10_000_000)?;
     let max_tier = u64::try_from(max_tier).unwrap_or(0);
     let reports = CONTEXT_TIERS
