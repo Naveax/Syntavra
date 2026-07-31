@@ -1,0 +1,1339 @@
+{
+  "claim": "DUAL_ENGINE_PARITY_INCOMPLETE",
+  "commands": [
+    {
+      "command": "adapter-certify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "adapter-configure",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "adapter-conformance",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "adapters",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "agent",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "agent replay",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "agent run",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "agent-execute",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "agent-plan",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "arm",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "arm run",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "arm validate",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "artifact-put",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "artifact-query",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "artifact-stats",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "artifact-verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "backup",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "backup create",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "backup restore",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "backup verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "benchmark",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "benchmark compare",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "benchmark generate-config",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "benchmark generate-repo",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "benchmark validate-config",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "cache-align",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "capabilities",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "capability-decide",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "capability-issue",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "capability-verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "capture",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "claim",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "compact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "compress",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "compress describe",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "compress get",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "compress put",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "compress verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "config",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "config explain",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "config show",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "config validate",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "console",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "context",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "context evaluate",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "context pack",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "context-compile",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "context-stress",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "data-route",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "demo",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "doctor",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "engine",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "engine list",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "engine route",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "engine route config.explain",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route config.resolve",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route config.show",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route config.validate",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route migration.plan",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route pipeline.describe",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route plugins.list",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route receipt.inspect",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route scheduler.list",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route scheduler.stats",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route state.broker-live-snapshot",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route state.broker-snapshot",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route state.inspect",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route state.layout",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route status",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route telemetry.metrics",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine route version",
+      "python": true,
+      "rust_owner": "syntavra_runtime/engine_entry.py",
+      "rust_status": "RUST_VIA_PYTHON_LAUNCHER"
+    },
+    {
+      "command": "engine status",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "engine use",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "engine verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "evidence",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "evidence describe",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "evidence get",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "evidence-neighbors",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "evidence-stats",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "external-suite",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "gate",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "gateway-plan",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "graph-impact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "graph-index",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "graph-query",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-cancel",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-events",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-export",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-import",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-resume",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-run",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-status",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "headless-submit",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "hook",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "host",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "host capabilities",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "host detect",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "host negotiate",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "init",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "insights",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "inspect",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "inspect impact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "inspect map",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "inspect paths",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "inspect stats",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "inspect symbol",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "install",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "installations",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "integrations",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "job",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "job cancel",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "job completions",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "job list",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "job recover",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "job show",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language detect",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language doctor",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language import-index",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language index",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language inventory",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language query",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "language remove-index",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "maintenance",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "maintenance janitor",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "mcp",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory add",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory link",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory neighbors",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory search",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-append",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-checkpoint",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-compact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-fork",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-merge",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-open",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-restore",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-retrieve",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "memory-verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "migrate",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "migrate apply",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "migrate plan",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "migrate rollback",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "output",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "output compact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "output govern",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "output profiles",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "output-capture",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "pipeline",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "pipeline describe",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "plan",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "platform-plan",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "plugins",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "plugins list",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "policy",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "policy record",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prepare",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "profile",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "proof",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "proof status",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove benchmark",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove long-context",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove maturity",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove plan",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove provider-billed",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove readiness",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove receipts",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "prove schema",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "proxy",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "reliability-run",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "repair",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "replay",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "rollback-install",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "rollout-tail",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "route",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run audit-config",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run cache-amortize",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run cache-health",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run cache-plan",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run code-intel",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run dashboard",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run delegate",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run manifest",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run memory-add",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run memory-backfill",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run memory-export",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run memory-extract",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run memory-intelligence-status",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run memory-search",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run mode",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run notify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run provider-pool",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run provider-route",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run proxy-plan",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run proxy-service",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run record",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run redact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run rewrite",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run route",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run session-append",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run session-compact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run session-continuity",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run session-open",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run session-status",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run statusline",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run transcript-mine",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run watch",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run wire",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "run worker",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "sandbox",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "sandbox backends",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "sandbox-run",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "sandbox-status",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "scheduler",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "scheduler list",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "scheduler reap",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "scheduler stats",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "semantic-import",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "semantic-services",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "service",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session append",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session checkpoint",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session close",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session compact",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session context",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session export",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session fork",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session import",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session list",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session merge",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session open",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session recover",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "session verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "setup",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "signalbench",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "signalbench compare",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "stats",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "status",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "suites",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "telemetry",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "telemetry bundle",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "telemetry metrics",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "uninstall",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "update-install",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "update-rollback",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "upgrade",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "verifier",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "verifier invalidated-by",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "verifier lookup",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "verify",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "verify-install",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    },
+    {
+      "command": "version",
+      "python": true,
+      "rust_owner": "crates/syntavra-cli/src/main.rs",
+      "rust_status": "RUST_NATIVE_PUBLIC"
+    },
+    {
+      "command": "wrap",
+      "python": true,
+      "rust_status": "PYTHON_ONLY"
+    }
+  ],
+  "goal": "FULL_DUAL_ENGINE_PARITY",
+  "inventory": {
+    "python_module_count": 194,
+    "python_public_command_count": 257,
+    "rust_launcher_bridge_command_count": 17,
+    "rust_missing_public_command_count": 247,
+    "rust_module_count": 19,
+    "rust_native_coverage_ppm": 38910,
+    "rust_native_public_command_count": 10
+  },
+  "policy": {
+    "full_claim_requires_every_public_command_native_in_both_engines": true,
+    "hidden_fallback_forbidden": true,
+    "one_install_contains_python_and_rust": true,
+    "python_must_remain_independently_runnable": true,
+    "rust_must_not_invoke_python": true,
+    "user_selects_engine": true
+  },
+  "product": "Syntavra",
+  "product_version": "0.0.1",
+  "release_channel": "pre-release",
+  "schema_version": 2
+}
