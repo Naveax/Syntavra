@@ -395,6 +395,11 @@ fn execute_program(
     engine: Engine,
 ) -> Result<ExitCode, String> {
     let mut command = Command::new(&program.executable);
+    if engine == Engine::Python {
+        command
+            .env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONUTF8", "1");
+    }
     command
         .args(&program.prefix)
         .arg("--engine")
