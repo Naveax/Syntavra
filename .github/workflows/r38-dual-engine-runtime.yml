@@ -13,6 +13,7 @@ on:
       - "tests/runtime/test_native_mode_r38.py"
       - "tests/runtime/test_native_proxy_plan_r38.py"
       - "tests/runtime/test_native_redact_r38.py"
+      - "tests/runtime/test_native_semantic_signalbench_r38.py"
       - "tests/runtime/test_native_wire_r38.py"
       - "tests/runtime/test_native_wrap_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
@@ -29,6 +30,7 @@ on:
       - "tests/runtime/test_native_mode_r38.py"
       - "tests/runtime/test_native_proxy_plan_r38.py"
       - "tests/runtime/test_native_redact_r38.py"
+      - "tests/runtime/test_native_semantic_signalbench_r38.py"
       - "tests/runtime/test_native_wire_r38.py"
       - "tests/runtime/test_native_wrap_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
@@ -81,6 +83,7 @@ jobs:
           tests/runtime/test_native_mode_r38.py
           tests/runtime/test_native_proxy_plan_r38.py
           tests/runtime/test_native_redact_r38.py
+          tests/runtime/test_native_semantic_signalbench_r38.py
           tests/runtime/test_native_wire_r38.py
           tests/runtime/test_native_wrap_r38.py
       - name: Verify Rust formatting
