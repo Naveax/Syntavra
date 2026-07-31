@@ -15,6 +15,7 @@ on:
       - "crates/syntavra-cli/src/native_product.rs"
       - "crates/syntavra-cli/src/native_proof_status.rs"
       - "crates/syntavra-cli/src/native_prove_plan.rs"
+      - "crates/syntavra-cli/src/native_proxy_plan.rs"
       - "crates/syntavra-cli/src/native_read_only_product.rs"
       - "crates/syntavra-cli/src/native_redact.rs"
       - "crates/syntavra-cli/src/native_statusline.rs"
@@ -22,6 +23,7 @@ on:
       - "syntavra_runtime/engine_entry.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_mode_r38.py"
+      - "tests/runtime/test_native_proxy_plan_r38.py"
       - "tests/runtime/test_native_redact_r38.py"
       - "tests/runtime/test_native_wire_r38.py"
   workflow_dispatch:
@@ -30,7 +32,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: r38-generated-metadata-23-wire
+  group: r38-generated-metadata-24-proxy-plan
   cancel-in-progress: false
 
 jobs:
@@ -60,12 +62,14 @@ jobs:
               'assert result["rust"]["native_public_command_count"] == 21',
               'assert result["rust"]["native_public_command_count"] == 22',
               'assert result["rust"]["native_public_command_count"] == 23',
+              'assert result["rust"]["native_public_command_count"] == 24',
           ]
           missing_candidates = [
               'assert result["rust"]["missing_native_public_command_count"] == 237',
               'assert result["rust"]["missing_native_public_command_count"] == 236',
               'assert result["rust"]["missing_native_public_command_count"] == 235',
               'assert result["rust"]["missing_native_public_command_count"] == 234',
+              'assert result["rust"]["missing_native_public_command_count"] == 233',
           ]
           count_matches = [candidate for candidate in count_candidates if candidate in text]
           missing_matches = [candidate for candidate in missing_candidates if candidate in text]
@@ -73,11 +77,11 @@ jobs:
           assert len(missing_matches) == 1, missing_matches
           text = text.replace(
               count_matches[0],
-              'assert result["rust"]["native_public_command_count"] == 23',
+              'assert result["rust"]["native_public_command_count"] == 24',
           )
           text = text.replace(
               missing_matches[0],
-              'assert result["rust"]["missing_native_public_command_count"] == 234',
+              'assert result["rust"]["missing_native_public_command_count"] == 233',
           )
           path.write_text(text, encoding="utf-8", newline="\n")
           PY
@@ -104,6 +108,7 @@ jobs:
               "crates/syntavra-cli/src/native_product.rs",
               "crates/syntavra-cli/src/native_proof_status.rs",
               "crates/syntavra-cli/src/native_prove_plan.rs",
+              "crates/syntavra-cli/src/native_proxy_plan.rs",
               "crates/syntavra-cli/src/native_read_only_product.rs",
               "crates/syntavra-cli/src/native_redact.rs",
               "crates/syntavra-cli/src/native_statusline.rs",
@@ -127,10 +132,11 @@ jobs:
             crates/syntavra-cli/src/native_product.rs \
             crates/syntavra-cli/src/native_proof_status.rs \
             crates/syntavra-cli/src/native_prove_plan.rs \
+            crates/syntavra-cli/src/native_proxy_plan.rs \
             crates/syntavra-cli/src/native_read_only_product.rs \
             crates/syntavra-cli/src/native_redact.rs \
             crates/syntavra-cli/src/native_statusline.rs \
             crates/syntavra-cli/src/native_wire.rs \
             tests/runtime/test_dual_engine_public_surface_r38.py
-          git commit -m "R38: synchronize wire coverage metadata"
+          git commit -m "R38: synchronize proxy-plan coverage metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
