@@ -31,6 +31,8 @@ mod native_redact;
 mod native_route;
 #[path = "native_semantic_demo.rs"]
 mod native_semantic_demo;
+#[path = "native_signalbench_gate.rs"]
+mod native_signalbench_gate;
 #[path = "native_signalbench_plan.rs"]
 mod native_signalbench_plan;
 #[path = "native_statusline.rs"]
@@ -60,7 +62,7 @@ pub fn supports(command: &[String]) -> bool {
             && command[1] == "demo")
         || (command.len() == 2
             && matches!(command[0].as_str(), "signalbench" | "signalbench2")
-            && command[1] == "plan")
+            && matches!(command[1].as_str(), "plan" | "gate"))
         || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
         || (command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan")
@@ -152,6 +154,17 @@ pub fn execute(
         && command[1] == "plan"
     {
         return native_signalbench_plan::execute(&arguments).map(Some);
+    }
+    if command.len() == 2
+        && matches!(command[0].as_str(), "signalbench" | "signalbench2")
+        && command[1] == "gate"
+    {
+        let decision = native_signalbench_gate::execute(&arguments)?;
+        if decision.exit_code != 0 {
+            println!("{}", decision.rendered);
+            std::process::exit(i32::from(decision.exit_code));
+        }
+        return Ok(Some(decision.value));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
         return native_cache_amortize::execute(&arguments).map(Some);
