@@ -269,9 +269,8 @@ fn provider_route_from_rows(
         }
         let blended_cost =
             candidate.input_cost_per_million + candidate.output_cost_per_million * 2.0;
-        let mut score = candidate.quality * 60.0
-            - blended_cost * 2.0
-            - candidate.latency_ms / 1000.0;
+        let mut score =
+            candidate.quality * 60.0 - blended_cost * 2.0 - candidate.latency_ms / 1000.0;
         score += (candidate.quota_remaining * 20.0).min(20.0);
         score += f64::from(candidate.priority.clamp(-20, 20)) * 0.5;
         let mut reasons = Vec::new();
@@ -459,7 +458,10 @@ mod tests {
     fn provider_complexity_matches_reference_thresholds() {
         assert_eq!(classify_complexity("rename variable", 1, 100), "simple");
         assert_eq!(classify_complexity("debug dependency", 1, 100), "medium");
-        assert_eq!(classify_complexity("architecture migration", 1, 100), "complex");
+        assert_eq!(
+            classify_complexity("architecture migration", 1, 100),
+            "complex"
+        );
         assert_eq!(
             classify_complexity("architecture migration proof", 9, 20_000),
             "reasoning"
