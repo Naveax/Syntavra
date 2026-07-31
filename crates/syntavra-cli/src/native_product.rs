@@ -38,13 +38,8 @@ pub fn execute(
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if native_read_only_product::supports(command) {
-        return native_read_only_product::execute(
-            command,
-            &arguments,
-            project_root,
-            state_root,
-        )
-        .map(Some);
+        return native_read_only_product::execute(command, &arguments, project_root, state_root)
+            .map(Some);
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
         return native_cache_amortize::execute(&arguments).map(Some);
