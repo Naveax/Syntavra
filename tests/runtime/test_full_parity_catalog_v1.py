@@ -19,10 +19,11 @@ CATALOG = ROOT / "contracts" / "parity" / "python-rust-full-parity-v1.json"
 def test_full_parity_catalog_verifier_passes() -> None:
     result = verify()
     assert result["ok"] is True
-    assert result["phase"] == "R23"
+    assert result["phase"] == "R37"
     assert result["program"] == "R23-R37"
-    assert result["claim"] == "FULL_PARITY_NOT_PROVEN"
+    assert result["claim"] == "FULL_PARITY_PROVEN"
     assert result["workstreams"] == EXPECTED_PHASES
+    assert all(row["complete"] is True for row in result["dimensions"].values())
 
 
 def test_surface_exporters_are_deterministic() -> None:
@@ -30,45 +31,30 @@ def test_surface_exporters_are_deterministic() -> None:
     assert export_rust_surface() == export_rust_surface()
 
 
-def test_catalog_starts_every_remaining_workstream() -> None:
+def test_every_workstream_is_complete() -> None:
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
     assert [row["phase"] for row in catalog["workstreams"]] == EXPECTED_PHASES
-    assert all(row["status"] == "ACTIVE" for row in catalog["workstreams"])
+    assert all(row["status"] == "COMPLETE" for row in catalog["workstreams"])
 
 
-def test_current_proven_routes_include_r22_and_r24_surfaces() -> None:
+def test_every_catalogued_feature_is_production_ready() -> None:
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
-    proven = {
-        row["id"]
-        for row in catalog["features"]
-        if row["status"] == "PARITY_PROVEN"
-    }
-    assert proven == {
-        "cli.read-only.complete",
-        "route.version",
-        "route.status",
-        "route.config.explain",
-        "route.config.resolve",
-        "route.config.show",
-        "route.config.validate",
-        "route.migration.plan",
-        "route.state.layout",
-        "route.state.inspect",
-        "route.receipt.inspect",
-        "route.state.broker-snapshot",
-        "route.state.broker-live-snapshot",
-        "route.pipeline.describe",
-        "route.plugins.list",
-        "route.scheduler.list",
-        "route.scheduler.stats",
-        "route.telemetry.metrics",
-    }
+    assert catalog["features"]
+    assert all(row["status"] == "RUST_PRODUCTION_READY" for row in catalog["features"])
+    assert all(row["rust_owner"] for row in catalog["features"])
+    assert all(row["contract"] for row in catalog["features"])
+    assert all(row["parity_tests"] for row in catalog["features"])
 
 
-def test_full_parity_is_not_claimed_early() -> None:
+def test_r37_certification_is_python_independent_and_four_platform() -> None:
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
-    assert catalog["claim"] == "FULL_PARITY_NOT_PROVEN"
-    assert not any(
-        row["status"] == "RUST_PRODUCTION_READY"
-        for row in catalog["features"]
-    )
+    certification = catalog["certification"]
+    assert catalog["claim"] == "FULL_PARITY_PROVEN"
+    assert certification["phase"] == "R37"
+    assert certification["python_invocation_by_rust"] is False
+    assert certification["platforms"] == [
+        "linux-x64",
+        "windows-x64",
+        "macos-x64",
+        "macos-arm64",
+    ]

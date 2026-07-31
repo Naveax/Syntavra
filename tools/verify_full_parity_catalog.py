@@ -114,8 +114,8 @@ def verify() -> dict[str, object]:
         raise RuntimeError("product version must remain locked to 0.0.1")
     if catalog.get("release_channel") != "pre-release":
         raise RuntimeError("release channel must remain pre-release")
-    if catalog.get("claim") != "FULL_PARITY_NOT_PROVEN":
-        raise RuntimeError("full parity cannot be claimed before R37 certification")
+    if catalog.get("claim") != "FULL_PARITY_PROVEN":
+        raise RuntimeError("R37 catalog must carry the certified full-parity claim")
     if rust_surface.get("product_version") != catalog.get("product_version"):
         raise RuntimeError("Rust product version drifted from parity catalog")
     if rust_surface.get("release_channel") != catalog.get("release_channel"):
@@ -129,16 +129,16 @@ def verify() -> dict[str, object]:
     phases = [row.get("phase") for row in workstreams if isinstance(row, dict)]
     if phases != EXPECTED_PHASES:
         raise RuntimeError(f"workstream phases must be exactly {EXPECTED_PHASES!r}, got {phases!r}")
-    if any(row.get("status") != "ACTIVE" for row in workstreams if isinstance(row, dict)):
-        raise RuntimeError("every R23-R37 workstream must start ACTIVE")
+    if any(row.get("status") != "COMPLETE" for row in workstreams if isinstance(row, dict)):
+        raise RuntimeError("every R23-R37 workstream must be COMPLETE after R37 certification")
 
     rust_capabilities = set(rust_surface.get("capabilities", []))
     for identifier, capability in PROVEN_ROUTE_CAPABILITIES.items():
         row = features.get(identifier)
         if row is None:
             raise RuntimeError(f"missing proven route catalog entry: {identifier}")
-        if row.get("status") != "PARITY_PROVEN":
-            raise RuntimeError(f"proven route lost PARITY_PROVEN status: {identifier}")
+        if row.get("status") not in {"PARITY_PROVEN", "RUST_PRODUCTION_READY"}:
+            raise RuntimeError(f"proven route lost parity status: {identifier}")
         if capability not in rust_capabilities:
             raise RuntimeError(f"Rust capability missing for {identifier}: {capability}")
 
@@ -168,12 +168,29 @@ def verify() -> dict[str, object]:
 
     status_counts = Counter(str(row.get("status")) for row in features.values())
     dimensions = _dimension_report(features)
-    if all(bool(row.get("complete")) for row in dimensions.values()):
-        raise RuntimeError("dimension completion requires an explicit R37 claim update")
+    if not all(bool(row.get("complete")) for row in dimensions.values()):
+        raise RuntimeError("every parity dimension must be production-ready at R37")
+
+    if any(row.get("status") != "RUST_PRODUCTION_READY" for row in features.values()):
+        raise RuntimeError("every catalogued feature must be production-ready at R37")
+
+    certification = catalog.get("certification")
+    if not isinstance(certification, dict):
+        raise RuntimeError("R37 certification evidence is missing")
+    if certification.get("phase") != "R37":
+        raise RuntimeError("certification phase must be R37")
+    if certification.get("python_invocation_by_rust") is not False:
+        raise RuntimeError("Rust must remain Python-independent")
+    if certification.get("platforms") != ["linux-x64", "windows-x64", "macos-x64", "macos-arm64"]:
+        raise RuntimeError("R36/R37 platform evidence inventory drifted")
+    for key in ("core_exact_parity", "resilience", "standalone"):
+        relative = certification.get(key)
+        if not isinstance(relative, str) or not (ROOT / relative).is_file():
+            raise RuntimeError(f"missing certification verifier: {key}")
 
     return {
         "ok": True,
-        "phase": "R23",
+        "phase": "R37",
         "program": "R23-R37",
         "claim": catalog["claim"],
         "feature_count": len(features),
