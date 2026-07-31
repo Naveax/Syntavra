@@ -56,7 +56,7 @@ fn json_version(path: &Path) -> Option<String> {
     value.get("version")?.as_str().map(str::to_owned)
 }
 
-fn check(name: &str, actual: Option<String>) -> Value {
+fn check(name: &str, actual: &Option<String>) -> Value {
     json!({
         "name": name,
         "passed": actual.as_deref() == Some(VERSION),
@@ -69,22 +69,22 @@ fn version(project_root: &Path) -> Value {
     let mut checks = vec![
         check(
             "VERSION",
-            fs::read_to_string(project_root.join("VERSION"))
+            &fs::read_to_string(project_root.join("VERSION"))
                 .ok()
                 .map(|value| value.trim().to_owned()),
         ),
         check(
             "pyproject",
-            pyproject_version(&project_root.join("pyproject.toml")),
+            &pyproject_version(&project_root.join("pyproject.toml")),
         ),
     ];
     let typescript = project_root.join("sdk/typescript/package.json");
     if typescript.is_file() {
-        checks.push(check("typescript", json_version(&typescript)));
+        checks.push(check("typescript", &json_version(&typescript)));
     }
     let codemeta = project_root.join("codemeta.json");
     if codemeta.is_file() {
-        checks.push(check("codemeta", json_version(&codemeta)));
+        checks.push(check("codemeta", &json_version(&codemeta)));
     }
     let ok = checks
         .iter()
