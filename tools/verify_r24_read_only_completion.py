@@ -18,6 +18,7 @@ from export_rust_surface import export_surface as export_rust_surface
 
 CATALOG_PATH = ROOT / "contracts" / "parity" / "python-rust-full-parity-v1.json"
 CONTRACT_PATH = ROOT / "contracts" / "parity" / "r24-read-only-cli-completion-v1.json"
+PROVEN_STATUSES = {"PARITY_PROVEN", "RUST_PRODUCTION_READY"}
 
 
 def _load_object(path: Path) -> dict[str, Any]:
@@ -117,8 +118,8 @@ def verify(*, run_real_verifiers: bool = False) -> dict[str, object]:
     completion = features.get(str(completion_id))
     if completion is None:
         raise RuntimeError("catalog is missing cli.read-only.complete")
-    if completion.get("status") != "PARITY_PROVEN":
-        raise RuntimeError("cli.read-only.complete must be PARITY_PROVEN")
+    if completion.get("status") not in PROVEN_STATUSES:
+        raise RuntimeError("cli.read-only.complete must remain parity-proven")
     if completion.get("mutation") != "read-only":
         raise RuntimeError("cli.read-only.complete must remain read-only")
     if completion.get("contract") != CONTRACT_PATH.relative_to(ROOT).as_posix():
@@ -157,8 +158,8 @@ def verify(*, run_real_verifiers: bool = False) -> dict[str, object]:
     for route in routes:
         identifier = route["feature_id"]
         row = features[identifier]
-        if row.get("status") != "PARITY_PROVEN":
-            raise RuntimeError(f"R24 route lost PARITY_PROVEN: {identifier}")
+        if row.get("status") not in PROVEN_STATUSES:
+            raise RuntimeError(f"R24 route lost parity proof: {identifier}")
         if not row.get("rust_owner"):
             raise RuntimeError(f"R24 route lacks Rust owner: {identifier}")
         contract_path = row.get("contract")
