@@ -44,7 +44,10 @@ fn pyproject_version(path: &Path) -> Option<String> {
         let trimmed = line.trim();
         let value = trimmed.strip_prefix("version")?.trim_start();
         let value = value.strip_prefix('=')?.trim();
-        value.strip_prefix('"')?.strip_suffix('"').map(str::to_owned)
+        value
+            .strip_prefix('"')?
+            .strip_suffix('"')
+            .map(str::to_owned)
     })
 }
 
@@ -153,9 +156,10 @@ pub fn execute(
 ) -> Result<Value, String> {
     match command {
         [value] if value == "version" => Ok(version(project_root)),
-        [group, action] if group == "pipeline" && action == "describe" => {
-            parse_json(&static_result_json("pipeline.describe")?, "PIPELINE_JSON_INVALID")
-        }
+        [group, action] if group == "pipeline" && action == "describe" => parse_json(
+            &static_result_json("pipeline.describe")?,
+            "PIPELINE_JSON_INVALID",
+        ),
         [group, action] if group == "plugins" && action == "list" => {
             parse_json(&static_result_json("plugins.list")?, "PLUGINS_JSON_INVALID")
         }

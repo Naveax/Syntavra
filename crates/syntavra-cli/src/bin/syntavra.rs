@@ -406,7 +406,7 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
     match selected {
         Engine::Rust => {
             if native_product::supports(&path) {
-                match native_product::execute(&path, &parsed.state_root) {
+                match native_product::execute(&path, &parsed.project_root, &parsed.state_root) {
                     Ok(Some(value)) => {
                         emit(&value);
                         ExitCode::SUCCESS
