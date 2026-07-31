@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
 const LANGUAGES: [&str; 10] = [
@@ -66,7 +66,7 @@ fn parse_repetitions(value: &str) -> Result<u64, String> {
 }
 
 fn tasks() -> Value {
-    let mut rows = Vec::with_capacity(usize::try_from(TASK_COUNT).unwrap_or(150));
+    let mut rows = Vec::with_capacity(150);
     let mut index = 0_u32;
     let mut language_index = 0_usize;
     for (category, count) in CATEGORIES {
@@ -132,10 +132,10 @@ fn manifest(repetitions: u64) -> Result<Value, String> {
     let rendered = serde_json::to_vec(&value)
         .map_err(|error| format!("SIGNALBENCH_MANIFEST_RENDER_FAILED:{error}"))?;
     let hash = sha256_hex(&rendered);
-    value
+    let object = value
         .as_object_mut()
-        .unwrap_or(&mut Map::new())
-        .insert("manifest_hash".to_owned(), Value::String(hash));
+        .ok_or_else(|| "SIGNALBENCH_MANIFEST_OBJECT_REQUIRED".to_owned())?;
+    object.insert("manifest_hash".to_owned(), Value::String(hash));
     Ok(value)
 }
 
