@@ -10,13 +10,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
+#[path = "native_delegate.rs"]
+mod native_delegate;
+
 const MAX_CACHE_STATE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PROVIDER_INPUT_BYTES: usize = 4 * 1024 * 1024;
 
 pub fn supports(command: &[String]) -> bool {
     command.len() == 2
         && command[0] == "run"
-        && matches!(command[1].as_str(), "cache-health" | "provider-route")
+        && matches!(
+            command[1].as_str(),
+            "cache-health" | "delegate" | "provider-route"
+        )
 }
 
 fn number_as_i64(value: Option<&Value>) -> i64 {
@@ -406,6 +412,10 @@ pub fn execute(command: &[String], state_root: &Path) -> Result<Option<Value>, S
     }
     match command[1].as_str() {
         "cache-health" => cache_health(state_root).map(Some),
+        "delegate" => {
+            let arguments = env::args().skip(1).collect::<Vec<_>>();
+            native_delegate::execute(&arguments).map(Some)
+        }
         "provider-route" => {
             let arguments = env::args().skip(1).collect::<Vec<_>>();
             provider_route(&arguments).map(Some)
