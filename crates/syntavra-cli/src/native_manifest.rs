@@ -14,10 +14,7 @@ const ARTIFACTS: [(&str, &str); 6] = [
     ),
     ("native_cli", "native/syntavra-native/Cargo.toml"),
     ("publish_readiness", "release/publish-readiness.json"),
-    (
-        "tree_sitter_parser",
-        "syntavra_runtime/language_parsers.py",
-    ),
+    ("tree_sitter_parser", "syntavra_runtime/language_parsers.py"),
     (
         "provider_account_pool",
         "syntavra_runtime/provider_account_pool.py",
@@ -31,7 +28,12 @@ const ARTIFACTS: [(&str, &str); 6] = [
 fn artifacts(project: &Path) -> Value {
     let rows = ARTIFACTS
         .iter()
-        .map(|(name, relative)| ((*name).to_owned(), Value::Bool(project.join(relative).is_file())))
+        .map(|(name, relative)| {
+            (
+                (*name).to_owned(),
+                Value::Bool(project.join(relative).is_file()),
+            )
+        })
         .collect::<Map<_, _>>();
     Value::Object(rows)
 }
