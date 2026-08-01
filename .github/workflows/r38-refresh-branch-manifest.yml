@@ -1,4 +1,5 @@
 # Canonical formatter, inventory and manifest synchronization for the active R38 branch.
+# Every independently implemented native command slice is synchronized from the contract inventory.
 name: Refresh R38 Generated Metadata
 
 on:
