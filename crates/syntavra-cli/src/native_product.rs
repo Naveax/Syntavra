@@ -55,8 +55,9 @@ pub fn supports(command: &[String]) -> bool {
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
         || (command.len() == 1 && command[0] == "context-stress")
-        || (command.len() == 1 && command[0] == "integrations")
-        || (command.len() == 1 && command[0] == "upgrade")
+        || command
+            .first()
+            .is_some_and(|item| matches!(item.as_str(), "integrations" | "upgrade"))
         || (command.len() == 2
             && matches!(command[0].as_str(), "semantic-demo" | "structural-v2")
             && command[1] == "demo")
@@ -137,10 +138,10 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
-    if command.len() == 1 && command[0] == "integrations" {
+    if command.first().is_some_and(|item| item == "integrations") {
         return native_integrations::execute(&arguments).map(Some);
     }
-    if command.len() == 1 && command[0] == "upgrade" {
+    if command.first().is_some_and(|item| item == "upgrade") {
         return native_upgrade::execute(&arguments).map(Some);
     }
     if command.len() == 2
