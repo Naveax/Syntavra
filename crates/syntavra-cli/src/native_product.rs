@@ -122,6 +122,22 @@ fn normalized_redact_arguments(arguments: &[String]) -> Result<Vec<String>, Stri
     Ok(normalized)
 }
 
+fn execute_static_run(
+    command: &[String],
+    arguments: &[String],
+    project_root: &Path,
+) -> Result<Option<Value>, String> {
+    if command.len() != 2 || command[0] != "run" {
+        return Ok(None);
+    }
+    match command[1].as_str() {
+        "audit-config" => native_audit_config::execute(project_root).map(Some),
+        "cache-amortize" => native_cache_amortize::execute(arguments).map(Some),
+        "manifest" => Ok(Some(native_manifest::execute(project_root))),
+        _ => Ok(None),
+    }
+}
+
 pub fn execute(
     command: &[String],
     project_root: &Path,
@@ -176,14 +192,8 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
-    if command.len() == 2 && command[0] == "run" && command[1] == "audit-config" {
-        return native_audit_config::execute(project_root).map(Some);
-    }
-    if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
-        return native_cache_amortize::execute(&arguments).map(Some);
-    }
-    if command.len() == 2 && command[0] == "run" && command[1] == "manifest" {
-        return Ok(Some(native_manifest::execute(project_root)));
+    if let Some(value) = execute_static_run(command, &arguments, project_root)? {
+        return Ok(Some(value));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
         return native_mode::execute(&arguments, state_root).map(Some);
