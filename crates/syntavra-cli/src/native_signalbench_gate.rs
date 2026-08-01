@@ -19,6 +19,22 @@ pub struct GateDecision {
     pub exit_code: u8,
 }
 
+struct ReceiptGroups<'a> {
+    task_count: usize,
+    repetition_count: usize,
+    pair_count: usize,
+    candidate: Vec<&'a Value>,
+    baseline: Vec<&'a Value>,
+}
+
+struct GateMetrics {
+    success: f64,
+    token_ratio: f64,
+    wall_ratio: f64,
+    security_regressions: i64,
+    candidate_wall_p95: f64,
+}
+
 fn receipts_path(arguments: &[String]) -> Result<&Path, String> {
     arguments
         .windows(3)
@@ -69,6 +85,15 @@ fn mean(values: &[f64]) -> f64 {
     values.iter().sum::<f64>() / f64::from(denominator)
 }
 
+fn mean_field(rows: &[&Value], key: &str) -> f64 {
+    mean(
+        &rows
+            .iter()
+            .map(|row| number(row, key))
+            .collect::<Vec<_>>(),
+    )
+}
+
 fn percentile_95(values: &[f64]) -> f64 {
     let mut values = values.to_vec();
     values.sort_by(f64::total_cmp);
@@ -77,6 +102,14 @@ fn percentile_95(values: &[f64]) -> f64 {
     }
     let rank = values.len().saturating_mul(95).saturating_add(99) / 100;
     values[rank.saturating_sub(1).min(values.len() - 1)]
+}
+
+fn ratio(numerator: f64, denominator: f64) -> f64 {
+    if denominator > 0.0 {
+        numerator / denominator
+    } else {
+        f64::INFINITY
+    }
 }
 
 fn ratio_value(value: f64) -> Value {
@@ -93,8 +126,7 @@ fn render(value: &Value) -> Result<String, String> {
         .map_err(|error| format!("SIGNALBENCH_RESULT_RENDER_FAILED:{error}"))
 }
 
-fn evaluate(rows: &[Value]) -> Result<GateDecision, String> {
-    let mut reasons = Vec::new();
+fn group_receipts<'a>(rows: &'a [Value], reasons: &mut Vec<&'static str>) -> ReceiptGroups<'a> {
     if rows.iter().any(|row| {
         python_truthy(row.get("synthetic"))
             || row.get("source_kind").and_then(Value::as_str) != Some("live-external-arm")
@@ -124,58 +156,43 @@ fn evaluate(rows: &[Value]) -> Result<GateDecision, String> {
     if !by_arm.contains_key("syntavra") || !by_arm.contains_key("plain-baseline") {
         reasons.push("missing-required-arm");
     }
-    let candidate = by_arm.get("syntavra").cloned().unwrap_or_default();
-    let baseline = by_arm.get("plain-baseline").cloned().unwrap_or_default();
+    let pair_count = rows
+        .iter()
+        .map(|row| text(row, "pair_key"))
+        .collect::<BTreeSet<_>>()
+        .len();
+
+    ReceiptGroups {
+        task_count: task_ids.len(),
+        repetition_count: repetitions.len(),
+        pair_count,
+        candidate: by_arm.remove("syntavra").unwrap_or_default(),
+        baseline: by_arm.remove("plain-baseline").unwrap_or_default(),
+    }
+}
+
+fn calculate_metrics(groups: &ReceiptGroups<'_>, reasons: &mut Vec<&'static str>) -> GateMetrics {
     let success = mean(
-        &candidate
+        &groups
+            .candidate
             .iter()
-            .map(|row| {
-                if python_truthy(row.get("success")) {
-                    1.0
-                } else {
-                    0.0
-                }
-            })
+            .map(|row| f64::from(u8::from(python_truthy(row.get("success")))))
             .collect::<Vec<_>>(),
     );
-    let candidate_tokens = mean(
-        &candidate
-            .iter()
-            .map(|row| number(row, "active_tokens"))
-            .collect::<Vec<_>>(),
+    let token_ratio = ratio(
+        mean_field(&groups.candidate, "active_tokens"),
+        mean_field(&groups.baseline, "active_tokens"),
     );
-    let baseline_tokens = mean(
-        &baseline
-            .iter()
-            .map(|row| number(row, "active_tokens"))
-            .collect::<Vec<_>>(),
+    let wall_ratio = ratio(
+        mean_field(&groups.candidate, "wall_seconds"),
+        mean_field(&groups.baseline, "wall_seconds"),
     );
-    let candidate_wall = mean(
-        &candidate
-            .iter()
-            .map(|row| number(row, "wall_seconds"))
-            .collect::<Vec<_>>(),
-    );
-    let baseline_wall = mean(
-        &baseline
-            .iter()
-            .map(|row| number(row, "wall_seconds"))
-            .collect::<Vec<_>>(),
-    );
-    let token_ratio = if baseline_tokens > 0.0 {
-        candidate_tokens / baseline_tokens
-    } else {
-        f64::INFINITY
-    };
-    let wall_ratio = if baseline_wall > 0.0 {
-        candidate_wall / baseline_wall
-    } else {
-        f64::INFINITY
-    };
-    let security = candidate
+    let security_regressions = groups
+        .candidate
         .iter()
         .map(|row| integer(row, "security_regressions"))
         .sum::<i64>();
+
     if success < MINIMUM_SUCCESS {
         reasons.push("success-floor-missed");
     }
@@ -185,33 +202,45 @@ fn evaluate(rows: &[Value]) -> Result<GateDecision, String> {
     if wall_ratio > MAXIMUM_WALL_RATIO {
         reasons.push("wall-target-missed");
     }
-    if security > 0 {
+    if security_regressions > 0 {
         reasons.push("security-regression");
     }
-    let pair_keys = rows
-        .iter()
-        .map(|row| text(row, "pair_key"))
-        .collect::<BTreeSet<_>>();
-    if pair_keys.len() < REQUIRED_TASKS * REQUIRED_REPETITIONS {
+    if groups.pair_count < REQUIRED_TASKS * REQUIRED_REPETITIONS {
         reasons.push("paired-coverage-incomplete");
     }
-    let candidate_wall_values = candidate
-        .iter()
-        .map(|row| number(row, "wall_seconds"))
-        .collect::<Vec<_>>();
+
+    GateMetrics {
+        success,
+        token_ratio,
+        wall_ratio,
+        security_regressions,
+        candidate_wall_p95: percentile_95(
+            &groups
+                .candidate
+                .iter()
+                .map(|row| number(row, "wall_seconds"))
+                .collect::<Vec<_>>(),
+        ),
+    }
+}
+
+fn evaluate(rows: &[Value]) -> Result<GateDecision, String> {
+    let mut reasons = Vec::new();
+    let groups = group_receipts(rows, &mut reasons);
+    let metrics = calculate_metrics(&groups, &mut reasons);
     let ok = reasons.is_empty();
     let value = json!({
         "ok": ok,
         "claim": if ok { "SUPERIORITY_PROVEN" } else { "EXTERNAL_SUPERIORITY_NOT_PROVEN" },
         "reasons": reasons,
         "metrics": {
-            "tasks": task_ids.len(),
-            "repetitions": repetitions.len(),
-            "success": success,
-            "token_ratio": ratio_value(token_ratio),
-            "wall_ratio": ratio_value(wall_ratio),
-            "security_regressions": security,
-            "candidate_wall_p95": percentile_95(&candidate_wall_values),
+            "tasks": groups.task_count,
+            "repetitions": groups.repetition_count,
+            "success": metrics.success,
+            "token_ratio": ratio_value(metrics.token_ratio),
+            "wall_ratio": ratio_value(metrics.wall_ratio),
+            "security_regressions": metrics.security_regressions,
+            "candidate_wall_p95": metrics.candidate_wall_p95,
         },
     });
     Ok(GateDecision {
