@@ -198,7 +198,7 @@ fn path_candidates(line: &str) -> Vec<String> {
             continue;
         }
         let parts = candidate.split('/').collect::<Vec<_>>();
-        if parts.len() < 2 || parts.iter().any(|part| part.is_empty()) {
+        if parts.len() < 2 || parts.iter().any(|part| part.is_empty() || *part == "..") {
             continue;
         }
         if !parts.last().is_some_and(|part| {
