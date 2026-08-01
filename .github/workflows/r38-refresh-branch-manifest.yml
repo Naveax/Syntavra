@@ -14,7 +14,6 @@ on:
       - "syntavra_runtime/prerelease_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
-      - "tools/normalize_r38_secret_fixtures.py"
       - "tools/sync_r38_native_command_count.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_*_r38.py"
@@ -42,8 +41,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Normalize synthetic secret fixtures
-        run: python tools/normalize_r38_secret_fixtures.py
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize complete R38 surface metadata
