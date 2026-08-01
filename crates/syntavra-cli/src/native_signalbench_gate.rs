@@ -86,12 +86,7 @@ fn mean(values: &[f64]) -> f64 {
 }
 
 fn mean_field(rows: &[&Value], key: &str) -> f64 {
-    mean(
-        &rows
-            .iter()
-            .map(|row| number(row, key))
-            .collect::<Vec<_>>(),
-    )
+    mean(&rows.iter().map(|row| number(row, key)).collect::<Vec<_>>())
 }
 
 fn percentile_95(values: &[f64]) -> f64 {
