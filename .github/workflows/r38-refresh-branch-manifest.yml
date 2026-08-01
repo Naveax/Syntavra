@@ -1,3 +1,4 @@
+# Canonical formatter, inventory and manifest synchronization for the active R38 branch.
 name: Refresh R38 Generated Metadata
 
 on:
