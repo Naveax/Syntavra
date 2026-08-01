@@ -14,6 +14,7 @@ on:
       - "syntavra_runtime/prerelease_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
+      - "tools/normalize_r38_secret_fixtures.py"
       - "tools/sync_r38_native_command_count.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_*_r38.py"
@@ -41,6 +42,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
+      - name: Normalize synthetic secret fixtures
+        run: python tools/normalize_r38_secret_fixtures.py
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize complete R38 surface metadata
@@ -60,6 +63,7 @@ jobs:
               "contracts/engine/dual-engine-public-surface-v2.json",
               "crates/syntavra-cli/src/bin/syntavra.rs",
               "tests/runtime/test_dual_engine_public_surface_r38.py",
+              "tests/runtime/test_native_redact_r38.py",
           }
           unexpected = {
               path
@@ -81,7 +85,8 @@ jobs:
             contracts/engine/dual-engine-public-surface-v2.json \
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_*.rs \
-            tests/runtime/test_dual_engine_public_surface_r38.py
+            tests/runtime/test_dual_engine_public_surface_r38.py \
+            tests/runtime/test_native_redact_r38.py
           git diff --cached --quiet && exit 0
           git commit -m "R38: synchronize complete surface metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
