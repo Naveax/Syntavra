@@ -47,8 +47,8 @@ impl Finding {
 }
 
 fn recursive_files(path: &Path, found: &mut BTreeSet<PathBuf>) -> Result<(), String> {
-    let entries = fs::read_dir(path)
-        .map_err(|error| format!("AUDIT_CONFIG_DISCOVERY_FAILED:{error}"))?;
+    let entries =
+        fs::read_dir(path).map_err(|error| format!("AUDIT_CONFIG_DISCOVERY_FAILED:{error}"))?;
     for entry in entries {
         let entry = entry.map_err(|error| format!("AUDIT_CONFIG_DISCOVERY_FAILED:{error}"))?;
         let child = entry.path();
@@ -201,10 +201,10 @@ fn path_candidates(line: &str) -> Vec<String> {
         if parts.len() < 2 || parts.iter().any(|part| part.is_empty()) {
             continue;
         }
-        if !parts
-            .last()
-            .is_some_and(|part| part.chars().any(|value| value.is_alphanumeric() || value == '_'))
-        {
+        if !parts.last().is_some_and(|part| {
+            part.chars()
+                .any(|value| value.is_alphanumeric() || value == '_')
+        }) {
             continue;
         }
         output.push(candidate.to_owned());
@@ -229,7 +229,8 @@ fn project_candidate(project: &Path, raw: &str) -> Option<PathBuf> {
 }
 
 fn contains_wildcard(raw: &str) -> bool {
-    raw.chars().any(|character| matches!(character, '*' | '{' | '}' | '[' | ']'))
+    raw.chars()
+        .any(|character| matches!(character, '*' | '{' | '}' | '[' | ']'))
 }
 
 fn overloaded_rule(line: &str) -> bool {
@@ -430,13 +431,19 @@ mod tests {
 
     #[test]
     fn normalizes_bullets_and_numbered_rules() {
-        assert_eq!(normalize_line("  - Always   inspect src/lib.rs "), "always inspect src/lib.rs");
+        assert_eq!(
+            normalize_line("  - Always   inspect src/lib.rs "),
+            "always inspect src/lib.rs"
+        );
         assert_eq!(normalize_line("12) NEVER skip tests"), "never skip tests");
     }
 
     #[test]
     fn extracts_bounded_relative_paths() {
-        assert_eq!(path_candidates("read src/lib.rs and docs/guide.md."), ["src/lib.rs", "docs/guide.md"]);
+        assert_eq!(
+            path_candidates("read src/lib.rs and docs/guide.md."),
+            ["src/lib.rs", "docs/guide.md"]
+        );
         assert!(path_candidates("/etc/passwd ../outside.txt").is_empty());
     }
 }
