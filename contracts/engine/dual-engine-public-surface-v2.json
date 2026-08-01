@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 230,
-    "module_count": 40,
-    "native_coverage_ppm": 125475,
-    "native_public_command_count": 33,
+    "missing_native_public_command_count": 229,
+    "module_count": 41,
+    "native_coverage_ppm": 129277,
+    "native_public_command_count": 34,
     "native_public_commands": [
       "context-stress",
       "engine list",
@@ -38,6 +38,7 @@
       "run cache-amortize",
       "run cache-health",
       "run delegate",
+      "run manifest",
       "run mode",
       "run provider-route",
       "run proxy-plan",
