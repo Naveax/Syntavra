@@ -24,6 +24,18 @@ _ENV = re.compile(r"\bSYNTAVRA_[A-Z0-9_]+\b")
 _MCP_NAME = re.compile(r"[\"']name[\"']\s*:\s*[\"']([A-Za-z0-9_.:-]+)[\"']")
 _ROUTE_INVENTORY_NAME = "INSTALLED_READ_ONLY_ROUTE_COMMANDS"
 
+# argparse command paths created by helpers or loops cannot be recovered by the
+# bounded line-oriented parser below. Keep that exceptional surface explicit,
+# deterministic and reviewable instead of silently under-counting public paths.
+_HELPER_GENERATED_CLI_COMMANDS: tuple[str, ...] = (
+    "semantic-demo demo",
+    "signalbench gate",
+    "signalbench plan",
+    "signalbench2 gate",
+    "signalbench2 plan",
+    "structural-v2 demo",
+)
+
 
 def _python_files() -> list[Path]:
     return sorted(path for path in RUNTIME.rglob("*.py") if path.is_file())
@@ -98,7 +110,7 @@ def _extract_cli_paths(source: str) -> set[str]:
 
 def export_surface() -> dict[str, object]:
     modules: list[str] = []
-    cli_commands: set[str] = set()
+    cli_commands: set[str] = set(_HELPER_GENERATED_CLI_COMMANDS)
     cli_arguments: set[str] = set()
     environment_variables: set[str] = set()
     mcp_name_literals: set[str] = set()
