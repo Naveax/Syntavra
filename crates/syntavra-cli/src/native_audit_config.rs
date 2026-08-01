@@ -100,6 +100,25 @@ fn posix_relative(project: &Path, path: &Path) -> Result<String, String> {
     Ok(parts.join("/"))
 }
 
+fn normalize_universal_newlines(text: &str) -> String {
+    if !text.contains('\r') {
+        return text.to_owned();
+    }
+    let mut normalized = String::with_capacity(text.len());
+    let mut characters = text.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character == '\r' {
+            if characters.peek() == Some(&'\n') {
+                characters.next();
+            }
+            normalized.push('\n');
+        } else {
+            normalized.push(character);
+        }
+    }
+    normalized
+}
+
 fn strip_instruction_prefix(line: &str) -> &str {
     let trimmed = line.trim_start_matches(char::is_whitespace);
     let mut iterator = trimmed.char_indices().peekable();
@@ -333,7 +352,8 @@ fn audit_file(
 ) -> Result<FileAudit, String> {
     let relative = posix_relative(project, path)?;
     let raw = fs::read(path).map_err(|error| format!("AUDIT_CONFIG_READ_FAILED:{error}"))?;
-    let text = String::from_utf8_lossy(&raw).into_owned();
+    let decoded = String::from_utf8_lossy(&raw);
+    let text = normalize_universal_newlines(decoded.as_ref());
     let bytes = text.as_bytes().len();
     let tokens = std::cmp::max(1, bytes / 4);
     let mut findings = Vec::new();
@@ -471,7 +491,7 @@ pub fn execute(project_root: &Path) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_line, path_candidates};
+    use super::{normalize_line, normalize_universal_newlines, path_candidates};
 
     #[test]
     fn normalizes_bullets_and_numbered_rules() {
@@ -480,6 +500,11 @@ mod tests {
             "always inspect src/lib.rs"
         );
         assert_eq!(normalize_line("12) NEVER skip tests"), "never skip tests");
+    }
+
+    #[test]
+    fn normalizes_cross_platform_newlines() {
+        assert_eq!(normalize_universal_newlines("a\r\nb\rc\n"), "a\nb\nc\n");
     }
 
     #[test]
