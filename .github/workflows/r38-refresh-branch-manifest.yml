@@ -1,5 +1,6 @@
 # Canonical formatter, inventory and manifest synchronization for the active R38 branch.
 # Every independently implemented native command slice is synchronized from the contract inventory.
+# The current refresh seals the cross-platform read-only agent-config audit slice.
 name: Refresh R38 Generated Metadata
 
 on:
