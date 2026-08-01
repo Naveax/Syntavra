@@ -9,6 +9,8 @@ use serde_json::Value;
 mod legacy;
 #[path = "migration_plan_read_only_contract.rs"]
 mod migration_plan_read_only_contract;
+#[path = "native_audit_config.rs"]
+mod native_audit_config;
 #[path = "native_cache_amortize.rs"]
 mod native_cache_amortize;
 #[path = "native_context_stress.rs"]
@@ -68,7 +70,10 @@ pub fn supports(command: &[String]) -> bool {
             && matches!(command[1].as_str(), "plan" | "gate"))
         || (command.len() == 2
             && command[0] == "run"
-            && matches!(command[1].as_str(), "cache-amortize" | "manifest"))
+            && matches!(
+                command[1].as_str(),
+                "audit-config" | "cache-amortize" | "manifest"
+            ))
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
         || (command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan")
         || (command.len() == 2 && command[0] == "run" && command[1] == "redact")
@@ -170,6 +175,9 @@ pub fn execute(
             std::process::exit(i32::from(decision.exit_code));
         }
         return Ok(Some(decision.value));
+    }
+    if command.len() == 2 && command[0] == "run" && command[1] == "audit-config" {
+        return native_audit_config::execute(project_root).map(Some);
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
         return native_cache_amortize::execute(&arguments).map(Some);
