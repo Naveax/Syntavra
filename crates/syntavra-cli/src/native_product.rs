@@ -15,6 +15,8 @@ mod native_cache_amortize;
 mod native_context_stress;
 #[path = "native_integrations.rs"]
 mod native_integrations;
+#[path = "native_manifest.rs"]
+mod native_manifest;
 #[path = "native_mode.rs"]
 mod native_mode;
 #[path = "native_proof_status.rs"]
@@ -64,7 +66,9 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 2
             && matches!(command[0].as_str(), "signalbench" | "signalbench2")
             && matches!(command[1].as_str(), "plan" | "gate"))
-        || (command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize")
+        || (command.len() == 2
+            && command[0] == "run"
+            && matches!(command[1].as_str(), "cache-amortize" | "manifest"))
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
         || (command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan")
         || (command.len() == 2 && command[0] == "run" && command[1] == "redact")
@@ -169,6 +173,9 @@ pub fn execute(
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "cache-amortize" {
         return native_cache_amortize::execute(&arguments).map(Some);
+    }
+    if command.len() == 2 && command[0] == "run" && command[1] == "manifest" {
+        return Ok(Some(native_manifest::execute(project_root)));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
         return native_mode::execute(&arguments, state_root).map(Some);
