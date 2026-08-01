@@ -23,6 +23,8 @@ const CONFIG_CANDIDATES: [&str; 12] = [
 ];
 const MAX_PATH_CANDIDATE_CHARS: usize = 4_096;
 
+type SeenInstructions = HashMap<String, (String, usize)>;
+
 #[derive(Debug, Clone)]
 struct Finding {
     path: String,
@@ -44,6 +46,13 @@ impl Finding {
             "estimated_tokens": self.estimated_tokens,
         })
     }
+}
+
+struct FileAudit {
+    relative: String,
+    bytes: usize,
+    tokens: usize,
+    findings: Vec<Finding>,
 }
 
 fn recursive_files(path: &Path, found: &mut BTreeSet<PathBuf>) -> Result<(), String> {
@@ -81,12 +90,13 @@ fn posix_relative(project: &Path, path: &Path) -> Result<String, String> {
     let relative = path
         .strip_prefix(project)
         .map_err(|error| format!("AUDIT_CONFIG_RELATIVE_PATH_FAILED:{error}"))?;
-    let mut parts = Vec::new();
-    for component in relative.components() {
-        if let Component::Normal(value) = component {
-            parts.push(value.to_string_lossy().into_owned());
-        }
-    }
+    let parts = relative
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => Some(value.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
     Ok(parts.join("/"))
 }
 
@@ -107,12 +117,11 @@ fn strip_instruction_prefix(line: &str) -> &str {
             end = index + character.len_utf8();
         }
     } else if first.is_ascii_digit() {
-        while let Some((index, character)) = iterator.peek().copied() {
+        while let Some((_, character)) = iterator.peek().copied() {
             if !character.is_ascii_digit() {
                 break;
             }
             iterator.next();
-            end = index + character.len_utf8();
         }
         match iterator.peek().copied() {
             Some((index, character @ ('.' | ')'))) => {
@@ -150,11 +159,28 @@ fn normalize_line(line: &str) -> String {
             normalized.push(' ');
             pending_space = false;
         }
-        for lowered in character.to_lowercase() {
-            normalized.push(lowered);
-        }
+        normalized.extend(character.to_lowercase());
     }
     normalized.trim().to_owned()
+}
+
+fn valid_path_candidate(candidate: &str) -> bool {
+    if candidate.is_empty()
+        || !candidate.contains('/')
+        || candidate.starts_with('/')
+        || candidate.ends_with('/')
+        || candidate.contains("//")
+    {
+        return false;
+    }
+    let parts = candidate.split('/').collect::<Vec<_>>();
+    if parts.len() < 2 || parts.iter().any(|part| part.is_empty() || *part == "..") {
+        return false;
+    }
+    parts.last().is_some_and(|part| {
+        part.chars()
+            .any(|value| value.is_alphanumeric() || value == '_')
+    })
 }
 
 fn path_candidates(line: &str) -> Vec<String> {
@@ -175,9 +201,7 @@ fn path_candidates(line: &str) -> Vec<String> {
                 overflowed = false;
             } else {
                 character_count += 1;
-                if character_count > MAX_PATH_CANDIDATE_CHARS {
-                    overflowed = true;
-                }
+                overflowed |= character_count > MAX_PATH_CANDIDATE_CHARS;
             }
             continue;
         }
@@ -189,25 +213,9 @@ fn path_candidates(line: &str) -> Vec<String> {
             continue;
         }
         let candidate = line[begin..index].trim_end_matches('.');
-        if candidate.is_empty()
-            || !candidate.contains('/')
-            || candidate.starts_with('/')
-            || candidate.ends_with('/')
-            || candidate.contains("//")
-        {
-            continue;
+        if valid_path_candidate(candidate) {
+            output.push(candidate.to_owned());
         }
-        let parts = candidate.split('/').collect::<Vec<_>>();
-        if parts.len() < 2 || parts.iter().any(|part| part.is_empty() || *part == "..") {
-            continue;
-        }
-        if !parts.last().is_some_and(|part| {
-            part.chars()
-                .any(|value| value.is_alphanumeric() || value == '_')
-        }) {
-            continue;
-        }
-        output.push(candidate.to_owned());
     }
     output
 }
@@ -241,9 +249,7 @@ fn overloaded_rule(line: &str) -> bool {
     let mut word = String::new();
     for character in line.chars().chain(std::iter::once(' ')) {
         if character.is_alphanumeric() || character == '_' {
-            for lowered in character.to_lowercase() {
-                word.push(lowered);
-            }
+            word.extend(character.to_lowercase());
             continue;
         }
         if matches!(word.as_str(), "always" | "never" | "must") {
@@ -255,6 +261,112 @@ fn overloaded_rule(line: &str) -> bool {
         }
     }
     false
+}
+
+fn duplicate_finding(
+    relative: &str,
+    line: &str,
+    number: usize,
+    normalized: String,
+    seen: &mut SeenInstructions,
+) -> Option<Finding> {
+    if normalized.chars().count() < 24 {
+        return None;
+    }
+    if let Some((previous_path, previous_line)) = seen.get(&normalized) {
+        return Some(Finding {
+            path: relative.to_owned(),
+            severity: "warning",
+            kind: "duplicate-instruction",
+            message: format!("duplicates {previous_path}:{previous_line}"),
+            line: Some(number),
+            estimated_tokens: std::cmp::max(1, line.chars().count() / 4),
+        });
+    }
+    seen.insert(normalized, (relative.to_owned(), number));
+    None
+}
+
+fn line_findings(
+    project: &Path,
+    relative: &str,
+    line: &str,
+    number: usize,
+    seen: &mut SeenInstructions,
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    if let Some(finding) = duplicate_finding(relative, line, number, normalize_line(line), seen) {
+        findings.push(finding);
+    }
+    for candidate in path_candidates(line) {
+        let Some(target) = project_candidate(project, &candidate) else {
+            continue;
+        };
+        if !target.exists() && !contains_wildcard(&candidate) {
+            findings.push(Finding {
+                path: relative.to_owned(),
+                severity: "error",
+                kind: "stale-path",
+                message: format!("referenced path does not exist: {candidate}"),
+                line: Some(number),
+                estimated_tokens: 0,
+            });
+        }
+    }
+    if overloaded_rule(line) {
+        findings.push(Finding {
+            path: relative.to_owned(),
+            severity: "warning",
+            kind: "overloaded-rule",
+            message: "one rule combines multiple absolute constraints".to_owned(),
+            line: Some(number),
+            estimated_tokens: std::cmp::max(1, line.chars().count() / 4),
+        });
+    }
+    findings
+}
+
+fn audit_file(
+    project: &Path,
+    path: &Path,
+    seen: &mut SeenInstructions,
+) -> Result<FileAudit, String> {
+    let relative = posix_relative(project, path)?;
+    let raw = fs::read(path).map_err(|error| format!("AUDIT_CONFIG_READ_FAILED:{error}"))?;
+    let text = String::from_utf8_lossy(&raw).into_owned();
+    let bytes = text.as_bytes().len();
+    let tokens = std::cmp::max(1, bytes / 4);
+    let mut findings = Vec::new();
+    if tokens > 2_000 {
+        findings.push(Finding {
+            path: relative.clone(),
+            severity: "warning",
+            kind: "oversized-config",
+            message: format!("configuration is approximately {tokens} tokens"),
+            line: None,
+            estimated_tokens: tokens,
+        });
+    }
+    for (offset, line) in text.lines().enumerate() {
+        findings.extend(line_findings(project, &relative, line, offset + 1, seen));
+    }
+    let folded = text.to_lowercase();
+    if folded.contains("ignore previous") || folded.contains("disregard all") {
+        findings.push(Finding {
+            path: relative.clone(),
+            severity: "error",
+            kind: "instruction-injection",
+            message: "configuration contains an instruction-override phrase".to_owned(),
+            line: None,
+            estimated_tokens: 0,
+        });
+    }
+    Ok(FileAudit {
+        relative,
+        bytes,
+        tokens,
+        findings,
+    })
 }
 
 fn canonical_json(value: &Value, output: &mut String) -> Result<(), String> {
@@ -297,93 +409,36 @@ fn canonical_json(value: &Value, output: &mut String) -> Result<(), String> {
     Ok(())
 }
 
+fn severity_counts(findings: &[Finding]) -> Map<String, Value> {
+    ["error", "warning", "info"]
+        .into_iter()
+        .map(|severity| {
+            let count = findings
+                .iter()
+                .filter(|finding| finding.severity == severity)
+                .count();
+            (severity.to_owned(), Value::from(count))
+        })
+        .collect()
+}
+
 pub fn execute(project_root: &Path) -> Result<Value, String> {
     let project = fs::canonicalize(project_root)
         .map_err(|error| format!("AUDIT_CONFIG_PROJECT_INVALID:{error}"))?;
     let paths = discover(&project)?;
+    let mut seen = SeenInstructions::new();
+    let mut files = Vec::new();
     let mut findings = Vec::new();
-    let mut normalized_seen: HashMap<String, (String, usize)> = HashMap::new();
     let mut total_bytes = 0usize;
     let mut total_tokens = 0usize;
-    let mut files = Vec::new();
 
     for path in &paths {
-        let relative = posix_relative(&project, path)?;
-        files.push(relative.clone());
-        let raw = fs::read(path).map_err(|error| format!("AUDIT_CONFIG_READ_FAILED:{error}"))?;
-        let text = String::from_utf8_lossy(&raw).into_owned();
-        let encoded_bytes = text.as_bytes().len();
-        total_bytes += encoded_bytes;
-        let tokens = std::cmp::max(1, encoded_bytes / 4);
-        total_tokens += tokens;
-        if tokens > 2_000 {
-            findings.push(Finding {
-                path: relative.clone(),
-                severity: "warning",
-                kind: "oversized-config",
-                message: format!("configuration is approximately {tokens} tokens"),
-                line: None,
-                estimated_tokens: tokens,
-            });
-        }
-
-        for (offset, line) in text.lines().enumerate() {
-            let number = offset + 1;
-            let normalized = normalize_line(line);
-            if normalized.chars().count() >= 24 {
-                if let Some((previous_path, previous_line)) = normalized_seen.get(&normalized) {
-                    findings.push(Finding {
-                        path: relative.clone(),
-                        severity: "warning",
-                        kind: "duplicate-instruction",
-                        message: format!("duplicates {previous_path}:{previous_line}"),
-                        line: Some(number),
-                        estimated_tokens: std::cmp::max(1, line.chars().count() / 4),
-                    });
-                } else {
-                    normalized_seen.insert(normalized, (relative.clone(), number));
-                }
-            }
-            for candidate in path_candidates(line) {
-                let Some(target) = project_candidate(&project, &candidate) else {
-                    continue;
-                };
-                if !target.exists() && !contains_wildcard(&candidate) {
-                    findings.push(Finding {
-                        path: relative.clone(),
-                        severity: "error",
-                        kind: "stale-path",
-                        message: format!("referenced path does not exist: {candidate}"),
-                        line: Some(number),
-                        estimated_tokens: 0,
-                    });
-                }
-            }
-            if overloaded_rule(line) {
-                findings.push(Finding {
-                    path: relative.clone(),
-                    severity: "warning",
-                    kind: "overloaded-rule",
-                    message: "one rule combines multiple absolute constraints".to_owned(),
-                    line: Some(number),
-                    estimated_tokens: std::cmp::max(1, line.chars().count() / 4),
-                });
-            }
-        }
-
-        let folded = text.to_lowercase();
-        if folded.contains("ignore previous") || folded.contains("disregard all") {
-            findings.push(Finding {
-                path: relative,
-                severity: "error",
-                kind: "instruction-injection",
-                message: "configuration contains an instruction-override phrase".to_owned(),
-                line: None,
-                estimated_tokens: 0,
-            });
-        }
+        let audit = audit_file(&project, path, &mut seen)?;
+        files.push(audit.relative);
+        total_bytes += audit.bytes;
+        total_tokens += audit.tokens;
+        findings.extend(audit.findings);
     }
-
     let estimated_reclaimable_tokens = findings
         .iter()
         .filter(|finding| {
@@ -394,19 +449,6 @@ pub fn execute(project_root: &Path) -> Result<Value, String> {
         })
         .map(|finding| finding.estimated_tokens)
         .sum::<usize>();
-
-    let mut counts = Map::new();
-    for severity in ["error", "warning", "info"] {
-        counts.insert(
-            severity.to_owned(),
-            Value::from(
-                findings
-                    .iter()
-                    .filter(|finding| finding.severity == severity)
-                    .count(),
-            ),
-        );
-    }
     let mut body = json!({
         "files": files,
         "file_count": paths.len(),
@@ -414,14 +456,16 @@ pub fn execute(project_root: &Path) -> Result<Value, String> {
         "estimated_tokens": total_tokens,
         "estimated_reclaimable_tokens": estimated_reclaimable_tokens,
         "findings": findings.iter().map(Finding::value).collect::<Vec<_>>(),
-        "counts": counts,
+        "counts": severity_counts(&findings),
     });
     let mut canonical = String::new();
     canonical_json(&body, &mut canonical)?;
-    let audit_hash = sha256_hex(canonical.as_bytes());
     body.as_object_mut()
         .ok_or_else(|| "AUDIT_CONFIG_RESULT_INVALID".to_owned())?
-        .insert("audit_hash".to_owned(), Value::String(audit_hash));
+        .insert(
+            "audit_hash".to_owned(),
+            Value::String(sha256_hex(canonical.as_bytes())),
+        );
     Ok(body)
 }
 
