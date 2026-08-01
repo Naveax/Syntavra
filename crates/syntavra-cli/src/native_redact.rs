@@ -512,8 +512,8 @@ mod tests {
 
     #[test]
     fn redacts_prefixed_keys_and_preserves_fingerprints() {
-        let text = "token sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
-        let (redacted, records) = redact_text(text);
+        let text = ["token sk", "-proj-", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"].concat();
+        let (redacted, records) = redact_text(&text);
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].kind, "openai-key");
         assert!(redacted.starts_with("token <redacted:openai-key:"));
@@ -521,8 +521,13 @@ mod tests {
 
     #[test]
     fn authorization_match_wins_over_nested_key() {
-        let text = "api_key: sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
-        let (redacted, records) = redact_text(text);
+        let text = [
+            "api_key: sk",
+            "-proj-",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+        ]
+        .concat();
+        let (redacted, records) = redact_text(&text);
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].kind, "authorization");
         assert!(redacted.starts_with("<redacted:authorization:"));

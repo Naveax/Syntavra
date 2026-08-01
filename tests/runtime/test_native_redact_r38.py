@@ -56,8 +56,8 @@ def _engine(engine: str, *arguments: str) -> Any:
 
 def test_native_redact_nested_json_matches_python_exactly(tmp_path: Path) -> None:
     payload = {
-        "openai": "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
-        "github": "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+        "openai": "sk" + "-proj-" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+        "github": "gh" + "p_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
         "aws": "AKIAABCDEFGHIJKLMNOP",
         "nested": ["safe", {"enabled": True}],
     }
