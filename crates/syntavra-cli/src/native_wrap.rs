@@ -76,9 +76,7 @@ fn make_executable(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
-fn make_executable(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
+fn make_executable(_path: &Path) {}
 
 pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String> {
     let host = host_argument(arguments)?;
@@ -92,7 +90,10 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
         fs::create_dir_all(parent).map_err(|error| format!("WRAP_DIRECTORY_FAILED:{error}"))?;
     }
     fs::write(&output, text.as_bytes()).map_err(|error| format!("WRAP_WRITE_FAILED:{error}"))?;
+    #[cfg(unix)]
     make_executable(&output)?;
+    #[cfg(not(unix))]
+    make_executable(&output);
     Ok(json!({
         "ok": true,
         "host": host,
