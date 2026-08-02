@@ -27,8 +27,6 @@ mod native_long_context;
 mod native_manifest;
 #[path = "native_mode.rs"]
 mod native_mode;
-#[path = "native_product_legacy.rs"]
-mod native_product_legacy;
 #[path = "native_proof_evidence.rs"]
 mod native_proof_evidence;
 #[path = "native_proof_status.rs"]
