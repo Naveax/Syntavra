@@ -79,6 +79,21 @@ struct PairKey {
     model: String,
 }
 
+#[derive(Default)]
+struct BenchmarkMetrics {
+    token_ratios: Vec<f64>,
+    wall_ratios: Vec<f64>,
+    cost_ratios: Vec<f64>,
+    quality_deltas: Vec<f64>,
+    success_deltas: Vec<f64>,
+}
+
+struct BenchmarkDimensions {
+    repositories: usize,
+    tasks: usize,
+    workloads: usize,
+}
+
 fn string_field(value: &Value, key: &str, default: &str) -> String {
     value
         .get(key)
@@ -91,25 +106,42 @@ fn integer_field(value: &Value, key: &str, default: i64) -> i64 {
     value
         .get(key)
         .and_then(|item| {
-            item.as_i64().or_else(|| {
-                item.as_f64().and_then(|number| {
-                    if number.is_finite() {
-                        number.trunc().to_string().parse::<i64>().ok()
-                    } else {
-                        None
-                    }
+            item.as_i64()
+                .or_else(|| item.as_bool().map(|flag| if flag { 1 } else { 0 }))
+                .or_else(|| item.as_str().and_then(|text| text.parse::<i64>().ok()))
+                .or_else(|| {
+                    item.as_f64().and_then(|number| {
+                        if number.is_finite() {
+                            number.trunc().to_string().parse::<i64>().ok()
+                        } else {
+                            None
+                        }
+                    })
                 })
-            })
         })
         .unwrap_or(default)
 }
 
 fn float_field(value: &Value, key: &str, default: f64) -> f64 {
-    value.get(key).and_then(Value::as_f64).unwrap_or(default)
+    value
+        .get(key)
+        .and_then(|item| {
+            item.as_f64()
+                .or_else(|| item.as_bool().map(|flag| if flag { 1.0 } else { 0.0 }))
+                .or_else(|| item.as_str().and_then(|text| text.parse::<f64>().ok()))
+        })
+        .unwrap_or(default)
 }
 
 fn boolean_field(value: &Value, key: &str, default: bool) -> bool {
-    value.get(key).and_then(Value::as_bool).unwrap_or(default)
+    value.get(key).map_or(default, |item| match item {
+        Value::Null => false,
+        Value::Bool(flag) => *flag,
+        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0),
+        Value::String(text) => !text.is_empty(),
+        Value::Array(items) => !items.is_empty(),
+        Value::Object(items) => !items.is_empty(),
+    })
 }
 
 impl ProviderUsageReceipt {
@@ -217,43 +249,46 @@ impl ProviderUsageReceipt {
     }
 }
 
-fn valid_iso_datetime(value: &str) -> bool {
-    let Some((date, time)) = value.split_once(['T', ' ']) else {
+fn valid_date(value: &str) -> bool {
+    let mut parts = value.split('-');
+    let Some(year) = parts.next().and_then(|item| item.parse::<i32>().ok()) else {
         return false;
     };
-    let mut date_parts = date.split('-');
-    let Some(year) = date_parts.next().and_then(|item| item.parse::<i32>().ok()) else {
+    let Some(month) = parts.next().and_then(|item| item.parse::<u32>().ok()) else {
         return false;
     };
-    let Some(month) = date_parts.next().and_then(|item| item.parse::<u32>().ok()) else {
+    let Some(day) = parts.next().and_then(|item| item.parse::<u32>().ok()) else {
         return false;
     };
-    let Some(day) = date_parts.next().and_then(|item| item.parse::<u32>().ok()) else {
-        return false;
-    };
-    if date_parts.next().is_some()
-        || year < 1
-        || !(1..=12).contains(&month)
-        || !(1..=31).contains(&day)
-    {
+    if parts.next().is_some() || year < 1 || !(1..=12).contains(&month) {
         return false;
     }
-    let time = time.strip_suffix('Z').unwrap_or(time);
-    let clock = time.split_once('+').map_or_else(
-        || time.split_once('-').map_or(time, |(left, _)| left),
-        |(left, _)| left,
-    );
-    let mut clock_parts = clock.split(':');
-    let Some(hour) = clock_parts.next().and_then(|item| item.parse::<u32>().ok()) else {
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let maximum_day = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    (1..=maximum_day).contains(&day)
+}
+
+fn valid_time(value: &str) -> bool {
+    let without_positive_offset = value.split_once('+').map_or(value, |(left, _)| left);
+    let clock = without_positive_offset
+        .split_once('-')
+        .map_or(without_positive_offset, |(left, _)| left);
+    let mut parts = clock.split(':');
+    let Some(hour) = parts.next().and_then(|item| item.parse::<u32>().ok()) else {
         return false;
     };
-    let Some(minute) = clock_parts.next().and_then(|item| item.parse::<u32>().ok()) else {
+    let Some(minute) = parts.next().and_then(|item| item.parse::<u32>().ok()) else {
         return false;
     };
-    let Some(second_text) = clock_parts.next() else {
+    let Some(second_text) = parts.next() else {
         return false;
     };
-    if clock_parts.next().is_some() {
+    if parts.next().is_some() {
         return false;
     }
     let second = second_text
@@ -261,12 +296,23 @@ fn valid_iso_datetime(value: &str) -> bool {
         .map_or(second_text, |(whole, _)| whole)
         .parse::<u32>()
         .ok();
-    matches!(second, Some(0..=59)) && hour <= 23 && minute <= 59
+    hour <= 23 && minute <= 59 && matches!(second, Some(0..=59))
+}
+
+fn valid_iso_datetime(value: &str) -> bool {
+    let normalized = value.strip_suffix('Z').unwrap_or(value);
+    normalized
+        .split_once('T')
+        .or_else(|| normalized.split_once(' '))
+        .map_or_else(
+            || valid_date(normalized),
+            |(date, time)| valid_date(date) && valid_time(time),
+        )
 }
 
 fn load_rows(path: &Path) -> Result<Vec<ProviderUsageReceipt>, String> {
-    let text =
-        fs::read_to_string(path).map_err(|error| format!("PROOF_RECEIPT_READ_FAILED:{error}"))?;
+    let text = fs::read_to_string(path)
+        .map_err(|error| format!("PROOF_RECEIPT_READ_FAILED:{error}"))?;
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("PROOF_RECEIPT_JSON_INVALID:{error}"))?;
     let rows = match &value {
@@ -283,7 +329,7 @@ fn load_rows(path: &Path) -> Result<Vec<ProviderUsageReceipt>, String> {
         .collect())
 }
 
-fn receipt_path(arguments: &[String], action: &str) -> Result<&Path, String> {
+fn receipt_path<'a>(arguments: &'a [String], action: &str) -> Result<&'a Path, String> {
     let index = arguments
         .windows(2)
         .position(|window| window[0] == "prove" && window[1] == action)
@@ -402,7 +448,7 @@ fn paired_rows(rows: &[ProviderUsageReceipt]) -> Vec<(ProviderUsageReceipt, Prov
     let mut grouped = Vec::<(PairKey, HashMap<String, ProviderUsageReceipt>)>::new();
     for row in rows {
         let key = row.pair_key();
-        if let Some((_, arms)) = grouped.iter_mut().find(|(existing, _)| *existing == key) {
+        if let Some((_, arms)) = grouped.iter_mut().find(|(existing, _)| existing == &key) {
             arms.insert(row.arm.clone(), row.clone());
         } else {
             let mut arms = HashMap::new();
@@ -413,52 +459,64 @@ fn paired_rows(rows: &[ProviderUsageReceipt]) -> Vec<(ProviderUsageReceipt, Prov
     grouped
         .into_iter()
         .filter_map(|(_, arms)| {
-            Some((arms.get("baseline")?.clone(), arms.get("syntavra")?.clone()))
+            Some((
+                arms.get("baseline")?.clone(),
+                arms.get("syntavra")?.clone(),
+            ))
         })
         .collect()
 }
 
-fn evaluate_benchmark(rows: &[ProviderUsageReceipt]) -> Value {
-    let validation = evaluate_receipts(rows);
-    let mut reasons = Vec::<String>::new();
-    if validation.get("ok").and_then(Value::as_bool) != Some(true) {
-        reasons.push("receipt-validation-failed".to_owned());
-    }
-    if rows.iter().any(|row| row.synthetic) {
-        reasons.push("synthetic-receipts-present".to_owned());
-    }
-    let pairs = paired_rows(rows);
-    if pairs.len() < MINIMUM_PAIRS {
-        reasons.push("insufficient-paired-runs".to_owned());
-    }
+fn benchmark_dimensions(
+    pairs: &[(ProviderUsageReceipt, ProviderUsageReceipt)],
+) -> BenchmarkDimensions {
     let repositories = pairs
         .iter()
         .map(|(_, syntavra)| syntavra.repository_hash.as_str())
-        .collect::<BTreeSet<_>>();
+        .collect::<BTreeSet<_>>()
+        .len();
     let tasks = pairs
         .iter()
         .map(|(_, syntavra)| syntavra.task_id.as_str())
-        .collect::<BTreeSet<_>>();
+        .collect::<BTreeSet<_>>()
+        .len();
     let workloads = pairs
         .iter()
         .map(|(_, syntavra)| syntavra.workload.as_str())
-        .collect::<BTreeSet<_>>();
-    if repositories.len() < MINIMUM_REPOSITORIES {
+        .collect::<BTreeSet<_>>()
+        .len();
+    BenchmarkDimensions {
+        repositories,
+        tasks,
+        workloads,
+    }
+}
+
+fn add_dimension_reasons(
+    pairs: usize,
+    dimensions: &BenchmarkDimensions,
+    reasons: &mut Vec<String>,
+) {
+    if pairs < MINIMUM_PAIRS {
+        reasons.push("insufficient-paired-runs".to_owned());
+    }
+    if dimensions.repositories < MINIMUM_REPOSITORIES {
         reasons.push("insufficient-repositories".to_owned());
     }
-    if tasks.len() < MINIMUM_TASKS {
+    if dimensions.tasks < MINIMUM_TASKS {
         reasons.push("insufficient-tasks".to_owned());
     }
-    if workloads.len() < MINIMUM_WORKLOAD_FAMILIES {
+    if dimensions.workloads < MINIMUM_WORKLOAD_FAMILIES {
         reasons.push("insufficient-workload-diversity".to_owned());
     }
+}
 
-    let mut token_ratios = Vec::new();
-    let mut wall_ratios = Vec::new();
-    let mut cost_ratios = Vec::new();
-    let mut quality_deltas = Vec::new();
-    let mut success_deltas = Vec::new();
-    for (baseline, syntavra) in &pairs {
+fn collect_metrics(
+    pairs: &[(ProviderUsageReceipt, ProviderUsageReceipt)],
+    reasons: &mut Vec<String>,
+) -> BenchmarkMetrics {
+    let mut metrics = BenchmarkMetrics::default();
+    for (baseline, syntavra) in pairs {
         if baseline.provider != syntavra.provider || baseline.model != syntavra.model {
             reasons.push("provider-or-model-parity-failed".to_owned());
             continue;
@@ -469,25 +527,74 @@ fn evaluate_benchmark(rows: &[ProviderUsageReceipt]) -> Value {
             reasons.push("invalid-baseline-denominator".to_owned());
             continue;
         }
-        token_ratios.push(integer_as_f64(syntavra_tokens) / integer_as_f64(baseline_tokens));
-        wall_ratios.push(syntavra.wall_time_ms / baseline.wall_time_ms);
-        cost_ratios.push(syntavra.cost_usd / baseline.cost_usd);
-        quality_deltas.push(syntavra.quality_score - baseline.quality_score);
-        success_deltas.push(
-            if syntavra.success { 1.0 } else { 0.0 } - if baseline.success { 1.0 } else { 0.0 },
-        );
+        metrics
+            .token_ratios
+            .push(integer_as_f64(syntavra_tokens) / integer_as_f64(baseline_tokens));
+        metrics
+            .wall_ratios
+            .push(syntavra.wall_time_ms / baseline.wall_time_ms);
+        metrics
+            .cost_ratios
+            .push(syntavra.cost_usd / baseline.cost_usd);
+        metrics
+            .quality_deltas
+            .push(syntavra.quality_score - baseline.quality_score);
+        let candidate_success = if syntavra.success { 1.0 } else { 0.0 };
+        let baseline_success = if baseline.success { 1.0 } else { 0.0 };
+        metrics
+            .success_deltas
+            .push(candidate_success - baseline_success);
     }
-    let mean_quality_delta = precise_mean(&quality_deltas).unwrap_or(-1.0);
-    let mean_success_delta = precise_mean(&success_deltas).unwrap_or(-1.0);
+    metrics
+}
+
+fn add_metric_reasons(metrics: &BenchmarkMetrics, reasons: &mut Vec<String>) {
+    let mean_quality_delta = precise_mean(&metrics.quality_deltas).unwrap_or(-1.0);
+    let mean_success_delta = precise_mean(&metrics.success_deltas).unwrap_or(-1.0);
     if mean_quality_delta < -QUALITY_NON_INFERIORITY_MARGIN {
         reasons.push("quality-non-inferiority-failed".to_owned());
     }
     if mean_success_delta < -SUCCESS_NON_INFERIORITY_MARGIN {
         reasons.push("success-non-inferiority-failed".to_owned());
     }
-    if token_ratios.is_empty() {
+    if metrics.token_ratios.is_empty() {
         reasons.push("no-measurable-pairs".to_owned());
     }
+}
+
+fn benchmark_metrics_value(
+    pairs: usize,
+    dimensions: &BenchmarkDimensions,
+    metrics: &BenchmarkMetrics,
+) -> Value {
+    json!({
+        "pairs": pairs,
+        "repositories": dimensions.repositories,
+        "tasks": dimensions.tasks,
+        "workloads": dimensions.workloads,
+        "mean_token_ratio": precise_mean(&metrics.token_ratios),
+        "median_token_ratio": median(&metrics.token_ratios),
+        "mean_wall_time_ratio": precise_mean(&metrics.wall_ratios),
+        "mean_cost_ratio": precise_mean(&metrics.cost_ratios),
+        "mean_quality_delta": precise_mean(&metrics.quality_deltas),
+        "mean_success_delta": precise_mean(&metrics.success_deltas),
+    })
+}
+
+fn evaluate_benchmark(rows: &[ProviderUsageReceipt]) -> Value {
+    let validation = evaluate_receipts(rows);
+    let pairs = paired_rows(rows);
+    let dimensions = benchmark_dimensions(&pairs);
+    let mut reasons = Vec::<String>::new();
+    if validation.get("ok").and_then(Value::as_bool) != Some(true) {
+        reasons.push("receipt-validation-failed".to_owned());
+    }
+    if rows.iter().any(|row| row.synthetic) {
+        reasons.push("synthetic-receipts-present".to_owned());
+    }
+    add_dimension_reasons(pairs.len(), &dimensions, &mut reasons);
+    let metrics = collect_metrics(&pairs, &mut reasons);
+    add_metric_reasons(&metrics, &mut reasons);
     let reasons = reasons
         .into_iter()
         .collect::<BTreeSet<_>>()
@@ -499,18 +606,7 @@ fn evaluate_benchmark(rows: &[ProviderUsageReceipt]) -> Value {
         "claim": if ok { "MEASURED_AGENT_BENCHMARK_VERIFIED" } else { "MEASURED_AGENT_BENCHMARK_NOT_PROVEN" },
         "external_superiority": if ok { "EXTERNAL_SUPERIORITY_ELIGIBLE_FOR_REVIEW" } else { "EXTERNAL_SUPERIORITY_NOT_PROVEN" },
         "reasons": reasons,
-        "metrics": {
-            "pairs": pairs.len(),
-            "repositories": repositories.len(),
-            "tasks": tasks.len(),
-            "workloads": workloads.len(),
-            "mean_token_ratio": precise_mean(&token_ratios),
-            "median_token_ratio": median(&token_ratios),
-            "mean_wall_time_ratio": precise_mean(&wall_ratios),
-            "mean_cost_ratio": precise_mean(&cost_ratios),
-            "mean_quality_delta": precise_mean(&quality_deltas),
-            "mean_success_delta": precise_mean(&success_deltas),
-        },
+        "metrics": benchmark_metrics_value(pairs.len(), &dimensions, &metrics),
         "requirements": {
             "minimum_pairs": MINIMUM_PAIRS,
             "minimum_repositories": MINIMUM_REPOSITORIES,
@@ -558,8 +654,7 @@ pub fn execute(
 ) -> Result<ProofDecision, String> {
     let rows = match action {
         "receipts" | "benchmark" => load_rows(receipt_path(arguments, action)?)?,
-        "readiness" => readiness_receipt_path(arguments)
-            .map_or_else(|| Ok(Vec::new()), |path| load_rows(path))?,
+        "readiness" => readiness_receipt_path(arguments).map_or_else(|| Ok(Vec::new()), load_rows)?,
         _ => return Err("PROOF_EVIDENCE_ACTION_INVALID".to_owned()),
     };
     let value = match action {
