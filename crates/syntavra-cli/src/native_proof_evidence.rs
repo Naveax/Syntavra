@@ -311,8 +311,8 @@ fn valid_iso_datetime(value: &str) -> bool {
 }
 
 fn load_rows(path: &Path) -> Result<Vec<ProviderUsageReceipt>, String> {
-    let text = fs::read_to_string(path)
-        .map_err(|error| format!("PROOF_RECEIPT_READ_FAILED:{error}"))?;
+    let text =
+        fs::read_to_string(path).map_err(|error| format!("PROOF_RECEIPT_READ_FAILED:{error}"))?;
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("PROOF_RECEIPT_JSON_INVALID:{error}"))?;
     let rows = match &value {
@@ -459,10 +459,7 @@ fn paired_rows(rows: &[ProviderUsageReceipt]) -> Vec<(ProviderUsageReceipt, Prov
     grouped
         .into_iter()
         .filter_map(|(_, arms)| {
-            Some((
-                arms.get("baseline")?.clone(),
-                arms.get("syntavra")?.clone(),
-            ))
+            Some((arms.get("baseline")?.clone(), arms.get("syntavra")?.clone()))
         })
         .collect()
 }
@@ -654,7 +651,9 @@ pub fn execute(
 ) -> Result<ProofDecision, String> {
     let rows = match action {
         "receipts" | "benchmark" => load_rows(receipt_path(arguments, action)?)?,
-        "readiness" => readiness_receipt_path(arguments).map_or_else(|| Ok(Vec::new()), load_rows)?,
+        "readiness" => {
+            readiness_receipt_path(arguments).map_or_else(|| Ok(Vec::new()), load_rows)?
+        }
         _ => return Err("PROOF_EVIDENCE_ACTION_INVALID".to_owned()),
     };
     let value = match action {
