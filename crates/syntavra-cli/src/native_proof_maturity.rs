@@ -87,9 +87,7 @@ fn string_value(value: Option<&Value>, default: &str) -> String {
         None => default.to_owned(),
         Some(Value::String(text)) => text.clone(),
         Some(Value::Null) => "None".to_owned(),
-        Some(Value::Bool(flag)) => {
-            if *flag { "True" } else { "False" }.to_owned()
-        }
+        Some(Value::Bool(flag)) => if *flag { "True" } else { "False" }.to_owned(),
         Some(Value::Number(number)) => number.to_string(),
         Some(other) => other.to_string(),
     }
@@ -253,7 +251,9 @@ fn civil_days(year: i64, month: i64, day: i64) -> i64 {
 }
 
 fn parse_two(text: &str) -> Option<i64> {
-    (text.len() == 2).then(|| text.parse::<i64>().ok()).flatten()
+    (text.len() == 2)
+        .then(|| text.parse::<i64>().ok())
+        .flatten()
 }
 
 fn parse_datetime(value: &str) -> Option<f64> {
@@ -368,10 +368,21 @@ fn percentile(values: &[f64], percentile: f64) -> f64 {
 fn object_rows(value: Option<&Value>) -> Vec<&Value> {
     value
         .and_then(Value::as_array)
-        .map_or_else(Vec::new, |rows| rows.iter().filter(|row| row.is_object()).collect())
+        .map_or_else(Vec::new, |rows| {
+            rows.iter().filter(|row| row.is_object()).collect()
+        })
 }
 
-fn maturity_document(value: &Value) -> Result<(Vec<OnboardingReceipt>, Vec<DistributionReceipt>, Vec<ReleaseReceipt>), String> {
+fn maturity_document(
+    value: &Value,
+) -> Result<
+    (
+        Vec<OnboardingReceipt>,
+        Vec<DistributionReceipt>,
+        Vec<ReleaseReceipt>,
+    ),
+    String,
+> {
     let object = value
         .as_object()
         .ok_or_else(|| "MATURITY_DOCUMENT_NOT_OBJECT".to_owned())?;
@@ -417,15 +428,21 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
         .collect::<BTreeSet<_>>();
     let repositories = live_onboarding
         .iter()
-        .filter_map(|(row, _)| (!row.repository_hash.is_empty()).then_some(row.repository_hash.as_str()))
+        .filter_map(|(row, _)| {
+            (!row.repository_hash.is_empty()).then_some(row.repository_hash.as_str())
+        })
         .collect::<BTreeSet<_>>();
     let integrations = live_onboarding
         .iter()
-        .filter_map(|(row, _)| (!row.integration_id.is_empty()).then_some(row.integration_id.as_str()))
+        .filter_map(|(row, _)| {
+            (!row.integration_id.is_empty()).then_some(row.integration_id.as_str())
+        })
         .collect::<BTreeSet<_>>();
     let operating_systems = live_onboarding
         .iter()
-        .filter_map(|(row, _)| (!row.operating_system.is_empty()).then_some(row.operating_system.as_str()))
+        .filter_map(|(row, _)| {
+            (!row.operating_system.is_empty()).then_some(row.operating_system.as_str())
+        })
         .collect::<BTreeSet<_>>();
     if users.len() < MINIMUM_USERS {
         reasons.push("insufficient-users".to_owned());
@@ -453,7 +470,9 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
         / denominator;
     let install_times = live_onboarding
         .iter()
-        .filter_map(|(row, _)| (row.install_wall_time_ms >= 0.0).then_some(row.install_wall_time_ms))
+        .filter_map(|(row, _)| {
+            (row.install_wall_time_ms >= 0.0).then_some(row.install_wall_time_ms)
+        })
         .collect::<Vec<_>>();
     let p95_install_ms = percentile(&install_times, 0.95);
     if success < MINIMUM_ONBOARDING_SUCCESS {
@@ -509,7 +528,8 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
                 .flatten()
         })
         .collect::<Vec<_>>();
-    verified_releases.sort_by(|left, right| left.1.partial_cmp(&right.1).unwrap_or(Ordering::Equal));
+    verified_releases
+        .sort_by(|left, right| left.1.partial_cmp(&right.1).unwrap_or(Ordering::Equal));
     if verified_releases.len() < MINIMUM_VERIFIED_RELEASES {
         reasons.push("insufficient-verified-releases".to_owned());
     }
@@ -611,8 +631,7 @@ impl PythonRandom {
         let mut count = 624usize.max(key.len());
         while count > 0 {
             let previous = self.state[i - 1];
-            self.state[i] = (self.state[i]
-                ^ (previous ^ (previous >> 30)).wrapping_mul(1_664_525))
+            self.state[i] = (self.state[i] ^ (previous ^ (previous >> 30)).wrapping_mul(1_664_525))
                 .wrapping_add(key[j])
                 .wrapping_add(j as u32);
             i += 1;
@@ -631,7 +650,7 @@ impl PythonRandom {
             let previous = self.state[i - 1];
             self.state[i] = (self.state[i]
                 ^ (previous ^ (previous >> 30)).wrapping_mul(1_566_083_941))
-                .wrapping_sub(i as u32);
+            .wrapping_sub(i as u32);
             i += 1;
             if i >= 624 {
                 self.state[0] = self.state[623];
@@ -722,13 +741,14 @@ fn signal_rows(value: &Value) -> Result<Vec<SignalRun>, String> {
             .ok_or_else(|| "PROVIDER_BILLED_RESULTS_NOT_LIST".to_owned())?,
         _ => return Err("PROVIDER_BILLED_RESULTS_NOT_LIST".to_owned()),
     };
-    Ok(rows
-        .iter()
-        .map(SignalRun::from_value)
-        .collect::<Vec<_>>())
+    Ok(rows.iter().map(SignalRun::from_value).collect::<Vec<_>>())
 }
 
-fn evaluate_provider_billed(value: &Value, baseline: &str, candidate: &str) -> Result<Value, String> {
+fn evaluate_provider_billed(
+    value: &Value,
+    baseline: &str,
+    candidate: &str,
+) -> Result<Value, String> {
     let rows = signal_rows(value)?;
     let mut keyed = HashMap::<(String, i64, String, String), SignalRun>::new();
     let mut order = Vec::<(String, i64, String, String)>::new();
