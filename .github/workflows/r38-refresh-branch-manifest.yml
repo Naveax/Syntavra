@@ -1,6 +1,6 @@
 # Canonical formatter, inventory and manifest synchronization for the active R38 branch.
 # Every independently implemented native command slice is synchronized from the contract inventory.
-# The current refresh seals the cross-platform read-only agent-config audit slice.
+# The current refresh seals the prove external-suite certification slice.
 name: Refresh R38 Generated Metadata
 
 on:
@@ -44,6 +44,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
+      - name: Normalize external-suite numeric helper
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/native_external_suite_gate.rs")
+          text = path.read_text(encoding="utf-8")
+          helper = (
+              "\nfn integer_as_f64(value: i64) -> f64 {\n"
+              "    value.to_string().parse::<f64>().unwrap_or(0.0)\n"
+              "}\n"
+          )
+          count = text.count(helper)
+          if count == 2:
+              first = text.find(helper)
+              second = text.find(helper, first + len(helper))
+              text = text[:second] + text[second + len(helper):]
+              path.write_text(text, encoding="utf-8")
+          elif count != 1:
+              raise SystemExit(f"unexpected integer_as_f64 definition count: {count}")
+          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize complete R38 surface metadata
