@@ -235,10 +235,7 @@ impl OnboardingReceipt {
             operating_system: string_value(value.get("operating_system"), ""),
             install_wall_time_ms: float_value(value.get("install_wall_time_ms"), -1.0),
             success: Flag::from_bool(bool_value(value.get("success"), false)),
-            rollback_verified: Flag::from_bool(bool_value(
-                value.get("rollback_verified"),
-                false,
-            )),
+            rollback_verified: Flag::from_bool(bool_value(value.get("rollback_verified"), false)),
             doctor_passed: Flag::from_bool(bool_value(value.get("doctor_passed"), false)),
             synthetic: Flag::from_bool(bool_value(value.get("synthetic"), true)),
             version: string_value(value.get("version"), VERSION),
@@ -290,10 +287,7 @@ impl SignalRun {
             security_regressions: integer_value(value.get("security_regressions"), 0),
             verifier_skips: integer_value(value.get("verifier_skips"), 0),
             cache_mode: string_value(value.get("cache_mode"), ""),
-            provider_observed: Flag::from_bool(bool_value(
-                value.get("provider_observed"),
-                false,
-            )),
+            provider_observed: Flag::from_bool(bool_value(value.get("provider_observed"), false)),
         }
     }
 }
@@ -499,9 +493,7 @@ impl MaturityDocument {
     }
 
     fn contains_synthetic(&self) -> bool {
-        self.onboarding
-            .iter()
-            .any(|row| row.synthetic.is_enabled())
+        self.onboarding.iter().any(|row| row.synthetic.is_enabled())
             || self
                 .distributions
                 .iter()
@@ -627,9 +619,7 @@ fn assess_distributions(rows: &[DistributionReceipt]) -> DistributionAssessment 
         .collect::<Vec<_>>();
     let channels = verified
         .iter()
-        .filter_map(|(row, _)| {
-            (!row.channel_name.is_empty()).then_some(row.channel_name.as_str())
-        })
+        .filter_map(|(row, _)| (!row.channel_name.is_empty()).then_some(row.channel_name.as_str()))
         .collect::<BTreeSet<_>>()
         .len();
     let downloads = verified
@@ -708,9 +698,13 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
     let distributions = assess_distributions(&document.distributions);
     let releases = assess_releases(&document.releases);
     let earliest = minimum_time(
-        [onboarding.earliest, distributions.earliest, releases.earliest]
-            .into_iter()
-            .flatten(),
+        [
+            onboarding.earliest,
+            distributions.earliest,
+            releases.earliest,
+        ]
+        .into_iter()
+        .flatten(),
     );
     let days = earliest.map_or(0.0, |time| (current_epoch_seconds() - time) / 86_400.0);
     let mut reasons = Vec::new();
@@ -961,7 +955,11 @@ fn build_signal_index(rows: &[SignalRun]) -> SignalIndex {
     index
 }
 
-fn collect_provider_pairs(index: &SignalIndex, baseline: &str, candidate: &str) -> ProviderPairStats {
+fn collect_provider_pairs(
+    index: &SignalIndex,
+    baseline: &str,
+    candidate: &str,
+) -> ProviderPairStats {
     let mut stats = ProviderPairStats {
         ratios: Vec::new(),
         observed_pairs: Vec::new(),
@@ -1008,13 +1006,13 @@ fn increment(values: &mut BTreeMap<String, i64>, key: &str, amount: i64) {
 
 fn add_pair_result(base: &SignalRun, candidate: Option<&SignalRun>, stats: &mut ProviderPairStats) {
     let Some(candidate) = candidate else {
-        stats.invalid_pairs.push(invalid_pair(base, "missing-candidate"));
+        stats
+            .invalid_pairs
+            .push(invalid_pair(base, "missing-candidate"));
         return;
     };
-    let equal_work = base
-        .verified_work
-        .partial_cmp(&candidate.verified_work)
-        == Some(Ordering::Equal);
+    let equal_work =
+        base.verified_work.partial_cmp(&candidate.verified_work) == Some(Ordering::Equal);
     if !base.success.is_enabled() || !candidate.success.is_enabled() || !equal_work {
         stats
             .invalid_pairs
@@ -1022,11 +1020,15 @@ fn add_pair_result(base: &SignalRun, candidate: Option<&SignalRun>, stats: &mut 
         return;
     }
     let (Some(base_cost), Some(candidate_cost)) = (base.quota_cost, candidate.quota_cost) else {
-        stats.invalid_pairs.push(invalid_pair(base, "quota-unavailable"));
+        stats
+            .invalid_pairs
+            .push(invalid_pair(base, "quota-unavailable"));
         return;
     };
     if candidate_cost <= 0.0 {
-        stats.invalid_pairs.push(invalid_pair(base, "quota-unavailable"));
+        stats
+            .invalid_pairs
+            .push(invalid_pair(base, "quota-unavailable"));
         return;
     }
     stats.ratios.push(base_cost / candidate_cost);
