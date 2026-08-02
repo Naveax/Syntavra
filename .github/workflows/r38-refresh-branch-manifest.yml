@@ -110,6 +110,138 @@ jobs:
           else:
               raise SystemExit(f"unexpected maturity import state: before={count}, after={text.count(after)}")
           PY
+      - name: Normalize final maturity Clippy structure
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/native_proof_maturity.rs")
+          text = path.read_text(encoding="utf-8")
+
+          pairs = [
+              (
+                  "        reasons,\n        &onboarding,",
+                  "        &reasons,\n        &onboarding,",
+              ),
+              (
+                  "    reasons: Vec<String>,\n    onboarding: &OnboardingAssessment,",
+                  "    reasons: &[String],\n    onboarding: &OnboardingAssessment,",
+              ),
+          ]
+          for before, after in pairs:
+              count = text.count(before)
+              if count == 1:
+                  text = text.replace(before, after, 1)
+              elif count == 0 and text.count(after) == 1:
+                  pass
+              else:
+                  raise SystemExit(f"unexpected maturity slice state: before={count}, after={text.count(after)}")
+
+          stats_struct = '''struct ProviderPairStats {
+    ratios: Vec<f64>,
+    observed_pairs: Vec<Flag>,
+    invalid_pairs: Vec<Value>,
+    quality: BTreeMap<String, i64>,
+    total: BTreeMap<String, i64>,
+}
+'''
+          summary_struct = stats_struct + '''
+struct ProviderBilledSummary {
+    confidence_interval: Option<[f64; 2]>,
+    median_ratio: Option<f64>,
+    pass_rates: BTreeMap<String, f64>,
+    observed_count: usize,
+    claimable: bool,
+}
+'''
+          if text.count(summary_struct) == 0:
+              if text.count(stats_struct) != 1:
+                  raise SystemExit("unexpected ProviderPairStats structure")
+              text = text.replace(stats_struct, summary_struct, 1)
+
+          old_call = '''    Ok(provider_billed_value(
+        baseline,
+        candidate,
+        &rows,
+        stats,
+        ci,
+        ratio_median,
+        pass_rates,
+        observed_count,
+        claimable,
+    ))
+'''
+          new_call = '''    let summary = ProviderBilledSummary {
+        confidence_interval: ci,
+        median_ratio: ratio_median,
+        pass_rates,
+        observed_count,
+        claimable,
+    };
+    Ok(provider_billed_value(
+        baseline,
+        candidate,
+        &rows,
+        &stats,
+        &summary,
+    ))
+'''
+          if text.count(old_call) == 1:
+              text = text.replace(old_call, new_call, 1)
+          elif text.count(new_call) != 1:
+              raise SystemExit("unexpected provider billed call structure")
+
+          old_function = '''fn provider_billed_value(
+    baseline: &str,
+    candidate: &str,
+    rows: &[SignalRun],
+    stats: ProviderPairStats,
+    confidence_interval: Option<[f64; 2]>,
+    median_ratio: Option<f64>,
+    pass_rates: BTreeMap<String, f64>,
+    observed_count: usize,
+    claimable: bool,
+) -> Value {
+    json!({
+        "baseline": baseline,
+        "candidate": candidate,
+        "valid_pairs": stats.ratios.len(),
+        "invalid_pairs": stats.invalid_pairs,
+        "provider_observed_pairs": observed_count,
+        "provider_unobserved_pairs": stats.observed_pairs.len() - observed_count,
+        "median_efficiency_ratio": median_ratio,
+        "confidence_interval_95": confidence_interval,
+        "pass_rates": pass_rates,
+        "claimable_superiority": claimable,
+        "claim": if claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
+'''
+          new_function = '''fn provider_billed_value(
+    baseline: &str,
+    candidate: &str,
+    rows: &[SignalRun],
+    stats: &ProviderPairStats,
+    summary: &ProviderBilledSummary,
+) -> Value {
+    json!({
+        "baseline": baseline,
+        "candidate": candidate,
+        "valid_pairs": stats.ratios.len(),
+        "invalid_pairs": stats.invalid_pairs,
+        "provider_observed_pairs": summary.observed_count,
+        "provider_unobserved_pairs": stats.observed_pairs.len() - summary.observed_count,
+        "median_efficiency_ratio": summary.median_ratio,
+        "confidence_interval_95": summary.confidence_interval,
+        "pass_rates": summary.pass_rates,
+        "claimable_superiority": summary.claimable,
+        "claim": if summary.claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
+'''
+          if text.count(old_function) == 1:
+              text = text.replace(old_function, new_function, 1)
+          elif text.count(new_function) != 1:
+              raise SystemExit("unexpected provider billed output structure")
+
+          path.write_text(text, encoding="utf-8")
+          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize complete R38 surface metadata
