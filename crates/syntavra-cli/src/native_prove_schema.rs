@@ -119,7 +119,7 @@ fn write_schema(path: &Path, value: &Value) -> Result<(), String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("PROVE_SCHEMA_PARENT_CREATE_FAILED:{error}"))?;
     }
-    let mut encoded = serde_json::to_string(value)
+    let mut encoded = serde_json::to_string_pretty(value)
         .map_err(|error| format!("PROVE_SCHEMA_SERIALIZE_FAILED:{error}"))?;
     encoded.push('\n');
     fs::write(path, encoded).map_err(|error| format!("PROVE_SCHEMA_WRITE_FAILED:{error}"))
