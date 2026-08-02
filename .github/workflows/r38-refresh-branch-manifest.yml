@@ -1,6 +1,6 @@
 # Canonical formatter, inventory and manifest synchronization for the active R38 branch.
 # Every independently implemented native command slice is synchronized from the contract inventory.
-# The current refresh seals the prove external-suite certification slice.
+# The current refresh seals the receipts, benchmark and readiness native proof slice.
 name: Refresh R38 Generated Metadata
 
 on:
