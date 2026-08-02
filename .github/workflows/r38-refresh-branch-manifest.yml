@@ -1,6 +1,6 @@
 # Canonical formatter, inventory and manifest synchronization for the active R38 branch.
 # Every independently implemented native command slice is synchronized from the contract inventory.
-# The current refresh seals the receipts, benchmark and readiness native proof slice.
+# The current refresh seals the maturity and provider-billed native proof slice.
 name: Refresh R38 Generated Metadata
 
 on:
@@ -92,6 +92,23 @@ jobs:
               pass
           else:
               raise SystemExit(f"unexpected bool conversion state: before={count}, after={text.count(after)}")
+          PY
+      - name: Normalize maturity proof imports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/native_proof_maturity.rs")
+          text = path.read_text(encoding="utf-8")
+          before = "use serde_json::{json, Map, Value};"
+          after = "use serde_json::{json, Value};"
+          count = text.count(before)
+          if count == 1:
+              path.write_text(text.replace(before, after, 1), encoding="utf-8")
+          elif count == 0 and text.count(after) == 1:
+              pass
+          else:
+              raise SystemExit(f"unexpected maturity import state: before={count}, after={text.count(after)}")
           PY
       - name: Format Rust workspace
         run: cargo fmt --all
