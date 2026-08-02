@@ -124,7 +124,13 @@ jobs:
       - name: Run launcher unit tests
         run: cargo test --locked --bin syntavra
       - name: Run strict Rust lint
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
+          code=${PIPESTATUS[0]}
+          set -e
+          exit "$code"
       - name: Build both engines and selector
         run: cargo build --locked --bins
       - name: Verify explicit Rust execution and no fallback
@@ -155,6 +161,7 @@ jobs:
           name: r38-dual-engine-${{ matrix.os }}
           path: |
             dual-engine-coverage.json
+            clippy.log
             rust-version.json
             rust-missing.json
             python-version.json
