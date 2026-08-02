@@ -107,7 +107,7 @@ fn integer_field(value: &Value, key: &str, default: i64) -> i64 {
         .get(key)
         .and_then(|item| {
             item.as_i64()
-                .or_else(|| item.as_bool().map(|flag| if flag { 1 } else { 0 }))
+                .or_else(|| item.as_bool().map(i64::from))
                 .or_else(|| item.as_str().and_then(|text| text.parse::<i64>().ok()))
                 .or_else(|| {
                     item.as_f64().and_then(|number| {
