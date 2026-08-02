@@ -15,6 +15,8 @@ mod native_audit_config;
 mod native_cache_amortize;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
+#[path = "native_external_suite_gate.rs"]
+mod native_external_suite_gate;
 #[path = "native_external_suites.rs"]
 mod native_external_suites;
 #[path = "native_integrations.rs"]
@@ -91,7 +93,7 @@ pub fn supports(command: &[String]) -> bool {
             && command[0] == "prove"
             && matches!(
                 command[1].as_str(),
-                "long-context" | "plan" | "schema" | "suites"
+                "external-suite" | "long-context" | "plan" | "schema" | "suites"
             ))
 }
 
@@ -149,20 +151,30 @@ fn execute_static_run(
     }
 }
 
+fn emit_failed_decision(value: &Value, exit_code: u8) -> ! {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(value).unwrap_or_else(|_| "{\"ok\":false}".to_owned())
+    );
+    std::process::exit(i32::from(exit_code));
+}
+
 fn execute_prove(command: &[String], arguments: &[String]) -> Result<Option<Value>, String> {
     if command.len() != 2 || command[0] != "prove" {
         return Ok(None);
     }
     match command[1].as_str() {
+        "external-suite" => {
+            let decision = native_external_suite_gate::execute(arguments)?;
+            if decision.exit_code != 0 {
+                emit_failed_decision(&decision.value, decision.exit_code);
+            }
+            Ok(Some(decision.value))
+        }
         "long-context" => {
             let decision = native_long_context::execute(arguments)?;
             if decision.exit_code != 0 {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&decision.value)
-                        .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
-                );
-                std::process::exit(i32::from(decision.exit_code));
+                emit_failed_decision(&decision.value, decision.exit_code);
             }
             Ok(Some(decision.value))
         }
@@ -189,12 +201,7 @@ pub fn execute(
     if command.len() == 1 && command[0] == "context-stress" {
         let decision = native_context_stress::execute(&arguments)?;
         if decision.exit_code != 0 {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&decision.value)
-                    .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
-            );
-            std::process::exit(i32::from(decision.exit_code));
+            emit_failed_decision(&decision.value, decision.exit_code);
         }
         return Ok(Some(decision.value));
     }
@@ -239,12 +246,7 @@ pub fn execute(
     if command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan" {
         let decision = native_proxy_plan::execute(&arguments)?;
         if decision.exit_code != 0 {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&decision.value)
-                    .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
-            );
-            std::process::exit(i32::from(decision.exit_code));
+            emit_failed_decision(&decision.value, decision.exit_code);
         }
         return Ok(Some(decision.value));
     }
@@ -255,12 +257,7 @@ pub fn execute(
     if command.len() == 2 && command[0] == "run" && command[1] == "route" {
         let decision = native_route::execute(&arguments)?;
         if decision.exit_code != 0 {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&decision.value)
-                    .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
-            );
-            std::process::exit(i32::from(decision.exit_code));
+            emit_failed_decision(&decision.value, decision.exit_code);
         }
         return Ok(Some(decision.value));
     }
