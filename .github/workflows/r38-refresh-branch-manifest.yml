@@ -65,6 +65,23 @@ jobs:
           elif count != 1:
               raise SystemExit(f"unexpected integer_as_f64 definition count: {count}")
           PY
+      - name: Normalize proof evidence bool conversion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/native_proof_evidence.rs")
+          text = path.read_text(encoding="utf-8")
+          before = ".or_else(|| item.as_bool().map(|flag| if flag { 1 } else { 0 }))"
+          after = ".or_else(|| item.as_bool().map(i64::from))"
+          count = text.count(before)
+          if count == 1:
+              path.write_text(text.replace(before, after, 1), encoding="utf-8")
+          elif count == 0 and text.count(after) == 1:
+              pass
+          else:
+              raise SystemExit(f"unexpected bool conversion state: before={count}, after={text.count(after)}")
+          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize complete R38 surface metadata
