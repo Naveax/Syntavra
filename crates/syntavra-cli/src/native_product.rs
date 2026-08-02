@@ -29,6 +29,8 @@ mod native_manifest;
 mod native_mode;
 #[path = "native_proof_evidence.rs"]
 mod native_proof_evidence;
+#[path = "native_proof_maturity.rs"]
+mod native_proof_maturity;
 #[path = "native_proof_status.rs"]
 mod native_proof_status;
 #[path = "native_prove_plan.rs"]
@@ -98,7 +100,9 @@ pub fn supports(command: &[String]) -> bool {
                 "benchmark"
                     | "external-suite"
                     | "long-context"
+                    | "maturity"
                     | "plan"
+                    | "provider-billed"
                     | "readiness"
                     | "receipts"
                     | "schema"
@@ -179,6 +183,13 @@ fn execute_prove(
     match command[1].as_str() {
         "benchmark" | "readiness" | "receipts" => {
             let decision = native_proof_evidence::execute(&command[1], arguments, state_root)?;
+            if decision.exit_code != 0 {
+                emit_failed_decision(&decision.value, decision.exit_code);
+            }
+            Ok(Some(decision.value))
+        }
+        "maturity" | "provider-billed" => {
+            let decision = native_proof_maturity::execute(&command[1], arguments)?;
             if decision.exit_code != 0 {
                 emit_failed_decision(&decision.value, decision.exit_code);
             }
