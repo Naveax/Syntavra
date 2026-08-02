@@ -8,7 +8,14 @@ use serde_json::{json, Value};
 const VERSION: &str = "0.0.1";
 const CHANNEL: &str = "pre-release";
 const LONG_CONTEXT_TIERS: [i64; 8] = [
-    32_000, 64_000, 128_000, 256_000, 512_000, 1_000_000, 2_000_000, 10_000_000,
+    32_000,
+    64_000,
+    128_000,
+    256_000,
+    512_000,
+    1_000_000,
+    2_000_000,
+    10_000_000,
 ];
 const TASK_FAMILIES: [&str; 6] = [
     "needle-retrieval",
@@ -28,15 +35,35 @@ const MINIMUM_RECALL: f64 = 0.98;
 const MINIMUM_STALE_REJECTION: f64 = 0.98;
 const MINIMUM_EVIDENCE_PRECISION: f64 = 0.95;
 
-type Pair = (Receipt, Receipt);
+type Pair = (ContextRow, ContextRow);
 
 pub struct LongContextDecision {
     pub value: Value,
     pub exit_code: u8,
 }
 
+#[derive(Clone, Copy)]
+enum BooleanState {
+    Enabled,
+    Disabled,
+}
+
+impl BooleanState {
+    const fn from_bool(value: bool) -> Self {
+        if value {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+
+    const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
 #[derive(Clone)]
-struct Receipt {
+struct ContextRow {
     receipt_id: String,
     case_id: String,
     task_family: String,
@@ -50,13 +77,13 @@ struct Receipt {
     required_fact_recall: f64,
     stale_fact_rejection: f64,
     evidence_precision: f64,
-    exact_recovery: bool,
-    forced_restart: bool,
-    continuity_restored: bool,
+    exact_recovery: BooleanState,
+    forced_restart: BooleanState,
+    continuity_restored: BooleanState,
     wall_time_ms: f64,
     input_tokens: i64,
     output_tokens: i64,
-    synthetic: bool,
+    synthetic: BooleanState,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -101,8 +128,8 @@ fn float_field(value: &Value, key: &str, default: f64) -> f64 {
     value.get(key).and_then(Value::as_f64).unwrap_or(default)
 }
 
-fn boolean_field(value: &Value, key: &str, default: bool) -> bool {
-    value.get(key).and_then(Value::as_bool).unwrap_or(default)
+fn boolean_field(value: &Value, key: &str, default: bool) -> BooleanState {
+    BooleanState::from_bool(value.get(key).and_then(Value::as_bool).unwrap_or(default))
 }
 
 fn numeric_as_f64(value: i64) -> f64 {
@@ -113,7 +140,7 @@ fn length_as_f64(value: usize) -> f64 {
     value.to_string().parse::<f64>().unwrap_or(1.0)
 }
 
-impl Receipt {
+impl ContextRow {
     fn from_value(value: &Value) -> Self {
         Self {
             receipt_id: string_field(value, "receipt_id"),
@@ -227,13 +254,14 @@ fn mean(values: &[f64]) -> Option<f64> {
     (!values.is_empty()).then(|| values.iter().sum::<f64>() / length_as_f64(values.len()))
 }
 
-fn invalid_receipts(rows: &[Receipt], reasons: &mut Vec<String>) -> Vec<Value> {
+fn invalid_receipts(rows: &[ContextRow], reasons: &mut Vec<String>) -> Vec<Value> {
     let invalid = rows
         .iter()
         .filter_map(|row| {
             let row_reasons = row.validate();
-            (!row_reasons.is_empty())
-                .then(|| json!({"receipt_id": row.receipt_id, "reasons": row_reasons}))
+            (!row_reasons.is_empty()).then(|| {
+                json!({"receipt_id": row.receipt_id, "reasons": row_reasons})
+            })
         })
         .collect::<Vec<_>>();
     if !invalid.is_empty() {
@@ -242,14 +270,14 @@ fn invalid_receipts(rows: &[Receipt], reasons: &mut Vec<String>) -> Vec<Value> {
     if rows.is_empty() {
         reasons.push("no-receipts".to_owned());
     }
-    if rows.iter().any(|row| row.synthetic) {
+    if rows.iter().any(|row| row.synthetic.is_enabled()) {
         reasons.push("synthetic-receipts-present".to_owned());
     }
     invalid
 }
 
-fn paired_receipts(rows: &[Receipt], reasons: &mut Vec<String>) -> Vec<Pair> {
-    let mut groups: HashMap<PairKey, HashMap<String, Receipt>> = HashMap::new();
+fn paired_receipts(rows: &[ContextRow], reasons: &mut Vec<String>) -> Vec<Pair> {
+    let mut groups: HashMap<PairKey, HashMap<String, ContextRow>> = HashMap::new();
     let mut key_order = Vec::new();
     for row in rows {
         let key = row.key();
@@ -265,10 +293,7 @@ fn paired_receipts(rows: &[Receipt], reasons: &mut Vec<String>) -> Vec<Pair> {
         .iter()
         .filter_map(|key| {
             let group = groups.get(key)?;
-            Some((
-                group.get("baseline")?.clone(),
-                group.get("syntavra")?.clone(),
-            ))
+            Some((group.get("baseline")?.clone(), group.get("syntavra")?.clone()))
         })
         .collect::<Vec<_>>();
     if pairs.len() < MINIMUM_PAIRS {
@@ -318,27 +343,31 @@ fn collect_metrics(pairs: &[Pair], reasons: &mut Vec<String>) -> MetricRows {
             .quality_deltas
             .push(syntavra.answer_quality - baseline.answer_quality);
         metrics.recalls.push(syntavra.required_fact_recall);
-        metrics.stale_rejections.push(syntavra.stale_fact_rejection);
+        metrics
+            .stale_rejections
+            .push(syntavra.stale_fact_rejection);
         metrics.precisions.push(syntavra.evidence_precision);
         let baseline_tokens = baseline.input_tokens + baseline.output_tokens;
         let syntavra_tokens = syntavra.input_tokens + syntavra.output_tokens;
         if baseline_tokens > 0 {
-            metrics
-                .token_ratios
-                .push(numeric_as_f64(syntavra_tokens) / numeric_as_f64(baseline_tokens));
+            metrics.token_ratios.push(
+                numeric_as_f64(syntavra_tokens) / numeric_as_f64(baseline_tokens),
+            );
         }
         if baseline.wall_time_ms > 0.0 {
             metrics
                 .wall_ratios
                 .push(syntavra.wall_time_ms / baseline.wall_time_ms);
         }
-        if !syntavra.exact_recovery {
+        if !syntavra.exact_recovery.is_enabled() {
             reasons.push("exact-recovery-failed".to_owned());
         }
-        if syntavra.forced_restart {
+        if syntavra.forced_restart.is_enabled() {
             reasons.push("forced-restart-observed".to_owned());
         }
-        if syntavra.task_family == "cross-session-continuity" && !syntavra.continuity_restored {
+        if syntavra.task_family == "cross-session-continuity"
+            && !syntavra.continuity_restored.is_enabled()
+        {
             reasons.push("session-continuity-failed".to_owned());
         }
     }
@@ -363,8 +392,8 @@ fn apply_metric_requirements(metrics: &MetricRows, reasons: &mut Vec<String>) {
 fn result_value(
     pairs: &[Pair],
     coverage: CoverageSets,
-    metrics: MetricRows,
-    invalid: Vec<Value>,
+    metrics: &MetricRows,
+    invalid: &[Value],
     mut reasons: Vec<String>,
 ) -> Value {
     reasons.sort();
@@ -405,14 +434,14 @@ fn result_value(
     })
 }
 
-fn evaluate(rows: &[Receipt]) -> Value {
+fn evaluate(rows: &[ContextRow]) -> Value {
     let mut reasons = Vec::new();
     let invalid = invalid_receipts(rows, &mut reasons);
     let pairs = paired_receipts(rows, &mut reasons);
     let coverage = coverage_sets(&pairs, &mut reasons);
     let metrics = collect_metrics(&pairs, &mut reasons);
     apply_metric_requirements(&metrics, &mut reasons);
-    result_value(&pairs, coverage, metrics, invalid, reasons)
+    result_value(&pairs, coverage, &metrics, &invalid, reasons)
 }
 
 fn path_argument(arguments: &[String]) -> Option<&str> {
@@ -423,7 +452,7 @@ fn path_argument(arguments: &[String]) -> Option<&str> {
         .filter(|value| !value.starts_with('-'))
 }
 
-fn load_receipts(path: &str) -> Result<Vec<Receipt>, String> {
+fn load_receipts(path: &str) -> Result<Vec<ContextRow>, String> {
     let text = fs::read_to_string(path)
         .map_err(|error| format!("LONG_CONTEXT_RECEIPT_READ_FAILED:{error}"))?;
     let value: Value = serde_json::from_str(&text)
@@ -438,7 +467,7 @@ fn load_receipts(path: &str) -> Result<Vec<Receipt>, String> {
     Ok(array
         .iter()
         .filter(|item| item.is_object())
-        .map(Receipt::from_value)
+        .map(ContextRow::from_value)
         .collect())
 }
 
@@ -451,11 +480,7 @@ pub fn execute(arguments: &[String]) -> Result<LongContextDecision, String> {
     };
     let receipts = load_receipts(path)?;
     let value = evaluate(&receipts);
-    let exit_code = if value["ok"] == Value::Bool(true) {
-        0
-    } else {
-        4
-    };
+    let exit_code = if value["ok"] == Value::Bool(true) { 0 } else { 4 };
     Ok(LongContextDecision { value, exit_code })
 }
 
@@ -463,7 +488,7 @@ pub fn execute(arguments: &[String]) -> Result<LongContextDecision, String> {
 mod tests {
     use serde_json::json;
 
-    use super::{evaluate, manifest, Receipt};
+    use super::{evaluate, manifest, ContextRow};
 
     #[test]
     fn manifest_has_required_tiers() {
@@ -482,7 +507,7 @@ mod tests {
 
     #[test]
     fn receipt_defaults_are_fail_closed() {
-        let receipt = Receipt::from_value(&json!({}));
+        let receipt = ContextRow::from_value(&json!({}));
         assert!(!receipt.validate().is_empty());
     }
 }
