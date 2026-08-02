@@ -36,7 +36,7 @@ def _run(engine: str, output: Path) -> subprocess.CompletedProcess[str]:
         ]
     )
     return subprocess.run(
-        [*argv, "prove", "schema", str(output)],
+        [*argv, "prove", "schema", "--output", str(output)],
         cwd=ROOT,
         check=False,
         capture_output=True,
