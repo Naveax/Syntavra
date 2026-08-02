@@ -11,6 +11,7 @@ on:
       - "tools/verify_dual_engine_public_surface.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_audit_config_r38.py"
+      - "tests/runtime/test_native_external_suite_gate_r38.py"
       - "tests/runtime/test_native_external_suites_r38.py"
       - "tests/runtime/test_native_integrations_r38.py"
       - "tests/runtime/test_native_long_context_r38.py"
@@ -36,6 +37,7 @@ on:
       - "tools/verify_dual_engine_public_surface.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_audit_config_r38.py"
+      - "tests/runtime/test_native_external_suite_gate_r38.py"
       - "tests/runtime/test_native_external_suites_r38.py"
       - "tests/runtime/test_native_integrations_r38.py"
       - "tests/runtime/test_native_long_context_r38.py"
@@ -97,6 +99,7 @@ jobs:
           python -m pytest -q
           tests/runtime/test_dual_engine_public_surface_r38.py
           tests/runtime/test_native_audit_config_r38.py
+          tests/runtime/test_native_external_suite_gate_r38.py
           tests/runtime/test_native_external_suites_r38.py
           tests/runtime/test_native_integrations_r38.py
           tests/runtime/test_native_long_context_r38.py
