@@ -142,10 +142,7 @@ fn execute_static_run(
     }
 }
 
-fn execute_long_context(
-    command: &[String],
-    arguments: &[String],
-) -> Result<Option<Value>, String> {
+fn execute_long_context(command: &[String], arguments: &[String]) -> Result<Option<Value>, String> {
     if command.len() != 2 || command[0] != "prove" || command[1] != "long-context" {
         return Ok(None);
     }
