@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 224,
+    "missing_native_public_command_count": 223,
     "module_count": 47,
-    "native_coverage_ppm": 154716,
-    "native_public_command_count": 41,
+    "native_coverage_ppm": 158490,
+    "native_public_command_count": 42,
     "native_public_commands": [
       "context-stress",
       "engine list",
@@ -35,6 +35,7 @@
       "plugins list",
       "proof status",
       "prove benchmark",
+      "prove external-suite",
       "prove long-context",
       "prove plan",
       "prove readiness",
