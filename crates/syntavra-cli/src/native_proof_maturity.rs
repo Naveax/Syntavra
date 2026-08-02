@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::cmp::Ordering;
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::Path;
@@ -11,7 +12,7 @@ use serde_json::{json, Value};
 const VERSION: &str = "0.0.1";
 const CHANNEL: &str = "pre-release";
 
-const MINIMUM_DAYS: f64 = 90.0;
+const MINIMUM_DAYS: i64 = 90;
 const MINIMUM_ONBOARDING_RECEIPTS: usize = 1_000;
 const MINIMUM_USERS: usize = 50;
 const MINIMUM_REPOSITORIES: usize = 100;
@@ -30,6 +31,26 @@ pub struct ProofDecision {
     pub exit_code: u8,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Flag {
+    Enabled,
+    Disabled,
+}
+
+impl Flag {
+    const fn from_bool(value: bool) -> Self {
+        if value {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+
+    const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
 #[derive(Clone)]
 struct OnboardingReceipt {
     observed_at: String,
@@ -38,10 +59,10 @@ struct OnboardingReceipt {
     integration_id: String,
     operating_system: String,
     install_wall_time_ms: f64,
-    success: bool,
-    rollback_verified: bool,
-    doctor_passed: bool,
-    synthetic: bool,
+    success: Flag,
+    rollback_verified: Flag,
+    doctor_passed: Flag,
+    synthetic: Flag,
     version: String,
     channel: String,
 }
@@ -53,8 +74,8 @@ struct DistributionReceipt {
     version: String,
     downloads: i64,
     unique_installations: i64,
-    source_verified: bool,
-    synthetic: bool,
+    source_verified: Flag,
+    synthetic: Flag,
 }
 
 #[derive(Clone)]
@@ -62,10 +83,10 @@ struct ReleaseReceipt {
     published_at: String,
     version: String,
     channel: String,
-    signed: bool,
-    provenance: bool,
-    source_verified: bool,
-    synthetic: bool,
+    signed: Flag,
+    provenance: Flag,
+    source_verified: Flag,
+    synthetic: Flag,
 }
 
 #[derive(Clone)]
@@ -73,13 +94,63 @@ struct SignalRun {
     task_id: String,
     arm_id: String,
     repetition: i64,
-    success: bool,
+    success: Flag,
     verified_work: f64,
     quota_cost: Option<f64>,
     security_regressions: i64,
     verifier_skips: i64,
     cache_mode: String,
-    provider_observed: bool,
+    provider_observed: Flag,
+}
+
+struct MaturityDocument {
+    onboarding: Vec<OnboardingReceipt>,
+    distributions: Vec<DistributionReceipt>,
+    releases: Vec<ReleaseReceipt>,
+}
+
+struct OnboardingAssessment {
+    earliest: Option<f64>,
+    receipts: usize,
+    users: usize,
+    repositories: usize,
+    integrations: usize,
+    operating_systems: usize,
+    success_rate: f64,
+    rollback_rate: f64,
+    mean_install_ms: Option<f64>,
+    p95_install_ms: Option<f64>,
+    reasons: Vec<String>,
+}
+
+struct DistributionAssessment {
+    earliest: Option<f64>,
+    channels: usize,
+    downloads: i64,
+    installations: i64,
+    reasons: Vec<String>,
+}
+
+struct ReleaseAssessment {
+    earliest: Option<f64>,
+    releases: usize,
+    maximum_gap_days: f64,
+    reasons: Vec<String>,
+}
+
+type SignalKey = (String, i64, String, String);
+
+struct SignalIndex {
+    rows: HashMap<SignalKey, SignalRun>,
+    order: Vec<SignalKey>,
+}
+
+struct ProviderPairStats {
+    ratios: Vec<f64>,
+    observed_pairs: Vec<Flag>,
+    invalid_pairs: Vec<Value>,
+    quality: BTreeMap<String, i64>,
+    total: BTreeMap<String, i64>,
 }
 
 fn string_value(value: Option<&Value>, default: &str) -> String {
@@ -112,10 +183,11 @@ fn integer_value(value: Option<&Value>, default: i64) -> i64 {
                 .or_else(|| item.as_str().and_then(|text| text.parse::<i64>().ok()))
                 .or_else(|| {
                     item.as_f64().and_then(|number| {
-                        number
-                            .is_finite()
-                            .then(|| number.trunc().to_string().parse::<i64>().ok())
-                            .flatten()
+                        if number.is_finite() {
+                            number.trunc().to_string().parse::<i64>().ok()
+                        } else {
+                            None
+                        }
                     })
                 })
         })
@@ -132,6 +204,27 @@ fn float_value(value: Option<&Value>, default: f64) -> f64 {
         .unwrap_or(default)
 }
 
+fn i64_as_f64(value: i64) -> f64 {
+    value.to_string().parse::<f64>().unwrap_or(0.0)
+}
+
+fn usize_as_f64(value: usize) -> f64 {
+    value.to_string().parse::<f64>().unwrap_or(0.0)
+}
+
+fn floor_as_usize(value: f64) -> usize {
+    if !value.is_finite() || value <= 0.0 {
+        return 0;
+    }
+    value
+        .floor()
+        .to_string()
+        .split('.')
+        .next()
+        .and_then(|text| text.parse::<usize>().ok())
+        .unwrap_or(0)
+}
+
 impl OnboardingReceipt {
     fn from_value(value: &Value) -> Self {
         Self {
@@ -141,10 +234,13 @@ impl OnboardingReceipt {
             integration_id: string_value(value.get("integration_id"), ""),
             operating_system: string_value(value.get("operating_system"), ""),
             install_wall_time_ms: float_value(value.get("install_wall_time_ms"), -1.0),
-            success: bool_value(value.get("success"), false),
-            rollback_verified: bool_value(value.get("rollback_verified"), false),
-            doctor_passed: bool_value(value.get("doctor_passed"), false),
-            synthetic: bool_value(value.get("synthetic"), true),
+            success: Flag::from_bool(bool_value(value.get("success"), false)),
+            rollback_verified: Flag::from_bool(bool_value(
+                value.get("rollback_verified"),
+                false,
+            )),
+            doctor_passed: Flag::from_bool(bool_value(value.get("doctor_passed"), false)),
+            synthetic: Flag::from_bool(bool_value(value.get("synthetic"), true)),
             version: string_value(value.get("version"), VERSION),
             channel: string_value(value.get("channel"), CHANNEL),
         }
@@ -159,8 +255,8 @@ impl DistributionReceipt {
             version: string_value(value.get("version"), ""),
             downloads: integer_value(value.get("downloads"), -1),
             unique_installations: integer_value(value.get("unique_installations"), -1),
-            source_verified: bool_value(value.get("source_verified"), false),
-            synthetic: bool_value(value.get("synthetic"), true),
+            source_verified: Flag::from_bool(bool_value(value.get("source_verified"), false)),
+            synthetic: Flag::from_bool(bool_value(value.get("synthetic"), true)),
         }
     }
 }
@@ -171,10 +267,10 @@ impl ReleaseReceipt {
             published_at: string_value(value.get("published_at"), ""),
             version: string_value(value.get("version"), ""),
             channel: string_value(value.get("channel"), ""),
-            signed: bool_value(value.get("signed"), false),
-            provenance: bool_value(value.get("provenance"), false),
-            source_verified: bool_value(value.get("source_verified"), false),
-            synthetic: bool_value(value.get("synthetic"), true),
+            signed: Flag::from_bool(bool_value(value.get("signed"), false)),
+            provenance: Flag::from_bool(bool_value(value.get("provenance"), false)),
+            source_verified: Flag::from_bool(bool_value(value.get("source_verified"), false)),
+            synthetic: Flag::from_bool(bool_value(value.get("synthetic"), true)),
         }
     }
 }
@@ -185,7 +281,7 @@ impl SignalRun {
             task_id: string_value(value.get("task_id"), ""),
             arm_id: string_value(value.get("arm_id"), ""),
             repetition: integer_value(value.get("repetition"), 0),
-            success: bool_value(value.get("success"), false),
+            success: Flag::from_bool(bool_value(value.get("success"), false)),
             verified_work: float_value(value.get("verified_work"), 0.0),
             quota_cost: value
                 .get("quota_cost")
@@ -194,7 +290,10 @@ impl SignalRun {
             security_regressions: integer_value(value.get("security_regressions"), 0),
             verifier_skips: integer_value(value.get("verifier_skips"), 0),
             cache_mode: string_value(value.get("cache_mode"), ""),
-            provider_observed: bool_value(value.get("provider_observed"), false),
+            provider_observed: Flag::from_bool(bool_value(
+                value.get("provider_observed"),
+                false,
+            )),
         }
     }
 }
@@ -251,9 +350,10 @@ fn civil_days(year: i64, month: i64, day: i64) -> i64 {
 }
 
 fn parse_two(text: &str) -> Option<i64> {
-    (text.len() == 2)
-        .then(|| text.parse::<i64>().ok())
-        .flatten()
+    if text.len() != 2 {
+        return None;
+    }
+    text.parse::<i64>().ok()
 }
 
 fn parse_datetime(value: &str) -> Option<f64> {
@@ -288,21 +388,26 @@ fn parse_datetime(value: &str) -> Option<f64> {
     if !(0.0..60.0).contains(&second) {
         return None;
     }
-    let offset = if zone.is_empty() {
-        0.0
-    } else {
-        let sign = if zone.starts_with('-') { -1.0 } else { 1.0 };
-        let zone = &zone[1..];
-        let (hours, minutes) = zone.split_once(':')?;
-        sign * ((hours.parse::<f64>().ok()? * 60.0 + minutes.parse::<f64>().ok()?) * 60.0)
-    };
+    let offset = parse_offset(zone)?;
     Some(
-        civil_days(year, month, day) as f64 * 86_400.0
-            + hour as f64 * 3_600.0
-            + minute as f64 * 60.0
+        i64_as_f64(civil_days(year, month, day)) * 86_400.0
+            + i64_as_f64(hour) * 3_600.0
+            + i64_as_f64(minute) * 60.0
             + second
             - offset,
     )
+}
+
+fn parse_offset(zone: &str) -> Option<f64> {
+    if zone.is_empty() {
+        return Some(0.0);
+    }
+    let sign = if zone.starts_with('-') { -1.0 } else { 1.0 };
+    let zone = zone.get(1..)?;
+    let (hours, minutes) = zone.split_once(':')?;
+    let hours = hours.parse::<f64>().ok()?;
+    let minutes = minutes.parse::<f64>().ok()?;
+    Some(sign * ((hours * 60.0 + minutes) * 60.0))
 }
 
 fn current_epoch_seconds() -> f64 {
@@ -338,18 +443,17 @@ fn precise_mean(values: &[f64]) -> Option<f64> {
         }
     }
     let sum = partials.iter().rev().sum::<f64>();
-    Some(sum / values.len() as f64)
+    Some(sum / usize_as_f64(values.len()))
 }
 
 fn python_round_nonnegative(value: f64) -> usize {
-    let floor = value.floor();
-    let fraction = value - floor;
+    let floor = floor_as_usize(value);
+    let fraction = value - usize_as_f64(floor);
     if fraction < 0.5 {
-        floor as usize
+        floor
     } else if fraction > 0.5 {
-        floor as usize + 1
+        floor + 1
     } else {
-        let floor = floor as usize;
         floor + usize::from(floor % 2 == 1)
     }
 }
@@ -360,7 +464,7 @@ fn percentile(values: &[f64], percentile: f64) -> f64 {
     }
     let mut ordered = values.to_vec();
     ordered.sort_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal));
-    let raw = (ordered.len() - 1) as f64 * percentile;
+    let raw = usize_as_f64(ordered.len() - 1) * percentile;
     let index = python_round_nonnegative(raw).min(ordered.len() - 1);
     ordered[index]
 }
@@ -373,192 +477,277 @@ fn object_rows(value: Option<&Value>) -> Vec<&Value> {
         })
 }
 
-fn maturity_document(
-    value: &Value,
-) -> Result<
-    (
-        Vec<OnboardingReceipt>,
-        Vec<DistributionReceipt>,
-        Vec<ReleaseReceipt>,
-    ),
-    String,
-> {
-    let object = value
-        .as_object()
-        .ok_or_else(|| "MATURITY_DOCUMENT_NOT_OBJECT".to_owned())?;
-    let onboarding = object_rows(object.get("onboarding"))
-        .into_iter()
-        .map(OnboardingReceipt::from_value)
-        .collect();
-    let distributions = object_rows(object.get("distributions"))
-        .into_iter()
-        .map(DistributionReceipt::from_value)
-        .collect();
-    let releases = object_rows(object.get("releases"))
-        .into_iter()
-        .map(ReleaseReceipt::from_value)
-        .collect();
-    Ok((onboarding, distributions, releases))
+impl MaturityDocument {
+    fn from_value(value: &Value) -> Result<Self, String> {
+        let object = value
+            .as_object()
+            .ok_or_else(|| "MATURITY_DOCUMENT_NOT_OBJECT".to_owned())?;
+        Ok(Self {
+            onboarding: object_rows(object.get("onboarding"))
+                .into_iter()
+                .map(OnboardingReceipt::from_value)
+                .collect(),
+            distributions: object_rows(object.get("distributions"))
+                .into_iter()
+                .map(DistributionReceipt::from_value)
+                .collect(),
+            releases: object_rows(object.get("releases"))
+                .into_iter()
+                .map(ReleaseReceipt::from_value)
+                .collect(),
+        })
+    }
+
+    fn contains_synthetic(&self) -> bool {
+        self.onboarding
+            .iter()
+            .any(|row| row.synthetic.is_enabled())
+            || self
+                .distributions
+                .iter()
+                .any(|row| row.synthetic.is_enabled())
+            || self.releases.iter().any(|row| row.synthetic.is_enabled())
+    }
 }
 
-fn evaluate_maturity(value: &Value) -> Result<Value, String> {
-    let (onboarding, distributions, releases) = maturity_document(value)?;
-    let mut reasons = Vec::<String>::new();
-    if onboarding.iter().any(|row| row.synthetic)
-        || distributions.iter().any(|row| row.synthetic)
-        || releases.iter().any(|row| row.synthetic)
-    {
-        reasons.push("synthetic-receipts-present".to_owned());
-    }
-
-    let live_onboarding = onboarding
+fn assess_onboarding(rows: &[OnboardingReceipt]) -> OnboardingAssessment {
+    let live = rows
         .iter()
         .filter_map(|row| {
-            (!row.synthetic && row.version == VERSION && row.channel == CHANNEL)
-                .then(|| parse_datetime(&row.observed_at).map(|time| (row, time)))
-                .flatten()
+            if row.synthetic.is_enabled() || row.version != VERSION || row.channel != CHANNEL {
+                return None;
+            }
+            parse_datetime(&row.observed_at).map(|time| (row, time))
         })
         .collect::<Vec<_>>();
-    if live_onboarding.len() < MINIMUM_ONBOARDING_RECEIPTS {
-        reasons.push("insufficient-onboarding-receipts".to_owned());
-    }
-    let users = live_onboarding
-        .iter()
-        .filter_map(|(row, _)| (!row.user_hash.is_empty()).then_some(row.user_hash.as_str()))
-        .collect::<BTreeSet<_>>();
-    let repositories = live_onboarding
-        .iter()
-        .filter_map(|(row, _)| {
-            (!row.repository_hash.is_empty()).then_some(row.repository_hash.as_str())
-        })
-        .collect::<BTreeSet<_>>();
-    let integrations = live_onboarding
-        .iter()
-        .filter_map(|(row, _)| {
-            (!row.integration_id.is_empty()).then_some(row.integration_id.as_str())
-        })
-        .collect::<BTreeSet<_>>();
-    let operating_systems = live_onboarding
-        .iter()
-        .filter_map(|(row, _)| {
-            (!row.operating_system.is_empty()).then_some(row.operating_system.as_str())
-        })
-        .collect::<BTreeSet<_>>();
-    if users.len() < MINIMUM_USERS {
-        reasons.push("insufficient-users".to_owned());
-    }
-    if repositories.len() < MINIMUM_REPOSITORIES {
-        reasons.push("insufficient-repositories".to_owned());
-    }
-    if integrations.len() < MINIMUM_INTEGRATIONS {
-        reasons.push("insufficient-live-integrations".to_owned());
-    }
-    if operating_systems.len() < MINIMUM_OPERATING_SYSTEMS {
-        reasons.push("insufficient-operating-system-coverage".to_owned());
-    }
-
-    let denominator = live_onboarding.len().max(1) as f64;
-    let success = live_onboarding
-        .iter()
-        .filter(|(row, _)| row.success && row.doctor_passed)
-        .count() as f64
-        / denominator;
-    let rollback = live_onboarding
-        .iter()
-        .filter(|(row, _)| row.rollback_verified)
-        .count() as f64
-        / denominator;
-    let install_times = live_onboarding
+    let users = distinct_nonempty(&live, |row| row.user_hash.as_str());
+    let repositories = distinct_nonempty(&live, |row| row.repository_hash.as_str());
+    let integrations = distinct_nonempty(&live, |row| row.integration_id.as_str());
+    let operating_systems = distinct_nonempty(&live, |row| row.operating_system.as_str());
+    let denominator = usize_as_f64(live.len().max(1));
+    let success_rate = usize_as_f64(
+        live.iter()
+            .filter(|(row, _)| row.success.is_enabled() && row.doctor_passed.is_enabled())
+            .count(),
+    ) / denominator;
+    let rollback_rate = usize_as_f64(
+        live.iter()
+            .filter(|(row, _)| row.rollback_verified.is_enabled())
+            .count(),
+    ) / denominator;
+    let install_times = live
         .iter()
         .filter_map(|(row, _)| {
             (row.install_wall_time_ms >= 0.0).then_some(row.install_wall_time_ms)
         })
         .collect::<Vec<_>>();
-    let p95_install_ms = percentile(&install_times, 0.95);
-    if success < MINIMUM_ONBOARDING_SUCCESS {
-        reasons.push("onboarding-success-target-missed".to_owned());
-    }
-    if rollback < MINIMUM_ONBOARDING_SUCCESS {
-        reasons.push("rollback-verification-target-missed".to_owned());
-    }
-    if p95_install_ms > MAXIMUM_P95_INSTALL_SECONDS * 1_000.0 {
-        reasons.push("installation-speed-target-missed".to_owned());
-    }
+    let p95_install_ms = (!install_times.is_empty()).then_some(percentile(&install_times, 0.95));
+    let mut assessment = OnboardingAssessment {
+        earliest: minimum_time(live.iter().map(|(_, time)| *time)),
+        receipts: live.len(),
+        users,
+        repositories,
+        integrations,
+        operating_systems,
+        success_rate,
+        rollback_rate,
+        mean_install_ms: precise_mean(&install_times),
+        p95_install_ms,
+        reasons: Vec::new(),
+    };
+    add_onboarding_reasons(&mut assessment);
+    assessment
+}
 
-    let verified_distributions = distributions
+fn distinct_nonempty<'a, F>(rows: &[(&'a OnboardingReceipt, f64)], value: F) -> usize
+where
+    F: Fn(&'a OnboardingReceipt) -> &'a str,
+{
+    rows.iter()
+        .filter_map(|(row, _)| {
+            let selected = value(row);
+            (!selected.is_empty()).then_some(selected)
+        })
+        .collect::<BTreeSet<_>>()
+        .len()
+}
+
+fn add_onboarding_reasons(assessment: &mut OnboardingAssessment) {
+    for (condition, reason) in [
+        (
+            assessment.receipts < MINIMUM_ONBOARDING_RECEIPTS,
+            "insufficient-onboarding-receipts",
+        ),
+        (assessment.users < MINIMUM_USERS, "insufficient-users"),
+        (
+            assessment.repositories < MINIMUM_REPOSITORIES,
+            "insufficient-repositories",
+        ),
+        (
+            assessment.integrations < MINIMUM_INTEGRATIONS,
+            "insufficient-live-integrations",
+        ),
+        (
+            assessment.operating_systems < MINIMUM_OPERATING_SYSTEMS,
+            "insufficient-operating-system-coverage",
+        ),
+        (
+            assessment.success_rate < MINIMUM_ONBOARDING_SUCCESS,
+            "onboarding-success-target-missed",
+        ),
+        (
+            assessment.rollback_rate < MINIMUM_ONBOARDING_SUCCESS,
+            "rollback-verification-target-missed",
+        ),
+        (
+            assessment
+                .p95_install_ms
+                .is_some_and(|value| value > MAXIMUM_P95_INSTALL_SECONDS * 1_000.0),
+            "installation-speed-target-missed",
+        ),
+    ] {
+        if condition {
+            assessment.reasons.push(reason.to_owned());
+        }
+    }
+}
+
+fn assess_distributions(rows: &[DistributionReceipt]) -> DistributionAssessment {
+    let verified = rows
         .iter()
         .filter_map(|row| {
-            (!row.synthetic && row.source_verified && row.version == VERSION)
-                .then(|| parse_datetime(&row.observed_at).map(|time| (row, time)))
-                .flatten()
+            if row.synthetic.is_enabled()
+                || !row.source_verified.is_enabled()
+                || row.version != VERSION
+            {
+                return None;
+            }
+            parse_datetime(&row.observed_at).map(|time| (row, time))
         })
         .collect::<Vec<_>>();
-    let channels = verified_distributions
+    let channels = verified
         .iter()
-        .filter_map(|(row, _)| (!row.channel_name.is_empty()).then_some(row.channel_name.as_str()))
-        .collect::<BTreeSet<_>>();
-    let public_downloads = verified_distributions
+        .filter_map(|(row, _)| {
+            (!row.channel_name.is_empty()).then_some(row.channel_name.as_str())
+        })
+        .collect::<BTreeSet<_>>()
+        .len();
+    let downloads = verified
         .iter()
         .map(|(row, _)| row.downloads.max(0))
         .sum::<i64>();
-    let unique_installations = verified_distributions
+    let installations = verified
         .iter()
         .map(|(row, _)| row.unique_installations.max(0))
         .sum::<i64>();
-    if channels.len() < MINIMUM_DISTRIBUTION_CHANNELS {
+    let mut reasons = Vec::new();
+    if channels < MINIMUM_DISTRIBUTION_CHANNELS {
         reasons.push("insufficient-distribution-channels".to_owned());
     }
-    if public_downloads < MINIMUM_PUBLIC_DOWNLOADS {
+    if downloads < MINIMUM_PUBLIC_DOWNLOADS {
         reasons.push("insufficient-public-downloads".to_owned());
     }
-    if unique_installations < MINIMUM_UNIQUE_INSTALLATIONS {
+    if installations < MINIMUM_UNIQUE_INSTALLATIONS {
         reasons.push("insufficient-unique-installations".to_owned());
     }
+    DistributionAssessment {
+        earliest: minimum_time(verified.iter().map(|(_, time)| *time)),
+        channels,
+        downloads,
+        installations,
+        reasons,
+    }
+}
 
-    let mut verified_releases = releases
+fn assess_releases(rows: &[ReleaseReceipt]) -> ReleaseAssessment {
+    let mut verified = rows
         .iter()
         .filter_map(|row| {
-            (!row.synthetic
-                && row.source_verified
-                && row.signed
-                && row.provenance
+            let eligible = !row.synthetic.is_enabled()
+                && row.source_verified.is_enabled()
+                && row.signed.is_enabled()
+                && row.provenance.is_enabled()
                 && row.version == VERSION
-                && row.channel == CHANNEL)
-                .then(|| parse_datetime(&row.published_at).map(|time| (row, time)))
-                .flatten()
+                && row.channel == CHANNEL;
+            if !eligible {
+                return None;
+            }
+            parse_datetime(&row.published_at).map(|time| (row, time))
         })
         .collect::<Vec<_>>();
-    verified_releases
-        .sort_by(|left, right| left.1.partial_cmp(&right.1).unwrap_or(Ordering::Equal));
-    if verified_releases.len() < MINIMUM_VERIFIED_RELEASES {
-        reasons.push("insufficient-verified-releases".to_owned());
-    }
-    let max_gap_days = verified_releases
+    verified.sort_by(|left, right| left.1.partial_cmp(&right.1).unwrap_or(Ordering::Equal));
+    let maximum_gap_days = verified
         .windows(2)
         .map(|window| (window[1].1 - window[0].1) / 86_400.0)
         .fold(0.0, f64::max);
-    if max_gap_days > MAXIMUM_RELEASE_GAP_DAYS {
+    let mut reasons = Vec::new();
+    if verified.len() < MINIMUM_VERIFIED_RELEASES {
+        reasons.push("insufficient-verified-releases".to_owned());
+    }
+    if maximum_gap_days > MAXIMUM_RELEASE_GAP_DAYS {
         reasons.push("release-cadence-gap-too-large".to_owned());
     }
+    ReleaseAssessment {
+        earliest: minimum_time(verified.iter().map(|(_, time)| *time)),
+        releases: verified.len(),
+        maximum_gap_days,
+        reasons,
+    }
+}
 
-    let earliest = live_onboarding
-        .iter()
-        .map(|(_, time)| *time)
-        .chain(verified_distributions.iter().map(|(_, time)| *time))
-        .chain(verified_releases.iter().map(|(_, time)| *time))
-        .min_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal));
+fn minimum_time<I>(values: I) -> Option<f64>
+where
+    I: Iterator<Item = f64>,
+{
+    values.min_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal))
+}
+
+fn evaluate_maturity(value: &Value) -> Result<Value, String> {
+    let document = MaturityDocument::from_value(value)?;
+    let onboarding = assess_onboarding(&document.onboarding);
+    let distributions = assess_distributions(&document.distributions);
+    let releases = assess_releases(&document.releases);
+    let earliest = minimum_time(
+        [onboarding.earliest, distributions.earliest, releases.earliest]
+            .into_iter()
+            .flatten(),
+    );
     let days = earliest.map_or(0.0, |time| (current_epoch_seconds() - time) / 86_400.0);
-    if days < MINIMUM_DAYS {
+    let mut reasons = Vec::new();
+    if document.contains_synthetic() {
+        reasons.push("synthetic-receipts-present".to_owned());
+    }
+    reasons.extend(onboarding.reasons.iter().cloned());
+    reasons.extend(distributions.reasons.iter().cloned());
+    reasons.extend(releases.reasons.iter().cloned());
+    if days < i64_as_f64(MINIMUM_DAYS) {
         reasons.push("insufficient-operation-window".to_owned());
     }
-
     let reasons = reasons
         .into_iter()
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
     let ok = reasons.is_empty();
-    Ok(json!({
+    Ok(maturity_value(
+        ok,
+        days,
+        reasons,
+        &onboarding,
+        &distributions,
+        &releases,
+    ))
+}
+
+fn maturity_value(
+    ok: bool,
+    days: f64,
+    reasons: Vec<String>,
+    onboarding: &OnboardingAssessment,
+    distributions: &DistributionAssessment,
+    releases: &ReleaseAssessment,
+) -> Value {
+    json!({
         "ok": ok,
         "claim": if ok { "PUBLIC_PRODUCT_MATURITY_VERIFIED" } else { "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN" },
         "version": VERSION,
@@ -566,23 +755,23 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
         "reasons": reasons,
         "metrics": {
             "days": days,
-            "onboarding_receipts": live_onboarding.len(),
-            "users": users.len(),
-            "repositories": repositories.len(),
-            "live_integrations": integrations.len(),
-            "operating_systems": operating_systems.len(),
-            "onboarding_success": success,
-            "rollback_verified": rollback,
-            "mean_install_wall_time_ms": precise_mean(&install_times),
-            "p95_install_wall_time_ms": (!install_times.is_empty()).then_some(p95_install_ms),
-            "distribution_channels": channels.len(),
-            "public_downloads": public_downloads,
-            "unique_installations": unique_installations,
-            "verified_releases": verified_releases.len(),
-            "maximum_release_gap_days": max_gap_days,
+            "onboarding_receipts": onboarding.receipts,
+            "users": onboarding.users,
+            "repositories": onboarding.repositories,
+            "live_integrations": onboarding.integrations,
+            "operating_systems": onboarding.operating_systems,
+            "onboarding_success": onboarding.success_rate,
+            "rollback_verified": onboarding.rollback_rate,
+            "mean_install_wall_time_ms": onboarding.mean_install_ms,
+            "p95_install_wall_time_ms": onboarding.p95_install_ms,
+            "distribution_channels": distributions.channels,
+            "public_downloads": distributions.downloads,
+            "unique_installations": distributions.installations,
+            "verified_releases": releases.releases,
+            "maximum_release_gap_days": releases.maximum_gap_days,
         },
         "requirements": {
-            "minimum_days": MINIMUM_DAYS as i64,
+            "minimum_days": MINIMUM_DAYS,
             "minimum_onboarding_receipts": MINIMUM_ONBOARDING_RECEIPTS,
             "minimum_users": MINIMUM_USERS,
             "minimum_repositories": MINIMUM_REPOSITORIES,
@@ -596,7 +785,7 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
             "minimum_verified_releases": MINIMUM_VERIFIED_RELEASES,
             "maximum_release_gap_days": MAXIMUM_RELEASE_GAP_DAYS,
         },
-    }))
+    })
 }
 
 struct PythonRandom {
@@ -617,9 +806,10 @@ impl PythonRandom {
     fn init_genrand(&mut self, seed: u32) {
         self.state[0] = seed;
         for index in 1..624 {
+            let index_u32 = u32::try_from(index).expect("MT state index is bounded");
             self.state[index] = 1_812_433_253u32
                 .wrapping_mul(self.state[index - 1] ^ (self.state[index - 1] >> 30))
-                .wrapping_add(index as u32);
+                .wrapping_add(index_u32);
         }
         self.index = 624;
     }
@@ -631,9 +821,10 @@ impl PythonRandom {
         let mut count = 624usize.max(key.len());
         while count > 0 {
             let previous = self.state[i - 1];
+            let j_u32 = u32::try_from(j).expect("MT key index is bounded");
             self.state[i] = (self.state[i] ^ (previous ^ (previous >> 30)).wrapping_mul(1_664_525))
                 .wrapping_add(key[j])
-                .wrapping_add(j as u32);
+                .wrapping_add(j_u32);
             i += 1;
             j += 1;
             if i >= 624 {
@@ -648,9 +839,10 @@ impl PythonRandom {
         count = 623;
         while count > 0 {
             let previous = self.state[i - 1];
+            let i_u32 = u32::try_from(i).expect("MT state index is bounded");
             self.state[i] = (self.state[i]
                 ^ (previous ^ (previous >> 30)).wrapping_mul(1_566_083_941))
-            .wrapping_sub(i as u32);
+            .wrapping_sub(i_u32);
             i += 1;
             if i >= 624 {
                 self.state[0] = self.state[623];
@@ -695,7 +887,7 @@ impl PythonRandom {
     fn randbelow(&mut self, upper: usize) -> usize {
         let bits = usize::BITS - upper.leading_zeros();
         loop {
-            let value = self.getrandbits(bits) as usize;
+            let value = usize::try_from(self.getrandbits(bits)).expect("u32 fits in usize");
             if value < upper {
                 return value;
             }
@@ -744,34 +936,41 @@ fn signal_rows(value: &Value) -> Result<Vec<SignalRun>, String> {
     Ok(rows.iter().map(SignalRun::from_value).collect::<Vec<_>>())
 }
 
-fn evaluate_provider_billed(
-    value: &Value,
-    baseline: &str,
-    candidate: &str,
-) -> Result<Value, String> {
-    let rows = signal_rows(value)?;
-    let mut keyed = HashMap::<(String, i64, String, String), SignalRun>::new();
-    let mut order = Vec::<(String, i64, String, String)>::new();
-    for row in &rows {
+fn build_signal_index(rows: &[SignalRun]) -> SignalIndex {
+    let mut index = SignalIndex {
+        rows: HashMap::new(),
+        order: Vec::new(),
+    };
+    for row in rows {
         let key = (
             row.task_id.clone(),
             row.repetition,
             row.cache_mode.clone(),
             row.arm_id.clone(),
         );
-        if !keyed.contains_key(&key) {
-            order.push(key.clone());
+        match index.rows.entry(key.clone()) {
+            Entry::Vacant(entry) => {
+                index.order.push(key);
+                entry.insert(row.clone());
+            }
+            Entry::Occupied(mut entry) => {
+                entry.insert(row.clone());
+            }
         }
-        keyed.insert(key, row.clone());
     }
+    index
+}
 
-    let mut ratios = Vec::<f64>::new();
-    let mut observed_pairs = Vec::<bool>::new();
-    let mut invalid = Vec::<Value>::new();
-    let mut quality = BTreeMap::from([(baseline.to_owned(), 0i64), (candidate.to_owned(), 0i64)]);
-    let mut total = BTreeMap::from([(baseline.to_owned(), 0i64), (candidate.to_owned(), 0i64)]);
-    for key in order {
-        let Some(base) = keyed.get(&key) else {
+fn collect_provider_pairs(index: &SignalIndex, baseline: &str, candidate: &str) -> ProviderPairStats {
+    let mut stats = ProviderPairStats {
+        ratios: Vec::new(),
+        observed_pairs: Vec::new(),
+        invalid_pairs: Vec::new(),
+        quality: BTreeMap::from([(baseline.to_owned(), 0), (candidate.to_owned(), 0)]),
+        total: BTreeMap::from([(baseline.to_owned(), 0), (candidate.to_owned(), 0)]),
+    };
+    for key in &index.order {
+        let Some(base) = index.rows.get(key) else {
             continue;
         };
         if base.arm_id != baseline {
@@ -783,108 +982,147 @@ fn evaluate_provider_billed(
             base.cache_mode.clone(),
             candidate.to_owned(),
         );
-        let candidate_row = keyed.get(&candidate_key);
-        *total.get_mut(baseline).expect("baseline initialized") += 1;
-        *quality.get_mut(baseline).expect("baseline initialized") += i64::from(base.success);
+        let candidate_row = index.rows.get(&candidate_key);
+        increment(&mut stats.total, baseline, 1);
+        increment(
+            &mut stats.quality,
+            baseline,
+            i64::from(base.success.is_enabled()),
+        );
         if let Some(row) = candidate_row {
-            *total.get_mut(candidate).expect("candidate initialized") += 1;
-            *quality.get_mut(candidate).expect("candidate initialized") += i64::from(row.success);
+            increment(&mut stats.total, candidate, 1);
+            increment(
+                &mut stats.quality,
+                candidate,
+                i64::from(row.success.is_enabled()),
+            );
         }
-        let Some(row) = candidate_row else {
-            invalid.push(json!({
-                "task": base.task_id,
-                "repetition": base.repetition,
-                "cache": base.cache_mode,
-                "reason": "missing-candidate",
-            }));
-            continue;
-        };
-        if !base.success || !row.success || base.verified_work != row.verified_work {
-            invalid.push(json!({
-                "task": base.task_id,
-                "repetition": base.repetition,
-                "cache": base.cache_mode,
-                "reason": "unequal-verified-work",
-            }));
-            continue;
-        }
-        let Some(base_cost) = base.quota_cost else {
-            invalid.push(json!({
-                "task": base.task_id,
-                "repetition": base.repetition,
-                "cache": base.cache_mode,
-                "reason": "quota-unavailable",
-            }));
-            continue;
-        };
-        let Some(candidate_cost) = row.quota_cost else {
-            invalid.push(json!({
-                "task": base.task_id,
-                "repetition": base.repetition,
-                "cache": base.cache_mode,
-                "reason": "quota-unavailable",
-            }));
-            continue;
-        };
-        if candidate_cost <= 0.0 {
-            invalid.push(json!({
-                "task": base.task_id,
-                "repetition": base.repetition,
-                "cache": base.cache_mode,
-                "reason": "quota-unavailable",
-            }));
-            continue;
-        }
-        ratios.push(base_cost / candidate_cost);
-        observed_pairs.push(base.provider_observed && row.provider_observed);
+        add_pair_result(base, candidate_row, &mut stats);
     }
-    ratios.sort_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal));
-    let ci = bootstrap_ci(&ratios);
-    let ratio_median = ratios.get(ratios.len() / 2).copied();
+    stats
+}
+
+fn increment(values: &mut BTreeMap<String, i64>, key: &str, amount: i64) {
+    *values.entry(key.to_owned()).or_default() += amount;
+}
+
+fn add_pair_result(base: &SignalRun, candidate: Option<&SignalRun>, stats: &mut ProviderPairStats) {
+    let Some(candidate) = candidate else {
+        stats.invalid_pairs.push(invalid_pair(base, "missing-candidate"));
+        return;
+    };
+    let equal_work = base
+        .verified_work
+        .partial_cmp(&candidate.verified_work)
+        == Some(Ordering::Equal);
+    if !base.success.is_enabled() || !candidate.success.is_enabled() || !equal_work {
+        stats
+            .invalid_pairs
+            .push(invalid_pair(base, "unequal-verified-work"));
+        return;
+    }
+    let (Some(base_cost), Some(candidate_cost)) = (base.quota_cost, candidate.quota_cost) else {
+        stats.invalid_pairs.push(invalid_pair(base, "quota-unavailable"));
+        return;
+    };
+    if candidate_cost <= 0.0 {
+        stats.invalid_pairs.push(invalid_pair(base, "quota-unavailable"));
+        return;
+    }
+    stats.ratios.push(base_cost / candidate_cost);
+    stats.observed_pairs.push(Flag::from_bool(
+        base.provider_observed.is_enabled() && candidate.provider_observed.is_enabled(),
+    ));
+}
+
+fn invalid_pair(base: &SignalRun, reason: &str) -> Value {
+    json!({
+        "task": base.task_id,
+        "repetition": base.repetition,
+        "cache": base.cache_mode,
+        "reason": reason,
+    })
+}
+
+fn pass_rate(stats: &ProviderPairStats, arm: &str) -> f64 {
+    let total = stats.total.get(arm).copied().unwrap_or(0);
+    if total == 0 {
+        return 0.0;
+    }
+    i64_as_f64(stats.quality.get(arm).copied().unwrap_or(0)) / i64_as_f64(total)
+}
+
+fn evaluate_provider_billed(
+    value: &Value,
+    baseline: &str,
+    candidate: &str,
+) -> Result<Value, String> {
+    let rows = signal_rows(value)?;
+    let index = build_signal_index(&rows);
+    let mut stats = collect_provider_pairs(&index, baseline, candidate);
+    stats
+        .ratios
+        .sort_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal));
+    let ci = bootstrap_ci(&stats.ratios);
+    let ratio_median = stats.ratios.get(stats.ratios.len() / 2).copied();
     let pass_rates = BTreeMap::from([
-        (
-            baseline.to_owned(),
-            if total[baseline] == 0 {
-                0.0
-            } else {
-                quality[baseline] as f64 / total[baseline] as f64
-            },
-        ),
-        (
-            candidate.to_owned(),
-            if total[candidate] == 0 {
-                0.0
-            } else {
-                quality[candidate] as f64 / total[candidate] as f64
-            },
-        ),
+        (baseline.to_owned(), pass_rate(&stats, baseline)),
+        (candidate.to_owned(), pass_rate(&stats, candidate)),
     ]);
     let candidate_clean = !rows
         .iter()
         .filter(|row| row.arm_id == candidate)
         .any(|row| row.security_regressions != 0 || row.verifier_skips != 0);
-    let claimable = ratios.len() >= 10
+    let observed_count = stats
+        .observed_pairs
+        .iter()
+        .filter(|flag| flag.is_enabled())
+        .count();
+    let claimable = stats.ratios.len() >= 10
         && ci.is_some_and(|interval| interval[0] > 1.0)
         && pass_rates[candidate] >= pass_rates[baseline]
-        && observed_pairs.len() == ratios.len()
-        && observed_pairs.iter().all(|observed| *observed)
+        && observed_count == stats.ratios.len()
         && candidate_clean;
-    Ok(json!({
+    Ok(provider_billed_value(
+        baseline,
+        candidate,
+        &rows,
+        stats,
+        ci,
+        ratio_median,
+        pass_rates,
+        observed_count,
+        claimable,
+    ))
+}
+
+fn provider_billed_value(
+    baseline: &str,
+    candidate: &str,
+    rows: &[SignalRun],
+    stats: ProviderPairStats,
+    confidence_interval: Option<[f64; 2]>,
+    median_ratio: Option<f64>,
+    pass_rates: BTreeMap<String, f64>,
+    observed_count: usize,
+    claimable: bool,
+) -> Value {
+    json!({
         "baseline": baseline,
         "candidate": candidate,
-        "valid_pairs": ratios.len(),
-        "invalid_pairs": invalid,
-        "provider_observed_pairs": observed_pairs.iter().filter(|value| **value).count(),
-        "provider_unobserved_pairs": observed_pairs.len() - observed_pairs.iter().filter(|value| **value).count(),
-        "median_efficiency_ratio": ratio_median,
-        "confidence_interval_95": ci,
+        "valid_pairs": stats.ratios.len(),
+        "invalid_pairs": stats.invalid_pairs,
+        "provider_observed_pairs": observed_count,
+        "provider_unobserved_pairs": stats.observed_pairs.len() - observed_count,
+        "median_efficiency_ratio": median_ratio,
+        "confidence_interval_95": confidence_interval,
         "pass_rates": pass_rates,
         "claimable_superiority": claimable,
         "claim": if claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
-        "provider_observed_runs": rows.iter().filter(|row| row.provider_observed).count(),
+        "provider_observed_runs": rows.iter().filter(|row| row.provider_observed.is_enabled()).count(),
         "total_runs": rows.len(),
         "fail_closed": true,
-    }))
+    })
 }
 
 pub fn execute(action: &str, arguments: &[String]) -> Result<ProofDecision, String> {
