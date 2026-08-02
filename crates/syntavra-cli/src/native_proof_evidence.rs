@@ -231,13 +231,18 @@ fn valid_iso_datetime(value: &str) -> bool {
     let Some(day) = date_parts.next().and_then(|item| item.parse::<u32>().ok()) else {
         return false;
     };
-    if date_parts.next().is_some() || year < 1 || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+    if date_parts.next().is_some()
+        || year < 1
+        || !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+    {
         return false;
     }
     let time = time.strip_suffix('Z').unwrap_or(time);
-    let clock = time
-        .split_once('+')
-        .map_or_else(|| time.split_once('-').map_or(time, |(left, _)| left), |(left, _)| left);
+    let clock = time.split_once('+').map_or_else(
+        || time.split_once('-').map_or(time, |(left, _)| left),
+        |(left, _)| left,
+    );
     let mut clock_parts = clock.split(':');
     let Some(hour) = clock_parts.next().and_then(|item| item.parse::<u32>().ok()) else {
         return false;
@@ -260,8 +265,8 @@ fn valid_iso_datetime(value: &str) -> bool {
 }
 
 fn load_rows(path: &Path) -> Result<Vec<ProviderUsageReceipt>, String> {
-    let text = fs::read_to_string(path)
-        .map_err(|error| format!("PROOF_RECEIPT_READ_FAILED:{error}"))?;
+    let text =
+        fs::read_to_string(path).map_err(|error| format!("PROOF_RECEIPT_READ_FAILED:{error}"))?;
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("PROOF_RECEIPT_JSON_INVALID:{error}"))?;
     let rows = match &value {
@@ -309,10 +314,12 @@ fn evaluate_receipts(rows: &[ProviderUsageReceipt]) -> Value {
         .iter()
         .filter_map(|row| {
             let reasons = row.validate();
-            (!reasons.is_empty()).then(|| json!({
-                "receipt_id": row.receipt_id,
-                "reasons": reasons,
-            }))
+            (!reasons.is_empty()).then(|| {
+                json!({
+                    "receipt_id": row.receipt_id,
+                    "reasons": reasons,
+                })
+            })
         })
         .collect::<Vec<_>>();
     let mut counts = HashMap::<&str, usize>::new();
@@ -406,10 +413,7 @@ fn paired_rows(rows: &[ProviderUsageReceipt]) -> Vec<(ProviderUsageReceipt, Prov
     grouped
         .into_iter()
         .filter_map(|(_, arms)| {
-            Some((
-                arms.get("baseline")?.clone(),
-                arms.get("syntavra")?.clone(),
-            ))
+            Some((arms.get("baseline")?.clone(), arms.get("syntavra")?.clone()))
         })
         .collect()
 }
@@ -469,7 +473,9 @@ fn evaluate_benchmark(rows: &[ProviderUsageReceipt]) -> Value {
         wall_ratios.push(syntavra.wall_time_ms / baseline.wall_time_ms);
         cost_ratios.push(syntavra.cost_usd / baseline.cost_usd);
         quality_deltas.push(syntavra.quality_score - baseline.quality_score);
-        success_deltas.push(if syntavra.success { 1.0 } else { 0.0 } - if baseline.success { 1.0 } else { 0.0 });
+        success_deltas.push(
+            if syntavra.success { 1.0 } else { 0.0 } - if baseline.success { 1.0 } else { 0.0 },
+        );
     }
     let mean_quality_delta = precise_mean(&quality_deltas).unwrap_or(-1.0);
     let mean_success_delta = precise_mean(&success_deltas).unwrap_or(-1.0);
@@ -545,13 +551,15 @@ fn evaluate_readiness(state_root: &Path, rows: &[ProviderUsageReceipt]) -> Value
     })
 }
 
-pub fn execute(action: &str, arguments: &[String], state_root: &Path) -> Result<ProofDecision, String> {
+pub fn execute(
+    action: &str,
+    arguments: &[String],
+    state_root: &Path,
+) -> Result<ProofDecision, String> {
     let rows = match action {
         "receipts" | "benchmark" => load_rows(receipt_path(arguments, action)?)?,
-        "readiness" => readiness_receipt_path(arguments).map_or_else(
-            || Ok(Vec::new()),
-            |path| load_rows(path),
-        )?,
+        "readiness" => readiness_receipt_path(arguments)
+            .map_or_else(|| Ok(Vec::new()), |path| load_rows(path))?,
         _ => return Err("PROOF_EVIDENCE_ACTION_INVALID".to_owned()),
     };
     let value = match action {
