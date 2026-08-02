@@ -35,6 +35,8 @@ const MINIMUM_RECALL: f64 = 0.98;
 const MINIMUM_STALE_REJECTION: f64 = 0.98;
 const MINIMUM_EVIDENCE_PRECISION: f64 = 0.95;
 
+type Pair = (Receipt, Receipt);
+
 pub struct LongContextDecision {
     pub value: Value,
     pub exit_code: u8,
@@ -74,6 +76,22 @@ struct PairKey {
     model: String,
 }
 
+#[derive(Default)]
+struct MetricRows {
+    quality_deltas: Vec<f64>,
+    recalls: Vec<f64>,
+    stale_rejections: Vec<f64>,
+    precisions: Vec<f64>,
+    token_ratios: Vec<f64>,
+    wall_ratios: Vec<f64>,
+}
+
+struct CoverageSets {
+    cases: HashSet<String>,
+    families: HashSet<String>,
+    tiers: HashSet<i64>,
+}
+
 fn string_field(value: &Value, key: &str) -> String {
     value
         .get(key)
@@ -92,6 +110,14 @@ fn float_field(value: &Value, key: &str, default: f64) -> f64 {
 
 fn boolean_field(value: &Value, key: &str, default: bool) -> bool {
     value.get(key).and_then(Value::as_bool).unwrap_or(default)
+}
+
+fn numeric_as_f64(value: i64) -> f64 {
+    value.to_string().parse::<f64>().unwrap_or(0.0)
+}
+
+fn length_as_f64(value: usize) -> f64 {
+    value.to_string().parse::<f64>().unwrap_or(1.0)
 }
 
 impl Receipt {
@@ -205,19 +231,10 @@ fn manifest() -> Value {
 }
 
 fn mean(values: &[f64]) -> Option<f64> {
-    if values.is_empty() {
-        None
-    } else {
-        Some(values.iter().sum::<f64>() / values.len() as f64)
-    }
+    (!values.is_empty()).then(|| values.iter().sum::<f64>() / length_as_f64(values.len()))
 }
 
-fn insert_reason(reasons: &mut Vec<String>, value: &str) {
-    reasons.push(value.to_owned());
-}
-
-fn evaluate(rows: &[Receipt]) -> Value {
-    let mut reasons = Vec::new();
+fn invalid_receipts(rows: &[Receipt], reasons: &mut Vec<String>) -> Vec<Value> {
     let invalid = rows
         .iter()
         .filter_map(|row| {
@@ -228,15 +245,18 @@ fn evaluate(rows: &[Receipt]) -> Value {
         })
         .collect::<Vec<_>>();
     if !invalid.is_empty() {
-        insert_reason(&mut reasons, "invalid-receipts");
+        reasons.push("invalid-receipts".to_owned());
     }
     if rows.is_empty() {
-        insert_reason(&mut reasons, "no-receipts");
+        reasons.push("no-receipts".to_owned());
     }
     if rows.iter().any(|row| row.synthetic) {
-        insert_reason(&mut reasons, "synthetic-receipts-present");
+        reasons.push("synthetic-receipts-present".to_owned());
     }
+    invalid
+}
 
+fn paired_receipts(rows: &[Receipt], reasons: &mut Vec<String>) -> Vec<Pair> {
     let mut groups: HashMap<PairKey, HashMap<String, Receipt>> = HashMap::new();
     let mut key_order = Vec::new();
     for row in rows {
@@ -257,89 +277,110 @@ fn evaluate(rows: &[Receipt]) -> Value {
         })
         .collect::<Vec<_>>();
     if pairs.len() < MINIMUM_PAIRS {
-        insert_reason(&mut reasons, "insufficient-paired-runs");
+        reasons.push("insufficient-paired-runs".to_owned());
     }
+    pairs
+}
 
-    let cases = pairs
-        .iter()
-        .map(|(_, syntavra)| syntavra.case_id.clone())
-        .collect::<HashSet<_>>();
-    let families = pairs
-        .iter()
-        .map(|(_, syntavra)| syntavra.task_family.clone())
-        .collect::<HashSet<_>>();
-    let tiers = pairs
-        .iter()
-        .map(|(_, syntavra)| syntavra.tier_tokens)
-        .collect::<HashSet<_>>();
-    if cases.len() < MINIMUM_CASES {
-        insert_reason(&mut reasons, "insufficient-cases");
+fn coverage_sets(pairs: &[Pair], reasons: &mut Vec<String>) -> CoverageSets {
+    let coverage = CoverageSets {
+        cases: pairs
+            .iter()
+            .map(|(_, syntavra)| syntavra.case_id.clone())
+            .collect(),
+        families: pairs
+            .iter()
+            .map(|(_, syntavra)| syntavra.task_family.clone())
+            .collect(),
+        tiers: pairs
+            .iter()
+            .map(|(_, syntavra)| syntavra.tier_tokens)
+            .collect(),
+    };
+    if coverage.cases.len() < MINIMUM_CASES {
+        reasons.push("insufficient-cases".to_owned());
     }
-    if families.len() < MINIMUM_FAMILIES {
-        insert_reason(&mut reasons, "insufficient-task-families");
+    if coverage.families.len() < MINIMUM_FAMILIES {
+        reasons.push("insufficient-task-families".to_owned());
     }
-    if !REQUIRED_TIERS.iter().all(|tier| tiers.contains(tier)) {
-        insert_reason(&mut reasons, "required-tiers-missing");
+    if !REQUIRED_TIERS
+        .iter()
+        .all(|tier| coverage.tiers.contains(tier))
+    {
+        reasons.push("required-tiers-missing".to_owned());
     }
+    coverage
+}
 
-    let mut quality_deltas = Vec::new();
-    let mut recalls = Vec::new();
-    let mut stale_rejections = Vec::new();
-    let mut precisions = Vec::new();
-    let mut token_ratios = Vec::new();
-    let mut wall_ratios = Vec::new();
-    for (baseline, syntavra) in &pairs {
+fn collect_metrics(pairs: &[Pair], reasons: &mut Vec<String>) -> MetricRows {
+    let mut metrics = MetricRows::default();
+    for (baseline, syntavra) in pairs {
         if baseline.provider != syntavra.provider || baseline.model != syntavra.model {
-            insert_reason(&mut reasons, "provider-or-model-parity-failed");
+            reasons.push("provider-or-model-parity-failed".to_owned());
             continue;
         }
-        quality_deltas.push(syntavra.answer_quality - baseline.answer_quality);
-        recalls.push(syntavra.required_fact_recall);
-        stale_rejections.push(syntavra.stale_fact_rejection);
-        precisions.push(syntavra.evidence_precision);
+        metrics
+            .quality_deltas
+            .push(syntavra.answer_quality - baseline.answer_quality);
+        metrics.recalls.push(syntavra.required_fact_recall);
+        metrics
+            .stale_rejections
+            .push(syntavra.stale_fact_rejection);
+        metrics.precisions.push(syntavra.evidence_precision);
         let baseline_tokens = baseline.input_tokens + baseline.output_tokens;
         let syntavra_tokens = syntavra.input_tokens + syntavra.output_tokens;
         if baseline_tokens > 0 {
-            token_ratios.push(syntavra_tokens as f64 / baseline_tokens as f64);
+            metrics.token_ratios.push(
+                numeric_as_f64(syntavra_tokens) / numeric_as_f64(baseline_tokens),
+            );
         }
         if baseline.wall_time_ms > 0.0 {
-            wall_ratios.push(syntavra.wall_time_ms / baseline.wall_time_ms);
+            metrics
+                .wall_ratios
+                .push(syntavra.wall_time_ms / baseline.wall_time_ms);
         }
         if !syntavra.exact_recovery {
-            insert_reason(&mut reasons, "exact-recovery-failed");
+            reasons.push("exact-recovery-failed".to_owned());
         }
         if syntavra.forced_restart {
-            insert_reason(&mut reasons, "forced-restart-observed");
+            reasons.push("forced-restart-observed".to_owned());
         }
         if syntavra.task_family == "cross-session-continuity"
             && !syntavra.continuity_restored
         {
-            insert_reason(&mut reasons, "session-continuity-failed");
+            reasons.push("session-continuity-failed".to_owned());
         }
     }
+    metrics
+}
 
-    let mean_quality_delta = mean(&quality_deltas).unwrap_or(-1.0);
-    let mean_recall = mean(&recalls).unwrap_or(0.0);
-    let mean_stale = mean(&stale_rejections).unwrap_or(0.0);
-    let mean_precision = mean(&precisions).unwrap_or(0.0);
-    if mean_quality_delta < -QUALITY_NON_INFERIORITY_MARGIN {
-        insert_reason(&mut reasons, "quality-non-inferiority-failed");
+fn apply_metric_requirements(metrics: &MetricRows, reasons: &mut Vec<String>) {
+    if mean(&metrics.quality_deltas).unwrap_or(-1.0) < -QUALITY_NON_INFERIORITY_MARGIN {
+        reasons.push("quality-non-inferiority-failed".to_owned());
     }
-    if mean_recall < MINIMUM_RECALL {
-        insert_reason(&mut reasons, "required-fact-recall-failed");
+    if mean(&metrics.recalls).unwrap_or(0.0) < MINIMUM_RECALL {
+        reasons.push("required-fact-recall-failed".to_owned());
     }
-    if mean_stale < MINIMUM_STALE_REJECTION {
-        insert_reason(&mut reasons, "stale-fact-rejection-failed");
+    if mean(&metrics.stale_rejections).unwrap_or(0.0) < MINIMUM_STALE_REJECTION {
+        reasons.push("stale-fact-rejection-failed".to_owned());
     }
-    if mean_precision < MINIMUM_EVIDENCE_PRECISION {
-        insert_reason(&mut reasons, "evidence-precision-failed");
+    if mean(&metrics.precisions).unwrap_or(0.0) < MINIMUM_EVIDENCE_PRECISION {
+        reasons.push("evidence-precision-failed".to_owned());
     }
+}
 
+fn result_value(
+    pairs: &[Pair],
+    coverage: CoverageSets,
+    metrics: MetricRows,
+    invalid: Vec<Value>,
+    mut reasons: Vec<String>,
+) -> Value {
     reasons.sort();
     reasons.dedup();
     let ok = reasons.is_empty();
-    let mut sorted_tiers = tiers.into_iter().collect::<Vec<_>>();
-    sorted_tiers.sort_unstable();
+    let mut tiers = coverage.tiers.into_iter().collect::<Vec<_>>();
+    tiers.sort_unstable();
     json!({
         "ok": ok,
         "claim": if ok { "LONG_CONTEXT_QUALITY_VERIFIED" } else { "LONG_CONTEXT_QUALITY_NOT_PROVEN" },
@@ -350,15 +391,15 @@ fn evaluate(rows: &[Receipt]) -> Value {
         "invalid": invalid,
         "metrics": {
             "pairs": pairs.len(),
-            "cases": cases.len(),
-            "families": families.len(),
-            "tiers": sorted_tiers,
-            "mean_quality_delta": mean(&quality_deltas),
-            "mean_required_fact_recall": mean(&recalls),
-            "mean_stale_fact_rejection": mean(&stale_rejections),
-            "mean_evidence_precision": mean(&precisions),
-            "mean_token_ratio": mean(&token_ratios),
-            "mean_wall_time_ratio": mean(&wall_ratios),
+            "cases": coverage.cases.len(),
+            "families": coverage.families.len(),
+            "tiers": tiers,
+            "mean_quality_delta": mean(&metrics.quality_deltas),
+            "mean_required_fact_recall": mean(&metrics.recalls),
+            "mean_stale_fact_rejection": mean(&metrics.stale_rejections),
+            "mean_evidence_precision": mean(&metrics.precisions),
+            "mean_token_ratio": mean(&metrics.token_ratios),
+            "mean_wall_time_ratio": mean(&metrics.wall_ratios),
         },
         "requirements": {
             "minimum_pairs": MINIMUM_PAIRS,
@@ -371,6 +412,16 @@ fn evaluate(rows: &[Receipt]) -> Value {
             "minimum_evidence_precision": MINIMUM_EVIDENCE_PRECISION,
         },
     })
+}
+
+fn evaluate(rows: &[Receipt]) -> Value {
+    let mut reasons = Vec::new();
+    let invalid = invalid_receipts(rows, &mut reasons);
+    let pairs = paired_receipts(rows, &mut reasons);
+    let coverage = coverage_sets(&pairs, &mut reasons);
+    let metrics = collect_metrics(&pairs, &mut reasons);
+    apply_metric_requirements(&metrics, &mut reasons);
+    result_value(&pairs, coverage, metrics, invalid, reasons)
 }
 
 fn path_argument(arguments: &[String]) -> Option<&str> {
@@ -415,6 +466,8 @@ pub fn execute(arguments: &[String]) -> Result<LongContextDecision, String> {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::{evaluate, manifest, Receipt};
 
     #[test]
