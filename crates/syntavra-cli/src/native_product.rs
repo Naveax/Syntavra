@@ -27,6 +27,8 @@ mod native_mode;
 mod native_proof_status;
 #[path = "native_prove_plan.rs"]
 mod native_prove_plan;
+#[path = "native_prove_schema.rs"]
+mod native_prove_schema;
 #[path = "native_proxy_plan.rs"]
 mod native_proxy_plan;
 #[path = "native_read_only_product.rs"]
@@ -85,7 +87,7 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
         || (command.len() == 2
             && command[0] == "prove"
-            && matches!(command[1].as_str(), "long-context" | "plan"))
+            && matches!(command[1].as_str(), "long-context" | "plan" | "schema"))
 }
 
 fn normalize_universal_newlines(text: &str) -> String {
@@ -142,20 +144,30 @@ fn execute_static_run(
     }
 }
 
-fn execute_long_context(command: &[String], arguments: &[String]) -> Result<Option<Value>, String> {
-    if command.len() != 2 || command[0] != "prove" || command[1] != "long-context" {
+fn execute_prove(
+    command: &[String],
+    arguments: &[String],
+) -> Result<Option<Value>, String> {
+    if command.len() != 2 || command[0] != "prove" {
         return Ok(None);
     }
-    let decision = native_long_context::execute(arguments)?;
-    if decision.exit_code != 0 {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&decision.value)
-                .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
-        );
-        std::process::exit(i32::from(decision.exit_code));
+    match command[1].as_str() {
+        "long-context" => {
+            let decision = native_long_context::execute(arguments)?;
+            if decision.exit_code != 0 {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&decision.value)
+                        .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
+                );
+                std::process::exit(i32::from(decision.exit_code));
+            }
+            Ok(Some(decision.value))
+        }
+        "plan" => Ok(Some(native_prove_plan::execute())),
+        "schema" => native_prove_schema::execute(arguments).map(Some),
+        _ => Ok(None),
     }
-    Ok(Some(decision.value))
 }
 
 pub fn execute(
@@ -215,7 +227,7 @@ pub fn execute(
     if let Some(value) = execute_static_run(command, &arguments, project_root)? {
         return Ok(Some(value));
     }
-    if let Some(value) = execute_long_context(command, &arguments)? {
+    if let Some(value) = execute_prove(command, &arguments)? {
         return Ok(Some(value));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
@@ -257,9 +269,6 @@ pub fn execute(
     }
     if command.len() == 2 && command[0] == "proof" && command[1] == "status" {
         return Ok(Some(native_proof_status::execute()));
-    }
-    if command.len() == 2 && command[0] == "prove" && command[1] == "plan" {
-        return Ok(Some(native_prove_plan::execute()));
     }
     legacy::execute(command, state_root)
 }
