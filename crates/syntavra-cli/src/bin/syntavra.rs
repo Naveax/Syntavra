@@ -14,7 +14,7 @@ mod native_product;
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
 const PUBLIC_COMMAND_COUNT: u64 = 263;
-const NATIVE_COMMAND_COUNT: u64 = 37;
+const NATIVE_COMMAND_COUNT: u64 = 38;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Engine {
