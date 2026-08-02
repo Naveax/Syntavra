@@ -27,6 +27,10 @@ mod native_long_context;
 mod native_manifest;
 #[path = "native_mode.rs"]
 mod native_mode;
+#[path = "native_product_legacy.rs"]
+mod native_product_legacy;
+#[path = "native_proof_evidence.rs"]
+mod native_proof_evidence;
 #[path = "native_proof_status.rs"]
 mod native_proof_status;
 #[path = "native_prove_plan.rs"]
@@ -93,7 +97,14 @@ pub fn supports(command: &[String]) -> bool {
             && command[0] == "prove"
             && matches!(
                 command[1].as_str(),
-                "external-suite" | "long-context" | "plan" | "schema" | "suites"
+                "benchmark"
+                    | "external-suite"
+                    | "long-context"
+                    | "plan"
+                    | "readiness"
+                    | "receipts"
+                    | "schema"
+                    | "suites"
             ))
 }
 
@@ -159,11 +170,22 @@ fn emit_failed_decision(value: &Value, exit_code: u8) -> ! {
     std::process::exit(i32::from(exit_code));
 }
 
-fn execute_prove(command: &[String], arguments: &[String]) -> Result<Option<Value>, String> {
+fn execute_prove(
+    command: &[String],
+    arguments: &[String],
+    state_root: &Path,
+) -> Result<Option<Value>, String> {
     if command.len() != 2 || command[0] != "prove" {
         return Ok(None);
     }
     match command[1].as_str() {
+        "benchmark" | "readiness" | "receipts" => {
+            let decision = native_proof_evidence::execute(&command[1], arguments, state_root)?;
+            if decision.exit_code != 0 {
+                emit_failed_decision(&decision.value, decision.exit_code);
+            }
+            Ok(Some(decision.value))
+        }
         "external-suite" => {
             let decision = native_external_suite_gate::execute(arguments)?;
             if decision.exit_code != 0 {
@@ -237,7 +259,7 @@ pub fn execute(
     if let Some(value) = execute_static_run(command, &arguments, project_root)? {
         return Ok(Some(value));
     }
-    if let Some(value) = execute_prove(command, &arguments)? {
+    if let Some(value) = execute_prove(command, &arguments, state_root)? {
         return Ok(Some(value));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
