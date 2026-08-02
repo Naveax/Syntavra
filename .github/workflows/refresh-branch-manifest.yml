@@ -118,6 +118,129 @@ jobs:
           claims_path.write_text(json.dumps(claims, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
           PY
           python tools/verify_claims.py
+      - name: Normalize final maturity Clippy structure
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('crates/syntavra-cli/src/native_proof_maturity.rs')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              ('        reasons,\n        &onboarding,', '        &reasons,\n        &onboarding,'),
+              ('    reasons: Vec<String>,\n    onboarding: &OnboardingAssessment,', '    reasons: &[String],\n    onboarding: &OnboardingAssessment,'),
+          ]
+          for before, after in replacements:
+              if text.count(before) == 1:
+                  text = text.replace(before, after, 1)
+              elif text.count(after) != 1:
+                  raise SystemExit(f'unexpected maturity slice state: {before!r}')
+
+          stats = '''struct ProviderPairStats {
+              ratios: Vec<f64>,
+              observed_pairs: Vec<Flag>,
+              invalid_pairs: Vec<Value>,
+              quality: BTreeMap<String, i64>,
+              total: BTreeMap<String, i64>,
+          }
+          '''
+          summary = stats + '''
+          struct ProviderBilledSummary {
+              confidence_interval: Option<[f64; 2]>,
+              median_ratio: Option<f64>,
+              pass_rates: BTreeMap<String, f64>,
+              observed_count: usize,
+              claimable: bool,
+          }
+          '''
+          if summary not in text:
+              if text.count(stats) != 1:
+                  raise SystemExit('unexpected ProviderPairStats state')
+              text = text.replace(stats, summary, 1)
+
+          old_call = '''    Ok(provider_billed_value(
+              baseline,
+              candidate,
+              &rows,
+              stats,
+              ci,
+              ratio_median,
+              pass_rates,
+              observed_count,
+              claimable,
+          ))
+          '''
+          new_call = '''    let summary = ProviderBilledSummary {
+              confidence_interval: ci,
+              median_ratio: ratio_median,
+              pass_rates,
+              observed_count,
+              claimable,
+          };
+          Ok(provider_billed_value(
+              baseline,
+              candidate,
+              &rows,
+              &stats,
+              &summary,
+          ))
+          '''
+          if old_call in text:
+              text = text.replace(old_call, new_call, 1)
+          elif new_call not in text:
+              raise SystemExit('unexpected provider-billed call state')
+
+          old_signature = '''fn provider_billed_value(
+              baseline: &str,
+              candidate: &str,
+              rows: &[SignalRun],
+              stats: ProviderPairStats,
+              confidence_interval: Option<[f64; 2]>,
+              median_ratio: Option<f64>,
+              pass_rates: BTreeMap<String, f64>,
+              observed_count: usize,
+              claimable: bool,
+          ) -> Value {
+              json!({
+                  "baseline": baseline,
+                  "candidate": candidate,
+                  "valid_pairs": stats.ratios.len(),
+                  "invalid_pairs": stats.invalid_pairs,
+                  "provider_observed_pairs": observed_count,
+                  "provider_unobserved_pairs": stats.observed_pairs.len() - observed_count,
+                  "median_efficiency_ratio": median_ratio,
+                  "confidence_interval_95": confidence_interval,
+                  "pass_rates": pass_rates,
+                  "claimable_superiority": claimable,
+                  "claim": if claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
+          '''
+          new_signature = '''fn provider_billed_value(
+              baseline: &str,
+              candidate: &str,
+              rows: &[SignalRun],
+              stats: &ProviderPairStats,
+              summary: &ProviderBilledSummary,
+          ) -> Value {
+              json!({
+                  "baseline": baseline,
+                  "candidate": candidate,
+                  "valid_pairs": stats.ratios.len(),
+                  "invalid_pairs": stats.invalid_pairs,
+                  "provider_observed_pairs": summary.observed_count,
+                  "provider_unobserved_pairs": stats.observed_pairs.len() - summary.observed_count,
+                  "median_efficiency_ratio": summary.median_ratio,
+                  "confidence_interval_95": summary.confidence_interval,
+                  "pass_rates": summary.pass_rates,
+                  "claimable_superiority": summary.claimable,
+                  "claim": if summary.claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
+          '''
+          if old_signature in text:
+              text = text.replace(old_signature, new_signature, 1)
+          elif new_signature not in text:
+              raise SystemExit('unexpected provider-billed output state')
+
+          path.write_text(text, encoding='utf-8', newline='\n')
+      - name: Format Rust workspace
+        run: cargo fmt --all
       - name: Remove transient dependency trees
         shell: bash
         run: rm -rf sdk/typescript/node_modules
@@ -141,15 +264,16 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Commit generated outputs to source branch
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_BRANCH: ${{ github.ref_name }}
+          SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
 
-          allowed='^(MANIFEST\.sha256|docs/claims/claims\.json|benchmarks/results/roblox-profile/(profile-tests|simulated-50)\.json|sdk/typescript/dist/(index\.js|index\.d\.ts|receipts\.js|receipts\.d\.ts)|skills/syntavra/profiles/roblox_studio/MANIFEST\.sha256)$'
+          allowed='^(MANIFEST\.sha256|crates/syntavra-cli/src/native_proof_maturity\.rs|docs/claims/claims\.json|benchmarks/results/roblox-profile/(profile-tests|simulated-50)\.json|sdk/typescript/dist/(index\.js|index\.d\.ts|receipts\.js|receipts\.d\.ts)|skills/syntavra/profiles/roblox_studio/MANIFEST\.sha256)$'
           mapfile -t changed < <(git diff --name-only)
 
           if [ "${#changed[@]}" -eq 0 ]; then
@@ -165,8 +289,8 @@ jobs:
           done
 
           remote_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${SOURCE_BRANCH}" --jq '.object.sha')"
-          if [ "$remote_head" != "$GITHUB_SHA" ]; then
-            echo "Branch advanced from $GITHUB_SHA to $remote_head; stale generated output will not be written."
+          if [ "$remote_head" != "$SOURCE_SHA" ]; then
+            echo "Branch advanced from $SOURCE_SHA to $remote_head; stale generated output will not be written."
             exit 0
           fi
 
