@@ -12,16 +12,16 @@
   "product": "Syntavra",
   "product_version": "0.0.1",
   "python_surface": {
-    "command_paths_sha256": "518a7cdf5c43e275e97aa59a2d87fff346d323f530a702c0da5afd2dde0bba25",
+    "command_paths_sha256": "ac9ae6470a074700ac5d13064ff7da9569038fd6733cde49741272c1a4167581",
     "digest_encoding": "canonical-json-array-utf8",
     "module_count": 194,
-    "public_command_count": 264
+    "public_command_count": 265
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 226,
+    "missing_native_public_command_count": 227,
     "module_count": 46,
-    "native_coverage_ppm": 143939,
+    "native_coverage_ppm": 143396,
     "native_public_command_count": 38,
     "native_public_commands": [
       "context-stress",

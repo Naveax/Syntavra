@@ -200,7 +200,10 @@ impl BenchmarkRow {
             ("model", self.model.as_str()),
             ("model-config-hash", self.model_config_hash.as_str()),
             ("result-artifact-hash", self.result_artifact_hash.as_str()),
-            ("raw-provider-receipt-hash", self.raw_provider_receipt_hash.as_str()),
+            (
+                "raw-provider-receipt-hash",
+                self.raw_provider_receipt_hash.as_str(),
+            ),
         ] {
             if value.is_empty() {
                 reasons.push(format!("missing-{name}"));
@@ -229,7 +232,10 @@ impl BenchmarkRow {
         for (name, value) in [
             ("model-config-hash", self.model_config_hash.as_str()),
             ("result-artifact-hash", self.result_artifact_hash.as_str()),
-            ("provider-receipt-hash", self.raw_provider_receipt_hash.as_str()),
+            (
+                "provider-receipt-hash",
+                self.raw_provider_receipt_hash.as_str(),
+            ),
         ] {
             if !is_lower_hex(value, 64) {
                 reasons.push(format!("invalid-{name}"));
@@ -325,7 +331,10 @@ fn path_and_suite(arguments: &[String]) -> Result<(String, Option<String>), Stri
     Ok((path, suite))
 }
 
-fn paired_rows(rows: &[BenchmarkRow], reasons: &mut Vec<String>) -> Vec<(BenchmarkRow, BenchmarkRow)> {
+fn paired_rows(
+    rows: &[BenchmarkRow],
+    reasons: &mut Vec<String>,
+) -> Vec<(BenchmarkRow, BenchmarkRow)> {
     let mut grouped: HashMap<PairKey, HashMap<String, BenchmarkRow>> = HashMap::new();
     for row in rows {
         grouped
@@ -336,7 +345,10 @@ fn paired_rows(rows: &[BenchmarkRow], reasons: &mut Vec<String>) -> Vec<(Benchma
     let pairs = grouped
         .into_values()
         .filter_map(|group| {
-            Some((group.get("baseline")?.clone(), group.get("syntavra")?.clone()))
+            Some((
+                group.get("baseline")?.clone(),
+                group.get("syntavra")?.clone(),
+            ))
         })
         .collect::<Vec<_>>();
     if pairs.len() < MINIMUM_PAIRS {
@@ -369,12 +381,13 @@ fn collect_metrics(pairs: &[(BenchmarkRow, BenchmarkRow)], reasons: &mut Vec<Str
         let baseline_tokens = baseline.total_billable_tokens();
         if baseline_tokens > 0 {
             metrics.token_ratios.push(
-                integer_as_f64(syntavra.total_billable_tokens())
-                    / integer_as_f64(baseline_tokens),
+                integer_as_f64(syntavra.total_billable_tokens()) / integer_as_f64(baseline_tokens),
             );
         }
         if baseline.cost_usd > 0.0 {
-            metrics.cost_ratios.push(syntavra.cost_usd / baseline.cost_usd);
+            metrics
+                .cost_ratios
+                .push(syntavra.cost_usd / baseline.cost_usd);
         }
         if baseline.wall_time_ms > 0.0 {
             metrics
@@ -425,9 +438,8 @@ fn evaluate(rows: &[BenchmarkRow]) -> Value {
         .iter()
         .filter_map(|row| {
             let row_reasons = row.validate();
-            (!row_reasons.is_empty()).then(|| {
-                json!({"receipt_id": row.receipt_id, "reasons": row_reasons})
-            })
+            (!row_reasons.is_empty())
+                .then(|| json!({"receipt_id": row.receipt_id, "reasons": row_reasons}))
         })
         .collect::<Vec<_>>();
     if !invalid.is_empty() {
@@ -519,7 +531,11 @@ pub fn execute(arguments: &[String]) -> Result<ExternalSuiteDecision, String> {
         rows.retain(|row| row.suite_id == selected);
     }
     let value = evaluate(&rows);
-    let exit_code = if value["ok"] == Value::Bool(true) { 0 } else { 4 };
+    let exit_code = if value["ok"] == Value::Bool(true) {
+        0
+    } else {
+        4
+    };
     Ok(ExternalSuiteDecision { value, exit_code })
 }
 

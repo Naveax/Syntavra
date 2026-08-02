@@ -13,7 +13,7 @@ mod native_product;
 
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
-const PUBLIC_COMMAND_COUNT: u64 = 264;
+const PUBLIC_COMMAND_COUNT: u64 = 265;
 const NATIVE_COMMAND_COUNT: u64 = 38;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
