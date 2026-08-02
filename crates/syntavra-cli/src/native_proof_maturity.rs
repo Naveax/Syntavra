@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
 const VERSION: &str = "0.0.1";
 const CHANNEL: &str = "pre-release";
