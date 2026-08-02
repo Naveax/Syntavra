@@ -17,6 +17,8 @@ mod native_cache_amortize;
 mod native_context_stress;
 #[path = "native_integrations.rs"]
 mod native_integrations;
+#[path = "native_long_context.rs"]
+mod native_long_context;
 #[path = "native_manifest.rs"]
 mod native_manifest;
 #[path = "native_mode.rs"]
@@ -81,7 +83,9 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 2 && command[0] == "run" && command[1] == "statusline")
         || (command.len() == 2 && command[0] == "run" && command[1] == "wire")
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
-        || (command.len() == 2 && command[0] == "prove" && command[1] == "plan")
+        || (command.len() == 2
+            && command[0] == "prove"
+            && matches!(command[1].as_str(), "long-context" | "plan"))
 }
 
 fn normalize_universal_newlines(text: &str) -> String {
@@ -136,6 +140,25 @@ fn execute_static_run(
         "manifest" => Ok(Some(native_manifest::execute(project_root))),
         _ => Ok(None),
     }
+}
+
+fn execute_long_context(
+    command: &[String],
+    arguments: &[String],
+) -> Result<Option<Value>, String> {
+    if command.len() != 2 || command[0] != "prove" || command[1] != "long-context" {
+        return Ok(None);
+    }
+    let decision = native_long_context::execute(arguments)?;
+    if decision.exit_code != 0 {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&decision.value)
+                .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
+        );
+        std::process::exit(i32::from(decision.exit_code));
+    }
+    Ok(Some(decision.value))
 }
 
 pub fn execute(
@@ -193,6 +216,9 @@ pub fn execute(
         return Ok(Some(decision.value));
     }
     if let Some(value) = execute_static_run(command, &arguments, project_root)? {
+        return Ok(Some(value));
+    }
+    if let Some(value) = execute_long_context(command, &arguments)? {
         return Ok(Some(value));
     }
     if command.len() == 2 && command[0] == "run" && command[1] == "mode" {
