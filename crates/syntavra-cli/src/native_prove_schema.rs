@@ -119,7 +119,7 @@ fn write_schema(path: &Path, value: &Value) -> Result<(), String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("PROVE_SCHEMA_PARENT_CREATE_FAILED:{error}"))?;
     }
-    let mut encoded = serde_json::to_string_pretty(value)
+    let mut encoded = serde_json::to_string(value)
         .map_err(|error| format!("PROVE_SCHEMA_SERIALIZE_FAILED:{error}"))?;
     encoded.push('\n');
     fs::write(path, encoded).map_err(|error| format!("PROVE_SCHEMA_WRITE_FAILED:{error}"))
@@ -150,8 +150,13 @@ mod tests {
     #[test]
     fn output_option_and_default_match_python_cli() {
         assert_eq!(
-            output_path(&["prove".into(), "schema".into(), "--output".into(), "x.json".into()])
-                .expect("output"),
+            output_path(&[
+                "prove".into(),
+                "schema".into(),
+                "--output".into(),
+                "x.json".into(),
+            ])
+            .expect("output"),
             PathBuf::from("x.json")
         );
         assert_eq!(
