@@ -97,7 +97,10 @@ fn output_path(arguments: &[String]) -> Result<PathBuf, String> {
 }
 
 fn write_schema(path: &Path, value: &Value) -> Result<(), String> {
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent)
             .map_err(|error| format!("PROVE_SCHEMA_PARENT_CREATE_FAILED:{error}"))?;
     }

@@ -144,10 +144,7 @@ fn execute_static_run(
     }
 }
 
-fn execute_prove(
-    command: &[String],
-    arguments: &[String],
-) -> Result<Option<Value>, String> {
+fn execute_prove(command: &[String], arguments: &[String]) -> Result<Option<Value>, String> {
     if command.len() != 2 || command[0] != "prove" {
         return Ok(None);
     }
