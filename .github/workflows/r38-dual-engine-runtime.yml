@@ -17,6 +17,7 @@ on:
       - "tests/runtime/test_native_long_context_r38.py"
       - "tests/runtime/test_native_manifest_r38.py"
       - "tests/runtime/test_native_mode_r38.py"
+      - "tests/runtime/test_native_proof_evidence_r38.py"
       - "tests/runtime/test_native_prove_schema_r38.py"
       - "tests/runtime/test_native_proxy_plan_r38.py"
       - "tests/runtime/test_native_redact_r38.py"
@@ -43,6 +44,7 @@ on:
       - "tests/runtime/test_native_long_context_r38.py"
       - "tests/runtime/test_native_manifest_r38.py"
       - "tests/runtime/test_native_mode_r38.py"
+      - "tests/runtime/test_native_proof_evidence_r38.py"
       - "tests/runtime/test_native_prove_schema_r38.py"
       - "tests/runtime/test_native_proxy_plan_r38.py"
       - "tests/runtime/test_native_redact_r38.py"
@@ -105,6 +107,7 @@ jobs:
           tests/runtime/test_native_long_context_r38.py
           tests/runtime/test_native_manifest_r38.py
           tests/runtime/test_native_mode_r38.py
+          tests/runtime/test_native_proof_evidence_r38.py
           tests/runtime/test_native_prove_schema_r38.py
           tests/runtime/test_native_proxy_plan_r38.py
           tests/runtime/test_native_redact_r38.py
