@@ -8,14 +8,7 @@ use serde_json::{json, Value};
 const VERSION: &str = "0.0.1";
 const CHANNEL: &str = "pre-release";
 const LONG_CONTEXT_TIERS: [i64; 8] = [
-    32_000,
-    64_000,
-    128_000,
-    256_000,
-    512_000,
-    1_000_000,
-    2_000_000,
-    10_000_000,
+    32_000, 64_000, 128_000, 256_000, 512_000, 1_000_000, 2_000_000, 10_000_000,
 ];
 const TASK_FAMILIES: [&str; 6] = [
     "needle-retrieval",
@@ -259,9 +252,8 @@ fn invalid_receipts(rows: &[ContextRow], reasons: &mut Vec<String>) -> Vec<Value
         .iter()
         .filter_map(|row| {
             let row_reasons = row.validate();
-            (!row_reasons.is_empty()).then(|| {
-                json!({"receipt_id": row.receipt_id, "reasons": row_reasons})
-            })
+            (!row_reasons.is_empty())
+                .then(|| json!({"receipt_id": row.receipt_id, "reasons": row_reasons}))
         })
         .collect::<Vec<_>>();
     if !invalid.is_empty() {
@@ -293,7 +285,10 @@ fn paired_receipts(rows: &[ContextRow], reasons: &mut Vec<String>) -> Vec<Pair> 
         .iter()
         .filter_map(|key| {
             let group = groups.get(key)?;
-            Some((group.get("baseline")?.clone(), group.get("syntavra")?.clone()))
+            Some((
+                group.get("baseline")?.clone(),
+                group.get("syntavra")?.clone(),
+            ))
         })
         .collect::<Vec<_>>();
     if pairs.len() < MINIMUM_PAIRS {
@@ -343,16 +338,14 @@ fn collect_metrics(pairs: &[Pair], reasons: &mut Vec<String>) -> MetricRows {
             .quality_deltas
             .push(syntavra.answer_quality - baseline.answer_quality);
         metrics.recalls.push(syntavra.required_fact_recall);
-        metrics
-            .stale_rejections
-            .push(syntavra.stale_fact_rejection);
+        metrics.stale_rejections.push(syntavra.stale_fact_rejection);
         metrics.precisions.push(syntavra.evidence_precision);
         let baseline_tokens = baseline.input_tokens + baseline.output_tokens;
         let syntavra_tokens = syntavra.input_tokens + syntavra.output_tokens;
         if baseline_tokens > 0 {
-            metrics.token_ratios.push(
-                numeric_as_f64(syntavra_tokens) / numeric_as_f64(baseline_tokens),
-            );
+            metrics
+                .token_ratios
+                .push(numeric_as_f64(syntavra_tokens) / numeric_as_f64(baseline_tokens));
         }
         if baseline.wall_time_ms > 0.0 {
             metrics
@@ -480,7 +473,11 @@ pub fn execute(arguments: &[String]) -> Result<LongContextDecision, String> {
     };
     let receipts = load_receipts(path)?;
     let value = evaluate(&receipts);
-    let exit_code = if value["ok"] == Value::Bool(true) { 0 } else { 4 };
+    let exit_code = if value["ok"] == Value::Bool(true) {
+        0
+    } else {
+        4
+    };
     Ok(LongContextDecision { value, exit_code })
 }
 
