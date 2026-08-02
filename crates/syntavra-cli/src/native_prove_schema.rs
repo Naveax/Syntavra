@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
+const DEFAULT_OUTPUT: &str = "schemas/provider-usage-receipt.json";
+
 const PROOF_WORKLOADS: [&str; 6] = [
     "coding-agent",
     "repository-task",
@@ -89,11 +91,24 @@ fn schema() -> Value {
 }
 
 fn output_path(arguments: &[String]) -> Result<PathBuf, String> {
-    arguments
-        .windows(3)
-        .find(|window| window[0] == "prove" && window[1] == "schema")
-        .map(|window| PathBuf::from(&window[2]))
-        .ok_or_else(|| "PROVE_SCHEMA_OUTPUT_MISSING".to_owned())
+    let mut index = 0usize;
+    while index < arguments.len() {
+        let value = &arguments[index];
+        if value == "--output" {
+            return arguments
+                .get(index + 1)
+                .map(PathBuf::from)
+                .ok_or_else(|| "PROVE_SCHEMA_OUTPUT_MISSING".to_owned());
+        }
+        if let Some(output) = value.strip_prefix("--output=") {
+            if output.is_empty() {
+                return Err("PROVE_SCHEMA_OUTPUT_MISSING".to_owned());
+            }
+            return Ok(PathBuf::from(output));
+        }
+        index += 1;
+    }
+    Ok(PathBuf::from(DEFAULT_OUTPUT))
 }
 
 fn write_schema(path: &Path, value: &Value) -> Result<(), String> {
@@ -119,7 +134,9 @@ pub fn execute(arguments: &[String]) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::schema;
+    use std::path::PathBuf;
+
+    use super::{output_path, schema, DEFAULT_OUTPUT};
 
     #[test]
     fn schema_has_required_contract() {
@@ -128,5 +145,18 @@ mod tests {
         assert_eq!(value["additionalProperties"], true);
         assert_eq!(value["properties"]["workload"]["enum"][0], "coding-agent");
         assert_eq!(value["properties"]["arm"]["enum"][13], "recursive");
+    }
+
+    #[test]
+    fn output_option_and_default_match_python_cli() {
+        assert_eq!(
+            output_path(&["prove".into(), "schema".into(), "--output".into(), "x.json".into()])
+                .expect("output"),
+            PathBuf::from("x.json")
+        );
+        assert_eq!(
+            output_path(&["prove".into(), "schema".into()]).expect("default"),
+            PathBuf::from(DEFAULT_OUTPUT)
+        );
     }
 }
