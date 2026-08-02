@@ -28,6 +28,7 @@ _ROUTE_INVENTORY_NAME = "INSTALLED_READ_ONLY_ROUTE_COMMANDS"
 # bounded line-oriented parser below. Keep that exceptional surface explicit,
 # deterministic and reviewable instead of silently under-counting public paths.
 _HELPER_GENERATED_CLI_COMMANDS: tuple[str, ...] = (
+    "prove external-suite",
     "prove suites",
     "semantic-demo demo",
     "signalbench gate",
