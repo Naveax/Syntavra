@@ -428,10 +428,6 @@ fn precise_mean(values: &[f64]) -> Option<f64> {
     Some(sum / integer_as_f64(i64::try_from(values.len()).unwrap_or(1)))
 }
 
-fn integer_as_f64(value: i64) -> f64 {
-    value.to_string().parse::<f64>().unwrap_or(0.0)
-}
-
 fn evaluate(rows: &[BenchmarkRow]) -> Value {
     let mut reasons = Vec::new();
     let invalid = rows
