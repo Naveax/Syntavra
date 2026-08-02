@@ -15,6 +15,8 @@ mod native_audit_config;
 mod native_cache_amortize;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
+#[path = "native_external_suites.rs"]
+mod native_external_suites;
 #[path = "native_integrations.rs"]
 mod native_integrations;
 #[path = "native_long_context.rs"]
@@ -87,7 +89,10 @@ pub fn supports(command: &[String]) -> bool {
         || (command.len() == 2 && command[0] == "proof" && command[1] == "status")
         || (command.len() == 2
             && command[0] == "prove"
-            && matches!(command[1].as_str(), "long-context" | "plan" | "schema"))
+            && matches!(
+                command[1].as_str(),
+                "long-context" | "plan" | "schema" | "suites"
+            ))
 }
 
 fn normalize_universal_newlines(text: &str) -> String {
@@ -163,6 +168,7 @@ fn execute_prove(command: &[String], arguments: &[String]) -> Result<Option<Valu
         }
         "plan" => Ok(Some(native_prove_plan::execute())),
         "schema" => native_prove_schema::execute(arguments).map(Some),
+        "suites" => Ok(Some(native_external_suites::execute())),
         _ => Ok(None),
     }
 }
