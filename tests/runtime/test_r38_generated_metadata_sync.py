@@ -34,7 +34,7 @@ def test_native_expansion_normalization_is_idempotent(tmp_path: Path) -> None:
     assert source.read_text(encoding="utf-8") == first
 
 
-def test_required_output_commands_are_added_once(tmp_path: Path) -> None:
+def test_required_native_commands_are_added_once(tmp_path: Path) -> None:
     contract = tmp_path / "contract.json"
     contract.write_text(
         json.dumps(
@@ -50,6 +50,10 @@ def test_required_output_commands_are_added_once(tmp_path: Path) -> None:
     assert MODULE.ensure_required_native_commands(contract) is True
     first = json.loads(contract.read_text(encoding="utf-8"))
     assert first["rust_surface"]["native_public_commands"] == [
+        "host",
+        "host capabilities",
+        "host detect",
+        "host negotiate",
         "output compact",
         "output govern",
         "output profiles",
