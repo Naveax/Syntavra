@@ -4,6 +4,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
+#[path = "native_claim.rs"]
+mod native_claim;
 #[path = "native_evidence_describe.rs"]
 mod native_evidence_describe;
 #[path = "native_evidence_gc.rs"]
@@ -18,7 +20,8 @@ mod native_scheduler_reap;
 mod native_stats;
 
 pub fn supports(command: &[String]) -> bool {
-    native_evidence_describe::supports(command)
+    native_claim::supports(command)
+        || native_evidence_describe::supports(command)
         || native_evidence_gc::supports(command)
         || native_evidence_stats::supports(command)
         || native_migrations::supports(command)
@@ -32,6 +35,9 @@ pub fn execute(
     project_root: &Path,
     state_root: &Path,
 ) -> Result<Value, String> {
+    if native_claim::supports(command) {
+        return native_claim::execute(arguments);
+    }
     if native_evidence_describe::supports(command) {
         return native_evidence_describe::execute(arguments, project_root, state_root);
     }
@@ -59,6 +65,7 @@ mod tests {
 
     #[test]
     fn routes_expansion_commands() {
+        assert!(supports(&["claim".to_owned()]));
         assert!(supports(&["stats".to_owned()]));
         assert!(supports(&["migrate".to_owned(), "apply".to_owned()]));
         assert!(supports(&["scheduler".to_owned(), "reap".to_owned()]));
