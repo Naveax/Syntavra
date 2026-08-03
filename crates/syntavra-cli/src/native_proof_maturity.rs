@@ -153,6 +153,14 @@ struct ProviderPairStats {
     total: BTreeMap<String, i64>,
 }
 
+struct ProviderBilledSummary {
+    confidence_interval: Option<[f64; 2]>,
+    median_ratio: Option<f64>,
+    pass_rates: BTreeMap<String, f64>,
+    observed_count: usize,
+    claimable: bool,
+}
+
 fn string_value(value: Option<&Value>, default: &str) -> String {
     match value {
         None => default.to_owned(),
@@ -726,7 +734,7 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
     Ok(maturity_value(
         ok,
         days,
-        reasons,
+        &reasons,
         &onboarding,
         &distributions,
         &releases,
@@ -736,7 +744,7 @@ fn evaluate_maturity(value: &Value) -> Result<Value, String> {
 fn maturity_value(
     ok: bool,
     days: f64,
-    reasons: Vec<String>,
+    reasons: &[String],
     onboarding: &OnboardingAssessment,
     distributions: &DistributionAssessment,
     releases: &ReleaseAssessment,
@@ -1085,16 +1093,15 @@ fn evaluate_provider_billed(
         && pass_rates[candidate] >= pass_rates[baseline]
         && observed_count == stats.ratios.len()
         && candidate_clean;
-    Ok(provider_billed_value(
-        baseline,
-        candidate,
-        &rows,
-        stats,
-        ci,
-        ratio_median,
+    let summary = ProviderBilledSummary {
+        confidence_interval: ci,
+        median_ratio: ratio_median,
         pass_rates,
         observed_count,
         claimable,
+    };
+    Ok(provider_billed_value(
+        baseline, candidate, &rows, &stats, &summary,
     ))
 }
 
@@ -1102,25 +1109,21 @@ fn provider_billed_value(
     baseline: &str,
     candidate: &str,
     rows: &[SignalRun],
-    stats: ProviderPairStats,
-    confidence_interval: Option<[f64; 2]>,
-    median_ratio: Option<f64>,
-    pass_rates: BTreeMap<String, f64>,
-    observed_count: usize,
-    claimable: bool,
+    stats: &ProviderPairStats,
+    summary: &ProviderBilledSummary,
 ) -> Value {
     json!({
         "baseline": baseline,
         "candidate": candidate,
         "valid_pairs": stats.ratios.len(),
         "invalid_pairs": stats.invalid_pairs,
-        "provider_observed_pairs": observed_count,
-        "provider_unobserved_pairs": stats.observed_pairs.len() - observed_count,
-        "median_efficiency_ratio": median_ratio,
-        "confidence_interval_95": confidence_interval,
-        "pass_rates": pass_rates,
-        "claimable_superiority": claimable,
-        "claim": if claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
+        "provider_observed_pairs": summary.observed_count,
+        "provider_unobserved_pairs": stats.observed_pairs.len() - summary.observed_count,
+        "median_efficiency_ratio": summary.median_ratio,
+        "confidence_interval_95": summary.confidence_interval,
+        "pass_rates": summary.pass_rates,
+        "claimable_superiority": summary.claimable,
+        "claim": if summary.claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
         "provider_observed_runs": rows.iter().filter(|row| row.provider_observed.is_enabled()).count(),
         "total_runs": rows.len(),
         "fail_closed": true,
