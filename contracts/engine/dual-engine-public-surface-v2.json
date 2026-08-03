@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 158,
-    "module_count": 67,
-    "native_coverage_ppm": 355102,
-    "native_public_command_count": 87,
+    "missing_native_public_command_count": 156,
+    "module_count": 68,
+    "native_coverage_ppm": 363265,
+    "native_public_command_count": 89,
     "native_public_commands": [
       "benchmark generate-config",
       "claim",
@@ -109,6 +109,8 @@
       "structural-v2 demo",
       "telemetry metrics",
       "upgrade",
+      "verifier invalidated-by",
+      "verifier lookup",
       "version",
       "wrap"
     ],
