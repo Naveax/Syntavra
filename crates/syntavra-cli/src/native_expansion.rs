@@ -4,6 +4,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
+#[path = "native_evidence_describe.rs"]
+mod native_evidence_describe;
 #[path = "native_evidence_stats.rs"]
 mod native_evidence_stats;
 #[path = "native_migrations.rs"]
@@ -14,7 +16,8 @@ mod native_scheduler_reap;
 mod native_stats;
 
 pub fn supports(command: &[String]) -> bool {
-    native_evidence_stats::supports(command)
+    native_evidence_describe::supports(command)
+        || native_evidence_stats::supports(command)
         || native_migrations::supports(command)
         || native_scheduler_reap::supports(command)
         || native_stats::supports(command)
@@ -23,9 +26,12 @@ pub fn supports(command: &[String]) -> bool {
 pub fn execute(
     command: &[String],
     arguments: &[String],
-    _project_root: &Path,
+    project_root: &Path,
     state_root: &Path,
 ) -> Result<Value, String> {
+    if native_evidence_describe::supports(command) {
+        return native_evidence_describe::execute(arguments, project_root, state_root);
+    }
     if native_evidence_stats::supports(command) {
         return native_evidence_stats::execute(command, arguments, state_root);
     }
@@ -50,6 +56,7 @@ mod tests {
         assert!(supports(&["stats".to_owned()]));
         assert!(supports(&["migrate".to_owned(), "apply".to_owned()]));
         assert!(supports(&["scheduler".to_owned(), "reap".to_owned()]));
+        assert!(supports(&["evidence".to_owned(), "describe".to_owned()]));
         assert!(supports(&["evidence".to_owned(), "stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-neighbors".to_owned()]));
