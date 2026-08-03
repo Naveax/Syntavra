@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 171,
-    "module_count": 59,
-    "native_coverage_ppm": 302040,
-    "native_public_command_count": 74,
+    "missing_native_public_command_count": 169,
+    "module_count": 60,
+    "native_coverage_ppm": 310204,
+    "native_public_command_count": 76,
     "native_public_commands": [
       "benchmark generate-config",
       "config explain",
@@ -82,6 +82,8 @@
       "run redact",
       "run route",
       "run session-append",
+      "run session-compact",
+      "run session-continuity",
       "run session-open",
       "run session-status",
       "run statusline",
