@@ -2,22 +2,6 @@
 name: Refresh R38 Generated Metadata
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - ".github/workflows/r38-refresh-branch-manifest.yml"
-      - ".github/workflows/r38-dual-engine-runtime.yml"
-      - "contracts/engine/dual-engine-public-surface-v2.json"
-      - "contracts/engine/r38-missing-native-commands-v1.json"
-      - "crates/syntavra-cli/src/bin/syntavra.rs"
-      - "crates/syntavra-cli/src/native_*.rs"
-      - "syntavra_runtime/engine_entry.py"
-      - "syntavra_runtime/prerelease_cli.py"
-      - "tools/export_python_surface.py"
-      - "tools/export_rust_surface.py"
-      - "tools/sync_r38_native_command_count.py"
-      - "tests/runtime/test_dual_engine_public_surface_r38.py"
-      - "tests/runtime/test_native_*_r38.py"
   push:
     branches: ["agent/full-dual-engine-runtime"]
     paths:
@@ -45,7 +29,6 @@ concurrency:
 
 jobs:
   refresh:
-    if: github.event_name != 'pull_request' || github.head_ref == 'agent/full-dual-engine-runtime'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
