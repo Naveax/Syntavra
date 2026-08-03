@@ -7,12 +7,16 @@ use serde_json::Value;
 
 #[path = "native_product_legacy.rs"]
 mod legacy;
+#[path = "config_contract.rs"]
+mod config_contract;
 #[path = "migration_plan_read_only_contract.rs"]
 mod migration_plan_read_only_contract;
 #[path = "native_audit_config.rs"]
 mod native_audit_config;
 #[path = "native_cache_amortize.rs"]
 mod native_cache_amortize;
+#[path = "native_config_read_only.rs"]
+mod native_config_read_only;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
 #[path = "native_external_suite_gate.rs"]
@@ -67,7 +71,8 @@ mod scheduler_read_only_contract;
 mod telemetry_metrics_contract;
 
 pub fn supports(command: &[String]) -> bool {
-    native_read_only_product::supports(command)
+    native_config_read_only::supports(command)
+        || native_read_only_product::supports(command)
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
         || (command.len() == 1 && command[0] == "context-stress")
@@ -222,6 +227,9 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if native_config_read_only::supports(command) {
+        return native_config_read_only::execute(command, &arguments, project_root).map(Some);
+    }
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
             .map(Some);
