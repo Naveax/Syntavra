@@ -63,6 +63,8 @@ mod native_route;
 mod native_rust_subprocess;
 #[path = "native_semantic_demo.rs"]
 mod native_semantic_demo;
+#[path = "native_session_status.rs"]
+mod native_session_status;
 #[path = "native_signalbench_gate.rs"]
 mod native_signalbench_gate;
 #[path = "native_signalbench_plan.rs"]
@@ -95,6 +97,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_read_only_product::supports(command)
         || native_engine_routes::supports(command)
         || native_engine_state_routes::supports(command)
+        || native_session_status::supports(command)
         || native_static_surfaces::supports(command)
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
@@ -269,6 +272,9 @@ pub fn execute(
     }
     if native_engine_state_routes::supports(command) {
         return native_engine_state_routes::execute(command, &arguments, project_root).map(Some);
+    }
+    if native_session_status::supports(command) {
+        return native_session_status::execute(project_root, state_root).map(Some);
     }
     if native_static_surfaces::supports(command) {
         return native_static_surfaces::execute(command, &arguments).map(Some);
