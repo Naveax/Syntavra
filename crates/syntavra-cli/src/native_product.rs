@@ -27,6 +27,8 @@ mod native_context_stress;
 mod native_engine_routes;
 #[path = "native_engine_state_routes.rs"]
 mod native_engine_state_routes;
+#[path = "native_expansion.rs"]
+mod native_expansion;
 #[path = "native_external_suite_gate.rs"]
 mod native_external_suite_gate;
 #[path = "native_external_suites.rs"]
@@ -101,6 +103,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_read_only_product::supports(command)
         || native_engine_routes::supports(command)
         || native_engine_state_routes::supports(command)
+        || native_expansion::supports(command)
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -278,6 +281,9 @@ pub fn execute(
     }
     if native_engine_state_routes::supports(command) {
         return native_engine_state_routes::execute(command, &arguments, project_root).map(Some);
+    }
+    if native_expansion::supports(command) {
+        return native_expansion::execute(command, &arguments, project_root, state_root).map(Some);
     }
     if native_session_continuity::supports(command) {
         return native_session_continuity::execute(
