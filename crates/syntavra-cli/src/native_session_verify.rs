@@ -92,11 +92,7 @@ fn canonical_bytes(value: &Value) -> Result<Vec<u8>, String> {
     serde_json::to_vec(value).map_err(|_| "SESSION_VERIFY_JSON_SERIALIZE_FAILED".to_owned())
 }
 
-fn verify(
-    connection: &Connection,
-    session_id: &str,
-    project_id: &str,
-) -> Result<Value, String> {
+fn verify(connection: &Connection, session_id: &str, project_id: &str) -> Result<Value, String> {
     let exists = connection
         .query_row(
             "SELECT 1 FROM sessions WHERE session_id=?1 AND project_id=?2",

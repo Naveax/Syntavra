@@ -89,8 +89,7 @@ fn write_compact_json_atomic(path: &Path, value: &Value) -> Result<(), String> {
     fs::write(&temporary, rendered.as_bytes())
         .map_err(|error| format!("BENCHMARK_OUTPUT_WRITE_FAILED:{error}"))?;
     if path.exists() {
-        fs::remove_file(path)
-            .map_err(|error| format!("BENCHMARK_OUTPUT_REMOVE_FAILED:{error}"))?;
+        fs::remove_file(path).map_err(|error| format!("BENCHMARK_OUTPUT_REMOVE_FAILED:{error}"))?;
     }
     fs::rename(&temporary, path).map_err(|error| {
         let _ = fs::remove_file(&temporary);
@@ -146,13 +145,12 @@ fn provider_capabilities(arguments: &[String]) -> Result<Value, String> {
         Some(alias) => {
             let normalized = alias.trim().to_ascii_lowercase();
             let canonical = match normalized.as_str() {
-                "anthropic" | "claude" | "bedrock-anthropic" | "vertex-anthropic" => {
-                    "anthropic"
-                }
+                "anthropic" | "claude" | "bedrock-anthropic" | "vertex-anthropic" => "anthropic",
                 "gemini" | "google" | "google-ai" | "vertex-gemini" => "gemini",
                 "openai" | "chatgpt" | "responses" | "azure-openai" => "openai",
-                "openrouter" | "litellm" | "vllm" | "ollama" | "lmstudio"
-                | "openai-compatible" => "openai-compatible",
+                "openrouter" | "litellm" | "vllm" | "ollama" | "lmstudio" | "openai-compatible" => {
+                    "openai-compatible"
+                }
                 _ => return Err(format!("PROVIDER_UNSUPPORTED:{alias}")),
             };
             all.get(canonical)
@@ -191,20 +189,36 @@ fn output_profiles() -> Value {
 
 fn benchmark_axes(tier: &str) -> Result<Value, String> {
     match tier {
-        "1X" => Ok(json!({"R": 1.0, "C": 1.0, "O": 1.0, "T": 1.0, "P": 1.0, "V": 1.0, "X": 1.0, "H": 1.0, "S": 1.0, "F": 1.0})),
-        "20X" => Ok(json!({"R": 35, "C": 32, "O": 40, "T": 30, "P": 22, "V": 34, "X": 18, "H": 24, "S": 16, "F": 20})),
-        "30X" => Ok(json!({"R": 60, "C": 55, "O": 70, "T": 50, "P": 35, "V": 58, "X": 28, "H": 40, "S": 26, "F": 32})),
-        "100X" => Ok(json!({"R": 240, "C": 220, "O": 280, "T": 200, "P": 130, "V": 230, "X": 100, "H": 150, "S": 90, "F": 120})),
+        "1X" => Ok(
+            json!({"R": 1.0, "C": 1.0, "O": 1.0, "T": 1.0, "P": 1.0, "V": 1.0, "X": 1.0, "H": 1.0, "S": 1.0, "F": 1.0}),
+        ),
+        "20X" => Ok(
+            json!({"R": 35, "C": 32, "O": 40, "T": 30, "P": 22, "V": 34, "X": 18, "H": 24, "S": 16, "F": 20}),
+        ),
+        "30X" => Ok(
+            json!({"R": 60, "C": 55, "O": 70, "T": 50, "P": 35, "V": 58, "X": 28, "H": 40, "S": 26, "F": 32}),
+        ),
+        "100X" => Ok(
+            json!({"R": 240, "C": 220, "O": 280, "T": 200, "P": 130, "V": 230, "X": 100, "H": 150, "S": 90, "F": 120}),
+        ),
         _ => Err(format!("BENCHMARK_TIER_INVALID:{tier}")),
     }
 }
 
 fn benchmark_difficulty_axes(tier: &str) -> Result<Value, String> {
     match tier {
-        "1X" => Ok(json!({"R": 1.0, "C": 1.0, "O": 1.0, "T": 1.0, "P": 1.0, "V": 1.0, "X": 1.0, "H": 1.0, "S": 1.0, "F": 1.0})),
-        "20X" => Ok(json!({"R": 35.0, "C": 32.0, "O": 40.0, "T": 30.0, "P": 22.0, "V": 34.0, "X": 18.0, "H": 24.0, "S": 16.0, "F": 20.0})),
-        "30X" => Ok(json!({"R": 60.0, "C": 55.0, "O": 70.0, "T": 50.0, "P": 35.0, "V": 58.0, "X": 28.0, "H": 40.0, "S": 26.0, "F": 32.0})),
-        "100X" => Ok(json!({"R": 240.0, "C": 220.0, "O": 280.0, "T": 200.0, "P": 130.0, "V": 230.0, "X": 100.0, "H": 150.0, "S": 90.0, "F": 120.0})),
+        "1X" => Ok(
+            json!({"R": 1.0, "C": 1.0, "O": 1.0, "T": 1.0, "P": 1.0, "V": 1.0, "X": 1.0, "H": 1.0, "S": 1.0, "F": 1.0}),
+        ),
+        "20X" => Ok(
+            json!({"R": 35.0, "C": 32.0, "O": 40.0, "T": 30.0, "P": 22.0, "V": 34.0, "X": 18.0, "H": 24.0, "S": 16.0, "F": 20.0}),
+        ),
+        "30X" => Ok(
+            json!({"R": 60.0, "C": 55.0, "O": 70.0, "T": 50.0, "P": 35.0, "V": 58.0, "X": 28.0, "H": 40.0, "S": 26.0, "F": 32.0}),
+        ),
+        "100X" => Ok(
+            json!({"R": 240.0, "C": 220.0, "O": 280.0, "T": 200.0, "P": 130.0, "V": 230.0, "X": 100.0, "H": 150.0, "S": 90.0, "F": 120.0}),
+        ),
         _ => Err(format!("BENCHMARK_TIER_INVALID:{tier}")),
     }
 }

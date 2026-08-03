@@ -18,8 +18,8 @@ fn initialize(path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("VERIFIER_DIRECTORY_CREATE_FAILED:{error}"))?;
     }
-    let connection = Connection::open(path)
-        .map_err(|error| format!("VERIFIER_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("VERIFIER_DATABASE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
             "PRAGMA busy_timeout=30000;\
@@ -204,7 +204,9 @@ fn lookup(arguments: &[String], state_root: &Path) -> Result<Value, String> {
 }
 
 fn invalidated_by(arguments: &[String], state_root: &Path) -> Result<Value, String> {
-    let changed = repeated_paths(arguments)?.into_iter().collect::<BTreeSet<_>>();
+    let changed = repeated_paths(arguments)?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
     let connection = initialize(&state_root.join("verifier.sqlite3"))?;
     let mut statement = connection
         .prepare(
@@ -253,9 +255,7 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Value, String> {
     match command {
-        [root, action] if root == "verifier" && action == "lookup" => {
-            lookup(arguments, state_root)
-        }
+        [root, action] if root == "verifier" && action == "lookup" => lookup(arguments, state_root),
         [root, action] if root == "verifier" && action == "invalidated-by" => {
             invalidated_by(arguments, state_root)
         }
@@ -270,6 +270,9 @@ mod tests {
     #[test]
     fn verifier_commands_are_supported() {
         assert!(supports(&["verifier".to_owned(), "lookup".to_owned()]));
-        assert!(supports(&["verifier".to_owned(), "invalidated-by".to_owned()]));
+        assert!(supports(&[
+            "verifier".to_owned(),
+            "invalidated-by".to_owned()
+        ]));
     }
 }

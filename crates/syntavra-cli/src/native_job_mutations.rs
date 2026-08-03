@@ -10,7 +10,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
 
 const FINAL_STATES: [&str; 5] = ["COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT", "ORPHANED"];
-const JOB_COLUMNS: &str = "job_id,state,argv_json,cwd,created_at,started_at,completed_at,pid,exit_code,\
+const JOB_COLUMNS: &str =
+    "job_id,state,argv_json,cwd,created_at,started_at,completed_at,pid,exit_code,\
  timed_out,cancelled,summary,evidence_handle,error,project_id,repository_tree,environment_hash";
 
 #[derive(Debug)]
@@ -213,7 +214,11 @@ fn cancel(arguments: &[String], state_root: &Path) -> Result<Value, String> {
     if FINAL_STATES.contains(&state) {
         return Ok(current);
     }
-    let marker = state_root.join("broker").join("jobs").join(job_id).join("cancel");
+    let marker = state_root
+        .join("broker")
+        .join("jobs")
+        .join(job_id)
+        .join("cancel");
     OpenOptions::new()
         .create(true)
         .append(true)

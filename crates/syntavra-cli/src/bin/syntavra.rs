@@ -14,7 +14,7 @@ mod native_product;
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
 const PUBLIC_COMMAND_COUNT: u64 = 245;
-const NATIVE_COMMAND_COUNT: u64 = 59;
+const NATIVE_COMMAND_COUNT: u64 = 115;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Engine {
@@ -470,7 +470,8 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
             ),
         },
         Engine::Auto => {
-            if matches!(path.as_slice(), [engine, route, ..] if engine == "engine" && route == "route") {
+            if matches!(path.as_slice(), [engine, route, ..] if engine == "engine" && route == "route")
+            {
                 return match discover_python_program() {
                     Some(program) => execute_program(&program, &parsed.forwarded, Engine::Python)
                         .unwrap_or_else(|error| {

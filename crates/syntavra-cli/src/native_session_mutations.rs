@@ -21,8 +21,8 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("SESSION_STATE_DIRECTORY_CREATE_FAILED:{error}"))?;
     }
-    let connection = Connection::open(path)
-        .map_err(|error| format!("SESSION_STATE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("SESSION_STATE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
             "PRAGMA foreign_keys=ON;\
@@ -103,7 +103,11 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
     Ok(found)
 }
 
-fn positional_after<'a>(arguments: &'a [String], action: &str, offset: usize) -> Result<&'a str, String> {
+fn positional_after<'a>(
+    arguments: &'a [String],
+    action: &str,
+    offset: usize,
+) -> Result<&'a str, String> {
     let index = arguments
         .iter()
         .position(|value| value == action)
@@ -117,8 +121,8 @@ fn positional_after<'a>(arguments: &'a [String], action: &str, offset: usize) ->
 fn load_json_object(source: &str, code: &str) -> Result<Value, String> {
     let path = Path::new(source);
     let bytes = if path.is_file() {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|error| format!("{code}_INSPECT_FAILED:{error}"))?;
+        let metadata =
+            fs::symlink_metadata(path).map_err(|error| format!("{code}_INSPECT_FAILED:{error}"))?;
         if metadata.file_type().is_symlink() || !metadata.is_file() {
             return Err(format!("{code}_SOURCE_INVALID"));
         }
@@ -252,8 +256,7 @@ fn open_session(
     state_root: &Path,
     connection: &mut Connection,
 ) -> Result<Value, String> {
-    let requested = option_value(arguments, "--session-id")?
-        .filter(|value| !value.is_empty());
+    let requested = option_value(arguments, "--session-id")?.filter(|value| !value.is_empty());
     let metadata_source = option_value(arguments, "--metadata")?.unwrap_or_else(|| "{}".to_owned());
     let metadata = load_json_object(&metadata_source, "SESSION_METADATA")?;
 
@@ -411,7 +414,9 @@ pub fn execute(
     let mut connection = initialize_database(&state_root.join("sessions.sqlite3"))?;
     match command.get(1).map(String::as_str) {
         Some("session-open") => open_session(arguments, &project_id, state_root, &mut connection),
-        Some("session-append") => append_session(arguments, &project_id, state_root, &mut connection),
+        Some("session-append") => {
+            append_session(arguments, &project_id, state_root, &mut connection)
+        }
         _ => Err("SESSION_COMMAND_UNSUPPORTED".to_owned()),
     }
 }

@@ -115,9 +115,7 @@ fn initialize(state_root: &Path) -> Result<(Connection, bool), String> {
             .map_err(|error| format!("MEMORY_SCHEMA_INSPECT_FAILED:{error}"))?;
         let mut columns = BTreeSet::new();
         for row in rows {
-            columns.insert(
-                row.map_err(|error| format!("MEMORY_SCHEMA_ROW_FAILED:{error}"))?,
-            );
+            columns.insert(row.map_err(|error| format!("MEMORY_SCHEMA_ROW_FAILED:{error}"))?);
         }
         columns
     };
@@ -157,12 +155,7 @@ fn generated_id() -> Result<String, String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|_| "MEMORY_SYSTEM_CLOCK_INVALID".to_owned())?;
     let counter = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let material = format!(
-        "{}:{}:{}",
-        duration.as_nanos(),
-        std::process::id(),
-        counter
-    );
+    let material = format!("{}:{}:{}", duration.as_nanos(), std::process::id(), counter);
     Ok(sha256_hex(material.as_bytes())[..32].to_owned())
 }
 
@@ -244,7 +237,12 @@ fn positional_after<'a>(
     arguments
         .get(index + 2 + offset)
         .map(String::as_str)
-        .ok_or_else(|| format!("MEMORY_{}_ARGUMENT_MISSING:{offset}", action.to_ascii_uppercase()))
+        .ok_or_else(|| {
+            format!(
+                "MEMORY_{}_ARGUMENT_MISSING:{offset}",
+                action.to_ascii_uppercase()
+            )
+        })
 }
 
 fn python_json_string(value: &str) -> Result<String, String> {
@@ -344,8 +342,8 @@ fn add(
     let created_at = now()?;
     let provenance_json = serde_json::to_string(&json!({"source": source}))
         .map_err(|_| "MEMORY_PROVENANCE_JSON_FAILED".to_owned())?;
-    let tags_json = serde_json::to_string(&tags)
-        .map_err(|_| "MEMORY_TAGS_JSON_FAILED".to_owned())?;
+    let tags_json =
+        serde_json::to_string(&tags).map_err(|_| "MEMORY_TAGS_JSON_FAILED".to_owned())?;
     transaction
         .execute(
             "INSERT INTO memories(\
@@ -408,10 +406,9 @@ fn link(
         )
         .map_err(|error| format!("MEMORY_LINK_SCOPE_PREPARE_FAILED:{error}"))?;
     let rows = statement
-        .query_map(
-            params![source_id, target_id, project_id, user_id],
-            |row| row.get::<_, String>(0),
-        )
+        .query_map(params![source_id, target_id, project_id, user_id], |row| {
+            row.get::<_, String>(0)
+        })
         .map_err(|error| format!("MEMORY_LINK_SCOPE_QUERY_FAILED:{error}"))?;
     let mut found = BTreeSet::new();
     for row in rows {
@@ -611,9 +608,8 @@ fn search_rows(
             })
             .map_err(|error| format!("MEMORY_SEARCH_FALLBACK_QUERY_FAILED:{error}"))?;
         for row in rows {
-            candidates.push(
-                row.map_err(|error| format!("MEMORY_SEARCH_FALLBACK_ROW_FAILED:{error}"))?,
-            );
+            candidates
+                .push(row.map_err(|error| format!("MEMORY_SEARCH_FALLBACK_ROW_FAILED:{error}"))?);
         }
     }
     Ok((mode, candidates))

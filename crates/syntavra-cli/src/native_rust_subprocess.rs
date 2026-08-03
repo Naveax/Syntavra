@@ -14,8 +14,8 @@ fn executable_name() -> String {
 }
 
 fn validate_binary(path: &Path) -> Result<PathBuf, String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|_| "RUST_SUBENGINE_BINARY_NOT_FOUND".to_owned())?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|_| "RUST_SUBENGINE_BINARY_NOT_FOUND".to_owned())?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err("RUST_SUBENGINE_BINARY_INVALID".to_owned());
     }

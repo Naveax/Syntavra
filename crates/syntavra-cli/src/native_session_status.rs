@@ -19,8 +19,8 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("SESSION_STATE_DIRECTORY_CREATE_FAILED:{error}"))?;
     }
-    let connection = Connection::open(path)
-        .map_err(|error| format!("SESSION_STATE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("SESSION_STATE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
             "PRAGMA foreign_keys=ON;\
@@ -52,7 +52,9 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn session_row(row: &Row<'_>) -> rusqlite::Result<(String, String, String, String, f64, f64, String)> {
+fn session_row(
+    row: &Row<'_>,
+) -> rusqlite::Result<(String, String, String, String, f64, f64, String)> {
     Ok((
         row.get(0)?,
         row.get(1)?,
@@ -175,15 +177,14 @@ fn analytics(path: &Path) -> Result<Value, String> {
     if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_ANALYTICS_BYTES {
         return Err("SESSION_ANALYTICS_FILE_TOO_LARGE".to_owned());
     }
-    let text = String::from_utf8(bytes)
-        .map_err(|_| "SESSION_ANALYTICS_UTF8_INVALID".to_owned())?;
+    let text = String::from_utf8(bytes).map_err(|_| "SESSION_ANALYTICS_UTF8_INVALID".to_owned())?;
     let mut rows = Vec::<Value>::new();
     for line in text.lines() {
         if line.trim().is_empty() {
             continue;
         }
-        let value: Value = serde_json::from_str(line)
-            .map_err(|_| "SESSION_ANALYTICS_JSONL_INVALID".to_owned())?;
+        let value: Value =
+            serde_json::from_str(line).map_err(|_| "SESSION_ANALYTICS_JSONL_INVALID".to_owned())?;
         if value.is_object() {
             rows.push(value);
         }
@@ -213,16 +214,16 @@ fn analytics(path: &Path) -> Result<Value, String> {
         input_tokens = input_tokens.saturating_add(python_int(object.get("input_tokens"))?.max(0));
         cached_tokens =
             cached_tokens.saturating_add(python_int(object.get("cached_input_tokens"))?.max(0));
-        output_tokens = output_tokens.saturating_add(python_int(object.get("output_tokens"))?.max(0));
+        output_tokens =
+            output_tokens.saturating_add(python_int(object.get("output_tokens"))?.max(0));
         wall_time_ms += python_float(object.get("wall_time_ms"))?.max(0.0);
         cost_usd += python_float(object.get("cost_usd"))?.max(0.0);
         compaction_ms += python_float(object.get("compaction_ms"))?.max(0.0);
-        continuity += u64::from(
-            object
-                .get("continuity_restored")
-                .is_some_and(json_truthy),
-        );
-        route_denied += u64::from(matches!(object.get("tool_route_allowed"), Some(Value::Bool(false))));
+        continuity += u64::from(object.get("continuity_restored").is_some_and(json_truthy));
+        route_denied += u64::from(matches!(
+            object.get("tool_route_allowed"),
+            Some(Value::Bool(false))
+        ));
     }
 
     Ok(json!({

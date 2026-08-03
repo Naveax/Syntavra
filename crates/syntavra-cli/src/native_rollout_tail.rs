@@ -88,10 +88,10 @@ fn file_numbers(_metadata: &fs::Metadata) -> (u64, u64) {
 }
 
 fn file_identity(path: &Path) -> Result<String, String> {
-    let resolved = fs::canonicalize(path)
-        .map_err(|error| format!("ROLLOUT_PATH_RESOLVE_FAILED:{error}"))?;
-    let metadata = fs::metadata(&resolved)
-        .map_err(|error| format!("ROLLOUT_METADATA_FAILED:{error}"))?;
+    let resolved =
+        fs::canonicalize(path).map_err(|error| format!("ROLLOUT_PATH_RESOLVE_FAILED:{error}"))?;
+    let metadata =
+        fs::metadata(&resolved).map_err(|error| format!("ROLLOUT_METADATA_FAILED:{error}"))?;
     let (inode, device) = file_numbers(&metadata);
     let material = format!("{}|{inode}|{device}", resolved.display());
     Ok(sha256_hex(material.as_bytes()))
@@ -154,8 +154,8 @@ fn atomic_write_json(path: &Path, value: &Value) -> Result<(), String> {
             .map_err(|error| format!("ROLLOUT_STATE_DIRECTORY_CREATE_FAILED:{error}"))?;
     }
     let temporary = temp_path(path)?;
-    let mut bytes = serde_json::to_vec(value)
-        .map_err(|_| "ROLLOUT_STATE_JSON_RENDER_FAILED".to_owned())?;
+    let mut bytes =
+        serde_json::to_vec(value).map_err(|_| "ROLLOUT_STATE_JSON_RENDER_FAILED".to_owned())?;
     bytes.push(b'\n');
     let result = (|| {
         let mut handle = OpenOptions::new()
@@ -271,7 +271,12 @@ fn normalize_event(event: &Map<String, Value>) -> BTreeMap<String, i64> {
     }
     if contains_any(
         &text,
-        &["\"wait\"", "write_stdin", "process is still running", "still running"],
+        &[
+            "\"wait\"",
+            "write_stdin",
+            "process is still running",
+            "still running",
+        ],
     ) {
         counters.insert("wait_calls".to_owned(), 1);
     }
@@ -291,10 +296,7 @@ fn normalize_event(event: &Map<String, Value>) -> BTreeMap<String, i64> {
         &value,
         &["input_tokens", "input_token_count", "prompt_tokens"],
     );
-    let explicit_fresh = first_number(
-        &value,
-        &["uncached_input_tokens", "fresh_input_tokens"],
-    );
+    let explicit_fresh = first_number(&value, &["uncached_input_tokens", "fresh_input_tokens"]);
     let cached = first_number(
         &value,
         &[
@@ -336,8 +338,7 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
         let pair = std::str::from_utf8(&bytes[index..index + 2])
             .map_err(|_| "ROLLOUT_PARTIAL_HEX_INVALID".to_owned())?;
         output.push(
-            u8::from_str_radix(pair, 16)
-                .map_err(|_| "ROLLOUT_PARTIAL_HEX_INVALID".to_owned())?,
+            u8::from_str_radix(pair, 16).map_err(|_| "ROLLOUT_PARTIAL_HEX_INVALID".to_owned())?,
         );
     }
     Ok(output)
@@ -351,8 +352,8 @@ fn poll(rollout: &Path, state_file: &Path) -> Result<Value, String> {
     let path = fs::canonicalize(rollout)
         .map_err(|error| format!("ROLLOUT_PATH_RESOLVE_FAILED:{error}"))?;
     let identity = file_identity(&path)?;
-    let metadata = fs::metadata(&path)
-        .map_err(|error| format!("ROLLOUT_METADATA_FAILED:{error}"))?;
+    let metadata =
+        fs::metadata(&path).map_err(|error| format!("ROLLOUT_METADATA_FAILED:{error}"))?;
     let mut state = read_state(state_file)?;
     let saved_identity = state.get("file_identity").and_then(Value::as_str);
     let saved_offset = integer_like(state.get("offset"), 0)?;
@@ -400,8 +401,7 @@ fn poll(rollout: &Path, state_file: &Path) -> Result<Value, String> {
         decode_hex(partial_hex)?
     };
 
-    let mut handle = File::open(&path)
-        .map_err(|error| format!("ROLLOUT_OPEN_FAILED:{error}"))?;
+    let mut handle = File::open(&path).map_err(|error| format!("ROLLOUT_OPEN_FAILED:{error}"))?;
     handle
         .seek(SeekFrom::Start(u64::try_from(offset).unwrap_or(0)))
         .map_err(|error| format!("ROLLOUT_SEEK_FAILED:{error}"))?;
@@ -482,8 +482,8 @@ fn poll(rollout: &Path, state_file: &Path) -> Result<Value, String> {
 }
 
 fn discover_recursive(root: &Path, output: &mut Vec<PathBuf>) -> Result<(), String> {
-    let entries = fs::read_dir(root)
-        .map_err(|error| format!("ROLLOUT_DISCOVERY_READ_FAILED:{error}"))?;
+    let entries =
+        fs::read_dir(root).map_err(|error| format!("ROLLOUT_DISCOVERY_READ_FAILED:{error}"))?;
     for entry in entries {
         let entry = entry.map_err(|error| format!("ROLLOUT_DISCOVERY_ENTRY_FAILED:{error}"))?;
         let file_type = entry

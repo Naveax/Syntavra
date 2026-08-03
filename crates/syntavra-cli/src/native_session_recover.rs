@@ -149,9 +149,7 @@ pub fn execute(project_root: &Path, state_root: &Path) -> Result<Value, String> 
         .map_err(|error| format!("SESSION_RECOVER_INTEGRITY_CHECK_FAILED:{error}"))?
         == "ok";
     let mut statement = connection
-        .prepare(
-            "SELECT session_id FROM sessions WHERE project_id=?1 ORDER BY updated_at DESC",
-        )
+        .prepare("SELECT session_id FROM sessions WHERE project_id=?1 ORDER BY updated_at DESC")
         .map_err(|error| format!("SESSION_RECOVER_LIST_PREPARE_FAILED:{error}"))?;
     let rows = statement
         .query_map([project_id], |row| row.get::<_, String>(0))
@@ -159,8 +157,7 @@ pub fn execute(project_root: &Path, state_root: &Path) -> Result<Value, String> 
     let mut sessions = Map::new();
     let mut histories_ok = true;
     for row in rows {
-        let session_id =
-            row.map_err(|error| format!("SESSION_RECOVER_LIST_ROW_FAILED:{error}"))?;
+        let session_id = row.map_err(|error| format!("SESSION_RECOVER_LIST_ROW_FAILED:{error}"))?;
         let verification = verify_session(&connection, &session_id)?;
         histories_ok &= verification.get("ok").and_then(Value::as_bool) == Some(true);
         sessions.insert(session_id, verification);

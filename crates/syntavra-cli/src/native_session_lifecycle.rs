@@ -151,11 +151,7 @@ fn merge_parents(arguments: &[String]) -> Result<Vec<String>, String> {
     Ok(parents)
 }
 
-fn session(
-    connection: &Connection,
-    session_id: &str,
-    project_id: &str,
-) -> Result<Value, String> {
+fn session(connection: &Connection, session_id: &str, project_id: &str) -> Result<Value, String> {
     let row = connection
         .query_row(
             "SELECT session_id,project_id,parent_ids_json,state,created_at,updated_at,metadata_json \
@@ -242,7 +238,10 @@ fn verify_rows(rows: &[Event]) -> Result<Value, String> {
     let mut expected_sequence = 1_i64;
     for event in rows {
         if event.sequence != expected_sequence {
-            reasons.push(format!("sequence-gap:{expected_sequence}->{}", event.sequence));
+            reasons.push(format!(
+                "sequence-gap:{expected_sequence}->{}",
+                event.sequence
+            ));
         }
         if event.previous_hash != previous {
             reasons.push(format!("previous-hash-mismatch:{}", event.sequence));
@@ -277,13 +276,21 @@ fn python_string(value: &Value) -> String {
         Value::String(value) => value.clone(),
         Value::Array(values) => format!(
             "[{}]",
-            values.iter().map(python_repr).collect::<Vec<_>>().join(", ")
+            values
+                .iter()
+                .map(python_repr)
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         Value::Object(values) => format!(
             "{{{}}}",
             values
                 .iter()
-                .map(|(key, value)| format!("'{}': {}", key.replace('\'', "\\'"), python_repr(value)))
+                .map(|(key, value)| format!(
+                    "'{}': {}",
+                    key.replace('\'', "\\'"),
+                    python_repr(value)
+                ))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -292,10 +299,7 @@ fn python_string(value: &Value) -> String {
 
 fn python_repr(value: &Value) -> String {
     match value {
-        Value::String(value) => format!(
-            "'{}'",
-            value.replace('\\', "\\\\").replace('\'', "\\'")
-        ),
+        Value::String(value) => format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'")),
         _ => python_string(value),
     }
 }
@@ -306,7 +310,9 @@ fn deterministic_summary(rows: &[Event]) -> String {
     for event in rows {
         *counts.entry(event.event_type.clone()).or_default() += 1;
         if let Some(payload) = event.payload.as_object() {
-            for key in ["task", "decision", "error", "result", "path", "command", "claim"] {
+            for key in [
+                "task", "decision", "error", "result", "path", "command", "claim",
+            ] {
                 if facts.len() >= 20 {
                     break;
                 }
@@ -396,7 +402,9 @@ fn compact_force(
                             [child_id],
                             |row| row.get::<_, String>(0),
                         )
-                        .map_err(|error| format!("SESSION_LIFECYCLE_SUMMARY_CONTENT_FAILED:{error}"))?,
+                        .map_err(|error| {
+                            format!("SESSION_LIFECYCLE_SUMMARY_CONTENT_FAILED:{error}")
+                        })?,
                 );
             }
             let start = group.first().map_or(0, |row| row.1);
@@ -451,7 +459,10 @@ fn generated_id(prefix: &str, context: &str) -> Result<String, String> {
         std::process::id(),
         std::thread::current().id(),
     );
-    Ok(format!("{prefix}-{}", &sha256_hex(material.as_bytes())[..32]))
+    Ok(format!(
+        "{prefix}-{}",
+        &sha256_hex(material.as_bytes())[..32]
+    ))
 }
 
 fn checkpoint_with_metadata(
@@ -636,7 +647,10 @@ fn fork(
     metadata
         .as_object_mut()
         .ok_or_else(|| "SESSION_LIFECYCLE_METADATA_INVALID".to_owned())?
-        .insert("fork_checkpoint".to_owned(), Value::String(checkpoint_id.clone()));
+        .insert(
+            "fork_checkpoint".to_owned(),
+            Value::String(checkpoint_id.clone()),
+        );
     let child = create_session(connection, project_id, &[parent.clone()], &metadata)?;
     let child_id = child["session_id"]
         .as_str()

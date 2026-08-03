@@ -34,8 +34,9 @@ fn active_key_version(keys_root: &Path) -> Result<i64, String> {
             let value = json!({"schema_version": 1, "active_version": 1});
             let encoded = serde_json::to_vec_pretty(&value)
                 .map_err(|_| "EVIDENCE_ACTIVE_KEY_MARKER_INVALID".to_owned())?;
-            fs::write(&marker, encoded)
-                .map_err(|write_error| format!("EVIDENCE_ACTIVE_KEY_MARKER_WRITE_FAILED:{write_error}"))?;
+            fs::write(&marker, encoded).map_err(|write_error| {
+                format!("EVIDENCE_ACTIVE_KEY_MARKER_WRITE_FAILED:{write_error}")
+            })?;
             value
         }
         Err(error) => return Err(format!("EVIDENCE_ACTIVE_KEY_MARKER_READ_FAILED:{error}")),
@@ -140,7 +141,9 @@ fn runtime_evidence_stats(state_root: &Path) -> Result<Value, String> {
         .prepare("SELECT relation,COUNT(*) FROM edges GROUP BY relation ORDER BY relation")
         .map_err(|error| format!("RUNTIME_EVIDENCE_RELATION_PREPARE_FAILED:{error}"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|error| format!("RUNTIME_EVIDENCE_RELATION_QUERY_FAILED:{error}"))?;
     let mut relations = Vec::new();
     for row in rows {
@@ -272,8 +275,13 @@ fn runtime_evidence_neighbors(arguments: &[String], state_root: &Path) -> Result
             .query_map(params![node_id, relation], edge_row)
             .map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_QUERY_FAILED:{error}"))?;
         for row in rows {
-            let row = row.map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?;
-            let linked = if reverse { row.1.clone() } else { row.2.clone() };
+            let row =
+                row.map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?;
+            let linked = if reverse {
+                row.1.clone()
+            } else {
+                row.2.clone()
+            };
             neighbors.push(neighbor_value(&connection, row, &linked)?);
         }
     } else {
@@ -281,8 +289,13 @@ fn runtime_evidence_neighbors(arguments: &[String], state_root: &Path) -> Result
             .query_map([node_id], edge_row)
             .map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_QUERY_FAILED:{error}"))?;
         for row in rows {
-            let row = row.map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?;
-            let linked = if reverse { row.1.clone() } else { row.2.clone() };
+            let row =
+                row.map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?;
+            let linked = if reverse {
+                row.1.clone()
+            } else {
+                row.2.clone()
+            };
             neighbors.push(neighbor_value(&connection, row, &linked)?);
         }
     }
@@ -316,6 +329,9 @@ mod tests {
     fn evidence_commands_are_supported() {
         assert!(supports(&["evidence".to_owned(), "stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-stats".to_owned()]));
-        assert!(supports(&["run".to_owned(), "evidence-neighbors".to_owned()]));
+        assert!(supports(&[
+            "run".to_owned(),
+            "evidence-neighbors".to_owned()
+        ]));
     }
 }

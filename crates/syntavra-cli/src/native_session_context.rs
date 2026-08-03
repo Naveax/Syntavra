@@ -189,7 +189,11 @@ fn python_string(value: &Value) -> String {
         Value::String(value) => value.clone(),
         Value::Array(values) => format!(
             "[{}]",
-            values.iter().map(python_repr).collect::<Vec<_>>().join(", ")
+            values
+                .iter()
+                .map(python_repr)
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         Value::Object(values) => {
             let rows = values
@@ -205,10 +209,7 @@ fn python_string(value: &Value) -> String {
 
 fn python_repr(value: &Value) -> String {
     match value {
-        Value::String(value) => format!(
-            "'{}'",
-            value.replace('\\', "\\\\").replace('\'', "\\'")
-        ),
+        Value::String(value) => format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'")),
         _ => python_string(value),
     }
 }
@@ -345,10 +346,7 @@ fn compact(
                 "hash": source_hash,
                 "level": level,
             });
-            let summary_id = format!(
-                "sum-{}",
-                &sha256_hex(&canonical_bytes(&material)?)[..32]
-            );
+            let summary_id = format!("sum-{}", &sha256_hex(&canonical_bytes(&material)?)[..32]);
             let children_json = serde_json::to_string(&material["children"])
                 .map_err(|_| "SESSION_CONTEXT_SUMMARY_CHILDREN_INVALID".to_owned())?;
             transaction
@@ -386,8 +384,9 @@ fn json_text(value: &Value) -> Result<String, String> {
         Value::Null => Ok("null".to_owned()),
         Value::Bool(value) => Ok(value.to_string()),
         Value::Number(value) => Ok(value.to_string()),
-        Value::String(value) => serde_json::to_string(value)
-            .map_err(|_| "SESSION_CONTEXT_JSON_TEXT_INVALID".to_owned()),
+        Value::String(value) => {
+            serde_json::to_string(value).map_err(|_| "SESSION_CONTEXT_JSON_TEXT_INVALID".to_owned())
+        }
         Value::Array(values) => Ok(format!(
             "[{}]",
             values

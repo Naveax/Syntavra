@@ -169,7 +169,12 @@ fn positional_after<'a>(
     arguments
         .get(index + 1 + offset)
         .map(String::as_str)
-        .ok_or_else(|| format!("SESSION_{}_ARGUMENT_MISSING:{offset}", action.to_ascii_uppercase()))
+        .ok_or_else(|| {
+            format!(
+                "SESSION_{}_ARGUMENT_MISSING:{offset}",
+                action.to_ascii_uppercase()
+            )
+        })
 }
 
 fn session(
@@ -199,10 +204,10 @@ fn session(
     let Some(row) = row else {
         return Ok(None);
     };
-    let parents: Value = serde_json::from_str(&row.2)
-        .map_err(|_| "SESSION_PUBLIC_PARENT_IDS_INVALID".to_owned())?;
-    let metadata: Value = serde_json::from_str(&row.6)
-        .map_err(|_| "SESSION_PUBLIC_METADATA_INVALID".to_owned())?;
+    let parents: Value =
+        serde_json::from_str(&row.2).map_err(|_| "SESSION_PUBLIC_PARENT_IDS_INVALID".to_owned())?;
+    let metadata: Value =
+        serde_json::from_str(&row.6).map_err(|_| "SESSION_PUBLIC_METADATA_INVALID".to_owned())?;
     Ok(Some(json!({
         "session_id": row.0,
         "project_id": row.1,
@@ -221,7 +226,8 @@ fn create_session(
     parents: &[String],
     metadata: &Value,
 ) -> Result<Value, String> {
-    let session_id = requested_id.map_or_else(|| generated_id("sess"), |value| Ok(value.to_owned()))?;
+    let session_id =
+        requested_id.map_or_else(|| generated_id("sess"), |value| Ok(value.to_owned()))?;
     let mut unique = Vec::new();
     let mut seen = BTreeSet::new();
     for parent in parents {
@@ -384,13 +390,21 @@ fn python_string(value: &Value) -> String {
         Value::String(value) => value.clone(),
         Value::Array(values) => format!(
             "[{}]",
-            values.iter().map(python_repr).collect::<Vec<_>>().join(", ")
+            values
+                .iter()
+                .map(python_repr)
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         Value::Object(values) => format!(
             "{{{}}}",
             values
                 .iter()
-                .map(|(key, value)| format!("'{}': {}", key.replace('\'', "\\'"), python_repr(value)))
+                .map(|(key, value)| format!(
+                    "'{}': {}",
+                    key.replace('\'', "\\'"),
+                    python_repr(value)
+                ))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -399,10 +413,7 @@ fn python_string(value: &Value) -> String {
 
 fn python_repr(value: &Value) -> String {
     match value {
-        Value::String(value) => format!(
-            "'{}'",
-            value.replace('\\', "\\\\").replace('\'', "\\'")
-        ),
+        Value::String(value) => format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'")),
         _ => python_string(value),
     }
 }
@@ -413,7 +424,9 @@ fn deterministic_summary(rows: &[Event]) -> String {
     for event in rows {
         *counts.entry(event.event_type.clone()).or_default() += 1;
         if let Some(payload) = event.payload.as_object() {
-            for key in ["task", "decision", "error", "result", "path", "command", "claim"] {
+            for key in [
+                "task", "decision", "error", "result", "path", "command", "claim",
+            ] {
                 if facts.len() >= 20 {
                     break;
                 }
@@ -469,8 +482,8 @@ fn compact(
     }
     let leaf_size = usize::try_from(leaf_size.max(1))
         .map_err(|_| "SESSION_PUBLIC_LEAF_SIZE_OVERFLOW".to_owned())?;
-    let fanout = usize::try_from(fanout.max(2))
-        .map_err(|_| "SESSION_PUBLIC_FANOUT_OVERFLOW".to_owned())?;
+    let fanout =
+        usize::try_from(fanout.max(2)).map_err(|_| "SESSION_PUBLIC_FANOUT_OVERFLOW".to_owned())?;
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| format!("SESSION_PUBLIC_COMPACT_TRANSACTION_FAILED:{error}"))?;
@@ -528,7 +541,9 @@ fn compact(
                             [child_id],
                             |row| row.get::<_, String>(0),
                         )
-                        .map_err(|error| format!("SESSION_PUBLIC_SUMMARY_CONTENT_FAILED:{error}"))?,
+                        .map_err(|error| {
+                            format!("SESSION_PUBLIC_SUMMARY_CONTENT_FAILED:{error}")
+                        })?,
                 );
             }
             let start = group.first().map_or(0, |row| row.1);
@@ -577,7 +592,11 @@ fn compact(
     Ok(root)
 }
 
-fn open(arguments: &[String], project_id: &str, connection: &mut Connection) -> Result<Value, String> {
+fn open(
+    arguments: &[String],
+    project_id: &str,
+    connection: &mut Connection,
+) -> Result<Value, String> {
     let requested = option_value(arguments, "--session-id")?.filter(|value| !value.is_empty());
     let parents = repeated_option(arguments, "--parent")?;
     let task = option_value(arguments, "--task")?.filter(|value| !value.is_empty());
@@ -591,7 +610,11 @@ fn open(arguments: &[String], project_id: &str, connection: &mut Connection) -> 
     )
 }
 
-fn append(arguments: &[String], project_id: &str, connection: &mut Connection) -> Result<Value, String> {
+fn append(
+    arguments: &[String],
+    project_id: &str,
+    connection: &mut Connection,
+) -> Result<Value, String> {
     let session_id = positional_after(arguments, "append", 1)?;
     let event_type = positional_after(arguments, "append", 2)?;
     let payload_text = positional_after(arguments, "append", 3)?;
@@ -646,8 +669,8 @@ fn import(
         .ok_or_else(|| "SESSION_IMPORT_INPUT_REQUIRED".to_owned())?;
     let explicit_id = option_value(arguments, "--session-id")?.filter(|value| !value.is_empty());
     let bytes = fs::read(&input).map_err(|error| format!("SESSION_IMPORT_READ_FAILED:{error}"))?;
-    let mut value: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| "SESSION_IMPORT_JSON_INVALID".to_owned())?;
+    let mut value: Value =
+        serde_json::from_slice(&bytes).map_err(|_| "SESSION_IMPORT_JSON_INVALID".to_owned())?;
     let object = value
         .as_object_mut()
         .ok_or_else(|| "SESSION_IMPORT_OBJECT_REQUIRED".to_owned())?;

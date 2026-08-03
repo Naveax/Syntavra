@@ -170,13 +170,16 @@ fn collect(
             remove_if_present(&object_path(&root, &row.digest)?)?;
             remove_if_present(&root.join("metadata").join(format!("{}.json", row.digest)))?;
             transaction
-                .execute("DELETE FROM evidence_objects WHERE digest=?1", [&row.digest])
+                .execute(
+                    "DELETE FROM evidence_objects WHERE digest=?1",
+                    [&row.digest],
+                )
                 .map_err(|error| format!("EVIDENCE_GC_DELETE_FAILED:{error}"))?;
         }
     }
-    let plaintext_bytes = selected
-        .iter()
-        .fold(0_i64, |total, row| total.saturating_add(row.plaintext_bytes));
+    let plaintext_bytes = selected.iter().fold(0_i64, |total, row| {
+        total.saturating_add(row.plaintext_bytes)
+    });
     let objects = i64::try_from(selected.len())
         .map_err(|_| "EVIDENCE_GC_OBJECT_COUNT_OVERFLOW".to_owned())?;
     transaction
@@ -205,11 +208,7 @@ pub fn execute(
             collect(state_root, ttl_days, None, dry_run)
         }
         [root, action] if root == "maintenance" && action == "janitor" => {
-            let maximum = option_i64(
-                arguments,
-                "--max-delete-bytes",
-                DEFAULT_MAX_DELETE_BYTES,
-            )?;
+            let maximum = option_i64(arguments, "--max-delete-bytes", DEFAULT_MAX_DELETE_BYTES)?;
             collect(state_root, ttl_days, Some(maximum), dry_run)
         }
         _ => Err("EVIDENCE_GC_COMMAND_UNSUPPORTED".to_owned()),

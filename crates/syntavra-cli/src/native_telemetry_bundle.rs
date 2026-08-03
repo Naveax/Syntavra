@@ -33,8 +33,8 @@ fn log_tail(path: &Path, limit: usize) -> Result<Vec<Value>, String> {
     if !path.is_file() {
         return Ok(Vec::new());
     }
-    let text = fs::read_to_string(path)
-        .map_err(|error| format!("TELEMETRY_LOG_READ_FAILED:{error}"))?;
+    let text =
+        fs::read_to_string(path).map_err(|error| format!("TELEMETRY_LOG_READ_FAILED:{error}"))?;
     let lines = text.lines().collect::<Vec<_>>();
     let start = lines.len().saturating_sub(limit);
     Ok(lines[start..]
@@ -62,8 +62,8 @@ fn atomic_write_json(destination: &Path, value: &Value) -> Result<(), String> {
             .map_err(|error| format!("TELEMETRY_BUNDLE_DIRECTORY_CREATE_FAILED:{error}"))?;
     }
     let temporary = temporary_path(destination)?;
-    let mut bytes = serde_json::to_vec(value)
-        .map_err(|_| "TELEMETRY_BUNDLE_JSON_RENDER_FAILED".to_owned())?;
+    let mut bytes =
+        serde_json::to_vec(value).map_err(|_| "TELEMETRY_BUNDLE_JSON_RENDER_FAILED".to_owned())?;
     bytes.push(b'\n');
     let result = (|| {
         let mut handle = OpenOptions::new()
@@ -119,9 +119,6 @@ mod tests {
 
     #[test]
     fn telemetry_bundle_is_supported() {
-        assert!(supports(&[
-            "telemetry".to_owned(),
-            "bundle".to_owned(),
-        ]));
+        assert!(supports(&["telemetry".to_owned(), "bundle".to_owned(),]));
     }
 }

@@ -41,8 +41,8 @@ fn canonical_bytes(value: &Value) -> Result<Vec<u8>, String> {
 fn load_event(source: &str) -> Result<Value, String> {
     let path = Path::new(source);
     let bytes = if path.is_file() {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|_| "ANALYTICS_EVENT_INSPECT_FAILED".to_owned())?;
+        let metadata =
+            fs::symlink_metadata(path).map_err(|_| "ANALYTICS_EVENT_INSPECT_FAILED".to_owned())?;
         if metadata.file_type().is_symlink() || !metadata.is_file() {
             return Err("ANALYTICS_EVENT_SOURCE_INVALID".to_owned());
         }
@@ -56,8 +56,8 @@ fn load_event(source: &str) -> Result<Value, String> {
         }
         source.as_bytes().to_vec()
     };
-    let value: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| "ANALYTICS_EVENT_JSON_INVALID".to_owned())?;
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|_| "ANALYTICS_EVENT_JSON_INVALID".to_owned())?;
     if !value.is_object() {
         return Err("ANALYTICS_EVENT_OBJECT_REQUIRED".to_owned());
     }
@@ -73,8 +73,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     } / 146_097;
     let day_of_era = shifted - era * 146_097;
     let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096)
-            / 365;
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let mut year = year_of_era + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
@@ -135,8 +134,7 @@ pub fn record_event(event: &Value, state_root: &Path) -> Result<Value, String> {
 
     let path = state_root.join("analytics").join("events.jsonl");
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|_| "ANALYTICS_DIRECTORY_CREATE_FAILED".to_owned())?;
+        fs::create_dir_all(parent).map_err(|_| "ANALYTICS_DIRECTORY_CREATE_FAILED".to_owned())?;
     }
     let encoded = canonical_bytes(&Value::Object(row.clone()))?;
     let mut handle = OpenOptions::new()

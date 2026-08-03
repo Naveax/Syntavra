@@ -243,10 +243,17 @@ fn positional_after<'a>(
         .windows(3)
         .find(|window| window[0] == root && window[1] == action)
         .map(|window| window[2].as_str())
-        .ok_or_else(|| format!("{}_{}_ARGUMENT_MISSING", root.to_ascii_uppercase(), action.to_ascii_uppercase()))
+        .ok_or_else(|| {
+            format!(
+                "{}_{}_ARGUMENT_MISSING",
+                root.to_ascii_uppercase(),
+                action.to_ascii_uppercase()
+            )
+        })
 }
 
-const JOB_COLUMNS: &str = "job_id,state,argv_json,cwd,created_at,started_at,completed_at,pid,exit_code,\
+const JOB_COLUMNS: &str =
+    "job_id,state,argv_json,cwd,created_at,started_at,completed_at,pid,exit_code,\
  timed_out,cancelled,summary,evidence_handle,error,project_id,repository_tree,environment_hash";
 
 fn list(arguments: &[String], state_root: &Path) -> Result<Value, String> {

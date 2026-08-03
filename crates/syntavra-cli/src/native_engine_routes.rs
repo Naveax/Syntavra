@@ -247,28 +247,6 @@ fn route_config_resolve(arguments: &[String]) -> Result<Value, String> {
     ))
 }
 
-fn live_wire(arguments: &[String], allow_overrides: bool) -> Result<(Vec<u8>, &'static str), String> {
-    let session = option_value(arguments, "--session-override-json-hex")?;
-    let task = option_value(arguments, "--task-override-json-hex")?;
-    if !allow_overrides && (session.is_some() || task.is_some()) {
-        return Err("ENGINE_ROUTE_LIVE_OVERRIDE_UNSUPPORTED_R24".to_owned());
-    }
-    let profile = if session.is_some() || task.is_some() {
-        "live-config-session-task-v1"
-    } else {
-        "live-config-discovery-v1"
-    };
-    super::native_live_config::discover_wire(
-        Path::new(
-            &option_value(arguments, "--project")?
-                .unwrap_or_else(|| ".".to_owned()),
-        ),
-        session.as_deref(),
-        task.as_deref(),
-    )
-    .map(|wire| (wire, profile))
-}
-
 fn live_wire_at(
     project_root: &Path,
     arguments: &[String],
@@ -331,20 +309,12 @@ fn route_config_explain(arguments: &[String], project_root: &Path) -> Result<Val
         .as_object_mut()
         .ok_or_else(|| "ENGINE_ROUTE_CONFIG_EXPLAIN_INPUT_INVALID".to_owned())?;
     object.insert("path".to_owned(), Value::String(path.clone()));
-    object.insert(
-        "path_bytes".to_owned(),
-        Value::Number(path.len().into()),
-    );
+    object.insert("path_bytes".to_owned(), Value::Number(path.len().into()));
     object.insert(
         "path_sha256".to_owned(),
         Value::String(sha256_hex(path.as_bytes())),
     );
-    Ok(envelope(
-        "config.explain",
-        "config.explain",
-        input,
-        result,
-    ))
+    Ok(envelope("config.explain", "config.explain", input, result))
 }
 
 fn route_config_validate(arguments: &[String], project_root: &Path) -> Result<Value, String> {
@@ -435,12 +405,7 @@ fn route_state_layout(arguments: &[String]) -> Result<Value, String> {
         return Err("ENGINE_ROUTE_STATE_LAYOUT_INPUT_UNSUPPORTED_R24".to_owned());
     }
     let result = rust_runtime(&["state", "layout"])?;
-    Ok(envelope(
-        "state.layout",
-        "state.layout",
-        no_input(),
-        result,
-    ))
+    Ok(envelope("state.layout", "state.layout", no_input(), result))
 }
 
 fn route_telemetry(arguments: &[String]) -> Result<Value, String> {
@@ -562,11 +527,7 @@ fn scheduler_limit(arguments: &[String]) -> Result<usize, String> {
     Ok(parsed.clamp(1, 1000) as usize)
 }
 
-fn route_scheduler(
-    route: &str,
-    arguments: &[String],
-    state_root: &Path,
-) -> Result<Value, String> {
+fn route_scheduler(route: &str, arguments: &[String], state_root: &Path) -> Result<Value, String> {
     let allowed = if route == "scheduler.list" {
         &["--scheduler-state", "--scheduler-limit"][..]
     } else {
@@ -600,9 +561,7 @@ fn route_scheduler(
             .map_err(|_| "ENGINE_ROUTE_SCHEDULER_STATES_INVALID".to_owned())?;
         (
             json_value(&rendered, "ENGINE_ROUTE_SCHEDULER_RESULT_INVALID")?,
-            format!(
-                r#"{{"limit":{limit},"route":"scheduler.list","states":{states_json}}}"#
-            ),
+            format!(r#"{{"limit":{limit},"route":"scheduler.list","states":{states_json}}}"#),
         )
     };
     Ok(envelope(

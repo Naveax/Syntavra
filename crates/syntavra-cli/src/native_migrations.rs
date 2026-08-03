@@ -79,12 +79,15 @@ fn remove_sidecars(path: &Path) -> Result<(), String> {
 fn rollback(arguments: &[String]) -> Result<Value, String> {
     let database = PathBuf::from(positional_after(arguments, "rollback", 1)?);
     let backup = PathBuf::from(positional_after(arguments, "rollback", 2)?);
-    let metadata = fs::metadata(&backup)
-        .map_err(|_| "MIGRATION_BACKUP_DOES_NOT_EXIST".to_owned())?;
+    let metadata =
+        fs::metadata(&backup).map_err(|_| "MIGRATION_BACKUP_DOES_NOT_EXIST".to_owned())?;
     if !metadata.is_file() {
         return Err("MIGRATION_BACKUP_DOES_NOT_EXIST".to_owned());
     }
-    if let Some(parent) = database.parent().filter(|value| !value.as_os_str().is_empty()) {
+    if let Some(parent) = database
+        .parent()
+        .filter(|value| !value.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent)
             .map_err(|error| format!("MIGRATION_RESTORE_DIRECTORY_FAILED:{error}"))?;
     }

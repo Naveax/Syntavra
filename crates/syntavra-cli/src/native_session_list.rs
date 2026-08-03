@@ -72,7 +72,9 @@ fn state_filter(arguments: &[String]) -> Result<Option<String>, String> {
     Ok(state.filter(|value| !value.is_empty()))
 }
 
-fn session_row(row: &Row<'_>) -> rusqlite::Result<(String, String, String, String, f64, f64, String)> {
+fn session_row(
+    row: &Row<'_>,
+) -> rusqlite::Result<(String, String, String, String, f64, f64, String)> {
     Ok((
         row.get(0)?,
         row.get(1)?,
@@ -118,28 +120,26 @@ pub fn execute(
             .query_map([project_id.as_str(), filter.as_str()], session_row)
             .map_err(|error| format!("SESSION_LIST_QUERY_FAILED:{error}"))?;
         for row in rows {
-            sessions.push(session_json(row.map_err(|error| {
-                format!("SESSION_LIST_ROW_FAILED:{error}")
-            })?)?);
+            sessions.push(session_json(
+                row.map_err(|error| format!("SESSION_LIST_ROW_FAILED:{error}"))?,
+            )?);
         }
     } else {
         let rows = statement
             .query_map([project_id.as_str()], session_row)
             .map_err(|error| format!("SESSION_LIST_QUERY_FAILED:{error}"))?;
         for row in rows {
-            sessions.push(session_json(row.map_err(|error| {
-                format!("SESSION_LIST_ROW_FAILED:{error}")
-            })?)?);
+            sessions.push(session_json(
+                row.map_err(|error| format!("SESSION_LIST_ROW_FAILED:{error}"))?,
+            )?);
         }
     }
     Ok(json!({"sessions": sessions}))
 }
 
-fn session_json(
-    row: (String, String, String, String, f64, f64, String),
-) -> Result<Value, String> {
-    let metadata: Value = serde_json::from_str(&row.6)
-        .map_err(|_| "SESSION_LIST_METADATA_INVALID".to_owned())?;
+fn session_json(row: (String, String, String, String, f64, f64, String)) -> Result<Value, String> {
+    let metadata: Value =
+        serde_json::from_str(&row.6).map_err(|_| "SESSION_LIST_METADATA_INVALID".to_owned())?;
     Ok(json!({
         "session_id": row.0,
         "project_id": row.1,

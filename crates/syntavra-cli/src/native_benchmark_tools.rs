@@ -134,10 +134,7 @@ fn python_truthy(value: Option<&Value>) -> bool {
     }
 }
 
-fn mapping_or_empty(
-    value: Option<&Value>,
-    code: &str,
-) -> Result<Map<String, Value>, String> {
+fn mapping_or_empty(value: Option<&Value>, code: &str) -> Result<Map<String, Value>, String> {
     match value {
         None => Ok(Map::new()),
         Some(value) if !python_truthy(Some(value)) => Ok(Map::new()),
@@ -171,9 +168,7 @@ fn validate_config_value(config: &Value) -> Result<Value, String> {
         .iter()
         .map(|(axis, value)| (axis.clone(), (*value).clamp(0.01, 1000.0)))
         .collect::<BTreeMap<_, _>>();
-    let geometric = (safe.values().map(|value| value.ln()).sum::<f64>()
-        / safe.len() as f64)
-        .exp();
+    let geometric = (safe.values().map(|value| value.ln()).sum::<f64>() / safe.len() as f64).exp();
     let harmonic = safe.len() as f64 / safe.values().map(|value| 1.0 / value).sum::<f64>();
     let critical_floor = CRITICAL
         .iter()
@@ -204,18 +199,20 @@ fn validate_config_value(config: &Value) -> Result<Value, String> {
         Value::Bool(
             CRITICAL
                 .iter()
-                .filter(|axis| safe.get(*axis).is_some_and(|value| *value >= rule.critical_high))
+                .filter(|axis| {
+                    safe.get(*axis)
+                        .is_some_and(|value| *value >= rule.critical_high)
+                })
                 .count()
                 >= rule.critical_count,
         ),
     );
     checks.insert(
         "critical_floor".to_owned(),
-        Value::Bool(
-            CRITICAL
-                .iter()
-                .all(|axis| safe.get(*axis).is_some_and(|value| *value >= rule.critical_floor)),
-        ),
+        Value::Bool(CRITICAL.iter().all(|axis| {
+            safe.get(*axis)
+                .is_some_and(|value| *value >= rule.critical_floor)
+        })),
     );
     checks.insert("observed_measurement".to_owned(), Value::Bool(true));
     for name in REQUIRED_CONTROLS {
@@ -369,9 +366,10 @@ fn validate_config(arguments: &[String]) -> Result<Value, String> {
     let source = option_value(arguments, "--config")?
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "BENCHMARK_CONFIG_REQUIRED".to_owned())?;
-    let bytes = fs::read(&source).map_err(|error| format!("BENCHMARK_CONFIG_READ_FAILED:{error}"))?;
-    let config: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| "BENCHMARK_CONFIG_JSON_INVALID".to_owned())?;
+    let bytes =
+        fs::read(&source).map_err(|error| format!("BENCHMARK_CONFIG_READ_FAILED:{error}"))?;
+    let config: Value =
+        serde_json::from_slice(&bytes).map_err(|_| "BENCHMARK_CONFIG_JSON_INVALID".to_owned())?;
     validate_config_value(&config)
 }
 
@@ -423,9 +421,7 @@ fn generate_repository(arguments: &[String]) -> Result<Value, String> {
         let file_name = format!("fault_{index:04}.py");
         fs::write(
             output.join(&file_name),
-            format!(
-                "def fault_{index}():\n    raise RuntimeError('SC_FAULT_{index}')\n"
-            ),
+            format!("def fault_{index}():\n    raise RuntimeError('SC_FAULT_{index}')\n"),
         )
         .map_err(|error| format!("BENCHMARK_FAULT_WRITE_FAILED:{error}"))?;
         fault_rows.push(json!({

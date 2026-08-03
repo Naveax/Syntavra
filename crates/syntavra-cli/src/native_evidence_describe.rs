@@ -63,8 +63,8 @@ pub fn execute(
         .join("evidence")
         .join("metadata")
         .join(format!("{digest}.json"));
-    let metadata = fs::symlink_metadata(&path)
-        .map_err(|_| "EVIDENCE_METADATA_MISSING".to_owned())?;
+    let metadata =
+        fs::symlink_metadata(&path).map_err(|_| "EVIDENCE_METADATA_MISSING".to_owned())?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err("EVIDENCE_METADATA_INVALID_SOURCE".to_owned());
     }
@@ -79,8 +79,7 @@ pub fn execute(
         return Err("EVIDENCE_METADATA_OBJECT_REQUIRED".to_owned());
     }
     let project = project_root.to_string_lossy();
-    let expected_project_id =
-        super::super::state_snapshot_contract::project_id_for_root(&project)?;
+    let expected_project_id = super::super::state_snapshot_contract::project_id_for_root(&project)?;
     if value.get("project_id").and_then(Value::as_str) != Some(expected_project_id.as_str()) {
         return Err("EVIDENCE_SCOPE_MISMATCH".to_owned());
     }

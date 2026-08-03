@@ -128,11 +128,7 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
     Ok(found)
 }
 
-fn session(
-    connection: &Connection,
-    session_id: &str,
-    project_id: &str,
-) -> Result<Value, String> {
+fn session(connection: &Connection, session_id: &str, project_id: &str) -> Result<Value, String> {
     let row = connection
         .query_row(
             "SELECT session_id,project_id,parent_ids_json,state,created_at,updated_at,metadata_json \
@@ -158,8 +154,8 @@ fn session(
     if !parent_ids.is_array() {
         return Err("SESSION_ARCHIVE_PARENT_IDS_INVALID".to_owned());
     }
-    let metadata: Value = serde_json::from_str(&row.6)
-        .map_err(|_| "SESSION_ARCHIVE_METADATA_INVALID".to_owned())?;
+    let metadata: Value =
+        serde_json::from_str(&row.6).map_err(|_| "SESSION_ARCHIVE_METADATA_INVALID".to_owned())?;
     Ok(json!({
         "session_id": row.0,
         "project_id": row.1,
@@ -275,7 +271,11 @@ fn python_string(value: &Value) -> String {
         Value::String(value) => value.clone(),
         Value::Array(values) => format!(
             "[{}]",
-            values.iter().map(python_repr).collect::<Vec<_>>().join(", ")
+            values
+                .iter()
+                .map(python_repr)
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         Value::Object(values) => {
             let rows = values
@@ -291,10 +291,7 @@ fn python_string(value: &Value) -> String {
 
 fn python_repr(value: &Value) -> String {
     match value {
-        Value::String(value) => format!(
-            "'{}'",
-            value.replace('\\', "\\\\").replace('\'', "\\'")
-        ),
+        Value::String(value) => format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'")),
         _ => python_string(value),
     }
 }
@@ -357,10 +354,7 @@ fn compact_force(
             "hash": source_hash,
             "level": 0,
         });
-        let summary_id = format!(
-            "sum-{}",
-            &sha256_hex(&canonical_bytes(&material)?)[..32]
-        );
+        let summary_id = format!("sum-{}", &sha256_hex(&canonical_bytes(&material)?)[..32]);
         transaction
             .execute(
                 "INSERT OR REPLACE INTO session_summaries(\
@@ -415,10 +409,7 @@ fn compact_force(
                 "hash": source_hash,
                 "level": level,
             });
-            let summary_id = format!(
-                "sum-{}",
-                &sha256_hex(&canonical_bytes(&material)?)[..32]
-            );
+            let summary_id = format!("sum-{}", &sha256_hex(&canonical_bytes(&material)?)[..32]);
             let children_json = serde_json::to_string(&material["children"])
                 .map_err(|_| "SESSION_ARCHIVE_SUMMARY_CHILDREN_INVALID".to_owned())?;
             transaction
@@ -458,10 +449,7 @@ fn checkpoint_id(session_id: &str, event_hash: &str) -> Result<String, String> {
         std::process::id(),
         std::thread::current().id(),
     );
-    Ok(format!(
-        "cp-{}",
-        &sha256_hex(material.as_bytes())[..32]
-    ))
+    Ok(format!("cp-{}", &sha256_hex(material.as_bytes())[..32]))
 }
 
 fn checkpoint(
@@ -546,8 +534,8 @@ fn checkpoints(connection: &Connection, session_id: &str) -> Result<Vec<Value>, 
         .map_err(|error| format!("SESSION_ARCHIVE_CHECKPOINT_LIST_QUERY_FAILED:{error}"))?;
     let mut output = Vec::new();
     for row in rows {
-        let row = row
-            .map_err(|error| format!("SESSION_ARCHIVE_CHECKPOINT_LIST_ROW_FAILED:{error}"))?;
+        let row =
+            row.map_err(|error| format!("SESSION_ARCHIVE_CHECKPOINT_LIST_ROW_FAILED:{error}"))?;
         let metadata: Value = serde_json::from_str(&row.5)
             .map_err(|_| "SESSION_ARCHIVE_CHECKPOINT_METADATA_INVALID".to_owned())?;
         output.push(json!({
@@ -701,10 +689,7 @@ mod tests {
 
     #[test]
     fn session_archive_commands_are_supported() {
-        assert!(supports(&[
-            "session".to_owned(),
-            "checkpoint".to_owned(),
-        ]));
+        assert!(supports(&["session".to_owned(), "checkpoint".to_owned(),]));
         assert!(supports(&["session".to_owned(), "export".to_owned()]));
     }
 }

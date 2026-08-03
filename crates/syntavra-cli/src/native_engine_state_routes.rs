@@ -101,9 +101,9 @@ fn conflicting_input(arguments: &[String], allowed: &str) -> Result<bool, String
     }
     Ok(flag_present(arguments, "--live-config")
         || flag_present(arguments, "--telemetry-prometheus")
-        || arguments.iter().any(|value| {
-            value == "--scheduler-state" || value.starts_with("--scheduler-state=")
-        }))
+        || arguments
+            .iter()
+            .any(|value| value == "--scheduler-state" || value.starts_with("--scheduler-state=")))
 }
 
 fn hex_nibble(value: u8) -> Option<u8> {
@@ -123,10 +123,9 @@ fn decode_receipt_hex(value: &str) -> Result<Vec<u8>, String> {
     }
     let mut output = Vec::with_capacity(value.len() / 2);
     for pair in value.as_bytes().chunks_exact(2) {
-        let high = hex_nibble(pair[0])
-            .ok_or_else(|| "RECEIPT_ROUTE_HEX_NONCANONICAL".to_owned())?;
-        let low = hex_nibble(pair[1])
-            .ok_or_else(|| "RECEIPT_ROUTE_HEX_NONCANONICAL".to_owned())?;
+        let high =
+            hex_nibble(pair[0]).ok_or_else(|| "RECEIPT_ROUTE_HEX_NONCANONICAL".to_owned())?;
+        let low = hex_nibble(pair[1]).ok_or_else(|| "RECEIPT_ROUTE_HEX_NONCANONICAL".to_owned())?;
         output.push((high << 4) | low);
     }
     Ok(output)

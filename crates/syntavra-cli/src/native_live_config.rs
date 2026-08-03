@@ -365,9 +365,13 @@ fn override_layer(
     let Some(encoded) = encoded else {
         return Ok(Vec::new());
     };
-    let raw = decode_lower_hex(encoded, MAX_OVERRIDE_JSON_BYTES, "LIVE_OVERRIDE_HEX_INVALID")?;
-    let value: Value = serde_json::from_slice(&raw)
-        .map_err(|_| "LIVE_OVERRIDE_JSON_INVALID".to_owned())?;
+    let raw = decode_lower_hex(
+        encoded,
+        MAX_OVERRIDE_JSON_BYTES,
+        "LIVE_OVERRIDE_HEX_INVALID",
+    )?;
+    let value: Value =
+        serde_json::from_slice(&raw).map_err(|_| "LIVE_OVERRIDE_JSON_INVALID".to_owned())?;
     if canonical_json(&value)?.as_bytes() != raw {
         return Err("LIVE_OVERRIDE_JSON_NONCANONICAL".to_owned());
     }

@@ -29,6 +29,10 @@ mod native_engine_routes;
 mod native_engine_state_routes;
 #[path = "native_expansion.rs"]
 mod native_expansion;
+#[path = "native_expansion.rs"]
+mod native_expansion;
+#[path = "native_expansion.rs"]
+mod native_expansion;
 #[path = "native_external_suite_gate.rs"]
 mod native_external_suite_gate;
 #[path = "native_external_suites.rs"]
@@ -286,22 +290,12 @@ pub fn execute(
         return native_expansion::execute(command, &arguments, project_root, state_root).map(Some);
     }
     if native_session_continuity::supports(command) {
-        return native_session_continuity::execute(
-            command,
-            &arguments,
-            project_root,
-            state_root,
-        )
-        .map(Some);
+        return native_session_continuity::execute(command, &arguments, project_root, state_root)
+            .map(Some);
     }
     if native_session_mutations::supports(command) {
-        return native_session_mutations::execute(
-            command,
-            &arguments,
-            project_root,
-            state_root,
-        )
-        .map(Some);
+        return native_session_mutations::execute(command, &arguments, project_root, state_root)
+            .map(Some);
     }
     if native_session_status::supports(command) {
         return native_session_status::execute(project_root, state_root).map(Some);

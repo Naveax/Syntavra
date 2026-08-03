@@ -133,11 +133,7 @@ pub fn execute(state_root: &Path) -> Result<Value, String> {
         wall_time_ms += python_float(object.get("wall_time_ms"))?.max(0.0);
         cost_usd += python_float(object.get("cost_usd"))?.max(0.0);
         compaction_ms += python_float(object.get("compaction_ms"))?.max(0.0);
-        continuity += u64::from(
-            object
-                .get("continuity_restored")
-                .is_some_and(json_truthy),
-        );
+        continuity += u64::from(object.get("continuity_restored").is_some_and(json_truthy));
         route_denied += u64::from(matches!(
             object.get("tool_route_allowed"),
             Some(Value::Bool(false))

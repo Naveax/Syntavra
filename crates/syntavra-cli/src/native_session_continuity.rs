@@ -32,8 +32,8 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("SESSION_STATE_DIRECTORY_CREATE_FAILED:{error}"))?;
     }
-    let connection = Connection::open(path)
-        .map_err(|error| format!("SESSION_STATE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("SESSION_STATE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
             "PRAGMA foreign_keys=ON;\
@@ -160,7 +160,11 @@ fn session(connection: &Connection, session_id: &str, project_id: &str) -> Resul
     }))
 }
 
-fn events(connection: &Connection, session_id: &str, project_id: &str) -> Result<Vec<Event>, String> {
+fn events(
+    connection: &Connection,
+    session_id: &str,
+    project_id: &str,
+) -> Result<Vec<Event>, String> {
     session(connection, session_id, project_id)?;
     let mut statement = connection
         .prepare(
@@ -205,7 +209,10 @@ fn verify(connection: &Connection, session_id: &str, project_id: &str) -> Result
     let mut expected_sequence = 1_i64;
     for event in &rows {
         if event.sequence != expected_sequence {
-            reasons.push(format!("sequence-gap:{expected_sequence}->{}", event.sequence));
+            reasons.push(format!(
+                "sequence-gap:{expected_sequence}->{}",
+                event.sequence
+            ));
         }
         if event.previous_hash != previous {
             reasons.push(format!("previous-hash-mismatch:{}", event.sequence));
@@ -249,7 +256,11 @@ fn python_string(value: &Value) -> String {
         Value::Object(values) => {
             let mut rows = Vec::new();
             for (key, value) in values {
-                rows.push(format!("'{}': {}", key.replace('\'', "\\'"), python_repr(value)));
+                rows.push(format!(
+                    "'{}': {}",
+                    key.replace('\'', "\\'"),
+                    python_repr(value)
+                ));
             }
             format!("{{{}}}", rows.join(", "))
         }
@@ -269,7 +280,9 @@ fn deterministic_summary(rows: &[Event]) -> String {
     for event in rows {
         *counts.entry(event.event_type.clone()).or_default() += 1;
         if let Some(payload) = event.payload.as_object() {
-            for key in ["task", "decision", "error", "result", "path", "command", "claim"] {
+            for key in [
+                "task", "decision", "error", "result", "path", "command", "claim",
+            ] {
                 if facts.len() >= 20 {
                     break;
                 }
@@ -433,8 +446,9 @@ fn python_json(value: &Value) -> Result<String, String> {
         Value::Null => Ok("null".to_owned()),
         Value::Bool(value) => Ok(value.to_string()),
         Value::Number(value) => Ok(value.to_string()),
-        Value::String(value) => serde_json::to_string(value)
-            .map_err(|_| "SESSION_CONTEXT_JSON_INVALID".to_owned()),
+        Value::String(value) => {
+            serde_json::to_string(value).map_err(|_| "SESSION_CONTEXT_JSON_INVALID".to_owned())
+        }
         Value::Array(values) => Ok(format!(
             "[{}]",
             values
@@ -611,11 +625,19 @@ fn continuity(
             )
             .optional()
             .map_err(|error| format!("SESSION_SUMMARY_EXPAND_FAILED:{error}"))?;
-        coverage.is_some_and(|row| {
-            row.2.is_none()
-                && row.1 - row.0 + 1
-                    == context["exact_history_events"].as_i64().unwrap_or(-1)
-        })
+        match coverage {
+            Some((source_start, source_end, None)) => {
+                let event_count = connection
+                    .query_row(
+                        "SELECT COUNT(*) FROM session_events                          WHERE session_id=?1 AND sequence BETWEEN ?2 AND ?3",
+                        params![session_id, source_start, source_end],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .map_err(|error| format!("SESSION_SUMMARY_EVENT_COUNT_FAILED:{error}"))?;
+                event_count == context["exact_history_events"].as_i64().unwrap_or(-1)
+            }
+            Some((_, _, Some(_))) | None => false,
+        }
     } else {
         true
     };
@@ -673,8 +695,12 @@ pub fn execute(
     let project_id = super::state_snapshot_contract::project_id_for_root(&project)?;
     let mut connection = initialize_database(&state_root.join("sessions.sqlite3"))?;
     match command.get(1).map(String::as_str) {
-        Some("session-compact") => compact_once(arguments, &project_id, state_root, &mut connection),
-        Some("session-continuity") => continuity(arguments, &project_id, state_root, &mut connection),
+        Some("session-compact") => {
+            compact_once(arguments, &project_id, state_root, &mut connection)
+        }
+        Some("session-continuity") => {
+            continuity(arguments, &project_id, state_root, &mut connection)
+        }
         _ => Err("SESSION_CONTINUITY_COMMAND_UNSUPPORTED".to_owned()),
     }
 }
