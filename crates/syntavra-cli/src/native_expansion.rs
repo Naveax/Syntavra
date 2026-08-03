@@ -27,7 +27,7 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Value, String> {
     if native_evidence_stats::supports(command) {
-        return native_evidence_stats::execute(command, state_root);
+        return native_evidence_stats::execute(command, arguments, state_root);
     }
     if native_migrations::supports(command) {
         return native_migrations::execute(command, arguments);
@@ -52,6 +52,7 @@ mod tests {
         assert!(supports(&["scheduler".to_owned(), "reap".to_owned()]));
         assert!(supports(&["evidence".to_owned(), "stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-stats".to_owned()]));
+        assert!(supports(&["run".to_owned(), "evidence-neighbors".to_owned()]));
         assert!(!supports(&["run".to_owned(), "unknown".to_owned()]));
     }
 }
