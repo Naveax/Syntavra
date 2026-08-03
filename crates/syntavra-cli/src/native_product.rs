@@ -17,6 +17,8 @@ mod native_audit_config;
 mod native_cache_amortize;
 #[path = "native_config_read_only.rs"]
 mod native_config_read_only;
+#[path = "native_context_governor.rs"]
+mod native_context_governor;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
 #[path = "native_external_suite_gate.rs"]
@@ -72,6 +74,7 @@ mod telemetry_metrics_contract;
 
 pub fn supports(command: &[String]) -> bool {
     native_config_read_only::supports(command)
+        || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
@@ -229,6 +232,9 @@ pub fn execute(
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if native_config_read_only::supports(command) {
         return native_config_read_only::execute(command, &arguments, project_root).map(Some);
+    }
+    if native_context_governor::supports(command) {
+        return native_context_governor::execute(command, &arguments).map(Some);
     }
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
