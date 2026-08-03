@@ -16,6 +16,9 @@ mod native_evidence_gc;
 #[path = "native_evidence_stats.rs"]
 mod native_evidence_stats;
 #[allow(clippy::pedantic)]
+#[path = "native_host.rs"]
+mod native_host;
+#[allow(clippy::pedantic)]
 #[path = "native_job_mutations.rs"]
 mod native_job_mutations;
 #[path = "native_job_queries.rs"]
@@ -63,6 +66,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_evidence_describe::supports(command)
         || native_evidence_gc::supports(command)
         || native_evidence_stats::supports(command)
+        || native_host::supports(command)
         || native_job_mutations::supports(command)
         || native_job_queries::supports(command)
         || native_memory::supports(command)
@@ -116,6 +120,9 @@ pub fn execute(
     }
     if native_evidence_stats::supports(command) {
         return native_evidence_stats::execute(command, arguments, state_root);
+    }
+    if native_host::supports(command) {
+        return native_host::execute(command, arguments, project_root);
     }
     if native_job_mutations::supports(command) {
         return native_job_mutations::execute(command, arguments, state_root);
@@ -182,6 +189,10 @@ mod tests {
     #[test]
     fn routes_recent_expansion_commands() {
         for command in [
+            vec!["host"],
+            vec!["host", "negotiate"],
+            vec!["host", "detect"],
+            vec!["host", "capabilities"],
             vec!["job", "cancel"],
             vec!["memory", "add"],
             vec!["memory", "search"],
