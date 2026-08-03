@@ -23,6 +23,8 @@ mod native_context_governor;
 mod native_context_stress;
 #[path = "native_engine_routes.rs"]
 mod native_engine_routes;
+#[path = "native_engine_state_routes.rs"]
+mod native_engine_state_routes;
 #[path = "native_external_suite_gate.rs"]
 mod native_external_suite_gate;
 #[path = "native_external_suites.rs"]
@@ -75,6 +77,8 @@ mod read_only_cli_contract;
 mod scheduler_read_only_contract;
 #[path = "state_layout_contract.rs"]
 mod state_layout_contract;
+#[path = "state_snapshot_contract.rs"]
+mod state_snapshot_contract;
 #[path = "telemetry_metrics_contract.rs"]
 mod telemetry_metrics_contract;
 
@@ -83,6 +87,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
         || native_engine_routes::supports(command)
+        || native_engine_state_routes::supports(command)
         || native_static_surfaces::supports(command)
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
@@ -250,6 +255,9 @@ pub fn execute(
     }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root).map(Some);
+    }
+    if native_engine_state_routes::supports(command) {
+        return native_engine_state_routes::execute(project_root).map(Some);
     }
     if native_static_surfaces::supports(command) {
         return native_static_surfaces::execute(command, &arguments).map(Some);
