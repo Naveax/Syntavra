@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use super::config_contract::{
-    explain_config_wire_json, resolve_config_wire, snapshot_json, ConfigScalar,
+    default_config_wire, explain_config_wire_json, resolve_config_wire, snapshot_json, status_json,
+    ConfigScalar,
 };
 
 const MAX_CONFIG_FILE_BYTES: u64 = 128 * 1024;
@@ -302,7 +303,11 @@ fn discover_wire(project_root: &Path) -> Result<Vec<u8>, String> {
         "project-config",
     )?);
     assignments.extend(environment_layer()?);
-    encode_wire(&assignments)
+    if assignments.is_empty() {
+        Ok(default_config_wire().to_vec())
+    } else {
+        encode_wire(&assignments)
+    }
 }
 
 fn command_path(arguments: &[String]) -> Result<String, String> {
@@ -320,6 +325,24 @@ fn command_path(arguments: &[String]) -> Result<String, String> {
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [group, action]
         if group == "config" && matches!(action.as_str(), "explain" | "show" | "validate"))
+}
+
+fn validate_result(snapshot: &super::config_contract::ConfigSnapshot) -> Result<Value, String> {
+    let status: Value = serde_json::from_str(&status_json(snapshot))
+        .map_err(|_| "CONFIG_VALIDATE_STATUS_JSON_INVALID".to_owned())?;
+    let config_hash = status
+        .get("config_hash")
+        .cloned()
+        .ok_or_else(|| "CONFIG_VALIDATE_HASH_MISSING".to_owned())?;
+    let warnings = status
+        .get("warnings")
+        .cloned()
+        .ok_or_else(|| "CONFIG_VALIDATE_WARNINGS_MISSING".to_owned())?;
+    Ok(json!({
+        "ok": true,
+        "config_hash": config_hash,
+        "warnings": warnings,
+    }))
 }
 
 pub fn execute(
@@ -341,11 +364,7 @@ pub fn execute(
         }
         [group, action] if group == "config" && action == "validate" => {
             let snapshot = resolve_config_wire(&wire)?;
-            Ok(json!({
-                "ok": true,
-                "config_hash": snapshot.config_hash,
-                "warnings": snapshot.warnings,
-            }))
+            validate_result(&snapshot)
         }
         _ => Err("RUST_CONFIG_READ_ONLY_COMMAND_UNSUPPORTED".to_owned()),
     }
