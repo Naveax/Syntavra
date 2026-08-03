@@ -57,6 +57,8 @@ mod native_semantic_demo;
 mod native_signalbench_gate;
 #[path = "native_signalbench_plan.rs"]
 mod native_signalbench_plan;
+#[path = "native_static_surfaces.rs"]
+mod native_static_surfaces;
 #[path = "native_statusline.rs"]
 mod native_statusline;
 #[path = "native_upgrade.rs"]
@@ -76,6 +78,7 @@ pub fn supports(command: &[String]) -> bool {
     native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
+        || native_static_surfaces::supports(command)
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
         || (command.len() == 1 && command[0] == "context-stress")
@@ -239,6 +242,9 @@ pub fn execute(
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
             .map(Some);
+    }
+    if native_static_surfaces::supports(command) {
+        return native_static_surfaces::execute(command, &arguments).map(Some);
     }
     if command.first().is_some_and(|item| item == "wrap") {
         return native_wrap::execute(&arguments, state_root).map(Some);
