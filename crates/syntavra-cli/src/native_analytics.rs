@@ -115,6 +115,7 @@ fn source_argument(arguments: &[String]) -> Result<&str, String> {
 
 pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String> {
     let event = load_event(source_argument(arguments)?)?;
+    let default_event_id = sha256_hex(&canonical_bytes(&event)?);
     let event_object = event
         .as_object()
         .ok_or_else(|| "ANALYTICS_EVENT_OBJECT_REQUIRED".to_owned())?;
@@ -124,20 +125,8 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
             row.insert((*field).to_owned(), value.clone());
         }
     }
-    row.entry("event_id".to_owned()).or_insert_with(|| {
-        Value::String(
-            canonical_bytes(&event)
-                .map(|bytes| sha256_hex(&bytes))
-                .unwrap_or_default(),
-        )
-    });
-    if row
-        .get("event_id")
-        .and_then(Value::as_str)
-        .is_some_and(str::is_empty)
-    {
-        return Err("ANALYTICS_EVENT_ID_INVALID".to_owned());
-    }
+    row.entry("event_id".to_owned())
+        .or_insert_with(|| Value::String(default_event_id));
     if !row.contains_key("observed_at") {
         row.insert("observed_at".to_owned(), Value::String(utc_isoformat()?));
     }
