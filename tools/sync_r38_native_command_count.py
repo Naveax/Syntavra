@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Canonical source for contract, selector, inventory and manifest synchronization.
 from __future__ import annotations
 
 import hashlib
