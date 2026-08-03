@@ -91,7 +91,7 @@ def _prepare_evidence_store(state_root: Path) -> None:
         json.dumps({"schema_version": 1, "active_version": 3}, sort_keys=True),
         encoding="utf-8",
     )
-    (keys / "master-v3.key").write_bytes(b"r38-native-evidence-key-32-bytes"[:32])
+    (keys / "master-v3.key").write_bytes(b"r38-native-evidence-key-32-bytes")
     database = sqlite3.connect(evidence / "evidence.sqlite3")
     try:
         database.executescript(
@@ -117,15 +117,14 @@ def _prepare_evidence_store(state_root: Path) -> None:
             CREATE INDEX evidence_expiry_idx ON evidence_objects(expires_at);
             """
         )
-        rows = [
-            ("a" * 64, 100, 140, 3, 10.0, 10.0, 1.0, 0, 0),
-            ("b" * 64, 200, 240, 3, 10.0, 10.0, 1.0, 2, 0),
-            ("c" * 64, 300, 340, 3, 10.0, 10.0, 1.0, 0, 1),
-            ("d" * 64, 400, 440, 3, 10.0, 10.0, 4_102_444_800.0, 1, 0),
-        ]
         database.executemany(
             "INSERT INTO evidence_objects VALUES(?,?,?,?,?,?,?,?,?)",
-            rows,
+            [
+                ("a" * 64, 100, 140, 3, 10.0, 10.0, 1.0, 0, 0),
+                ("b" * 64, 200, 240, 3, 10.0, 10.0, 1.0, 2, 0),
+                ("c" * 64, 300, 340, 3, 10.0, 10.0, 1.0, 0, 1),
+                ("d" * 64, 400, 440, 3, 10.0, 10.0, 4_102_444_800.0, 1, 0),
+            ],
         )
         database.commit()
     finally:
@@ -182,6 +181,16 @@ def _prepare_runtime_evidence(state_root: Path) -> None:
         database.close()
 
 
+def _runtime_state_pair(tmp_path: Path) -> tuple[Path, Path]:
+    source = tmp_path / "source"
+    python_state = tmp_path / "python"
+    rust_state = tmp_path / "rust"
+    _prepare_runtime_evidence(source)
+    shutil.copytree(source, python_state)
+    shutil.copytree(source, rust_state)
+    return python_state, rust_state
+
+
 def test_native_empty_evidence_store_stats_match_python(tmp_path: Path) -> None:
     python_state = tmp_path / "python"
     rust_state = tmp_path / "rust"
@@ -214,12 +223,7 @@ def test_native_populated_evidence_store_stats_match_python(tmp_path: Path) -> N
 
 
 def test_native_runtime_evidence_stats_match_python(tmp_path: Path) -> None:
-    source = tmp_path / "source"
-    python_state = tmp_path / "python"
-    rust_state = tmp_path / "rust"
-    _prepare_runtime_evidence(source)
-    shutil.copytree(source, python_state)
-    shutil.copytree(source, rust_state)
+    python_state, rust_state = _runtime_state_pair(tmp_path)
 
     rust_result = _rust_engine(rust_state, "run", "evidence-stats")
     python_result = _python_engine(python_state, "run", "evidence-stats")
@@ -234,3 +238,36 @@ def test_native_runtime_evidence_stats_match_python(tmp_path: Path) -> None:
             {"relation": "COVERS", "count": 1},
         ],
     }
+
+
+def test_native_runtime_evidence_forward_neighbors_match_python(tmp_path: Path) -> None:
+    python_state, rust_state = _runtime_state_pair(tmp_path)
+    rust_result = _rust_engine(rust_state, "run", "evidence-neighbors", "node-b")
+    python_result = _python_engine(python_state, "run", "evidence-neighbors", "node-b")
+
+    assert rust_result == python_result
+    assert [row["evidence"] for row in rust_result["neighbors"]] == ["ev-3", "ev-1"]
+    assert [row["node"]["node_id"] for row in rust_result["neighbors"]] == ["node-c", "node-a"]
+    assert rust_result["neighbors"][0]["metadata"] == {}
+    assert rust_result["neighbors"][0]["node"]["metadata_json"] == "{}"
+
+
+def test_native_runtime_evidence_relation_filter_matches_python(tmp_path: Path) -> None:
+    python_state, rust_state = _runtime_state_pair(tmp_path)
+    arguments = ("run", "evidence-neighbors", "node-b", "--relation", "CALLS")
+    rust_result = _rust_engine(rust_state, *arguments)
+    python_result = _python_engine(python_state, *arguments)
+
+    assert rust_result == python_result
+    assert [row["evidence"] for row in rust_result["neighbors"]] == ["ev-1"]
+
+
+def test_native_runtime_evidence_reverse_neighbors_match_python(tmp_path: Path) -> None:
+    python_state, rust_state = _runtime_state_pair(tmp_path)
+    arguments = ("run", "evidence-neighbors", "node-a", "--reverse")
+    rust_result = _rust_engine(rust_state, *arguments)
+    python_result = _python_engine(python_state, *arguments)
+
+    assert rust_result == python_result
+    assert [row["evidence"] for row in rust_result["neighbors"]] == ["ev-2", "ev-1"]
+    assert [row["node"]["node_id"] for row in rust_result["neighbors"]] == ["node-c", "node-b"]
