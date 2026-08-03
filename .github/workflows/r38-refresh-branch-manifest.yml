@@ -1,6 +1,4 @@
 # Canonical formatter, inventory and manifest synchronization for the active R38 branch.
-# Every independently implemented native command slice is synchronized from the contract inventory.
-# The current refresh seals the maturity and provider-billed native proof slice.
 name: Refresh R38 Generated Metadata
 
 on:
@@ -12,6 +10,11 @@ on:
       - "contracts/engine/dual-engine-public-surface-v2.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
       - "crates/syntavra-cli/src/native_*.rs"
+      - "syntavra_runtime/engine_entry.py"
+      - "syntavra_runtime/prerelease_cli.py"
+      - "tools/export_python_surface.py"
+      - "tools/export_rust_surface.py"
+      - "tools/sync_r38_native_command_count.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_*_r38.py"
   push:
@@ -19,7 +22,6 @@ on:
     paths:
       - ".github/workflows/r38-refresh-branch-manifest.yml"
       - ".github/workflows/r38-dual-engine-runtime.yml"
-      - ".github/workflows/validate-fusion-runtime.yml"
       - "contracts/engine/dual-engine-public-surface-v2.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
       - "crates/syntavra-cli/src/native_*.rs"
@@ -55,193 +57,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Normalize external-suite numeric helper
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/syntavra-cli/src/native_external_suite_gate.rs")
-          text = path.read_text(encoding="utf-8")
-          helper = (
-              "\nfn integer_as_f64(value: i64) -> f64 {\n"
-              "    value.to_string().parse::<f64>().unwrap_or(0.0)\n"
-              "}\n"
-          )
-          count = text.count(helper)
-          if count == 2:
-              first = text.find(helper)
-              second = text.find(helper, first + len(helper))
-              text = text[:second] + text[second + len(helper):]
-              path.write_text(text, encoding="utf-8")
-          elif count != 1:
-              raise SystemExit(f"unexpected integer_as_f64 definition count: {count}")
-          PY
-      - name: Normalize proof evidence bool conversion
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/syntavra-cli/src/native_proof_evidence.rs")
-          text = path.read_text(encoding="utf-8")
-          before = ".or_else(|| item.as_bool().map(|flag| if flag { 1 } else { 0 }))"
-          after = ".or_else(|| item.as_bool().map(i64::from))"
-          count = text.count(before)
-          if count == 1:
-              path.write_text(text.replace(before, after, 1), encoding="utf-8")
-          elif count == 0 and text.count(after) == 1:
-              pass
-          else:
-              raise SystemExit(f"unexpected bool conversion state: before={count}, after={text.count(after)}")
-          PY
-      - name: Normalize maturity proof imports
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/syntavra-cli/src/native_proof_maturity.rs")
-          text = path.read_text(encoding="utf-8")
-          before = "use serde_json::{json, Map, Value};"
-          after = "use serde_json::{json, Value};"
-          count = text.count(before)
-          if count == 1:
-              path.write_text(text.replace(before, after, 1), encoding="utf-8")
-          elif count == 0 and text.count(after) == 1:
-              pass
-          else:
-              raise SystemExit(f"unexpected maturity import state: before={count}, after={text.count(after)}")
-          PY
-      - name: Normalize final maturity Clippy structure
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/syntavra-cli/src/native_proof_maturity.rs")
-          text = path.read_text(encoding="utf-8")
-
-          pairs = [
-              (
-                  "        reasons,\n        &onboarding,",
-                  "        &reasons,\n        &onboarding,",
-              ),
-              (
-                  "    reasons: Vec<String>,\n    onboarding: &OnboardingAssessment,",
-                  "    reasons: &[String],\n    onboarding: &OnboardingAssessment,",
-              ),
-          ]
-          for before, after in pairs:
-              count = text.count(before)
-              if count == 1:
-                  text = text.replace(before, after, 1)
-              elif count == 0 and text.count(after) == 1:
-                  pass
-              else:
-                  raise SystemExit(f"unexpected maturity slice state: before={count}, after={text.count(after)}")
-
-          stats_struct = '''struct ProviderPairStats {
-    ratios: Vec<f64>,
-    observed_pairs: Vec<Flag>,
-    invalid_pairs: Vec<Value>,
-    quality: BTreeMap<String, i64>,
-    total: BTreeMap<String, i64>,
-}
-'''
-          summary_struct = stats_struct + '''
-struct ProviderBilledSummary {
-    confidence_interval: Option<[f64; 2]>,
-    median_ratio: Option<f64>,
-    pass_rates: BTreeMap<String, f64>,
-    observed_count: usize,
-    claimable: bool,
-}
-'''
-          if text.count(summary_struct) == 0:
-              if text.count(stats_struct) != 1:
-                  raise SystemExit("unexpected ProviderPairStats structure")
-              text = text.replace(stats_struct, summary_struct, 1)
-
-          old_call = '''    Ok(provider_billed_value(
-        baseline,
-        candidate,
-        &rows,
-        stats,
-        ci,
-        ratio_median,
-        pass_rates,
-        observed_count,
-        claimable,
-    ))
-'''
-          new_call = '''    let summary = ProviderBilledSummary {
-        confidence_interval: ci,
-        median_ratio: ratio_median,
-        pass_rates,
-        observed_count,
-        claimable,
-    };
-    Ok(provider_billed_value(
-        baseline,
-        candidate,
-        &rows,
-        &stats,
-        &summary,
-    ))
-'''
-          if text.count(old_call) == 1:
-              text = text.replace(old_call, new_call, 1)
-          elif text.count(new_call) != 1:
-              raise SystemExit("unexpected provider billed call structure")
-
-          old_function = '''fn provider_billed_value(
-    baseline: &str,
-    candidate: &str,
-    rows: &[SignalRun],
-    stats: ProviderPairStats,
-    confidence_interval: Option<[f64; 2]>,
-    median_ratio: Option<f64>,
-    pass_rates: BTreeMap<String, f64>,
-    observed_count: usize,
-    claimable: bool,
-) -> Value {
-    json!({
-        "baseline": baseline,
-        "candidate": candidate,
-        "valid_pairs": stats.ratios.len(),
-        "invalid_pairs": stats.invalid_pairs,
-        "provider_observed_pairs": observed_count,
-        "provider_unobserved_pairs": stats.observed_pairs.len() - observed_count,
-        "median_efficiency_ratio": median_ratio,
-        "confidence_interval_95": confidence_interval,
-        "pass_rates": pass_rates,
-        "claimable_superiority": claimable,
-        "claim": if claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
-'''
-          new_function = '''fn provider_billed_value(
-    baseline: &str,
-    candidate: &str,
-    rows: &[SignalRun],
-    stats: &ProviderPairStats,
-    summary: &ProviderBilledSummary,
-) -> Value {
-    json!({
-        "baseline": baseline,
-        "candidate": candidate,
-        "valid_pairs": stats.ratios.len(),
-        "invalid_pairs": stats.invalid_pairs,
-        "provider_observed_pairs": summary.observed_count,
-        "provider_unobserved_pairs": stats.observed_pairs.len() - summary.observed_count,
-        "median_efficiency_ratio": summary.median_ratio,
-        "confidence_interval_95": summary.confidence_interval,
-        "pass_rates": summary.pass_rates,
-        "claimable_superiority": summary.claimable,
-        "claim": if summary.claimable { "SUPERIORITY_PROVEN" } else { "NOT_PROVEN" },
-'''
-          if text.count(old_function) == 1:
-              text = text.replace(old_function, new_function, 1)
-          elif text.count(new_function) != 1:
-              raise SystemExit("unexpected provider billed output structure")
-
-          path.write_text(text, encoding="utf-8")
-          PY
       - name: Format Rust workspace
         run: cargo fmt --all
       - name: Synchronize complete R38 surface metadata
@@ -253,24 +68,17 @@ struct ProviderBilledSummary {
           python - <<'PY'
           import subprocess
 
-          changed = set(
-              subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
-          )
+          changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
           fixed = {
               "MANIFEST.sha256",
               "contracts/engine/dual-engine-public-surface-v2.json",
               "crates/syntavra-cli/src/bin/syntavra.rs",
               "tests/runtime/test_dual_engine_public_surface_r38.py",
-              "tests/runtime/test_native_redact_r38.py",
           }
           unexpected = {
-              path
-              for path in changed
+              path for path in changed
               if path not in fixed
-              and not (
-                  path.startswith("crates/syntavra-cli/src/native_")
-                  and path.endswith(".rs")
-              )
+              and not (path.startswith("crates/syntavra-cli/src/native_") and path.endswith(".rs"))
           }
           assert not unexpected, unexpected
           assert "MANIFEST.sha256" in changed, changed
@@ -283,8 +91,7 @@ struct ProviderBilledSummary {
             contracts/engine/dual-engine-public-surface-v2.json \
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_*.rs \
-            tests/runtime/test_dual_engine_public_surface_r38.py \
-            tests/runtime/test_native_redact_r38.py
+            tests/runtime/test_dual_engine_public_surface_r38.py
           git diff --cached --quiet && exit 0
           git commit -m "R38: synchronize complete surface metadata"
           git push origin HEAD:agent/full-dual-engine-runtime
