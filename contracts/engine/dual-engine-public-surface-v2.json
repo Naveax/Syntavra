@@ -12,17 +12,17 @@
   "product": "Syntavra",
   "product_version": "0.0.1",
   "python_surface": {
-    "command_paths_sha256": "ac9ae6470a074700ac5d13064ff7da9569038fd6733cde49741272c1a4167581",
+    "command_paths_sha256": "f6dfe1be5dba106bfcb30c92724889e2389aa8fe2d36dac6c00ddd7786f8f896",
     "digest_encoding": "canonical-json-array-utf8",
-    "module_count": 194,
-    "public_command_count": 265
+    "module_count": 195,
+    "public_command_count": 280
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 213,
+    "missing_native_public_command_count": 227,
     "module_count": 53,
-    "native_coverage_ppm": 196226,
-    "native_public_command_count": 52,
+    "native_coverage_ppm": 189285,
+    "native_public_command_count": 53,
     "native_public_commands": [
       "benchmark generate-config",
       "config explain",
@@ -52,6 +52,7 @@
       "prove receipts",
       "prove schema",
       "prove suites",
+      "provider capabilities",
       "run audit-config",
       "run cache-amortize",
       "run cache-health",
