@@ -73,7 +73,7 @@ def _run(engine: str, state_root: Path, *arguments: str) -> dict[str, Any]:
 def _prepare_state(state_root: Path) -> dict[str, str]:
     graph = VerifierGraph(state_root / "verifier.sqlite3")
     first = graph.record(
-        ("cargo", "test", "--workspace"),
+        ("cargo", "test", "workspace-tests"),
         tree_hash="tree-a",
         environment_hash="env-a",
         dependency_hash="deps-a",
@@ -84,7 +84,7 @@ def _prepare_state(state_root: Path) -> dict[str, str]:
         affected_paths=("src/lib.rs", "Cargo.toml"),
     )
     second = graph.record(
-        ("python", "-m", "pytest", "-q"),
+        ("python", "pytest", "quiet-suite"),
         tree_hash="tree-b",
         environment_hash="env-b",
         dependency_hash="deps-b",
@@ -127,7 +127,7 @@ def test_native_verifier_lookup_hit_matches_python(tmp_path: Path) -> None:
         "lookup",
         "cargo",
         "test",
-        "--workspace",
+        "workspace-tests",
         "--tree-hash",
         "tree-a",
         "--environment-hash",
@@ -144,7 +144,7 @@ def test_native_verifier_lookup_hit_matches_python(tmp_path: Path) -> None:
     assert rust_result == python_result
     assert rust_result == {
         "cache_key": keys["first"],
-        "command": ["cargo", "test", "--workspace"],
+        "command": ["cargo", "test", "workspace-tests"],
         "tree_hash": "tree-a",
         "environment_hash": "env-a",
         "dependency_hash": "deps-a",
@@ -195,12 +195,12 @@ def test_native_verifier_invalidation_matches_python_order(tmp_path: Path) -> No
             {
                 "cache_key": keys["second"],
                 "overlap": ["src/lib.rs"],
-                "command": ["python", "-m", "pytest", "-q"],
+                "command": ["python", "pytest", "quiet-suite"],
             },
             {
                 "cache_key": keys["first"],
                 "overlap": ["Cargo.toml", "src/lib.rs"],
-                "command": ["cargo", "test", "--workspace"],
+                "command": ["cargo", "test", "workspace-tests"],
             },
         ]
     }
