@@ -386,7 +386,6 @@ pub fn execute(
     command: &[String],
     arguments: &[String],
     project_root: &Path,
-    state_root: &Path,
 ) -> Result<Value, String> {
     let route = command
         .get(2)
@@ -397,7 +396,12 @@ pub fn execute(
         "config.resolve" => route_config_resolve(arguments),
         "migration.plan" => route_migration_plan(arguments, project_root),
         "pipeline.describe" | "plugins.list" => route_static(route),
-        "scheduler.list" | "scheduler.stats" => route_scheduler(route, arguments, state_root),
+        "scheduler.list" | "scheduler.stats" => {
+            let state_root = option_value(arguments, "--state-root")?
+                .map(PathBuf::from)
+                .unwrap_or_else(|| project_root.join(".syntavra").join("pre-release"));
+            route_scheduler(route, arguments, &state_root)
+        }
         "state.layout" => route_state_layout(),
         "telemetry.metrics" => route_telemetry(arguments),
         _ => Err("ENGINE_ROUTE_UNSUPPORTED".to_owned()),
@@ -430,13 +434,8 @@ mod tests {
             .into_iter()
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        let value = execute(
-            &command("version"),
-            &arguments,
-            Path::new("."),
-            Path::new("."),
-        )
-        .expect("version route");
+        let value = execute(&command("version"), &arguments, Path::new("."))
+            .expect("version route");
         assert_eq!(value["result"]["engine"], "rust");
         assert_eq!(value["selection"]["resolved"], "rust");
     }
