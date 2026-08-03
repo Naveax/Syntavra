@@ -6,13 +6,19 @@ on:
     paths:
       - "contracts/engine/dual-engine-public-surface-v2.json"
       - "crates/syntavra-cli/**"
+      - "syntavra_runtime/evidence_rotation.py"
+      - "syntavra_runtime/production_extension.py"
+      - "syntavra_runtime/unified_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
       - "tools/verify_dual_engine_public_surface.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
+      - "tests/runtime/test_evidence_key_rotation_r38.py"
+      - "tests/runtime/test_installed_python_surface_r38.py"
       - "tests/runtime/test_native_audit_config_r38.py"
       - "tests/runtime/test_native_config_read_only_r38.py"
       - "tests/runtime/test_native_context_governor_r38.py"
+      - "tests/runtime/test_native_engine_routes_r38.py"
       - "tests/runtime/test_native_external_suite_gate_r38.py"
       - "tests/runtime/test_native_external_suites_r38.py"
       - "tests/runtime/test_native_integrations_r38.py"
@@ -37,13 +43,19 @@ on:
     paths:
       - "contracts/engine/dual-engine-public-surface-v2.json"
       - "crates/syntavra-cli/**"
+      - "syntavra_runtime/evidence_rotation.py"
+      - "syntavra_runtime/production_extension.py"
+      - "syntavra_runtime/unified_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
       - "tools/verify_dual_engine_public_surface.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
+      - "tests/runtime/test_evidence_key_rotation_r38.py"
+      - "tests/runtime/test_installed_python_surface_r38.py"
       - "tests/runtime/test_native_audit_config_r38.py"
       - "tests/runtime/test_native_config_read_only_r38.py"
       - "tests/runtime/test_native_context_governor_r38.py"
+      - "tests/runtime/test_native_engine_routes_r38.py"
       - "tests/runtime/test_native_external_suite_gate_r38.py"
       - "tests/runtime/test_native_external_suites_r38.py"
       - "tests/runtime/test_native_integrations_r38.py"
@@ -108,9 +120,12 @@ jobs:
         run: >-
           python -m pytest -q
           tests/runtime/test_dual_engine_public_surface_r38.py
+          tests/runtime/test_evidence_key_rotation_r38.py
+          tests/runtime/test_installed_python_surface_r38.py
           tests/runtime/test_native_audit_config_r38.py
           tests/runtime/test_native_config_read_only_r38.py
           tests/runtime/test_native_context_governor_r38.py
+          tests/runtime/test_native_engine_routes_r38.py
           tests/runtime/test_native_external_suite_gate_r38.py
           tests/runtime/test_native_external_suites_r38.py
           tests/runtime/test_native_integrations_r38.py
