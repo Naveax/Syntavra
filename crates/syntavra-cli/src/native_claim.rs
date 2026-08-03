@@ -6,9 +6,6 @@ use std::path::Path;
 use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
-const MAX_RECEIPT_BYTES: u64 = 16 * 1024 * 1024;
-const MAX_ARTIFACT_BYTES: u64 = 1024 * 1024 * 1024;
-
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [root] if root == "claim")
 }
@@ -24,9 +21,9 @@ fn argument_after<'a>(arguments: &'a [String], command: &str) -> Result<&'a str,
         .ok_or_else(|| "CLAIM_RECEIPT_MISSING".to_owned())
 }
 
-fn regular_file_bytes(path: &Path, maximum: u64, code: &str) -> Result<Vec<u8>, String> {
+fn regular_file_bytes(path: &Path, code: &str) -> Result<Vec<u8>, String> {
     let metadata = fs::metadata(path).map_err(|_| code.to_owned())?;
-    if !metadata.is_file() || metadata.len() > maximum {
+    if !metadata.is_file() {
         return Err(code.to_owned());
     }
     fs::read(path).map_err(|_| code.to_owned())
@@ -36,28 +33,24 @@ fn canonical_bytes(value: &Value) -> Result<Vec<u8>, String> {
     serde_json::to_vec(value).map_err(|_| "CLAIM_CANONICAL_JSON_FAILED".to_owned())
 }
 
-fn artifact_hashes(value: &Map<String, Value>) -> Vec<(String, String)> {
+fn artifact_hashes(value: &Map<String, Value>) -> Vec<(String, Option<String>)> {
     match value.get("artifact_hashes").and_then(Value::as_object) {
         Some(rows) => rows
             .iter()
-            .filter_map(|(name, digest)| {
-                digest
-                    .as_str()
-                    .map(|digest| (name.clone(), digest.to_owned()))
-            })
+            .map(|(name, digest)| (name.clone(), digest.as_str().map(str::to_owned)))
             .collect(),
         None => Vec::new(),
     }
 }
 
 fn verify(path: &Path) -> Result<Value, String> {
-    let receipt_bytes = regular_file_bytes(path, MAX_RECEIPT_BYTES, "CLAIM_RECEIPT_INVALID")?;
+    let receipt_bytes = regular_file_bytes(path, "CLAIM_RECEIPT_INVALID")?;
     let mut value: Value = serde_json::from_slice(&receipt_bytes)
         .map_err(|_| "CLAIM_RECEIPT_JSON_INVALID".to_owned())?;
-    let object = value
+    let saved = value
         .as_object_mut()
-        .ok_or_else(|| "CLAIM_RECEIPT_OBJECT_REQUIRED".to_owned())?;
-    let saved = object.remove("receipt_hash");
+        .ok_or_else(|| "CLAIM_RECEIPT_OBJECT_REQUIRED".to_owned())?
+        .remove("receipt_hash");
     let mut reasons = Vec::<String>::new();
     let calculated = sha256_hex(&canonical_bytes(&value)?);
     if saved.as_ref().and_then(Value::as_str) != Some(calculated.as_str()) {
@@ -69,9 +62,11 @@ fn verify(path: &Path) -> Result<Value, String> {
         .ok_or_else(|| "CLAIM_RECEIPT_OBJECT_REQUIRED".to_owned())?;
     for (name, expected) in artifact_hashes(object) {
         let candidate = parent.join(&name);
-        let valid = regular_file_bytes(&candidate, MAX_ARTIFACT_BYTES, "CLAIM_ARTIFACT_INVALID")
-            .map(|bytes| sha256_hex(&bytes) == expected)
-            .unwrap_or(false);
+        let valid = expected.is_some_and(|expected| {
+            regular_file_bytes(&candidate, "CLAIM_ARTIFACT_INVALID")
+                .map(|bytes| sha256_hex(&bytes) == expected)
+                .unwrap_or(false)
+        });
         if !valid {
             reasons.push(format!("artifact-invalid:{name}"));
         }
