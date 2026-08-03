@@ -15,29 +15,7 @@ on:
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_evidence_key_rotation_r38.py"
       - "tests/runtime/test_installed_python_surface_r38.py"
-      - "tests/runtime/test_native_analytics_r38.py"
-      - "tests/runtime/test_native_audit_config_r38.py"
-      - "tests/runtime/test_native_config_read_only_r38.py"
-      - "tests/runtime/test_native_context_governor_r38.py"
-      - "tests/runtime/test_native_engine_routes_r38.py"
-      - "tests/runtime/test_native_external_suite_gate_r38.py"
-      - "tests/runtime/test_native_external_suites_r38.py"
-      - "tests/runtime/test_native_integrations_r38.py"
-      - "tests/runtime/test_native_long_context_r38.py"
-      - "tests/runtime/test_native_manifest_r38.py"
-      - "tests/runtime/test_native_mode_r38.py"
-      - "tests/runtime/test_native_proof_evidence_r38.py"
-      - "tests/runtime/test_native_proof_maturity_r38.py"
-      - "tests/runtime/test_native_prove_schema_r38.py"
-      - "tests/runtime/test_native_proxy_plan_r38.py"
-      - "tests/runtime/test_native_redact_r38.py"
-      - "tests/runtime/test_native_semantic_signalbench_r38.py"
-      - "tests/runtime/test_native_session_status_r38.py"
-      - "tests/runtime/test_native_signalbench_gate_r38.py"
-      - "tests/runtime/test_native_static_surfaces_r38.py"
-      - "tests/runtime/test_native_upgrade_r38.py"
-      - "tests/runtime/test_native_wire_r38.py"
-      - "tests/runtime/test_native_wrap_r38.py"
+      - "tests/runtime/test_native_*_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
       - ".github/workflows/r38-dual-engine-runtime.yml"
   push:
@@ -54,29 +32,7 @@ on:
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_evidence_key_rotation_r38.py"
       - "tests/runtime/test_installed_python_surface_r38.py"
-      - "tests/runtime/test_native_analytics_r38.py"
-      - "tests/runtime/test_native_audit_config_r38.py"
-      - "tests/runtime/test_native_config_read_only_r38.py"
-      - "tests/runtime/test_native_context_governor_r38.py"
-      - "tests/runtime/test_native_engine_routes_r38.py"
-      - "tests/runtime/test_native_external_suite_gate_r38.py"
-      - "tests/runtime/test_native_external_suites_r38.py"
-      - "tests/runtime/test_native_integrations_r38.py"
-      - "tests/runtime/test_native_long_context_r38.py"
-      - "tests/runtime/test_native_manifest_r38.py"
-      - "tests/runtime/test_native_mode_r38.py"
-      - "tests/runtime/test_native_proof_evidence_r38.py"
-      - "tests/runtime/test_native_proof_maturity_r38.py"
-      - "tests/runtime/test_native_prove_schema_r38.py"
-      - "tests/runtime/test_native_proxy_plan_r38.py"
-      - "tests/runtime/test_native_redact_r38.py"
-      - "tests/runtime/test_native_semantic_signalbench_r38.py"
-      - "tests/runtime/test_native_session_status_r38.py"
-      - "tests/runtime/test_native_signalbench_gate_r38.py"
-      - "tests/runtime/test_native_static_surfaces_r38.py"
-      - "tests/runtime/test_native_upgrade_r38.py"
-      - "tests/runtime/test_native_wire_r38.py"
-      - "tests/runtime/test_native_wrap_r38.py"
+      - "tests/runtime/test_native_*_r38.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
       - ".github/workflows/r38-dual-engine-runtime.yml"
   workflow_dispatch:
@@ -130,29 +86,7 @@ jobs:
           tests/runtime/test_dual_engine_public_surface_r38.py
           tests/runtime/test_evidence_key_rotation_r38.py
           tests/runtime/test_installed_python_surface_r38.py
-          tests/runtime/test_native_analytics_r38.py
-          tests/runtime/test_native_audit_config_r38.py
-          tests/runtime/test_native_config_read_only_r38.py
-          tests/runtime/test_native_context_governor_r38.py
-          tests/runtime/test_native_engine_routes_r38.py
-          tests/runtime/test_native_external_suite_gate_r38.py
-          tests/runtime/test_native_external_suites_r38.py
-          tests/runtime/test_native_integrations_r38.py
-          tests/runtime/test_native_long_context_r38.py
-          tests/runtime/test_native_manifest_r38.py
-          tests/runtime/test_native_mode_r38.py
-          tests/runtime/test_native_proof_evidence_r38.py
-          tests/runtime/test_native_proof_maturity_r38.py
-          tests/runtime/test_native_prove_schema_r38.py
-          tests/runtime/test_native_proxy_plan_r38.py
-          tests/runtime/test_native_redact_r38.py
-          tests/runtime/test_native_semantic_signalbench_r38.py
-          tests/runtime/test_native_session_status_r38.py
-          tests/runtime/test_native_signalbench_gate_r38.py
-          tests/runtime/test_native_static_surfaces_r38.py
-          tests/runtime/test_native_upgrade_r38.py
-          tests/runtime/test_native_wire_r38.py
-          tests/runtime/test_native_wrap_r38.py
+          tests/runtime/test_native_*_r38.py
       - name: Verify Rust formatting
         run: cargo fmt --all -- --check
       - name: Run launcher unit tests
