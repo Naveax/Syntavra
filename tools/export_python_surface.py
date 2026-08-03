@@ -82,17 +82,29 @@ def _installed_cli_commands() -> set[str]:
             unified_cli,
         )
 
-        parsers = (
-            engine_cli.build_parser(),
-            unified_cli._core_parser(),
-            prerelease_cli._parser(),
-            external_benchmark_cli.parser(),
-            cli.build_parser(),
-        )
-        commands = set(_MANUAL_DISPATCH_CLI_COMMANDS)
-        for parser in parsers:
-            commands.update(_walk_parser(parser))
-        return commands
+        engine_commands = _walk_parser(engine_cli.build_parser())
+        core_commands = _walk_parser(unified_cli._core_parser())
+        prerelease_commands = _walk_parser(prerelease_cli._parser())
+        external_commands = _walk_parser(external_benchmark_cli.parser())
+        legacy_commands = _walk_parser(cli.build_parser())
+        shadowed_roots = {
+            "engine",
+            *unified_cli.CORE_COMMANDS,
+            *prerelease_cli.PRE_RELEASE_COMMANDS,
+        }
+        reachable_legacy_commands = {
+            command
+            for command in legacy_commands
+            if command.split(maxsplit=1)[0] not in shadowed_roots
+        }
+        return {
+            *engine_commands,
+            *core_commands,
+            *prerelease_commands,
+            *external_commands,
+            *reachable_legacy_commands,
+            *_MANUAL_DISPATCH_CLI_COMMANDS,
+        }
     finally:
         if previous_bootstrap is None:
             os.environ.pop("SYNTAVRA_PORTABLE_BOOTSTRAP", None)
