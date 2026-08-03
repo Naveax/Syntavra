@@ -4,9 +4,9 @@ Status: accepted for implementation
 
 ## Context
 
-Syntavra currently has a complete Python product surface and several independent Rust implementations. The existing R23-R37 catalog certified a bounded set of 33 features, but the exported Python public surface contains 194 modules and 257 CLI command paths while the normal Rust CLI exposes only 10 directly equivalent public command paths. Seventeen additional routes are reached through a Python launcher.
+Syntavra currently has a complete Python product surface and several independent Rust implementations. The existing R23-R37 catalog certified a bounded set of features, but that scoped certification must not be interpreted as a complete native rewrite of the product.
 
-That scoped certification must not be interpreted as a complete native rewrite of the product.
+The installed-routing-aware inventory is authoritative. It excludes non-runnable parser group nodes and routes shadowed by higher-precedence dispatchers.
 
 ## Decision
 
@@ -72,9 +72,9 @@ Each migrated command changes from `PYTHON_ONLY` to `RUST_NATIVE_PUBLIC` only af
 
 `RUST_VIA_PYTHON_LAUNCHER` is transitional and never counts as native Rust coverage.
 
-## Current baseline
+## Adoption baseline
 
-At adoption of this ADR:
+At adoption of this ADR, the repository still contained a narrow, source-oriented estimate:
 
 - Python modules: 194
 - Python public command paths: 257
@@ -83,3 +83,20 @@ At adoption of this ADR:
 - full dual-engine claim: `DUAL_ENGINE_PARITY_INCOMPLETE`
 
 The historical R23-R37 evidence remains valid for its bounded contracts, but it does not satisfy this ADR's full-product acceptance criteria.
+
+## Current implementation status
+
+The canonical installed inventory now contains:
+
+- Python modules: **195**
+- Python public command paths: **245**
+- independent native Rust public command paths: **115**
+- remaining native Rust public command paths: **130**
+- native public-command coverage: **46.9387%**
+- Rust source modules: **83**
+- Python-launcher bridge paths counted as native: **0**
+- full dual-engine claim: `DUAL_ENGINE_PARITY_INCOMPLETE`
+
+Recent native slices include the complete public session lifecycle and query family, broker job queries and mutations, persistent memory operations, incremental rollout tailing, telemetry diagnostic bundles, evidence operations, verifier queries, migrations, scheduler operations and benchmark tooling.
+
+The R38 generated-metadata workflow now installs runtime dependencies, synchronizes the public-surface contract and selector counts, formats the Rust workspace, refreshes the deterministic repository manifest, validates generated scope idempotently and commits generated changes. Successful metadata generation does not itself certify runtime parity; exact-head formatting, Rust tests, strict Clippy, differential tests and platform matrices remain mandatory.
