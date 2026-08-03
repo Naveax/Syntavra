@@ -48,11 +48,7 @@ pub(super) fn parse_i64(arguments: &[String], name: &str) -> Result<i64, String>
         .map_err(|_| format!("CONTEXT_ARGUMENT_INVALID:{name}"))
 }
 
-pub(super) fn parse_f64(
-    arguments: &[String],
-    name: &str,
-    default: f64,
-) -> Result<f64, String> {
+pub(super) fn parse_f64(arguments: &[String], name: &str, default: f64) -> Result<f64, String> {
     match option_value(arguments, name) {
         Some(value) => value
             .parse::<f64>()
@@ -115,7 +111,10 @@ fn parse_item(value: &Value) -> Result<ContextItem, String> {
         tokens: required_i64(row, "tokens")?,
         utility: required_f64(row, "utility")?,
         confidence: row.get("confidence").and_then(Value::as_f64).unwrap_or(1.0),
-        mandatory: row.get("mandatory").and_then(Value::as_bool).unwrap_or(false),
+        mandatory: row
+            .get("mandatory")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         stable: row.get("stable").and_then(Value::as_bool).unwrap_or(false),
         dependencies: parse_dependencies(row)?,
     })

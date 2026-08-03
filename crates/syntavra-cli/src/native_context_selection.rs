@@ -30,9 +30,7 @@ fn dependency_closure(
     Ok(required)
 }
 
-pub(super) fn required_selection(
-    input: &PackInput,
-) -> Result<(BTreeSet<String>, i64), String> {
+pub(super) fn required_selection(input: &PackInput) -> Result<(BTreeSet<String>, i64), String> {
     let required_ids = input
         .by_id
         .values()
@@ -111,11 +109,7 @@ fn optional_density(item: &ContextItem) -> Result<f64, String> {
     Ok(item.utility * item.confidence / integer_as_f64(item.tokens.max(1))?)
 }
 
-fn depended_on(
-    outgoing: &ContextItem,
-    input: &PackInput,
-    selected: &BTreeSet<String>,
-) -> bool {
+fn depended_on(outgoing: &ContextItem, input: &PackInput, selected: &BTreeSet<String>) -> bool {
     selected.iter().any(|item_id| {
         item_id != &outgoing.item_id
             && input.by_id[item_id]

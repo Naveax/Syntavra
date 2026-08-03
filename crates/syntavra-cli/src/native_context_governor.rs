@@ -7,7 +7,9 @@ mod model;
 #[path = "native_context_selection.rs"]
 mod selection;
 
-use model::{integer_as_f64, over_budget_result, parse_f64, parse_i64, parse_pack_input, render_pack};
+use model::{
+    integer_as_f64, over_budget_result, parse_f64, parse_i64, parse_pack_input, render_pack,
+};
 use selection::{greedy_selection, replacement_selection, required_selection};
 
 const THRESHOLDS: [(f64, &[&str]); 6] = [
@@ -29,8 +31,7 @@ fn evaluate(arguments: &[String]) -> Result<Value, String> {
     let evidence_pressure = parse_f64(arguments, "--evidence-pressure", 0.0)?;
     let utilization = integer_as_f64(used)? / integer_as_f64(window)?;
     let pressure =
-        (utilization + 0.12 * churn.max(0.0) + 0.08 * evidence_pressure.max(0.0))
-            .clamp(0.0, 1.5);
+        (utilization + 0.12 * churn.max(0.0) + 0.08 * evidence_pressure.max(0.0)).clamp(0.0, 1.5);
     let mut level = 0_u64;
     let mut actions = Vec::<Value>::new();
     for (threshold, names) in THRESHOLDS {
