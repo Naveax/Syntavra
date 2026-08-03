@@ -44,17 +44,28 @@ def _module_name(path: Path) -> str:
     return ".".join(relative.parts)
 
 
+def _subparser_actions(parser: argparse.ArgumentParser) -> tuple[argparse._SubParsersAction, ...]:
+    return tuple(
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+
+
 def _walk_parser(
     parser: argparse.ArgumentParser,
     prefix: tuple[str, ...] = (),
 ) -> set[str]:
     commands: set[str] = set()
-    for action in parser._actions:
-        if not isinstance(action, argparse._SubParsersAction):
-            continue
+    for action in _subparser_actions(parser):
         for name, child in action.choices.items():
             path = (*prefix, str(name))
-            commands.add(" ".join(path))
+            child_subparsers = _subparser_actions(child)
+            if not child_subparsers or not any(
+                bool(getattr(child_action, "required", False))
+                for child_action in child_subparsers
+            ):
+                commands.add(" ".join(path))
             commands.update(_walk_parser(child, path))
     return commands
 
