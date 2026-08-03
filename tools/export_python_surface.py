@@ -6,10 +6,13 @@ import ast
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "syntavra_runtime"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 _ADD_PARSER_ASSIGN = re.compile(
     r"(?P<target>[A-Za-z_]\w*)\s*=\s*(?P<owner>[A-Za-z_]\w*)\.add_parser\(\s*[\"'](?P<name>[^\"']+)[\"']"
