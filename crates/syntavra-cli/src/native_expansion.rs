@@ -18,6 +18,8 @@ mod native_migrations;
 mod native_scheduler_reap;
 #[path = "native_stats.rs"]
 mod native_stats;
+#[path = "native_verifier.rs"]
+mod native_verifier;
 
 pub fn supports(command: &[String]) -> bool {
     native_claim::supports(command)
@@ -27,6 +29,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_migrations::supports(command)
         || native_scheduler_reap::supports(command)
         || native_stats::supports(command)
+        || native_verifier::supports(command)
 }
 
 pub fn execute(
@@ -56,6 +59,9 @@ pub fn execute(
     if native_stats::supports(command) {
         return native_stats::execute(state_root);
     }
+    if native_verifier::supports(command) {
+        return native_verifier::execute(command, arguments, state_root);
+    }
     Err("NATIVE_EXPANSION_COMMAND_UNSUPPORTED".to_owned())
 }
 
@@ -75,6 +81,8 @@ mod tests {
         assert!(supports(&["evidence".to_owned(), "stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-neighbors".to_owned()]));
+        assert!(supports(&["verifier".to_owned(), "lookup".to_owned()]));
+        assert!(supports(&["verifier".to_owned(), "invalidated-by".to_owned()]));
         assert!(!supports(&["run".to_owned(), "unknown".to_owned()]));
     }
 }
