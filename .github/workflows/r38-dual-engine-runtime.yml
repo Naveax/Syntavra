@@ -12,6 +12,7 @@ on:
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_audit_config_r38.py"
       - "tests/runtime/test_native_config_read_only_r38.py"
+      - "tests/runtime/test_native_context_governor_r38.py"
       - "tests/runtime/test_native_external_suite_gate_r38.py"
       - "tests/runtime/test_native_external_suites_r38.py"
       - "tests/runtime/test_native_integrations_r38.py"
@@ -41,6 +42,7 @@ on:
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_audit_config_r38.py"
       - "tests/runtime/test_native_config_read_only_r38.py"
+      - "tests/runtime/test_native_context_governor_r38.py"
       - "tests/runtime/test_native_external_suite_gate_r38.py"
       - "tests/runtime/test_native_external_suites_r38.py"
       - "tests/runtime/test_native_integrations_r38.py"
@@ -106,6 +108,7 @@ jobs:
           tests/runtime/test_dual_engine_public_surface_r38.py
           tests/runtime/test_native_audit_config_r38.py
           tests/runtime/test_native_config_read_only_r38.py
+          tests/runtime/test_native_context_governor_r38.py
           tests/runtime/test_native_external_suite_gate_r38.py
           tests/runtime/test_native_external_suites_r38.py
           tests/runtime/test_native_integrations_r38.py
