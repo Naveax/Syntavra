@@ -12,6 +12,7 @@ from export_rust_surface import export_surface as export_rust_surface
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
+MISSING_INVENTORY = ROOT / "contracts" / "engine" / "r38-missing-native-commands-v1.json"
 SELECTOR = ROOT / "crates" / "syntavra-cli" / "src" / "bin" / "syntavra.rs"
 NATIVE_PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 INVENTORY_TEST = ROOT / "tests" / "runtime" / "test_dual_engine_public_surface_r38.py"
@@ -70,6 +71,20 @@ def sync() -> int:
     if native_count > total:
         raise RuntimeError(f"native command count exceeds Python surface: {native_count}>{total}")
 
+    command_set = set(commands)
+    native_set = set(native)
+    bridge_set = set(bridged)
+    unknown_native = sorted(native_set - command_set)
+    unknown_bridge = sorted(bridge_set - command_set)
+    overlap = sorted(native_set & bridge_set)
+    if unknown_native:
+        raise RuntimeError(f"unknown native commands: {unknown_native!r}")
+    if unknown_bridge:
+        raise RuntimeError(f"unknown bridge commands: {unknown_bridge!r}")
+    if overlap:
+        raise RuntimeError(f"native/bridge overlap: {overlap!r}")
+
+    missing = sorted(command_set - native_set)
     contract["python_surface"] = {
         "command_paths_sha256": _command_digest(commands),
         "digest_encoding": "canonical-json-array-utf8",
@@ -79,10 +94,36 @@ def sync() -> int:
     rust_row["module_count"] = int(rust_surface["module_count"])
     rust_row["native_public_command_count"] = native_count
     rust_row["python_launcher_bridge_command_count"] = bridge_count
-    rust_row["missing_native_public_command_count"] = total - native_count
+    rust_row["missing_native_public_command_count"] = len(missing)
     rust_row["native_coverage_ppm"] = native_count * 1_000_000 // total
     CONTRACT.write_text(
         json.dumps(contract, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    MISSING_INVENTORY.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "product": "Syntavra",
+                "product_version": "0.0.1",
+                "release_channel": "pre-release",
+                "python_public_command_count": total,
+                "native_public_command_count": native_count,
+                "missing_native_public_command_count": len(missing),
+                "missing_native_public_commands": missing,
+                "python_launcher_bridge_command_count": bridge_count,
+                "python_launcher_bridge_commands": bridged,
+                "policy": {
+                    "source": "installed-routing-aware-python-surface",
+                    "native_only_certification": True,
+                    "hidden_fallback_forbidden": True,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -112,7 +153,7 @@ def sync() -> int:
         ),
         (
             re.compile(r'assert result\["rust"\]\["missing_native_public_command_count"\] == [0-9]+'),
-            f'assert result["rust"]["missing_native_public_command_count"] == {total - native_count}',
+            f'assert result["rust"]["missing_native_public_command_count"] == {len(missing)}',
         ),
     )
     for pattern, replacement in replacements:
@@ -124,10 +165,11 @@ def sync() -> int:
             {
                 "python_public_commands": total,
                 "native_public_commands": native_count,
-                "missing_native_public_commands": total - native_count,
+                "missing_native_public_commands": len(missing),
                 "python_modules": python_surface["module_count"],
                 "rust_modules": rust_surface["module_count"],
                 "bridge_commands": bridge_count,
+                "missing_inventory": MISSING_INVENTORY.relative_to(ROOT).as_posix(),
             },
             sort_keys=True,
         )
