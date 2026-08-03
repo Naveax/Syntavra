@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 130,
+    "missing_native_public_command_count": 128,
     "module_count": 84,
-    "native_coverage_ppm": 469387,
-    "native_public_command_count": 115,
+    "native_coverage_ppm": 477551,
+    "native_public_command_count": 117,
     "native_public_commands": [
       "benchmark generate-config",
       "benchmark generate-repo",
@@ -73,6 +73,8 @@
       "migrate apply",
       "migrate plan",
       "migrate rollback",
+      "output compact",
+      "output govern",
       "output profiles",
       "pipeline describe",
       "plugins list",

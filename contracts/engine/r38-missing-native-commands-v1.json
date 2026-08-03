@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 130,
+  "missing_native_public_command_count": 128,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -39,8 +39,6 @@
     "inspect symbol",
     "install",
     "mcp",
-    "output compact",
-    "output govern",
     "prove integrations",
     "provider capture",
     "provider prepare",
@@ -132,7 +130,7 @@
     "status",
     "uninstall"
   ],
-  "native_public_command_count": 115,
+  "native_public_command_count": 117,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
