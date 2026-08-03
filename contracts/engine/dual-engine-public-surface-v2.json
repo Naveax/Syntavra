@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 169,
-    "module_count": 60,
-    "native_coverage_ppm": 310204,
-    "native_public_command_count": 76,
+    "missing_native_public_command_count": 168,
+    "module_count": 61,
+    "native_coverage_ppm": 314285,
+    "native_public_command_count": 77,
     "native_public_commands": [
       "benchmark generate-config",
       "config explain",
@@ -95,6 +95,7 @@
       "signalbench plan",
       "signalbench2 gate",
       "signalbench2 plan",
+      "stats",
       "structural-v2 demo",
       "telemetry metrics",
       "upgrade",
