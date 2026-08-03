@@ -65,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     route.add_argument("--task-override-json-hex")
     route.add_argument("--receipt-wire-hex")
     route.add_argument("--database-path")
+    route.add_argument("--explain-path")
     route.add_argument("--scheduler-state", action="append")
     route.add_argument("--scheduler-limit", type=int)
     route.add_argument("--migration-database")
@@ -116,6 +117,8 @@ def main(
                 route_kwargs["receipt_wire_hex"] = args.receipt_wire_hex
             if args.database_path is not None:
                 route_kwargs["database_path"] = args.database_path
+            if args.explain_path is not None:
+                route_kwargs["explain_path"] = args.explain_path
             if args.scheduler_state is not None:
                 route_kwargs["scheduler_states"] = tuple(args.scheduler_state)
             if args.scheduler_limit is not None:
