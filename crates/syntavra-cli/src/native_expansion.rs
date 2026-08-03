@@ -56,6 +56,14 @@ pub fn supports(command: &[String]) -> bool {
         || native_verifier::supports(command)
 }
 
+fn emit_failed_value(value: &Value, exit_code: u8) -> ! {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(value).unwrap_or_else(|_| "{\"ok\":false}".to_owned())
+    );
+    std::process::exit(i32::from(exit_code));
+}
+
 pub fn execute(
     command: &[String],
     arguments: &[String],
@@ -63,7 +71,13 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Value, String> {
     if native_benchmark_tools::supports(command) {
-        return native_benchmark_tools::execute(command, arguments);
+        let value = native_benchmark_tools::execute(command, arguments)?;
+        if matches!(command, [root, action] if root == "benchmark" && action == "validate-config")
+            && value.get("ok").and_then(Value::as_bool) == Some(false)
+        {
+            emit_failed_value(&value, 3);
+        }
+        return Ok(value);
     }
     if native_claim::supports(command) {
         return native_claim::execute(arguments);
