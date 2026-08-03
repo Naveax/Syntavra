@@ -13,8 +13,8 @@ mod native_product;
 
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
-const PUBLIC_COMMAND_COUNT: u64 = 265;
-const NATIVE_COMMAND_COUNT: u64 = 52;
+const PUBLIC_COMMAND_COUNT: u64 = 245;
+const NATIVE_COMMAND_COUNT: u64 = 59;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Engine {
@@ -188,6 +188,10 @@ fn command_path(arguments: &[String]) -> Vec<String> {
     }
     if positional.first().map(String::as_str) == Some("context-stress") {
         positional.truncate(1);
+    } else if positional.first().map(String::as_str) == Some("engine")
+        && positional.get(1).map(String::as_str) == Some("route")
+    {
+        positional.truncate(3);
     } else {
         positional.truncate(2);
     }
@@ -364,6 +368,9 @@ fn engine_command(parsed: &Parsed) -> Option<Result<Value, String>> {
         return None;
     }
     let action = parsed.forwarded.get(1).map_or("status", String::as_str);
+    if action == "route" {
+        return None;
+    }
     let result = match action {
         "status" | "list" => Ok(engine_status(parsed)),
         "verify" => match parsed.forwarded.get(2) {
@@ -463,6 +470,23 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
             ),
         },
         Engine::Auto => {
+            if matches!(path.as_slice(), [engine, route, ..] if engine == "engine" && route == "route") {
+                return match discover_python_program() {
+                    Some(program) => execute_program(&program, &parsed.forwarded, Engine::Python)
+                        .unwrap_or_else(|error| {
+                            fail(
+                                "AUTO_ENGINE_EXECUTION_FAILED",
+                                "The automatic engine policy could not execute the selected Python engine.",
+                                json!({"error": error, "fallback": "forbidden"}),
+                            )
+                        }),
+                    None => fail(
+                        "AUTO_ENGINE_NOT_AVAILABLE",
+                        "The automatic engine policy has no available engine for this command.",
+                        json!({"command_path": path, "fallback": "forbidden"}),
+                    ),
+                };
+            }
             if native_product::supports(&path) {
                 run_selected(parsed, Engine::Rust)
             } else {
