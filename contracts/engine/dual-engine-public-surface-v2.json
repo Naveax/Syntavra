@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 192,
-    "module_count": 53,
-    "native_coverage_ppm": 216326,
-    "native_public_command_count": 53,
+    "missing_native_public_command_count": 186,
+    "module_count": 54,
+    "native_coverage_ppm": 240816,
+    "native_public_command_count": 59,
     "native_public_commands": [
       "benchmark generate-config",
       "config explain",
@@ -33,6 +33,12 @@
       "context pack",
       "context-stress",
       "engine list",
+      "engine route config.resolve",
+      "engine route pipeline.describe",
+      "engine route plugins.list",
+      "engine route state.layout",
+      "engine route telemetry.metrics",
+      "engine route version",
       "engine status",
       "engine use",
       "engine verify",
@@ -78,25 +84,19 @@
       "version",
       "wrap"
     ],
-    "python_launcher_bridge_command_count": 17,
+    "python_launcher_bridge_command_count": 11,
     "python_launcher_bridge_commands": [
       "engine route config.explain",
-      "engine route config.resolve",
       "engine route config.show",
       "engine route config.validate",
       "engine route migration.plan",
-      "engine route pipeline.describe",
-      "engine route plugins.list",
       "engine route receipt.inspect",
       "engine route scheduler.list",
       "engine route scheduler.stats",
       "engine route state.broker-live-snapshot",
       "engine route state.broker-snapshot",
       "engine route state.inspect",
-      "engine route state.layout",
-      "engine route status",
-      "engine route telemetry.metrics",
-      "engine route version"
+      "engine route status"
     ]
   },
   "schema_version": 2
