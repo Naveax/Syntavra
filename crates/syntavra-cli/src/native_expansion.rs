@@ -31,6 +31,9 @@ mod native_session_context;
 mod native_session_lifecycle;
 #[path = "native_session_list.rs"]
 mod native_session_list;
+#[allow(clippy::pedantic, dead_code)]
+#[path = "native_session_public.rs"]
+mod native_session_public;
 #[path = "native_session_recover.rs"]
 mod native_session_recover;
 #[path = "native_session_verify.rs"]
@@ -53,6 +56,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_session_context::supports(command)
         || native_session_lifecycle::supports(command)
         || native_session_list::supports(command)
+        || native_session_public::supports(command)
         || native_session_recover::supports(command)
         || native_session_verify::supports(command)
         || native_stats::supports(command)
@@ -115,6 +119,9 @@ pub fn execute(
     if native_session_list::supports(command) {
         return native_session_list::execute(arguments, project_root, state_root);
     }
+    if native_session_public::supports(command) {
+        return native_session_public::execute(command, arguments, project_root, state_root);
+    }
     if native_session_recover::supports(command) {
         return native_session_recover::execute(project_root, state_root);
     }
@@ -157,13 +164,17 @@ mod tests {
         assert!(supports(&["job".to_owned(), "list".to_owned()]));
         assert!(supports(&["job".to_owned(), "show".to_owned()]));
         assert!(supports(&["job".to_owned(), "completions".to_owned()]));
+        assert!(supports(&["session".to_owned(), "append".to_owned()]));
         assert!(supports(&["session".to_owned(), "checkpoint".to_owned()]));
         assert!(supports(&["session".to_owned(), "close".to_owned()]));
+        assert!(supports(&["session".to_owned(), "compact".to_owned()]));
         assert!(supports(&["session".to_owned(), "context".to_owned()]));
         assert!(supports(&["session".to_owned(), "export".to_owned()]));
         assert!(supports(&["session".to_owned(), "fork".to_owned()]));
+        assert!(supports(&["session".to_owned(), "import".to_owned()]));
         assert!(supports(&["session".to_owned(), "list".to_owned()]));
         assert!(supports(&["session".to_owned(), "merge".to_owned()]));
+        assert!(supports(&["session".to_owned(), "open".to_owned()]));
         assert!(supports(&["session".to_owned(), "recover".to_owned()]));
         assert!(supports(&["session".to_owned(), "verify".to_owned()]));
         assert!(supports(&["verifier".to_owned(), "lookup".to_owned()]));
