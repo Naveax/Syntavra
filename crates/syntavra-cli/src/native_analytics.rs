@@ -113,9 +113,8 @@ fn source_argument(arguments: &[String]) -> Result<&str, String> {
         .ok_or_else(|| "ANALYTICS_EVENT_MISSING".to_owned())
 }
 
-pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String> {
-    let event = load_event(source_argument(arguments)?)?;
-    let default_event_id = sha256_hex(&canonical_bytes(&event)?);
+pub fn record_event(event: &Value, state_root: &Path) -> Result<Value, String> {
+    let default_event_id = sha256_hex(&canonical_bytes(event)?);
     let event_object = event
         .as_object()
         .ok_or_else(|| "ANALYTICS_EVENT_OBJECT_REQUIRED".to_owned())?;
@@ -158,6 +157,11 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
             .ok_or_else(|| "ANALYTICS_EVENT_ID_MISSING".to_owned())?,
         "path": path,
     }))
+}
+
+pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String> {
+    let event = load_event(source_argument(arguments)?)?;
+    record_event(&event, state_root)
 }
 
 #[cfg(test)]
