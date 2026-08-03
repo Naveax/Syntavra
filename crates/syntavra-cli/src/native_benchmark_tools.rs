@@ -134,24 +134,29 @@ fn python_truthy(value: Option<&Value>) -> bool {
     }
 }
 
+fn mapping_or_empty(
+    value: Option<&Value>,
+    code: &str,
+) -> Result<Map<String, Value>, String> {
+    match value {
+        None => Ok(Map::new()),
+        Some(value) if !python_truthy(Some(value)) => Ok(Map::new()),
+        Some(Value::Object(value)) => Ok(value.clone()),
+        Some(_) => Err(code.to_owned()),
+    }
+}
+
 fn validate_config_value(config: &Value) -> Result<Value, String> {
     let object = config
         .as_object()
         .ok_or_else(|| "BENCHMARK_CONFIG_OBJECT_REQUIRED".to_owned())?;
     let tier = python_string(object.get("tier"));
     let rule = tier_rule(&tier)?;
-    let axes = object
-        .get("axes")
-        .filter(|value| python_truthy(Some(value)))
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
-    let controls = object
-        .get("controls")
-        .filter(|value| python_truthy(Some(value)))
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+    let axes = mapping_or_empty(object.get("axes"), "BENCHMARK_AXES_MAPPING_REQUIRED")?;
+    let controls = mapping_or_empty(
+        object.get("controls"),
+        "BENCHMARK_CONTROLS_MAPPING_REQUIRED",
+    )?;
 
     let mut normalized = BTreeMap::<String, f64>::new();
     let mut errors = Vec::<String>::new();
@@ -164,7 +169,7 @@ fn validate_config_value(config: &Value) -> Result<Value, String> {
     }
     let safe = normalized
         .iter()
-        .map(|(axis, value)| (axis.clone(), value.clamp(0.01, 1000.0)))
+        .map(|(axis, value)| (axis.clone(), (*value).clamp(0.01, 1000.0)))
         .collect::<BTreeMap<_, _>>();
     let geometric = (safe.values().map(|value| value.ln()).sum::<f64>()
         / safe.len() as f64)
@@ -180,7 +185,7 @@ fn validate_config_value(config: &Value) -> Result<Value, String> {
     } else {
         geometric
             * (harmonic / geometric).powf(0.35)
-            * (critical_floor / geometric.max(0.01)).sqrt().add(0.5).min(1.5)
+            * ((critical_floor / geometric.max(0.01)).sqrt() + 0.5).min(1.5)
     };
 
     let mut checks = Map::new();
@@ -199,7 +204,7 @@ fn validate_config_value(config: &Value) -> Result<Value, String> {
         Value::Bool(
             CRITICAL
                 .iter()
-                .filter(|axis| safe.get(**axis).is_some_and(|value| *value >= rule.critical_high))
+                .filter(|axis| safe.get(*axis).is_some_and(|value| *value >= rule.critical_high))
                 .count()
                 >= rule.critical_count,
         ),
@@ -248,6 +253,7 @@ fn validate_config_value(config: &Value) -> Result<Value, String> {
 
 fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
     let mut value = None;
+    let equals = format!("{flag}=");
     let mut index = 0usize;
     while index < arguments.len() {
         if arguments[index] == flag {
@@ -258,7 +264,7 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
                     .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
                     .clone(),
             );
-        } else if let Some(current) = arguments[index].strip_prefix(&format!("{flag}=")) {
+        } else if let Some(current) = arguments[index].strip_prefix(&equals) {
             value = Some(current.to_owned());
         }
         index += 1;
