@@ -74,7 +74,9 @@ jobs:
       - name: Validate generated scope
         run: |
           python - <<'PY'
+          import json
           import subprocess
+          from pathlib import Path
 
           changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
           fixed = {
@@ -90,8 +92,15 @@ jobs:
               and not (path.startswith("crates/syntavra-cli/src/native_") and path.endswith(".rs"))
           }
           assert not unexpected, unexpected
-          assert "MANIFEST.sha256" in changed, changed
-          assert "contracts/engine/r38-missing-native-commands-v1.json" in changed, changed
+
+          contract = json.loads(Path("contracts/engine/dual-engine-public-surface-v2.json").read_text(encoding="utf-8"))
+          missing = json.loads(Path("contracts/engine/r38-missing-native-commands-v1.json").read_text(encoding="utf-8"))
+          rust = contract["rust_surface"]
+          assert missing["python_public_command_count"] == contract["python_surface"]["public_command_count"]
+          assert missing["native_public_command_count"] == rust["native_public_command_count"]
+          assert missing["missing_native_public_command_count"] == rust["missing_native_public_command_count"]
+          assert len(missing["missing_native_public_commands"]) == rust["missing_native_public_command_count"]
+          assert Path("MANIFEST.sha256").is_file()
           PY
       - name: Commit generated metadata
         run: |
