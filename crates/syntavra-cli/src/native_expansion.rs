@@ -6,11 +6,15 @@ use serde_json::Value;
 
 #[path = "native_migrations.rs"]
 mod native_migrations;
+#[path = "native_scheduler_reap.rs"]
+mod native_scheduler_reap;
 #[path = "native_stats.rs"]
 mod native_stats;
 
 pub fn supports(command: &[String]) -> bool {
-    native_migrations::supports(command) || native_stats::supports(command)
+    native_migrations::supports(command)
+        || native_scheduler_reap::supports(command)
+        || native_stats::supports(command)
 }
 
 pub fn execute(
@@ -21,6 +25,9 @@ pub fn execute(
 ) -> Result<Value, String> {
     if native_migrations::supports(command) {
         return native_migrations::execute(command, arguments);
+    }
+    if native_scheduler_reap::supports(command) {
+        return native_scheduler_reap::execute(state_root);
     }
     if native_stats::supports(command) {
         return native_stats::execute(state_root);
@@ -36,6 +43,7 @@ mod tests {
     fn routes_expansion_commands() {
         assert!(supports(&["stats".to_owned()]));
         assert!(supports(&["migrate".to_owned(), "apply".to_owned()]));
+        assert!(supports(&["scheduler".to_owned(), "reap".to_owned()]));
         assert!(!supports(&["run".to_owned(), "unknown".to_owned()]));
     }
 }
