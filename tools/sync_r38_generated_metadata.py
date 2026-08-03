@@ -9,6 +9,10 @@ import sync_r38_native_command_count as legacy
 EXPANSION_DECLARATION = '#[path = "native_expansion.rs"]\nmod native_expansion;\n'
 EXPANSION_ANCHOR = '#[path = "native_external_suite_gate.rs"]\nmod native_external_suite_gate;\n'
 REQUIRED_NATIVE_COMMANDS = {
+    "host",
+    "host capabilities",
+    "host detect",
+    "host negotiate",
     "output compact",
     "output govern",
 }
