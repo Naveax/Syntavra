@@ -31,6 +31,8 @@ mod native_external_suite_gate;
 mod native_external_suites;
 #[path = "native_integrations.rs"]
 mod native_integrations;
+#[path = "native_live_config.rs"]
+mod native_live_config;
 #[path = "native_long_context.rs"]
 mod native_long_context;
 #[path = "native_manifest.rs"]
@@ -55,6 +57,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_route.rs"]
 mod native_route;
+#[path = "native_rust_subprocess.rs"]
+mod native_rust_subprocess;
 #[path = "native_semantic_demo.rs"]
 mod native_semantic_demo;
 #[path = "native_signalbench_gate.rs"]
@@ -254,10 +258,11 @@ pub fn execute(
             .map(Some);
     }
     if native_engine_routes::supports(command) {
-        return native_engine_routes::execute(command, &arguments, project_root).map(Some);
+        return native_engine_routes::execute(command, &arguments, project_root, state_root)
+            .map(Some);
     }
     if native_engine_state_routes::supports(command) {
-        return native_engine_state_routes::execute(project_root).map(Some);
+        return native_engine_state_routes::execute(command, &arguments, project_root).map(Some);
     }
     if native_static_surfaces::supports(command) {
         return native_static_surfaces::execute(command, &arguments).map(Some);
