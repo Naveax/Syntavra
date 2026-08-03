@@ -75,33 +75,33 @@ NEW_EXACT_RECOVERY = '''        let coverage = connection
             Some((_, _, Some(_))) | None => false,
         }
 '''
-STATS_MODULE_MARKER = '''#[path = "native_static_surfaces.rs"]
-mod native_static_surfaces;
+EXPANSION_MODULE_MARKER = '''#[path = "native_external_suite_gate.rs"]
+mod native_external_suite_gate;
 '''
-STATS_MODULE_REPLACEMENT = '''#[path = "native_stats.rs"]
-mod native_stats;
-#[path = "native_static_surfaces.rs"]
-mod native_static_surfaces;
+EXPANSION_MODULE_REPLACEMENT = '''#[path = "native_expansion.rs"]
+mod native_expansion;
+#[path = "native_external_suite_gate.rs"]
+mod native_external_suite_gate;
 '''
-STATS_SUPPORT_MARKER = '''        || native_session_status::supports(command)
-        || native_static_surfaces::supports(command)
+EXPANSION_SUPPORT_MARKER = '''        || native_engine_state_routes::supports(command)
+        || native_session_continuity::supports(command)
 '''
-STATS_SUPPORT_REPLACEMENT = '''        || native_session_status::supports(command)
-        || native_stats::supports(command)
-        || native_static_surfaces::supports(command)
+EXPANSION_SUPPORT_REPLACEMENT = '''        || native_engine_state_routes::supports(command)
+        || native_expansion::supports(command)
+        || native_session_continuity::supports(command)
 '''
-STATS_EXECUTE_MARKER = '''    if native_session_status::supports(command) {
-        return native_session_status::execute(project_root, state_root).map(Some);
+EXPANSION_EXECUTE_MARKER = '''    if native_engine_state_routes::supports(command) {
+        return native_engine_state_routes::execute(command, &arguments, project_root).map(Some);
     }
-    if native_static_surfaces::supports(command) {
+    if native_session_continuity::supports(command) {
 '''
-STATS_EXECUTE_REPLACEMENT = '''    if native_session_status::supports(command) {
-        return native_session_status::execute(project_root, state_root).map(Some);
+EXPANSION_EXECUTE_REPLACEMENT = '''    if native_engine_state_routes::supports(command) {
+        return native_engine_state_routes::execute(command, &arguments, project_root).map(Some);
     }
-    if native_stats::supports(command) {
-        return native_stats::execute(state_root).map(Some);
+    if native_expansion::supports(command) {
+        return native_expansion::execute(command, &arguments, project_root, state_root).map(Some);
     }
-    if native_static_surfaces::supports(command) {
+    if native_session_continuity::supports(command) {
 '''
 
 
@@ -142,25 +142,25 @@ def _synchronize_config_contract_visibility() -> None:
     NATIVE_PRODUCT.write_text(source, encoding="utf-8", newline="\n")
 
 
-def _wire_native_stats() -> None:
+def _wire_native_expansion() -> None:
     source = NATIVE_PRODUCT.read_text(encoding="utf-8")
     source = _replace_literal_once(
         source,
-        STATS_MODULE_MARKER,
-        STATS_MODULE_REPLACEMENT,
-        label="native stats module",
+        EXPANSION_MODULE_MARKER,
+        EXPANSION_MODULE_REPLACEMENT,
+        label="native expansion module",
     )
     source = _replace_literal_once(
         source,
-        STATS_SUPPORT_MARKER,
-        STATS_SUPPORT_REPLACEMENT,
-        label="native stats support",
+        EXPANSION_SUPPORT_MARKER,
+        EXPANSION_SUPPORT_REPLACEMENT,
+        label="native expansion support",
     )
     source = _replace_literal_once(
         source,
-        STATS_EXECUTE_MARKER,
-        STATS_EXECUTE_REPLACEMENT,
-        label="native stats execution",
+        EXPANSION_EXECUTE_MARKER,
+        EXPANSION_EXECUTE_REPLACEMENT,
+        label="native expansion execution",
     )
     NATIVE_PRODUCT.write_text(source, encoding="utf-8", newline="\n")
 
@@ -183,7 +183,7 @@ def _repair_native_sources() -> None:
 
 def sync() -> int:
     _synchronize_config_contract_visibility()
-    _wire_native_stats()
+    _wire_native_expansion()
     _repair_native_sources()
 
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
