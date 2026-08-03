@@ -101,8 +101,9 @@ mod tests {
 
     #[test]
     fn evidence_handle_is_strict_lower_hex() {
-        let valid = format!("sc://sha256/{}", "a".repeat(64));
-        assert_eq!(digest_from_handle(&valid), Ok("a".repeat(64).leak()));
+        let expected = "a".repeat(64);
+        let valid = format!("sc://sha256/{expected}");
+        assert_eq!(digest_from_handle(&valid).expect("valid handle"), expected);
         assert!(digest_from_handle("sc://sha256/ABC").is_err());
     }
 }
