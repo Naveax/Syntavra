@@ -10,6 +10,9 @@ from typing import Any
 
 import pytest
 
+from syntavra_runtime.session_product import SessionContinuityController
+from syntavra_runtime.util import stable_project_id
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -94,15 +97,14 @@ def _normalize_dynamic(value: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_history(project: Path, state: Path, *, events: int = 40) -> None:
-    opened = _python_engine(
-        project,
-        state,
-        "run",
-        "session-open",
-        "--session-id",
+    controller = SessionContinuityController(
+        state / "sessions.sqlite3",
+        project_id=stable_project_id(project),
+        analytics_path=state / "analytics" / "events.jsonl",
+    )
+    opened = controller.open_or_resume(
         "session-r38",
-        "--metadata",
-        json.dumps({"owner": "r38", "purpose": "parity"}, sort_keys=True, separators=(",", ":")),
+        metadata={"owner": "r38", "purpose": "parity"},
     )
     assert opened["ok"] is True
     for sequence in range(1, events + 1):
@@ -112,14 +114,10 @@ def _build_history(project: Path, state: Path, *, events: int = 40) -> None:
             "result": sequence,
             "path": f"src/module_{sequence:02}.rs",
         }
-        appended = _python_engine(
-            project,
-            state,
-            "run",
-            "session-append",
+        appended = controller.append(
             "session-r38",
             "tool-result" if sequence % 3 else "decision",
-            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            payload,
         )
         assert appended["ok"] is True
         assert appended["event"]["sequence"] == sequence
