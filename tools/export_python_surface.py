@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import re
 from pathlib import Path
 
@@ -24,18 +25,13 @@ _ENV = re.compile(r"\bSYNTAVRA_[A-Z0-9_]+\b")
 _MCP_NAME = re.compile(r"[\"']name[\"']\s*:\s*[\"']([A-Za-z0-9_.:-]+)[\"']")
 _ROUTE_INVENTORY_NAME = "INSTALLED_READ_ONLY_ROUTE_COMMANDS"
 
-# argparse command paths created by helpers or loops cannot be recovered by the
-# bounded line-oriented parser below. Keep that exceptional surface explicit,
-# deterministic and reviewable instead of silently under-counting public paths.
-_HELPER_GENERATED_CLI_COMMANDS: tuple[str, ...] = (
-    "prove external-suite",
-    "prove suites",
-    "semantic-demo demo",
-    "signalbench gate",
-    "signalbench plan",
-    "signalbench2 gate",
-    "signalbench2 plan",
-    "structural-v2 demo",
+# Public command certification follows the parsers and explicit dispatch branches
+# reachable from the installed ``syntavra`` entry point. Source scanning remains a
+# diagnostic only; it is not allowed to create contractual command paths.
+_MANUAL_DISPATCH_CLI_COMMANDS: tuple[str, ...] = (
+    "evidence gc",
+    "evidence rotate-key",
+    "evidence stats",
 )
 
 
@@ -46,6 +42,51 @@ def _python_files() -> list[Path]:
 def _module_name(path: Path) -> str:
     relative = path.relative_to(ROOT).with_suffix("")
     return ".".join(relative.parts)
+
+
+def _walk_parser(
+    parser: argparse.ArgumentParser,
+    prefix: tuple[str, ...] = (),
+) -> set[str]:
+    commands: set[str] = set()
+    for action in parser._actions:
+        if not isinstance(action, argparse._SubParsersAction):
+            continue
+        for name, child in action.choices.items():
+            path = (*prefix, str(name))
+            commands.add(" ".join(path))
+            commands.update(_walk_parser(child, path))
+    return commands
+
+
+def _installed_cli_commands() -> set[str]:
+    previous_bootstrap = os.environ.get("SYNTAVRA_PORTABLE_BOOTSTRAP")
+    os.environ["SYNTAVRA_PORTABLE_BOOTSTRAP"] = "1"
+    try:
+        from syntavra_runtime import (
+            cli,
+            engine_cli,
+            external_benchmark_cli,
+            prerelease_cli,
+            unified_cli,
+        )
+
+        parsers = (
+            engine_cli.build_parser(),
+            unified_cli._core_parser(),
+            prerelease_cli._parser(),
+            external_benchmark_cli.parser(),
+            cli.build_parser(),
+        )
+        commands = set(_MANUAL_DISPATCH_CLI_COMMANDS)
+        for parser in parsers:
+            commands.update(_walk_parser(parser))
+        return commands
+    finally:
+        if previous_bootstrap is None:
+            os.environ.pop("SYNTAVRA_PORTABLE_BOOTSTRAP", None)
+        else:
+            os.environ["SYNTAVRA_PORTABLE_BOOTSTRAP"] = previous_bootstrap
 
 
 def _literal_strings(tree: ast.AST) -> set[str]:
@@ -112,7 +153,8 @@ def _extract_cli_paths(source: str) -> set[str]:
 
 def export_surface() -> dict[str, object]:
     modules: list[str] = []
-    cli_commands: set[str] = set(_HELPER_GENERATED_CLI_COMMANDS)
+    cli_commands: set[str] = _installed_cli_commands()
+    source_cli_commands: set[str] = set()
     cli_arguments: set[str] = set()
     environment_variables: set[str] = set()
     mcp_name_literals: set[str] = set()
@@ -122,7 +164,7 @@ def export_surface() -> dict[str, object]:
     for path in _python_files():
         modules.append(_module_name(path))
         source = path.read_text(encoding="utf-8")
-        cli_commands.update(_extract_cli_paths(source))
+        source_cli_commands.update(_extract_cli_paths(source))
         cli_arguments.update(match.group("name") for match in _ARGUMENT.finditer(source))
         environment_variables.update(_ENV.findall(source))
         if "mcp" in path.as_posix().lower():
@@ -153,6 +195,7 @@ def export_surface() -> dict[str, object]:
         "module_count": len(modules),
         "modules": modules,
         "cli_commands": sorted(cli_commands),
+        "source_cli_commands": sorted(source_cli_commands),
         "cli_arguments": sorted(cli_arguments),
         "environment_variables": sorted(environment_variables),
         "mcp_name_literals": sorted(mcp_name_literals),
@@ -160,7 +203,8 @@ def export_surface() -> dict[str, object]:
         "route_inventory_definitions": route_inventory_definitions,
         "authoritative": {
             "modules": True,
-            "cli_commands": False,
+            "cli_commands": True,
+            "source_cli_commands": False,
             "cli_arguments": False,
             "environment_variables": False,
             "mcp_name_literals": False,
