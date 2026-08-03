@@ -18,6 +18,7 @@ mod native_job_queries;
 mod native_migrations;
 #[path = "native_scheduler_reap.rs"]
 mod native_scheduler_reap;
+#[allow(unused_imports)]
 #[path = "native_session_archive.rs"]
 mod native_session_archive;
 #[allow(dead_code)]
