@@ -21,6 +21,8 @@ mod native_config_read_only;
 mod native_context_governor;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
+#[path = "native_engine_routes.rs"]
+mod native_engine_routes;
 #[path = "native_external_suite_gate.rs"]
 mod native_external_suite_gate;
 #[path = "native_external_suites.rs"]
@@ -71,6 +73,8 @@ mod native_wrap;
 mod read_only_cli_contract;
 #[path = "scheduler_read_only_contract.rs"]
 mod scheduler_read_only_contract;
+#[path = "state_layout_contract.rs"]
+mod state_layout_contract;
 #[path = "telemetry_metrics_contract.rs"]
 mod telemetry_metrics_contract;
 
@@ -78,6 +82,7 @@ pub fn supports(command: &[String]) -> bool {
     native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
+        || native_engine_routes::supports(command)
         || native_static_surfaces::supports(command)
         || legacy::supports(command)
         || command.first().is_some_and(|item| item == "wrap")
@@ -242,6 +247,9 @@ pub fn execute(
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
             .map(Some);
+    }
+    if native_engine_routes::supports(command) {
+        return native_engine_routes::execute(command, &arguments, project_root).map(Some);
     }
     if native_static_surfaces::supports(command) {
         return native_static_surfaces::execute(command, &arguments).map(Some);
