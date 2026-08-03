@@ -11,6 +11,8 @@ pub mod config_contract;
 mod legacy;
 #[path = "migration_plan_read_only_contract.rs"]
 mod migration_plan_read_only_contract;
+#[path = "native_analytics.rs"]
+mod native_analytics;
 #[path = "native_audit_config.rs"]
 mod native_audit_config;
 #[path = "native_cache_amortize.rs"]
@@ -87,7 +89,8 @@ mod state_snapshot_contract;
 mod telemetry_metrics_contract;
 
 pub fn supports(command: &[String]) -> bool {
-    native_config_read_only::supports(command)
+    native_analytics::supports(command)
+        || native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
         || native_engine_routes::supports(command)
@@ -247,6 +250,9 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if native_analytics::supports(command) {
+        return native_analytics::execute(&arguments, state_root).map(Some);
+    }
     if native_config_read_only::supports(command) {
         return native_config_read_only::execute(command, &arguments, project_root).map(Some);
     }
