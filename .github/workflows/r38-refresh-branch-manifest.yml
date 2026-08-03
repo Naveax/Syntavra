@@ -8,6 +8,7 @@ on:
       - ".github/workflows/r38-refresh-branch-manifest.yml"
       - ".github/workflows/r38-dual-engine-runtime.yml"
       - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "contracts/engine/r38-missing-native-commands-v1.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
       - "crates/syntavra-cli/src/native_*.rs"
       - "syntavra_runtime/engine_entry.py"
@@ -23,6 +24,7 @@ on:
       - ".github/workflows/r38-refresh-branch-manifest.yml"
       - ".github/workflows/r38-dual-engine-runtime.yml"
       - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "contracts/engine/r38-missing-native-commands-v1.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
       - "crates/syntavra-cli/src/native_*.rs"
       - "syntavra_runtime/engine_entry.py"
@@ -72,6 +74,7 @@ jobs:
           fixed = {
               "MANIFEST.sha256",
               "contracts/engine/dual-engine-public-surface-v2.json",
+              "contracts/engine/r38-missing-native-commands-v1.json",
               "crates/syntavra-cli/src/bin/syntavra.rs",
               "tests/runtime/test_dual_engine_public_surface_r38.py",
           }
@@ -82,6 +85,7 @@ jobs:
           }
           assert not unexpected, unexpected
           assert "MANIFEST.sha256" in changed, changed
+          assert "contracts/engine/r38-missing-native-commands-v1.json" in changed, changed
           PY
       - name: Commit generated metadata
         run: |
@@ -89,6 +93,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MANIFEST.sha256 \
             contracts/engine/dual-engine-public-surface-v2.json \
+            contracts/engine/r38-missing-native-commands-v1.json \
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_*.rs \
             tests/runtime/test_dual_engine_public_surface_r38.py
