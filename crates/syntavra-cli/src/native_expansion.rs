@@ -15,6 +15,9 @@ mod native_evidence_describe;
 mod native_evidence_gc;
 #[path = "native_evidence_stats.rs"]
 mod native_evidence_stats;
+#[allow(clippy::pedantic)]
+#[path = "native_job_mutations.rs"]
+mod native_job_mutations;
 #[path = "native_job_queries.rs"]
 mod native_job_queries;
 #[path = "native_migrations.rs"]
@@ -49,6 +52,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_evidence_describe::supports(command)
         || native_evidence_gc::supports(command)
         || native_evidence_stats::supports(command)
+        || native_job_mutations::supports(command)
         || native_job_queries::supports(command)
         || native_migrations::supports(command)
         || native_scheduler_reap::supports(command)
@@ -97,6 +101,9 @@ pub fn execute(
     }
     if native_evidence_stats::supports(command) {
         return native_evidence_stats::execute(command, arguments, state_root);
+    }
+    if native_job_mutations::supports(command) {
+        return native_job_mutations::execute(command, arguments, state_root);
     }
     if native_job_queries::supports(command) {
         return native_job_queries::execute(command, arguments, state_root);
@@ -161,9 +168,11 @@ mod tests {
         assert!(supports(&["evidence".to_owned(), "stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-stats".to_owned()]));
         assert!(supports(&["run".to_owned(), "evidence-neighbors".to_owned()]));
-        assert!(supports(&["job".to_owned(), "list".to_owned()]));
-        assert!(supports(&["job".to_owned(), "show".to_owned()]));
+        assert!(supports(&["job".to_owned(), "cancel".to_owned()]));
         assert!(supports(&["job".to_owned(), "completions".to_owned()]));
+        assert!(supports(&["job".to_owned(), "list".to_owned()]));
+        assert!(supports(&["job".to_owned(), "recover".to_owned()]));
+        assert!(supports(&["job".to_owned(), "show".to_owned()]));
         assert!(supports(&["session".to_owned(), "append".to_owned()]));
         assert!(supports(&["session".to_owned(), "checkpoint".to_owned()]));
         assert!(supports(&["session".to_owned(), "close".to_owned()]));
