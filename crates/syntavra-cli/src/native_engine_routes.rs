@@ -5,19 +5,16 @@ use std::path::Path;
 use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
-use super::config_contract::{default_config_wire, resolve_config_wire, snapshot_json, status_json};
+use super::config_contract::{resolve_config_wire, snapshot_json};
 
 const PHASE: &str = "R24";
 const SCHEMA_VERSION: u64 = 12;
 
 const STATIC_ROUTES: &[&str] = &[
     "config.resolve",
-    "config.show",
-    "config.validate",
     "pipeline.describe",
     "plugins.list",
     "state.layout",
-    "status",
     "telemetry.metrics",
     "version",
 ];
@@ -117,9 +114,9 @@ fn no_input() -> Value {
     json!({"profile": "none", "format": null, "bytes": 0, "sha256": null})
 }
 
-fn wire_input(wire: &[u8], profile: &str) -> Value {
+fn wire_input(wire: &[u8]) -> Value {
     json!({
-        "profile": profile,
+        "profile": "explicit-config-wire-v1",
         "format": "R6CFG1",
         "bytes": wire.len(),
         "sha256": sha256_hex(wire),
@@ -128,33 +125,6 @@ fn wire_input(wire: &[u8], profile: &str) -> Value {
 
 fn json_value(rendered: &str, code: &str) -> Result<Value, String> {
     serde_json::from_str(rendered).map_err(|_| code.to_owned())
-}
-
-fn config_wire_for_status(
-    arguments: &[String],
-    project_root: &Path,
-) -> Result<(Vec<u8>, &'static str), String> {
-    if let Some(value) = option_value(arguments, "--config-wire-hex")? {
-        return Ok((decode_hex(&value)?, "explicit-config-wire-v1"));
-    }
-    if flag_present(arguments, "--live-config") {
-        return Ok((
-            super::native_config_read_only::discover_wire(project_root)?,
-            "live-config-discovery-v1",
-        ));
-    }
-    Ok((default_config_wire().to_vec(), "default-config-only"))
-}
-
-fn config_snapshot(
-    wire: &[u8],
-) -> Result<(Value, super::config_contract::ConfigSnapshot), String> {
-    let snapshot = resolve_config_wire(wire)?;
-    let value = json_value(
-        &snapshot_json(&snapshot)?,
-        "ENGINE_ROUTE_CONFIG_JSON_INVALID",
-    )?;
-    Ok((value, snapshot))
 }
 
 fn route_version() -> Value {
@@ -173,21 +143,6 @@ fn route_version() -> Value {
     )
 }
 
-fn route_status(arguments: &[String], project_root: &Path) -> Result<Value, String> {
-    let (wire, profile) = config_wire_for_status(arguments, project_root)?;
-    let snapshot = resolve_config_wire(&wire)?;
-    let result = json_value(
-        &status_json(&snapshot),
-        "ENGINE_ROUTE_STATUS_JSON_INVALID",
-    )?;
-    Ok(envelope(
-        "status",
-        "status",
-        wire_input(&wire, profile),
-        result,
-    ))
-}
-
 fn route_config_resolve(arguments: &[String]) -> Result<Value, String> {
     let encoded = option_value(arguments, "--config-wire-hex")?
         .ok_or_else(|| "ENGINE_ROUTE_INPUT_REQUIRED_R14".to_owned())?;
@@ -195,48 +150,15 @@ fn route_config_resolve(arguments: &[String]) -> Result<Value, String> {
         return Err("ENGINE_ROUTE_CONFIG_INPUT_CONFLICT".to_owned());
     }
     let wire = decode_hex(&encoded)?;
-    let (result, _) = config_snapshot(&wire)?;
+    let snapshot = resolve_config_wire(&wire)?;
+    let result = json_value(
+        &snapshot_json(&snapshot)?,
+        "ENGINE_ROUTE_CONFIG_JSON_INVALID",
+    )?;
     Ok(envelope(
         "config.resolve",
         "config.resolve",
-        wire_input(&wire, "explicit-config-wire-v1"),
-        result,
-    ))
-}
-
-fn route_config_show(arguments: &[String], project_root: &Path) -> Result<Value, String> {
-    if option_value(arguments, "--config-wire-hex")?.is_some()
-        || flag_present(arguments, "--live-config")
-    {
-        return Err("ENGINE_ROUTE_CONFIG_SHOW_INPUT_UNSUPPORTED_R24".to_owned());
-    }
-    let wire = super::native_config_read_only::discover_wire(project_root)?;
-    let (result, _) = config_snapshot(&wire)?;
-    Ok(envelope(
-        "config.show",
-        "config.show",
-        wire_input(&wire, "live-config-discovery-v1"),
-        result,
-    ))
-}
-
-fn route_config_validate(arguments: &[String], project_root: &Path) -> Result<Value, String> {
-    if option_value(arguments, "--config-wire-hex")?.is_some()
-        || flag_present(arguments, "--live-config")
-    {
-        return Err("ENGINE_ROUTE_CONFIG_VALIDATE_INPUT_UNSUPPORTED_R24".to_owned());
-    }
-    let wire = super::native_config_read_only::discover_wire(project_root)?;
-    let (_, snapshot) = config_snapshot(&wire)?;
-    let result = json!({
-        "ok": true,
-        "config_hash": snapshot.config_hash,
-        "warnings": snapshot.warnings,
-    });
-    Ok(envelope(
-        "config.validate",
-        "config.resolve",
-        wire_input(&wire, "live-config-discovery-v1"),
+        wire_input(&wire),
         result,
     ))
 }
@@ -287,7 +209,7 @@ fn route_telemetry(arguments: &[String]) -> Result<Value, String> {
 pub fn execute(
     command: &[String],
     arguments: &[String],
-    project_root: &Path,
+    _project_root: &Path,
 ) -> Result<Value, String> {
     let route = command
         .get(2)
@@ -295,10 +217,7 @@ pub fn execute(
         .ok_or_else(|| "ENGINE_ROUTE_COMMAND_MISSING".to_owned())?;
     match route {
         "version" => Ok(route_version()),
-        "status" => route_status(arguments, project_root),
         "config.resolve" => route_config_resolve(arguments),
-        "config.show" => route_config_show(arguments, project_root),
-        "config.validate" => route_config_validate(arguments, project_root),
         "pipeline.describe" | "plugins.list" => route_static(route),
         "state.layout" => route_state_layout(),
         "telemetry.metrics" => route_telemetry(arguments),
@@ -322,7 +241,7 @@ mod tests {
     fn recognizes_certified_static_routes() {
         assert!(supports(&command("version")));
         assert!(supports(&command("state.layout")));
-        assert!(!supports(&command("config.explain")));
+        assert!(!supports(&command("config.show")));
     }
 
     #[test]
