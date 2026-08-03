@@ -21,8 +21,8 @@ def test_installed_python_surface_is_authoritative_and_exact() -> None:
     ).hexdigest()
 
     assert surface["module_count"] == 195
-    assert len(commands) == 280
-    assert digest == "f6dfe1be5dba106bfcb30c92724889e2389aa8fe2d36dac6c00ddd7786f8f896"
+    assert len(commands) == 250
+    assert digest == "0e0ed4729964ecfe331d666c48db1f8984a3d21d48d237720d67f07f76613c49"
     assert surface["authoritative"]["cli_commands"] is True
     assert surface["authoritative"]["source_cli_commands"] is False
 
@@ -45,4 +45,8 @@ def test_installed_surface_contains_reachable_paths_only() -> None:
         "service",
         "policy",
         "data-route",
+        "engine",
+        "provider",
+        "backup",
+        "run language",
     }.isdisjoint(commands)
