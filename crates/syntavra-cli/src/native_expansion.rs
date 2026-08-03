@@ -23,6 +23,8 @@ mod native_scheduler_reap;
 mod native_session_context;
 #[path = "native_session_list.rs"]
 mod native_session_list;
+#[path = "native_session_recover.rs"]
+mod native_session_recover;
 #[path = "native_session_verify.rs"]
 mod native_session_verify;
 #[path = "native_stats.rs"]
@@ -40,6 +42,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_scheduler_reap::supports(command)
         || native_session_context::supports(command)
         || native_session_list::supports(command)
+        || native_session_recover::supports(command)
         || native_session_verify::supports(command)
         || native_stats::supports(command)
         || native_verifier::supports(command)
@@ -78,6 +81,9 @@ pub fn execute(
     if native_session_list::supports(command) {
         return native_session_list::execute(arguments, project_root, state_root);
     }
+    if native_session_recover::supports(command) {
+        return native_session_recover::execute(project_root, state_root);
+    }
     if native_session_verify::supports(command) {
         return native_session_verify::execute(arguments, project_root, state_root);
     }
@@ -111,6 +117,7 @@ mod tests {
         assert!(supports(&["job".to_owned(), "completions".to_owned()]));
         assert!(supports(&["session".to_owned(), "context".to_owned()]));
         assert!(supports(&["session".to_owned(), "list".to_owned()]));
+        assert!(supports(&["session".to_owned(), "recover".to_owned()]));
         assert!(supports(&["session".to_owned(), "verify".to_owned()]));
         assert!(supports(&["verifier".to_owned(), "lookup".to_owned()]));
         assert!(supports(&["verifier".to_owned(), "invalidated-by".to_owned()]));
