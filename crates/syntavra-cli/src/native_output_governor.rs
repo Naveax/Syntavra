@@ -137,10 +137,7 @@ fn python_repr(value: &Value) -> String {
             }
         }
         Value::Number(value) => value.to_string(),
-        Value::String(value) => format!(
-            "'{}'",
-            value.replace('\\', "\\\\").replace('\'', "\\'")
-        ),
+        Value::String(value) => format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'")),
         Value::Array(values) => format!(
             "[{}]",
             values
@@ -293,7 +290,11 @@ fn has_exit_status(line: &str) -> bool {
                 continue;
             }
             let remainder = tail.trim_start();
-            if remainder.chars().next().is_some_and(|value| value.is_ascii_digit()) {
+            if remainder
+                .chars()
+                .next()
+                .is_some_and(|value| value.is_ascii_digit())
+            {
                 return true;
             }
         }
@@ -303,8 +304,7 @@ fn has_exit_status(line: &str) -> bool {
 
 fn has_status(line: &str) -> bool {
     [
-        "pass", "passed", "success", "ok", "fail", "failed", "blocked", "skipped",
-        "timeout",
+        "pass", "passed", "success", "ok", "fail", "failed", "blocked", "skipped", "timeout",
     ]
     .iter()
     .any(|word| contains_word_phrase(line, word))
@@ -316,15 +316,17 @@ fn has_command(line: &str) -> bool {
     if value.starts_with('$') || value.starts_with('>') || value.starts_with("PS>") {
         return true;
     }
-    ["python", "pytest", "git", "npm", "pnpm", "cargo", "go", "dotnet"]
-        .iter()
-        .any(|word| {
-            value.starts_with(word)
-                && value[word.len()..]
-                    .chars()
-                    .next()
-                    .is_none_or(|character| !is_word_character(character))
-        })
+    [
+        "python", "pytest", "git", "npm", "pnpm", "cargo", "go", "dotnet",
+    ]
+    .iter()
+    .any(|word| {
+        value.starts_with(word)
+            && value[word.len()..]
+                .chars()
+                .next()
+                .is_none_or(|character| !is_word_character(character))
+    })
 }
 
 fn has_code(line: &str) -> bool {
@@ -333,9 +335,9 @@ fn has_code(line: &str) -> bool {
         return true;
     }
     for keyword in [
-        "def", "class", "fn", "func", "function", "const", "let", "var", "import",
-        "from", "return", "raise", "throw", "if", "for", "while", "match", "case",
-        "SELECT", "INSERT", "UPDATE", "DELETE",
+        "def", "class", "fn", "func", "function", "const", "let", "var", "import", "from",
+        "return", "raise", "throw", "if", "for", "while", "match", "case", "SELECT", "INSERT",
+        "UPDATE", "DELETE",
     ] {
         if value.starts_with(keyword)
             && value[keyword.len()..]
@@ -355,9 +357,9 @@ fn has_code(line: &str) -> bool {
     let left = value[..index].trim_end();
     let right = value[index + delimiter.len_utf8()..].trim_start();
     !left.is_empty()
-        && left
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '-'))
+        && left.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '-')
+        })
         && !right.is_empty()
         && !right.contains(',')
 }
@@ -377,8 +379,8 @@ fn parse_path_prefix(value: &str) -> Option<usize> {
     }
     let path = value[..index].to_ascii_lowercase();
     if ![
-        ".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".c", ".cc", ".cpp", ".h",
-        ".hpp", ".go", ".java", ".cs", ".rb", ".php", ".lua", ".luau",
+        ".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".c", ".cc", ".cpp", ".h", ".hpp", ".go",
+        ".java", ".cs", ".rb", ".php", ".lua", ".luau",
     ]
     .iter()
     .any(|extension| path.ends_with(extension))
@@ -530,7 +532,10 @@ fn compact_text(text: &str, active: Profile) -> Value {
         let critical = lines
             .iter()
             .filter(|line| {
-                is_critical(line) || !find_paths(line).is_empty() || has_code(line) || has_command(line)
+                is_critical(line)
+                    || !find_paths(line).is_empty()
+                    || has_code(line)
+                    || has_command(line)
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -560,7 +565,10 @@ fn compact_text(text: &str, active: Profile) -> Value {
 }
 
 fn required_field(field: &str) -> bool {
-    matches!(field, "result" | "status" | "root_cause" | "claim" | "verification")
+    matches!(
+        field,
+        "result" | "status" | "root_cause" | "claim" | "verification"
+    )
 }
 
 fn render(payload: &Value, active: Profile, contract: &str) -> Result<Value, String> {
@@ -680,8 +688,8 @@ pub fn execute(command: &[String], arguments: &[String]) -> Result<Value, String
                     .as_deref()
                     .unwrap_or("balanced"),
             )?;
-            let contract = option_value(arguments, "--contract")?
-                .unwrap_or_else(|| "generic".to_owned());
+            let contract =
+                option_value(arguments, "--contract")?.unwrap_or_else(|| "generic".to_owned());
             let payload_text = if let Some(path) = option_value(arguments, "--input")? {
                 fs::read_to_string(path)
                     .map_err(|error| format!("OUTPUT_INPUT_READ_FAILED:{error}"))?

@@ -45,6 +45,10 @@ mod native_expansion;
 mod native_expansion;
 #[path = "native_expansion.rs"]
 mod native_expansion;
+#[path = "native_expansion.rs"]
+mod native_expansion;
+#[path = "native_expansion.rs"]
+mod native_expansion;
 #[path = "native_external_suite_gate.rs"]
 mod native_external_suite_gate;
 #[path = "native_external_suites.rs"]
