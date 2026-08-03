@@ -5,10 +5,10 @@ use std::path::Path;
 
 use serde_json::Value;
 
-#[path = "native_product_legacy.rs"]
-mod legacy;
 #[path = "config_contract.rs"]
 mod config_contract;
+#[path = "native_product_legacy.rs"]
+mod legacy;
 #[path = "migration_plan_read_only_contract.rs"]
 mod migration_plan_read_only_contract;
 #[path = "native_audit_config.rs"]

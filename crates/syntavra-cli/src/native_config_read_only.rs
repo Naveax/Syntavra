@@ -173,7 +173,8 @@ fn read_stable_file(path: &Path, scope: &str) -> Result<Option<String>, String> 
     if before.len() > MAX_CONFIG_FILE_BYTES {
         return Err(format!("LIVE_CONFIG_FILE_TOO_LARGE:{scope}"));
     }
-    let payload = fs::read(path).map_err(|error| format!("LIVE_CONFIG_READ_FAILED:{scope}:{error}"))?;
+    let payload =
+        fs::read(path).map_err(|error| format!("LIVE_CONFIG_READ_FAILED:{scope}:{error}"))?;
     let after = fs::symlink_metadata(path)
         .map_err(|error| format!("LIVE_CONFIG_REINSPECT_FAILED:{scope}:{error}"))?;
     if before.len() != after.len()
