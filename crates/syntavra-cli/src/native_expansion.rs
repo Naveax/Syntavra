@@ -4,6 +4,9 @@ use std::path::Path;
 
 use serde_json::Value;
 
+#[allow(clippy::pedantic)]
+#[path = "native_benchmark_tools.rs"]
+mod native_benchmark_tools;
 #[path = "native_claim.rs"]
 mod native_claim;
 #[path = "native_evidence_describe.rs"]
@@ -18,7 +21,7 @@ mod native_job_queries;
 mod native_migrations;
 #[path = "native_scheduler_reap.rs"]
 mod native_scheduler_reap;
-#[allow(unused_imports)]
+#[allow(clippy::pedantic, unused_imports)]
 #[path = "native_session_archive.rs"]
 mod native_session_archive;
 #[allow(dead_code)]
@@ -36,7 +39,8 @@ mod native_stats;
 mod native_verifier;
 
 pub fn supports(command: &[String]) -> bool {
-    native_claim::supports(command)
+    native_benchmark_tools::supports(command)
+        || native_claim::supports(command)
         || native_evidence_describe::supports(command)
         || native_evidence_gc::supports(command)
         || native_evidence_stats::supports(command)
@@ -58,6 +62,9 @@ pub fn execute(
     project_root: &Path,
     state_root: &Path,
 ) -> Result<Value, String> {
+    if native_benchmark_tools::supports(command) {
+        return native_benchmark_tools::execute(command, arguments);
+    }
     if native_claim::supports(command) {
         return native_claim::execute(arguments);
     }
@@ -109,6 +116,14 @@ mod tests {
 
     #[test]
     fn routes_expansion_commands() {
+        assert!(supports(&[
+            "benchmark".to_owned(),
+            "generate-repo".to_owned(),
+        ]));
+        assert!(supports(&[
+            "benchmark".to_owned(),
+            "validate-config".to_owned(),
+        ]));
         assert!(supports(&["claim".to_owned()]));
         assert!(supports(&["stats".to_owned()]));
         assert!(supports(&["migrate".to_owned(), "apply".to_owned()]));
