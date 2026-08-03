@@ -109,6 +109,49 @@ def test_native_config_resolve_route_matches_canonical_python_contract() -> None
     assert _rust_engine(*arguments) == _rust_expected(_python_engine(*arguments))
 
 
+def test_native_migration_plan_route_matches_python_exactly(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    arguments = (
+        "--project",
+        str(project),
+        "engine",
+        "route",
+        "migration.plan",
+        "--migration-database",
+        "state/missing.sqlite3",
+    )
+    assert _rust_engine(*arguments) == _rust_expected(_python_engine(*arguments))
+
+
+def test_native_scheduler_stats_route_matches_python_exactly(tmp_path: Path) -> None:
+    arguments = (
+        "--state-root",
+        str(tmp_path / "state"),
+        "engine",
+        "route",
+        "scheduler.stats",
+    )
+    assert _rust_engine(*arguments) == _rust_expected(_python_engine(*arguments))
+
+
+def test_native_scheduler_list_route_matches_python_exactly(tmp_path: Path) -> None:
+    arguments = (
+        "--state-root",
+        str(tmp_path / "state"),
+        "engine",
+        "route",
+        "scheduler.list",
+        "--scheduler-state",
+        "queued",
+        "--scheduler-state",
+        "failed",
+        "--scheduler-limit",
+        "7",
+    )
+    assert _rust_engine(*arguments) == _rust_expected(_python_engine(*arguments))
+
+
 def test_auto_engine_route_preserves_python_auto_policy() -> None:
     if shutil.which("cargo") is None:
         pytest.skip("Cargo is required for the real selector regression")
