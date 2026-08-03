@@ -77,6 +77,10 @@ on:
       - ".github/workflows/r38-dual-engine-runtime.yml"
   workflow_dispatch:
 
+concurrency:
+  group: r38-dual-engine-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
