@@ -19,11 +19,14 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 221,
-    "module_count": 48,
-    "native_coverage_ppm": 166037,
-    "native_public_command_count": 44,
+    "missing_native_public_command_count": 218,
+    "module_count": 49,
+    "native_coverage_ppm": 177358,
+    "native_public_command_count": 47,
     "native_public_commands": [
+      "config explain",
+      "config show",
+      "config validate",
       "context-stress",
       "engine list",
       "engine status",
