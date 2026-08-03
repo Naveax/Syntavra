@@ -25,6 +25,9 @@ mod native_job_queries;
 mod native_memory;
 #[path = "native_migrations.rs"]
 mod native_migrations;
+#[allow(clippy::pedantic)]
+#[path = "native_rollout_tail.rs"]
+mod native_rollout_tail;
 #[path = "native_scheduler_reap.rs"]
 mod native_scheduler_reap;
 #[allow(clippy::pedantic, unused_imports)]
@@ -59,6 +62,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_job_queries::supports(command)
         || native_memory::supports(command)
         || native_migrations::supports(command)
+        || native_rollout_tail::supports(command)
         || native_scheduler_reap::supports(command)
         || native_session_archive::supports(command)
         || native_session_context::supports(command)
@@ -117,6 +121,13 @@ pub fn execute(
     }
     if native_migrations::supports(command) {
         return native_migrations::execute(command, arguments);
+    }
+    if native_rollout_tail::supports(command) {
+        let value = native_rollout_tail::execute(arguments, state_root)?;
+        if value.get("ok").and_then(Value::as_bool) == Some(false) {
+            emit_failed_value(&value, 2);
+        }
+        return Ok(value);
     }
     if native_scheduler_reap::supports(command) {
         return native_scheduler_reap::execute(state_root);
@@ -184,6 +195,7 @@ mod tests {
         assert!(supports(&["memory".to_owned(), "search".to_owned()]));
         assert!(supports(&["memory".to_owned(), "link".to_owned()]));
         assert!(supports(&["memory".to_owned(), "neighbors".to_owned()]));
+        assert!(supports(&["rollout-tail".to_owned()]));
         assert!(supports(&["session".to_owned(), "append".to_owned()]));
         assert!(supports(&["session".to_owned(), "checkpoint".to_owned()]));
         assert!(supports(&["session".to_owned(), "close".to_owned()]));
