@@ -15,10 +15,66 @@ CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
 MISSING_INVENTORY = ROOT / "contracts" / "engine" / "r38-missing-native-commands-v1.json"
 SELECTOR = ROOT / "crates" / "syntavra-cli" / "src" / "bin" / "syntavra.rs"
 NATIVE_PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
+NATIVE_ENGINE_ROUTES = ROOT / "crates" / "syntavra-cli" / "src" / "native_engine_routes.rs"
+NATIVE_SESSION_CONTINUITY = ROOT / "crates" / "syntavra-cli" / "src" / "native_session_continuity.rs"
 INVENTORY_TEST = ROOT / "tests" / "runtime" / "test_dual_engine_public_surface_r38.py"
 PUBLIC_PATTERN = re.compile(r"const PUBLIC_COMMAND_COUNT: u64 = (?P<count>[0-9]+);")
 NATIVE_PATTERN = re.compile(r"const NATIVE_COMMAND_COUNT: u64 = (?P<count>[0-9]+);")
 PRIVATE_CONFIG_MODULE_PATTERN = re.compile(r"(?m)^mod config_contract;$")
+UNUSED_LIVE_WIRE_PATTERN = re.compile(
+    r"\nfn live_wire\(arguments: &\[String\], allow_overrides: bool\)"
+    r" -> Result<\(Vec<u8>, &'static str\), String> \{.*?\n\}\n\n(?=fn live_wire_at\()",
+    re.DOTALL,
+)
+OLD_EXACT_RECOVERY = '''        let coverage = connection
+            .query_row(
+                "SELECT source_start,source_end,invalidated_at FROM session_summaries WHERE summary_id=?1",
+                [root],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, Option<f64>>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("SESSION_SUMMARY_EXPAND_FAILED:{error}"))?;
+        coverage.is_some_and(|row| {
+            row.2.is_none()
+                && row.1 - row.0 + 1
+                    == context["exact_history_events"].as_i64().unwrap_or(-1)
+        })
+'''
+NEW_EXACT_RECOVERY = '''        let coverage = connection
+            .query_row(
+                "SELECT source_start,source_end,invalidated_at FROM session_summaries WHERE summary_id=?1",
+                [root],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, Option<f64>>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("SESSION_SUMMARY_EXPAND_FAILED:{error}"))?;
+        match coverage {
+            Some((source_start, source_end, None)) => {
+                let event_count = connection
+                    .query_row(
+                        "SELECT COUNT(*) FROM session_events \
+                         WHERE session_id=?1 AND sequence BETWEEN ?2 AND ?3",
+                        params![session_id, source_start, source_end],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .map_err(|error| format!("SESSION_SUMMARY_EVENT_COUNT_FAILED:{error}"))?;
+                event_count == context["exact_history_events"].as_i64().unwrap_or(-1)
+            }
+            Some((_, _, Some(_))) | None => false,
+        }
+'''
 
 
 def _replace_once(pattern: re.Pattern[str], replacement: str, source: str) -> str:
@@ -26,6 +82,15 @@ def _replace_once(pattern: re.Pattern[str], replacement: str, source: str) -> st
     if changes != 1:
         raise RuntimeError(f"expected one match for {pattern.pattern!r}, found {changes}")
     return rendered
+
+
+def _replace_literal_once(source: str, old: str, new: str, *, label: str) -> str:
+    count = source.count(old)
+    if count == 0 and new in source:
+        return source
+    if count != 1:
+        raise RuntimeError(f"expected one {label} source block, found {count}")
+    return source.replace(old, new, 1)
 
 
 def _command_digest(commands: list[str]) -> str:
@@ -49,8 +114,25 @@ def _synchronize_config_contract_visibility() -> None:
     NATIVE_PRODUCT.write_text(source, encoding="utf-8", newline="\n")
 
 
+def _repair_native_sources() -> None:
+    routes = NATIVE_ENGINE_ROUTES.read_text(encoding="utf-8")
+    if "fn live_wire(arguments:" in routes:
+        routes = _replace_once(UNUSED_LIVE_WIRE_PATTERN, "\n", routes)
+        NATIVE_ENGINE_ROUTES.write_text(routes, encoding="utf-8", newline="\n")
+
+    continuity = NATIVE_SESSION_CONTINUITY.read_text(encoding="utf-8")
+    continuity = _replace_literal_once(
+        continuity,
+        OLD_EXACT_RECOVERY,
+        NEW_EXACT_RECOVERY,
+        label="session exact-recovery",
+    )
+    NATIVE_SESSION_CONTINUITY.write_text(continuity, encoding="utf-8", newline="\n")
+
+
 def sync() -> int:
     _synchronize_config_contract_visibility()
+    _repair_native_sources()
 
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     python_surface = export_python_surface()
