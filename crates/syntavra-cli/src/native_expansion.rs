@@ -27,6 +27,8 @@ mod native_session_archive;
 #[allow(dead_code)]
 #[path = "native_session_context.rs"]
 mod native_session_context;
+#[path = "native_session_lifecycle.rs"]
+mod native_session_lifecycle;
 #[path = "native_session_list.rs"]
 mod native_session_list;
 #[path = "native_session_recover.rs"]
@@ -49,6 +51,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_scheduler_reap::supports(command)
         || native_session_archive::supports(command)
         || native_session_context::supports(command)
+        || native_session_lifecycle::supports(command)
         || native_session_list::supports(command)
         || native_session_recover::supports(command)
         || native_session_verify::supports(command)
@@ -106,6 +109,9 @@ pub fn execute(
     if native_session_context::supports(command) {
         return native_session_context::execute(arguments, project_root, state_root);
     }
+    if native_session_lifecycle::supports(command) {
+        return native_session_lifecycle::execute(command, arguments, project_root, state_root);
+    }
     if native_session_list::supports(command) {
         return native_session_list::execute(arguments, project_root, state_root);
     }
@@ -152,9 +158,12 @@ mod tests {
         assert!(supports(&["job".to_owned(), "show".to_owned()]));
         assert!(supports(&["job".to_owned(), "completions".to_owned()]));
         assert!(supports(&["session".to_owned(), "checkpoint".to_owned()]));
+        assert!(supports(&["session".to_owned(), "close".to_owned()]));
         assert!(supports(&["session".to_owned(), "context".to_owned()]));
         assert!(supports(&["session".to_owned(), "export".to_owned()]));
+        assert!(supports(&["session".to_owned(), "fork".to_owned()]));
         assert!(supports(&["session".to_owned(), "list".to_owned()]));
+        assert!(supports(&["session".to_owned(), "merge".to_owned()]));
         assert!(supports(&["session".to_owned(), "recover".to_owned()]));
         assert!(supports(&["session".to_owned(), "verify".to_owned()]));
         assert!(supports(&["verifier".to_owned(), "lookup".to_owned()]));
