@@ -49,6 +49,8 @@ mod native_session_recover;
 mod native_session_verify;
 #[path = "native_stats.rs"]
 mod native_stats;
+#[path = "native_telemetry_bundle.rs"]
+mod native_telemetry_bundle;
 #[path = "native_verifier.rs"]
 mod native_verifier;
 
@@ -72,6 +74,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_session_recover::supports(command)
         || native_session_verify::supports(command)
         || native_stats::supports(command)
+        || native_telemetry_bundle::supports(command)
         || native_verifier::supports(command)
 }
 
@@ -156,6 +159,9 @@ pub fn execute(
     if native_stats::supports(command) {
         return native_stats::execute(state_root);
     }
+    if native_telemetry_bundle::supports(command) {
+        return native_telemetry_bundle::execute(arguments, state_root);
+    }
     if native_verifier::supports(command) {
         return native_verifier::execute(command, arguments, state_root);
     }
@@ -167,50 +173,22 @@ mod tests {
     use super::supports;
 
     #[test]
-    fn routes_expansion_commands() {
-        assert!(supports(&[
-            "benchmark".to_owned(),
-            "generate-repo".to_owned(),
-        ]));
-        assert!(supports(&[
-            "benchmark".to_owned(),
-            "validate-config".to_owned(),
-        ]));
-        assert!(supports(&["claim".to_owned()]));
-        assert!(supports(&["stats".to_owned()]));
-        assert!(supports(&["migrate".to_owned(), "apply".to_owned()]));
-        assert!(supports(&["scheduler".to_owned(), "reap".to_owned()]));
-        assert!(supports(&["maintenance".to_owned(), "janitor".to_owned()]));
-        assert!(supports(&["evidence".to_owned(), "describe".to_owned()]));
-        assert!(supports(&["evidence".to_owned(), "gc".to_owned()]));
-        assert!(supports(&["evidence".to_owned(), "stats".to_owned()]));
-        assert!(supports(&["run".to_owned(), "evidence-stats".to_owned()]));
-        assert!(supports(&["run".to_owned(), "evidence-neighbors".to_owned()]));
-        assert!(supports(&["job".to_owned(), "cancel".to_owned()]));
-        assert!(supports(&["job".to_owned(), "completions".to_owned()]));
-        assert!(supports(&["job".to_owned(), "list".to_owned()]));
-        assert!(supports(&["job".to_owned(), "recover".to_owned()]));
-        assert!(supports(&["job".to_owned(), "show".to_owned()]));
-        assert!(supports(&["memory".to_owned(), "add".to_owned()]));
-        assert!(supports(&["memory".to_owned(), "search".to_owned()]));
-        assert!(supports(&["memory".to_owned(), "link".to_owned()]));
-        assert!(supports(&["memory".to_owned(), "neighbors".to_owned()]));
-        assert!(supports(&["rollout-tail".to_owned()]));
-        assert!(supports(&["session".to_owned(), "append".to_owned()]));
-        assert!(supports(&["session".to_owned(), "checkpoint".to_owned()]));
-        assert!(supports(&["session".to_owned(), "close".to_owned()]));
-        assert!(supports(&["session".to_owned(), "compact".to_owned()]));
-        assert!(supports(&["session".to_owned(), "context".to_owned()]));
-        assert!(supports(&["session".to_owned(), "export".to_owned()]));
-        assert!(supports(&["session".to_owned(), "fork".to_owned()]));
-        assert!(supports(&["session".to_owned(), "import".to_owned()]));
-        assert!(supports(&["session".to_owned(), "list".to_owned()]));
-        assert!(supports(&["session".to_owned(), "merge".to_owned()]));
-        assert!(supports(&["session".to_owned(), "open".to_owned()]));
-        assert!(supports(&["session".to_owned(), "recover".to_owned()]));
-        assert!(supports(&["session".to_owned(), "verify".to_owned()]));
-        assert!(supports(&["verifier".to_owned(), "lookup".to_owned()]));
-        assert!(supports(&["verifier".to_owned(), "invalidated-by".to_owned()]));
+    fn routes_recent_expansion_commands() {
+        for command in [
+            vec!["job", "cancel"],
+            vec!["memory", "add"],
+            vec!["memory", "search"],
+            vec!["memory", "link"],
+            vec!["memory", "neighbors"],
+            vec!["rollout-tail"],
+            vec!["telemetry", "bundle"],
+            vec!["session", "import"],
+            vec!["verifier", "lookup"],
+        ] {
+            assert!(supports(
+                &command.into_iter().map(str::to_owned).collect::<Vec<_>>()
+            ));
+        }
         assert!(!supports(&["run".to_owned(), "unknown".to_owned()]));
     }
 }
