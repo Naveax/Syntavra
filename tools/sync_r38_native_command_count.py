@@ -13,9 +13,11 @@ from export_rust_surface import export_surface as export_rust_surface
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
 SELECTOR = ROOT / "crates" / "syntavra-cli" / "src" / "bin" / "syntavra.rs"
+NATIVE_PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 INVENTORY_TEST = ROOT / "tests" / "runtime" / "test_dual_engine_public_surface_r38.py"
 PUBLIC_PATTERN = re.compile(r"const PUBLIC_COMMAND_COUNT: u64 = (?P<count>[0-9]+);")
 NATIVE_PATTERN = re.compile(r"const NATIVE_COMMAND_COUNT: u64 = (?P<count>[0-9]+);")
+PRIVATE_CONFIG_MODULE_PATTERN = re.compile(r"(?m)^mod config_contract;$")
 
 
 def _replace_once(pattern: re.Pattern[str], replacement: str, source: str) -> str:
@@ -34,7 +36,21 @@ def _command_digest(commands: list[str]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _synchronize_config_contract_visibility() -> None:
+    source = NATIVE_PRODUCT.read_text(encoding="utf-8")
+    if "pub mod config_contract;" in source:
+        return
+    source = _replace_once(
+        PRIVATE_CONFIG_MODULE_PATTERN,
+        "pub mod config_contract;",
+        source,
+    )
+    NATIVE_PRODUCT.write_text(source, encoding="utf-8", newline="\n")
+
+
 def sync() -> int:
+    _synchronize_config_contract_visibility()
+
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     python_surface = export_python_surface()
     rust_surface = export_rust_surface()
