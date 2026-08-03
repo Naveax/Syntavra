@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::env;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -24,11 +25,11 @@ struct Assignment {
 }
 
 fn hex(value: &str) -> String {
-    value
-        .as_bytes()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    let mut output = String::with_capacity(value.len() * 2);
+    for byte in value.as_bytes() {
+        write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    output
 }
 
 fn scalar_wire(value: &ConfigScalar) -> (&'static str, String) {
@@ -36,7 +37,11 @@ fn scalar_wire(value: &ConfigScalar) -> (&'static str, String) {
         ConfigScalar::Null => ("n", String::new()),
         ConfigScalar::Bool(flag) => ("b", flag.to_string()),
         ConfigScalar::Number(number) => {
-            let kind = if number.contains(['.', 'e', 'E']) { "f" } else { "i" };
+            let kind = if number.contains('.') || number.contains('e') || number.contains('E') {
+                "f"
+            } else {
+                "i"
+            };
             (kind, number.clone())
         }
         ConfigScalar::String(text) => ("s", text.clone()),
@@ -47,14 +52,16 @@ fn encode_wire(assignments: &[Assignment]) -> Result<Vec<u8>, String> {
     let mut output = String::from("R6CFG1\nphase\t0\n");
     for assignment in assignments {
         let (kind, raw) = scalar_wire(&assignment.value);
-        output.push_str(&format!(
-            "a\t{}\t{}\t{}\t{}\t{}\n",
+        writeln!(
+            &mut output,
+            "a\t{}\t{}\t{}\t{}\t{}",
             assignment.scope,
             hex(&assignment.source),
             hex(&assignment.path),
             kind,
             hex(&raw),
-        ));
+        )
+        .expect("writing to a String cannot fail");
     }
     if output.len() > MAX_CONFIG_WIRE_BYTES {
         return Err("LIVE_CONFIG_WIRE_TOO_LARGE".to_owned());
@@ -117,7 +124,7 @@ fn parse_toml_scalar(value: &str) -> Result<ConfigScalar, String> {
         "false" => return Ok(ConfigScalar::Bool(false)),
         _ => {}
     }
-    if value.starts_with(['[', '{']) {
+    if value.starts_with('[') || value.starts_with('{') {
         return Err("LIVE_CONFIG_NON_SCALAR_FORBIDDEN".to_owned());
     }
     let normalized = value.replace('_', "");
@@ -345,8 +352,7 @@ pub fn execute(
 
 #[cfg(test)]
 mod tests {
-    use super::{environment_scalar, parse_toml_scalar};
-    use crate::native_product::config_contract::ConfigScalar;
+    use super::{environment_scalar, parse_toml_scalar, ConfigScalar};
 
     #[test]
     fn parses_bounded_toml_scalars() {
