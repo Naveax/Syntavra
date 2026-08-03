@@ -20,6 +20,9 @@ mod native_evidence_stats;
 mod native_job_mutations;
 #[path = "native_job_queries.rs"]
 mod native_job_queries;
+#[allow(clippy::pedantic)]
+#[path = "native_memory.rs"]
+mod native_memory;
 #[path = "native_migrations.rs"]
 mod native_migrations;
 #[path = "native_scheduler_reap.rs"]
@@ -54,6 +57,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_evidence_stats::supports(command)
         || native_job_mutations::supports(command)
         || native_job_queries::supports(command)
+        || native_memory::supports(command)
         || native_migrations::supports(command)
         || native_scheduler_reap::supports(command)
         || native_session_archive::supports(command)
@@ -107,6 +111,9 @@ pub fn execute(
     }
     if native_job_queries::supports(command) {
         return native_job_queries::execute(command, arguments, state_root);
+    }
+    if native_memory::supports(command) {
+        return native_memory::execute(command, arguments, project_root, state_root);
     }
     if native_migrations::supports(command) {
         return native_migrations::execute(command, arguments);
@@ -173,6 +180,10 @@ mod tests {
         assert!(supports(&["job".to_owned(), "list".to_owned()]));
         assert!(supports(&["job".to_owned(), "recover".to_owned()]));
         assert!(supports(&["job".to_owned(), "show".to_owned()]));
+        assert!(supports(&["memory".to_owned(), "add".to_owned()]));
+        assert!(supports(&["memory".to_owned(), "search".to_owned()]));
+        assert!(supports(&["memory".to_owned(), "link".to_owned()]));
+        assert!(supports(&["memory".to_owned(), "neighbors".to_owned()]));
         assert!(supports(&["session".to_owned(), "append".to_owned()]));
         assert!(supports(&["session".to_owned(), "checkpoint".to_owned()]));
         assert!(supports(&["session".to_owned(), "close".to_owned()]));
