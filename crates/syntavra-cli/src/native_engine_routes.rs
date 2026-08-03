@@ -6,10 +6,12 @@ use std::path::{Component, Path, PathBuf};
 use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
-use super::config_contract::{resolve_config_wire, snapshot_json};
+use super::config_contract::{default_config_wire, resolve_config_wire, snapshot_json};
 
 const PHASE: &str = "R24";
 const SCHEMA_VERSION: u64 = 12;
+const MAX_CONFIG_WIRE_BYTES: usize = 256 * 1024;
+const MAX_EXPLAIN_PATH_BYTES: usize = 512;
 const ALLOWED_SCHEDULER_STATES: &[&str] = &[
     "cancelled",
     "dead-letter",
@@ -19,21 +21,25 @@ const ALLOWED_SCHEDULER_STATES: &[&str] = &[
     "succeeded",
 ];
 
-const STATIC_ROUTES: &[&str] = &[
+const ROUTES: &[&str] = &[
+    "config.explain",
     "config.resolve",
+    "config.show",
+    "config.validate",
     "migration.plan",
     "pipeline.describe",
     "plugins.list",
     "scheduler.list",
     "scheduler.stats",
     "state.layout",
+    "status",
     "telemetry.metrics",
     "version",
 ];
 
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [engine, route, name]
-        if engine == "engine" && route == "route" && STATIC_ROUTES.contains(&name.as_str()))
+        if engine == "engine" && route == "route" && ROUTES.contains(&name.as_str()))
 }
 
 fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
@@ -93,16 +99,14 @@ fn flag_present(arguments: &[String], flag: &str) -> bool {
     arguments.iter().any(|value| value == flag)
 }
 
-fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
-    if value.len() % 2 != 0 {
-        return Err("ENGINE_ROUTE_CONFIG_WIRE_HEX_INVALID".to_owned());
+fn decode_hex(value: &str, maximum_bytes: usize, code: &str) -> Result<Vec<u8>, String> {
+    if value.len() > maximum_bytes.saturating_mul(2) || value.len() % 2 != 0 {
+        return Err(code.to_owned());
     }
     let mut output = Vec::with_capacity(value.len() / 2);
     for pair in value.as_bytes().chunks_exact(2) {
-        let high = hex_nibble(pair[0])
-            .ok_or_else(|| "ENGINE_ROUTE_CONFIG_WIRE_HEX_INVALID".to_owned())?;
-        let low = hex_nibble(pair[1])
-            .ok_or_else(|| "ENGINE_ROUTE_CONFIG_WIRE_HEX_INVALID".to_owned())?;
+        let high = hex_nibble(pair[0]).ok_or_else(|| code.to_owned())?;
+        let low = hex_nibble(pair[1]).ok_or_else(|| code.to_owned())?;
         output.push((high << 4) | low);
     }
     Ok(output)
@@ -115,6 +119,15 @@ fn hex_nibble(value: u8) -> Option<u8> {
         b'A'..=b'F' => Some(value - b'A' + 10),
         _ => None,
     }
+}
+
+fn bytes_hex(value: &[u8]) -> String {
+    let mut output = String::with_capacity(value.len() * 2);
+    for byte in value {
+        use std::fmt::Write as _;
+        write!(&mut output, "{byte:02x}").expect("writing to String cannot fail");
+    }
+    output
 }
 
 fn selection() -> Value {
@@ -159,37 +172,68 @@ fn canonical_input(profile: &str, format: &str, request: &[u8]) -> Value {
     })
 }
 
-fn wire_input(wire: &[u8]) -> Value {
-    canonical_input("explicit-config-wire-v1", "R6CFG1", wire)
+fn wire_input(profile: &str, wire: &[u8]) -> Value {
+    canonical_input(profile, "R6CFG1", wire)
 }
 
 fn json_value(rendered: &str, code: &str) -> Result<Value, String> {
     serde_json::from_str(rendered).map_err(|_| code.to_owned())
 }
 
-fn route_version() -> Value {
-    envelope(
-        "version",
-        "version",
-        no_input(),
-        json!({
-            "contract_version": 1,
-            "engine": "rust",
-            "engine_stability": "experimental",
-            "product": "Syntavra",
-            "product_version": "0.0.1",
-            "release_channel": "pre-release",
-        }),
-    )
+fn unsupported_route_inputs(arguments: &[String], allowed: &[&str]) -> Result<bool, String> {
+    let option_flags = [
+        "--config-wire-hex",
+        "--session-override-json-hex",
+        "--task-override-json-hex",
+        "--receipt-wire-hex",
+        "--database-path",
+        "--explain-path",
+        "--scheduler-limit",
+        "--migration-database",
+    ];
+    for flag in option_flags {
+        if !allowed.contains(&flag) && option_value(arguments, flag)?.is_some() {
+            return Ok(true);
+        }
+    }
+    if !allowed.contains(&"--scheduler-state")
+        && !repeated_option_values(arguments, "--scheduler-state")?.is_empty()
+    {
+        return Ok(true);
+    }
+    let boolean_flags = ["--live-config", "--telemetry-prometheus"];
+    Ok(boolean_flags
+        .iter()
+        .any(|flag| !allowed.contains(flag) && flag_present(arguments, flag)))
+}
+
+fn rust_runtime(arguments: &[&str]) -> Result<Value, String> {
+    let owned = arguments
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+    super::native_rust_subprocess::execute_json(&owned)
+}
+
+fn route_version(arguments: &[String]) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &[])? {
+        return Err("ENGINE_ROUTE_VERSION_INPUT_UNSUPPORTED_R24".to_owned());
+    }
+    let result = rust_runtime(&["version"])?;
+    Ok(envelope("version", "version", no_input(), result))
 }
 
 fn route_config_resolve(arguments: &[String]) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &["--config-wire-hex"])? {
+        return Err("ENGINE_ROUTE_CONFIG_RESOLVE_INPUT_UNSUPPORTED_R24".to_owned());
+    }
     let encoded = option_value(arguments, "--config-wire-hex")?
         .ok_or_else(|| "ENGINE_ROUTE_INPUT_REQUIRED_R14".to_owned())?;
-    if flag_present(arguments, "--live-config") {
-        return Err("ENGINE_ROUTE_CONFIG_INPUT_CONFLICT".to_owned());
-    }
-    let wire = decode_hex(&encoded)?;
+    let wire = decode_hex(
+        &encoded,
+        MAX_CONFIG_WIRE_BYTES,
+        "ENGINE_ROUTE_CONFIG_WIRE_HEX_INVALID",
+    )?;
     let snapshot = resolve_config_wire(&wire)?;
     let result = json_value(
         &snapshot_json(&snapshot)?,
@@ -198,22 +242,199 @@ fn route_config_resolve(arguments: &[String]) -> Result<Value, String> {
     Ok(envelope(
         "config.resolve",
         "config.resolve",
-        wire_input(&wire),
+        wire_input("explicit-config-wire-v1", &wire),
         result,
     ))
 }
 
-fn route_static(command: &str) -> Result<Value, String> {
+fn live_wire(arguments: &[String], allow_overrides: bool) -> Result<(Vec<u8>, &'static str), String> {
+    let session = option_value(arguments, "--session-override-json-hex")?;
+    let task = option_value(arguments, "--task-override-json-hex")?;
+    if !allow_overrides && (session.is_some() || task.is_some()) {
+        return Err("ENGINE_ROUTE_LIVE_OVERRIDE_UNSUPPORTED_R24".to_owned());
+    }
+    let profile = if session.is_some() || task.is_some() {
+        "live-config-session-task-v1"
+    } else {
+        "live-config-discovery-v1"
+    };
+    super::native_live_config::discover_wire(
+        Path::new(
+            &option_value(arguments, "--project")?
+                .unwrap_or_else(|| ".".to_owned()),
+        ),
+        session.as_deref(),
+        task.as_deref(),
+    )
+    .map(|wire| (wire, profile))
+}
+
+fn live_wire_at(
+    project_root: &Path,
+    arguments: &[String],
+    allow_overrides: bool,
+) -> Result<(Vec<u8>, &'static str), String> {
+    let session = option_value(arguments, "--session-override-json-hex")?;
+    let task = option_value(arguments, "--task-override-json-hex")?;
+    if !allow_overrides && (session.is_some() || task.is_some()) {
+        return Err("ENGINE_ROUTE_LIVE_OVERRIDE_UNSUPPORTED_R24".to_owned());
+    }
+    let profile = if session.is_some() || task.is_some() {
+        "live-config-session-task-v1"
+    } else {
+        "live-config-discovery-v1"
+    };
+    super::native_live_config::discover_wire(project_root, session.as_deref(), task.as_deref())
+        .map(|wire| (wire, profile))
+}
+
+fn route_config_show(arguments: &[String], project_root: &Path) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &[])? {
+        return Err("ENGINE_ROUTE_CONFIG_SHOW_INPUT_UNSUPPORTED_R24".to_owned());
+    }
+    let (wire, profile) = live_wire_at(project_root, arguments, false)?;
+    let encoded = bytes_hex(&wire);
+    let result = rust_runtime(&["config", "show", &encoded])?;
+    Ok(envelope(
+        "config.show",
+        "config.show",
+        wire_input(profile, &wire),
+        result,
+    ))
+}
+
+fn validate_explain_path(value: &str) -> Result<(), String> {
+    let encoded = value.as_bytes();
+    if encoded.is_empty()
+        || encoded.len() > MAX_EXPLAIN_PATH_BYTES
+        || value.chars().any(char::is_control)
+        || value.split('.').any(str::is_empty)
+    {
+        return Err("ENGINE_ROUTE_CONFIG_EXPLAIN_PATH_INVALID_R24".to_owned());
+    }
+    Ok(())
+}
+
+fn route_config_explain(arguments: &[String], project_root: &Path) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &["--explain-path"])? {
+        return Err("ENGINE_ROUTE_CONFIG_EXPLAIN_INPUT_UNSUPPORTED_R24".to_owned());
+    }
+    let path = option_value(arguments, "--explain-path")?
+        .ok_or_else(|| "ENGINE_ROUTE_CONFIG_EXPLAIN_PATH_INVALID_R24".to_owned())?;
+    validate_explain_path(&path)?;
+    let (wire, profile) = live_wire_at(project_root, arguments, false)?;
+    let wire_hex = bytes_hex(&wire);
+    let path_hex = bytes_hex(path.as_bytes());
+    let result = rust_runtime(&["config", "explain", &wire_hex, &path_hex])?;
+    let mut input = wire_input(profile, &wire);
+    let object = input
+        .as_object_mut()
+        .ok_or_else(|| "ENGINE_ROUTE_CONFIG_EXPLAIN_INPUT_INVALID".to_owned())?;
+    object.insert("path".to_owned(), Value::String(path.clone()));
+    object.insert(
+        "path_bytes".to_owned(),
+        Value::Number(path.len().into()),
+    );
+    object.insert(
+        "path_sha256".to_owned(),
+        Value::String(sha256_hex(path.as_bytes())),
+    );
+    Ok(envelope(
+        "config.explain",
+        "config.explain",
+        input,
+        result,
+    ))
+}
+
+fn route_config_validate(arguments: &[String], project_root: &Path) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &[])? {
+        return Err("ENGINE_ROUTE_CONFIG_VALIDATE_INPUT_UNSUPPORTED_R24".to_owned());
+    }
+    let (wire, profile) = live_wire_at(project_root, arguments, false)?;
+    let encoded = bytes_hex(&wire);
+    let snapshot = rust_runtime(&["config", "resolve", &encoded])?;
+    let result = json!({
+        "ok": true,
+        "config_hash": snapshot
+            .get("config_hash")
+            .cloned()
+            .ok_or_else(|| "CONFIG_VALIDATE_HASH_MISSING".to_owned())?,
+        "warnings": snapshot
+            .get("warnings")
+            .cloned()
+            .ok_or_else(|| "CONFIG_VALIDATE_WARNINGS_MISSING".to_owned())?,
+    });
+    Ok(envelope(
+        "config.validate",
+        "config.resolve",
+        wire_input(profile, &wire),
+        result,
+    ))
+}
+
+fn route_status(arguments: &[String], project_root: &Path) -> Result<Value, String> {
+    if unsupported_route_inputs(
+        arguments,
+        &[
+            "--config-wire-hex",
+            "--live-config",
+            "--session-override-json-hex",
+            "--task-override-json-hex",
+        ],
+    )? {
+        return Err("ENGINE_ROUTE_STATUS_INPUT_UNSUPPORTED_R24".to_owned());
+    }
+    let explicit = option_value(arguments, "--config-wire-hex")?;
+    let live = flag_present(arguments, "--live-config");
+    let session = option_value(arguments, "--session-override-json-hex")?;
+    let task = option_value(arguments, "--task-override-json-hex")?;
+    if explicit.is_some() && (live || session.is_some() || task.is_some()) {
+        return Err("ENGINE_ROUTE_INPUT_CONFLICT_R16".to_owned());
+    }
+    if (session.is_some() || task.is_some()) && !live {
+        return Err("ENGINE_ROUTE_OVERRIDE_REQUIRES_LIVE_CONFIG_R16".to_owned());
+    }
+
+    let (wire, profile, result) = if let Some(encoded) = explicit {
+        let wire = decode_hex(
+            &encoded,
+            MAX_CONFIG_WIRE_BYTES,
+            "ENGINE_ROUTE_CONFIG_WIRE_HEX_INVALID",
+        )?;
+        let result = rust_runtime(&["status", &bytes_hex(&wire)])?;
+        (wire, "explicit-config-wire-v1", result)
+    } else if live {
+        let (wire, profile) = live_wire_at(project_root, arguments, true)?;
+        let result = rust_runtime(&["status", &bytes_hex(&wire)])?;
+        (wire, profile, result)
+    } else {
+        let wire = default_config_wire().to_vec();
+        let result = rust_runtime(&["status"])?;
+        (wire, "default-config-only", result)
+    };
+    Ok(envelope(
+        "status",
+        "status",
+        wire_input(profile, &wire),
+        result,
+    ))
+}
+
+fn route_static(command: &str, arguments: &[String]) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &[])? {
+        return Err("ENGINE_ROUTE_STATIC_INPUT_UNSUPPORTED_R24".to_owned());
+    }
     let rendered = super::read_only_cli_contract::result_json(command)?;
     let result = json_value(&rendered, "ENGINE_ROUTE_STATIC_RESULT_INVALID")?;
     Ok(envelope(command, command, no_input(), result))
 }
 
-fn route_state_layout() -> Result<Value, String> {
-    let result = json_value(
-        super::state_layout_contract::state_layout_json(),
-        "ENGINE_ROUTE_STATE_LAYOUT_INVALID",
-    )?;
+fn route_state_layout(arguments: &[String]) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &[])? {
+        return Err("ENGINE_ROUTE_STATE_LAYOUT_INPUT_UNSUPPORTED_R24".to_owned());
+    }
+    let result = rust_runtime(&["state", "layout"])?;
     Ok(envelope(
         "state.layout",
         "state.layout",
@@ -223,6 +444,9 @@ fn route_state_layout() -> Result<Value, String> {
 }
 
 fn route_telemetry(arguments: &[String]) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &["--telemetry-prometheus"])? {
+        return Err("ENGINE_ROUTE_TELEMETRY_INPUT_UNSUPPORTED_R24".to_owned());
+    }
     let prometheus = flag_present(arguments, "--telemetry-prometheus");
     let output_format = if prometheus { "prometheus" } else { "json" };
     let rendered = super::telemetry_metrics_contract::telemetry_metrics_json(output_format)?;
@@ -288,6 +512,9 @@ fn migration_logical_database(project_root: &Path, raw: &str) -> Result<String, 
 }
 
 fn route_migration_plan(arguments: &[String], project_root: &Path) -> Result<Value, String> {
+    if unsupported_route_inputs(arguments, &["--migration-database"])? {
+        return Err("ENGINE_ROUTE_MIGRATION_INPUT_UNSUPPORTED_R24".to_owned());
+    }
     let database = option_value(arguments, "--migration-database")?
         .ok_or_else(|| "ENGINE_ROUTE_MIGRATION_DATABASE_REQUIRED_R24".to_owned())?;
     let logical = migration_logical_database(project_root, &database)?;
@@ -340,6 +567,14 @@ fn route_scheduler(
     arguments: &[String],
     state_root: &Path,
 ) -> Result<Value, String> {
+    let allowed = if route == "scheduler.list" {
+        &["--scheduler-state", "--scheduler-limit"][..]
+    } else {
+        &[][..]
+    };
+    if unsupported_route_inputs(arguments, allowed)? {
+        return Err("ENGINE_ROUTE_SCHEDULER_INPUT_UNSUPPORTED_R24".to_owned());
+    }
     let states = scheduler_states(arguments)?;
     let explicit_limit = option_value(arguments, "--scheduler-limit")?.is_some();
     if route == "scheduler.stats" && (!states.is_empty() || explicit_limit) {
@@ -386,23 +621,23 @@ pub fn execute(
     command: &[String],
     arguments: &[String],
     project_root: &Path,
+    state_root: &Path,
 ) -> Result<Value, String> {
     let route = command
         .get(2)
         .map(String::as_str)
         .ok_or_else(|| "ENGINE_ROUTE_COMMAND_MISSING".to_owned())?;
     match route {
-        "version" => Ok(route_version()),
+        "version" => route_version(arguments),
+        "status" => route_status(arguments, project_root),
         "config.resolve" => route_config_resolve(arguments),
+        "config.show" => route_config_show(arguments, project_root),
+        "config.explain" => route_config_explain(arguments, project_root),
+        "config.validate" => route_config_validate(arguments, project_root),
         "migration.plan" => route_migration_plan(arguments, project_root),
-        "pipeline.describe" | "plugins.list" => route_static(route),
-        "scheduler.list" | "scheduler.stats" => {
-            let state_root = option_value(arguments, "--state-root")?
-                .map(PathBuf::from)
-                .unwrap_or_else(|| project_root.join(".syntavra").join("pre-release"));
-            route_scheduler(route, arguments, &state_root)
-        }
-        "state.layout" => route_state_layout(),
+        "pipeline.describe" | "plugins.list" => route_static(route, arguments),
+        "scheduler.list" | "scheduler.stats" => route_scheduler(route, arguments, state_root),
+        "state.layout" => route_state_layout(arguments),
         "telemetry.metrics" => route_telemetry(arguments),
         _ => Err("ENGINE_ROUTE_UNSUPPORTED".to_owned()),
     }
@@ -410,8 +645,7 @@ pub fn execute(
 
 #[cfg(test)]
 mod tests {
-    use super::{execute, supports};
-    use std::path::Path;
+    use super::{supports, validate_explain_path};
 
     fn command(route: &str) -> Vec<String> {
         ["engine", "route", route]
@@ -421,22 +655,18 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_certified_static_routes() {
+    fn recognizes_complete_non_state_route_family() {
         assert!(supports(&command("version")));
+        assert!(supports(&command("status")));
+        assert!(supports(&command("config.explain")));
         assert!(supports(&command("migration.plan")));
         assert!(supports(&command("scheduler.list")));
-        assert!(!supports(&command("config.show")));
     }
 
     #[test]
-    fn version_route_is_native_rust() {
-        let arguments = ["engine", "route", "version"]
-            .into_iter()
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-        let value = execute(&command("version"), &arguments, Path::new("."))
-            .expect("version route");
-        assert_eq!(value["result"]["engine"], "rust");
-        assert_eq!(value["selection"]["resolved"], "rust");
+    fn explain_path_validation_is_fail_closed() {
+        assert!(validate_explain_path("runtime.profile").is_ok());
+        assert!(validate_explain_path("runtime..profile").is_err());
+        assert!(validate_explain_path("").is_err());
     }
 }
