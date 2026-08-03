@@ -69,8 +69,8 @@ fn evaluate(arguments: &[String]) -> Result<Value, String> {
     let churn = parse_f64(arguments, "--churn", 0.0)?;
     let evidence_pressure = parse_f64(arguments, "--evidence-pressure", 0.0)?;
     let utilization = (used as f64) / (window as f64);
-    let pressure = (utilization + 0.12 * churn.max(0.0) + 0.08 * evidence_pressure.max(0.0))
-        .clamp(0.0, 1.5);
+    let pressure =
+        (utilization + 0.12 * churn.max(0.0) + 0.08 * evidence_pressure.max(0.0)).clamp(0.0, 1.5);
     let mut level = 0_u64;
     let mut actions = Vec::<Value>::new();
     for (threshold, names) in THRESHOLDS {
@@ -132,7 +132,10 @@ fn parse_item(value: &Value) -> Result<ContextItem, String> {
         tokens: required_i64(row, "tokens")?,
         utility: required_f64(row, "utility")?,
         confidence: row.get("confidence").and_then(Value::as_f64).unwrap_or(1.0),
-        mandatory: row.get("mandatory").and_then(Value::as_bool).unwrap_or(false),
+        mandatory: row
+            .get("mandatory")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         stable: row.get("stable").and_then(Value::as_bool).unwrap_or(false),
         dependencies,
     })
