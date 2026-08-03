@@ -26,6 +26,7 @@ on:
       - "tests/runtime/test_native_redact_r38.py"
       - "tests/runtime/test_native_semantic_signalbench_r38.py"
       - "tests/runtime/test_native_signalbench_gate_r38.py"
+      - "tests/runtime/test_native_static_surfaces_r38.py"
       - "tests/runtime/test_native_upgrade_r38.py"
       - "tests/runtime/test_native_wire_r38.py"
       - "tests/runtime/test_native_wrap_r38.py"
@@ -56,6 +57,7 @@ on:
       - "tests/runtime/test_native_redact_r38.py"
       - "tests/runtime/test_native_semantic_signalbench_r38.py"
       - "tests/runtime/test_native_signalbench_gate_r38.py"
+      - "tests/runtime/test_native_static_surfaces_r38.py"
       - "tests/runtime/test_native_upgrade_r38.py"
       - "tests/runtime/test_native_wire_r38.py"
       - "tests/runtime/test_native_wrap_r38.py"
@@ -122,6 +124,7 @@ jobs:
           tests/runtime/test_native_redact_r38.py
           tests/runtime/test_native_semantic_signalbench_r38.py
           tests/runtime/test_native_signalbench_gate_r38.py
+          tests/runtime/test_native_static_surfaces_r38.py
           tests/runtime/test_native_upgrade_r38.py
           tests/runtime/test_native_wire_r38.py
           tests/runtime/test_native_wrap_r38.py
