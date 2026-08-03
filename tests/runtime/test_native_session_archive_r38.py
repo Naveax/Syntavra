@@ -140,8 +140,10 @@ def _checkpoint_database_state(state_root: Path) -> dict[str, Any]:
     finally:
         database.close()
     assert checkpoint is not None
+    checkpoint_value = dict(checkpoint)
+    checkpoint_value["metadata_json"] = json.loads(checkpoint_value["metadata_json"])
     return {
-        "checkpoint": dict(checkpoint),
+        "checkpoint": checkpoint_value,
         "summaries": [dict(row) for row in summaries],
     }
 
