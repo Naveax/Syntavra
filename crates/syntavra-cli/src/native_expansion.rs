@@ -26,6 +26,9 @@ mod native_memory;
 #[path = "native_migrations.rs"]
 mod native_migrations;
 #[allow(clippy::pedantic)]
+#[path = "native_output_governor.rs"]
+mod native_output_governor;
+#[allow(clippy::pedantic)]
 #[path = "native_rollout_tail.rs"]
 mod native_rollout_tail;
 #[path = "native_scheduler_reap.rs"]
@@ -64,6 +67,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_job_queries::supports(command)
         || native_memory::supports(command)
         || native_migrations::supports(command)
+        || native_output_governor::supports(command)
         || native_rollout_tail::supports(command)
         || native_scheduler_reap::supports(command)
         || native_session_archive::supports(command)
@@ -125,6 +129,9 @@ pub fn execute(
     if native_migrations::supports(command) {
         return native_migrations::execute(command, arguments);
     }
+    if native_output_governor::supports(command) {
+        return native_output_governor::execute(command, arguments);
+    }
     if native_rollout_tail::supports(command) {
         let value = native_rollout_tail::execute(arguments, state_root)?;
         if value.get("ok").and_then(Value::as_bool) == Some(false) {
@@ -180,6 +187,8 @@ mod tests {
             vec!["memory", "search"],
             vec!["memory", "link"],
             vec!["memory", "neighbors"],
+            vec!["output", "compact"],
+            vec!["output", "govern"],
             vec!["rollout-tail"],
             vec!["telemetry", "bundle"],
             vec!["session", "import"],
