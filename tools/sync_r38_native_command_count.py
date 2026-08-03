@@ -75,6 +75,34 @@ NEW_EXACT_RECOVERY = '''        let coverage = connection
             Some((_, _, Some(_))) | None => false,
         }
 '''
+STATS_MODULE_MARKER = '''#[path = "native_static_surfaces.rs"]
+mod native_static_surfaces;
+'''
+STATS_MODULE_REPLACEMENT = '''#[path = "native_stats.rs"]
+mod native_stats;
+#[path = "native_static_surfaces.rs"]
+mod native_static_surfaces;
+'''
+STATS_SUPPORT_MARKER = '''        || native_session_status::supports(command)
+        || native_static_surfaces::supports(command)
+'''
+STATS_SUPPORT_REPLACEMENT = '''        || native_session_status::supports(command)
+        || native_stats::supports(command)
+        || native_static_surfaces::supports(command)
+'''
+STATS_EXECUTE_MARKER = '''    if native_session_status::supports(command) {
+        return native_session_status::execute(project_root, state_root).map(Some);
+    }
+    if native_static_surfaces::supports(command) {
+'''
+STATS_EXECUTE_REPLACEMENT = '''    if native_session_status::supports(command) {
+        return native_session_status::execute(project_root, state_root).map(Some);
+    }
+    if native_stats::supports(command) {
+        return native_stats::execute(state_root).map(Some);
+    }
+    if native_static_surfaces::supports(command) {
+'''
 
 
 def _replace_once(pattern: re.Pattern[str], replacement: str, source: str) -> str:
@@ -114,6 +142,29 @@ def _synchronize_config_contract_visibility() -> None:
     NATIVE_PRODUCT.write_text(source, encoding="utf-8", newline="\n")
 
 
+def _wire_native_stats() -> None:
+    source = NATIVE_PRODUCT.read_text(encoding="utf-8")
+    source = _replace_literal_once(
+        source,
+        STATS_MODULE_MARKER,
+        STATS_MODULE_REPLACEMENT,
+        label="native stats module",
+    )
+    source = _replace_literal_once(
+        source,
+        STATS_SUPPORT_MARKER,
+        STATS_SUPPORT_REPLACEMENT,
+        label="native stats support",
+    )
+    source = _replace_literal_once(
+        source,
+        STATS_EXECUTE_MARKER,
+        STATS_EXECUTE_REPLACEMENT,
+        label="native stats execution",
+    )
+    NATIVE_PRODUCT.write_text(source, encoding="utf-8", newline="\n")
+
+
 def _repair_native_sources() -> None:
     routes = NATIVE_ENGINE_ROUTES.read_text(encoding="utf-8")
     if "fn live_wire(arguments:" in routes:
@@ -132,6 +183,7 @@ def _repair_native_sources() -> None:
 
 def sync() -> int:
     _synchronize_config_contract_visibility()
+    _wire_native_stats()
     _repair_native_sources()
 
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
