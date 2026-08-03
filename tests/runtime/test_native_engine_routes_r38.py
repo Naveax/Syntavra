@@ -152,6 +152,22 @@ def test_native_scheduler_list_route_matches_python_exactly(tmp_path: Path) -> N
     assert _rust_engine(*arguments) == _rust_expected(_python_engine(*arguments))
 
 
+def test_native_state_inspect_route_matches_python_exactly(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    syntavra = project / ".syntavra"
+    syntavra.mkdir()
+    (syntavra / "config.toml").write_text("[runtime]\nmode = 'audit'\n", encoding="utf-8")
+    arguments = (
+        "--project",
+        str(project),
+        "engine",
+        "route",
+        "state.inspect",
+    )
+    assert _rust_engine(*arguments) == _rust_expected(_python_engine(*arguments))
+
+
 def test_auto_engine_route_preserves_python_auto_policy() -> None:
     if shutil.which("cargo") is None:
         pytest.skip("Cargo is required for the real selector regression")
