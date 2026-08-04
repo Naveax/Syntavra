@@ -1,0 +1,85 @@
+name: R38 Reachable Catalog Diagnostic
+
+on:
+  push:
+    branches:
+      - "agent/r38-quality-validation"
+    paths:
+      - ".github/r38-catalog-trigger"
+      - ".github/workflows/r38-catalog-diagnostic.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-reachable-catalog-diagnostic
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-quality-validation
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          path: source
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Run reachable-command catalog regressions
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .r38-catalog
+          cd source
+          source_head=$(git rev-parse HEAD)
+          python -m pip install --disable-pip-version-check -e . pytest > ../.r38-catalog/install.txt 2>&1
+          install_code=$?
+          if [ "$install_code" -eq 0 ]; then
+            python -m pytest -q \
+              tests/runtime/test_scheduler_read_only_r24.py \
+              tests/runtime/test_engine_selector_r4.py \
+              tests/runtime/test_full_parity_catalog_v1.py \
+              > ../.r38-catalog/tests.txt 2>&1
+            test_code=$?
+          else
+            printf 'skipped: install failed\n' > ../.r38-catalog/tests.txt
+            test_code=125
+          fi
+          cd ..
+          python - "$source_head" "$install_code" "$test_code" <<'PY'
+          import json
+          import sys
+
+          source_head = sys.argv[1]
+          install_code, test_code = (int(value) for value in sys.argv[2:])
+          payload = {
+              "source_head": source_head,
+              "install_exit": install_code,
+              "tests_exit": test_code,
+              "ok": install_code == 0 and test_code == 0,
+          }
+          with open(".r38-catalog/result.json", "w", encoding="utf-8", newline="\n") as handle:
+              json.dump(payload, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          PY
+          exit 0
+      - name: Commit diagnostic result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin agent/r38-quality-validation
+          git rebase origin/agent/r38-quality-validation
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f .r38-catalog
+          git diff --cached --quiet && exit 0
+          git commit -m "[catalog-result] R38 reachable catalog regression"
+          git push origin HEAD:agent/r38-quality-validation
