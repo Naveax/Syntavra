@@ -47,9 +47,16 @@ DUPLICATE_TRUNCATION = """    if positional.first().map(String::as_str) == Some(
         positional.truncate(1);
 """
 
-CANONICAL_TRUNCATION = """    if matches!(
+UNNESTED_TRUNCATION = """    if matches!(
         positional.first().map(String::as_str),
         Some("rollout-tail") | Some("context-stress")
+    ) {
+        positional.truncate(1);
+"""
+
+CANONICAL_TRUNCATION = """    if matches!(
+        positional.first().map(String::as_str),
+        Some("rollout-tail" | "context-stress")
     ) {
         positional.truncate(1);
 """
@@ -90,14 +97,14 @@ def _validate_canonical(source: str, path: Path) -> None:
         raise RuntimeError(
             f"selector value options missing from command_path in {path}: {missing_options}"
         )
-    if command_path.count('Some("rollout-tail")') != 1:
+    if command_path.count('"rollout-tail"') != 1:
         raise RuntimeError(f"rollout-tail truncation invariant failed in {path}")
-    if command_path.count('Some("context-stress")') != 1:
+    if command_path.count('"context-stress"') != 1:
         raise RuntimeError(f"context-stress truncation invariant failed in {path}")
     if command_path.count("positional.truncate(1);") != 1:
         raise RuntimeError(f"single-segment truncation must have one branch in {path}")
-    if 'Some("rollout-tail") | Some("context-stress")' not in command_path:
-        raise RuntimeError(f"combined selector truncation pattern missing in {path}")
+    if 'Some("rollout-tail" | "context-stress")' not in command_path:
+        raise RuntimeError(f"nested selector truncation pattern missing in {path}")
 
 
 def repair(path: Path | None = None) -> bool:
@@ -118,21 +125,18 @@ def repair(path: Path | None = None) -> bool:
         )
         changed = changed or applied
 
-    rendered, applied = _replace_optional_once(
-        rendered,
-        DUPLICATE_TRUNCATION,
-        CANONICAL_TRUNCATION,
-        "duplicate selector truncation",
-    )
-    changed = changed or applied
-
-    rendered, applied = _replace_optional_once(
-        rendered,
-        LEGACY_CONTEXT_TRUNCATION,
-        CANONICAL_TRUNCATION,
-        "legacy selector truncation",
-    )
-    changed = changed or applied
+    for legacy, label in (
+        (DUPLICATE_TRUNCATION, "duplicate selector truncation"),
+        (UNNESTED_TRUNCATION, "unnested selector truncation"),
+        (LEGACY_CONTEXT_TRUNCATION, "legacy selector truncation"),
+    ):
+        rendered, applied = _replace_optional_once(
+            rendered,
+            legacy,
+            CANONICAL_TRUNCATION,
+            label,
+        )
+        changed = changed or applied
 
     _validate_canonical(rendered, path)
     if changed:
