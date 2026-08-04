@@ -16,16 +16,19 @@ on:
       - "contracts/engine/r38-missing-native-commands-v1.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
       - "crates/syntavra-cli/src/native_*.rs"
+      - "crates/syntavra-cli/src/state_layout_contract.rs"
       - "syntavra_runtime/engine_entry.py"
       - "syntavra_runtime/prerelease_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
       - "tools/refresh_manifest.py"
+      - "tools/repair_r38_rust_sources.py"
       - "tools/sync_r38_generated_metadata.py"
       - "tools/sync_r38_native_command_count.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_*_r38.py"
       - "tests/runtime/test_r38_generated_metadata_sync.py"
+      - "tests/runtime/test_r38_rust_source_repairs.py"
   workflow_dispatch:
 
 permissions:
@@ -54,12 +57,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Verify metadata synchronizer idempotence
-        run: python -m pytest -q tests/runtime/test_r38_generated_metadata_sync.py
+      - name: Verify repair and metadata idempotence
+        run: |
+          python -m pytest -q \
+            tests/runtime/test_r38_rust_source_repairs.py \
+            tests/runtime/test_r38_generated_metadata_sync.py
       - name: Reproduce canonical generated state
         run: |
+          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
+          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           python tools/refresh_manifest.py
       - name: Validate generated contract consistency
@@ -82,7 +90,7 @@ jobs:
           assert missing["python_launcher_bridge_command_count"] == 0
           assert Path("MANIFEST.sha256").is_file()
           PY
-      - name: Reject stale generated files
+      - name: Reject stale canonical files
         if: ${{ hashFiles('.github/r38-manifest-refresh') == '' }}
         shell: bash
         run: |
@@ -93,11 +101,12 @@ jobs:
             contracts/engine/r38-missing-native-commands-v1.json \
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_*.rs \
+            crates/syntavra-cli/src/state_layout_contract.rs \
             tests/runtime/test_dual_engine_public_surface_r38.py
           code=$?
           set -e
           if [ "$code" -ne 0 ]; then
-            echo "Generated R38 metadata is stale. Run the synchronizer, formatter and manifest refresh locally, then commit all generated changes with the implementation."
+            echo "R38 canonical sources or metadata are stale. Run repair, synchronizer, formatter and manifest refresh, then commit all changes together."
             exit "$code"
           fi
 
@@ -137,18 +146,20 @@ jobs:
         if: steps.marker.outputs.present == 'true'
         with:
           components: rustfmt
-      - name: Generate canonical metadata and manifest
+      - name: Generate canonical sources, metadata and manifest
         if: steps.marker.outputs.present == 'true'
         shell: bash
         run: |
+          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
+          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           rm .github/r38-manifest-refresh
           python tools/refresh_manifest.py
           test ! -e .github/r38-manifest-refresh
           ! grep -q '  .github/r38-manifest-refresh$' MANIFEST.sha256
-      - name: Commit one-shot generated refresh
+      - name: Commit one-shot canonical refresh
         if: steps.marker.outputs.present == 'true'
         shell: bash
         run: |
@@ -160,6 +171,13 @@ jobs:
             contracts/engine/dual-engine-public-surface-v2.json \
             contracts/engine/r38-missing-native-commands-v1.json \
             crates/syntavra-cli/src/bin/syntavra.rs \
+            crates/syntavra-cli/src/native_benchmark_tools.rs \
+            crates/syntavra-cli/src/native_engine_routes.rs \
+            crates/syntavra-cli/src/native_job_mutations.rs \
+            crates/syntavra-cli/src/native_product.rs \
+            crates/syntavra-cli/src/native_structural.rs \
+            crates/syntavra-cli/src/native_verifier.rs \
+            crates/syntavra-cli/src/state_layout_contract.rs \
             crates/syntavra-cli/src/native_*.rs \
             tests/runtime/test_dual_engine_public_surface_r38.py
           git diff --cached --quiet && exit 0
