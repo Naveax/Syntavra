@@ -21,14 +21,17 @@ def test_windows_rollout_identity_repair_is_complete_and_idempotent(
 ) -> None:
     target = tmp_path / "native_rollout_tail.rs"
     target.write_text(
-        "prefix\n" + MODULE.LEGACY + "suffix\n",
+        "prefix\n"
+        + "\n".join(legacy for legacy, _ in MODULE.REPLACEMENTS)
+        + "suffix\n",
         encoding="utf-8",
     )
 
     assert MODULE.repair(target) is True
     first = target.read_text(encoding="utf-8")
-    assert MODULE.LEGACY not in first
-    assert first.count(MODULE.CANONICAL) == 1
+    for legacy, canonical in MODULE.REPLACEMENTS:
+        assert legacy not in first
+        assert first.count(canonical) == 1
 
     assert MODULE.repair(target) is False
     assert target.read_text(encoding="utf-8") == first
