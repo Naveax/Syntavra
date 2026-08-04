@@ -115,7 +115,7 @@ def test_selector_option_value_repair_rejects_missing_value_option(
 ) -> None:
     target = tmp_path / "syntavra.rs"
     broken_options = MODULE.CANONICAL_OPTION_BLOCK.replace(
-        '                | "--session-hint"\n',
+        '                | "--rollout"\n',
         "",
     )
     target.write_text(
