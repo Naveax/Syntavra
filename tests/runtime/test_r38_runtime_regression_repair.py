@@ -5,10 +5,15 @@ import sys
 from pathlib import Path
 
 from tools.repair_r38_runtime_regressions import (
+    BENCHMARK_SCORE_20X_CANONICAL,
+    BENCHMARK_SCORE_20X_LEGACY,
+    BENCHMARK_SCORE_30X_CANONICAL,
+    BENCHMARK_SCORE_30X_LEGACY,
     JSON_ARGUMENT_CANONICAL,
     JSON_ARGUMENT_LEGACY,
     SINGLE_SEGMENT_PATH_CANONICAL,
     SINGLE_SEGMENT_PATH_LEGACY,
+    repair_benchmark_scores,
     repair_inline_json_argument,
     repair_single_segment_command_paths,
     repaired_source,
@@ -58,6 +63,19 @@ def test_inline_json_path_probe_repair_is_exact_and_idempotent() -> None:
     assert second_count == 0
     assert JSON_ARGUMENT_LEGACY not in rendered
     assert rendered.count(JSON_ARGUMENT_CANONICAL) == 1
+    assert repeated == rendered
+
+
+def test_benchmark_score_repair_is_exact_and_idempotent() -> None:
+    source = "\n".join((BENCHMARK_SCORE_20X_LEGACY, BENCHMARK_SCORE_30X_LEGACY))
+    rendered, first_count = repair_benchmark_scores(source)
+    repeated, second_count = repair_benchmark_scores(rendered)
+    assert first_count == 2
+    assert second_count == 0
+    assert BENCHMARK_SCORE_20X_LEGACY not in rendered
+    assert BENCHMARK_SCORE_30X_LEGACY not in rendered
+    assert rendered.count(BENCHMARK_SCORE_20X_CANONICAL) == 1
+    assert rendered.count(BENCHMARK_SCORE_30X_CANONICAL) == 1
     assert repeated == rendered
 
 
