@@ -61,6 +61,15 @@ fn file_identity(path: &Path) -> Result<String, String> {
 }
 ''',
     ),
+    (
+        """    object.insert(
+        "rollout".to_owned(),
+        Value::String(selected.to_string_lossy().into_owned()),
+    );
+""",
+        """    object.insert("rollout".to_owned(), Value::String(identity_path(&selected)));
+""",
+    ),
 )
 
 
