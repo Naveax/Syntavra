@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".github/r38-user-head"
       - ".github/workflows/r38-dual-engine-runtime.yml"
       - ".github/workflows/r38-refresh-branch-manifest.yml"
       - "MANIFEST.sha256"
@@ -15,6 +16,7 @@ on:
       - "syntavra_runtime/unified_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
+      - "tools/refresh_manifest.py"
       - "tools/sync_r38_generated_metadata.py"
       - "tools/verify_dual_engine_public_surface.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
