@@ -1,0 +1,165 @@
+name: R38 Observable Platform Differential
+
+on:
+  push:
+    branches:
+      - "agent/r38-quality-validation"
+    paths:
+      - ".github/r38-platform-trigger"
+      - ".github/workflows/r38-platform-differential-diagnostic.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-observable-platform-differential
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHONHASHSEED: "0"
+  PYTHONUNBUFFERED: "1"
+  RUSTUP_TOOLCHAIN: "1.82.0"
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: "never"
+
+jobs:
+  differential:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: ubuntu
+          - os: windows-latest
+            label: windows
+          - os: macos-latest
+            label: macos
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          path: source
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r38-observable-${{ matrix.label }}
+          cache-on-failure: false
+      - name: Run complete platform differential
+        shell: bash
+        run: |
+          set +e
+          mkdir -p result
+          cd source
+          source_head=$(git rev-parse HEAD)
+
+          python -m pip install --disable-pip-version-check -e . pytest > ../result/install.txt 2>&1
+          install_code=$?
+          if [ "$install_code" -eq 0 ]; then
+            cargo build --locked --bins > ../result/build.txt 2>&1
+            build_code=$?
+          else
+            printf 'skipped: install failed\n' > ../result/build.txt
+            build_code=125
+          fi
+
+          if [ "$build_code" -eq 0 ]; then
+            python -m pytest -q tests/runtime/test_native_*_r38.py > ../result/differential.txt 2>&1
+            differential_code=$?
+          else
+            printf 'skipped: build failed\n' > ../result/differential.txt
+            differential_code=125
+          fi
+          cd ..
+
+          python - \
+            "$source_head" \
+            "${{ matrix.label }}" \
+            "$install_code" \
+            "$build_code" \
+            "$differential_code" <<'PY'
+          import json
+          import sys
+
+          source_head, platform = sys.argv[1:3]
+          values = [int(value) for value in sys.argv[3:]]
+          payload = {
+              "source_head": source_head,
+              "platform": platform,
+              "install_exit": values[0],
+              "build_exit": values[1],
+              "differential_exit": values[2],
+              "ok": all(value == 0 for value in values),
+          }
+          with open("result/result.json", "w", encoding="utf-8", newline="\n") as handle:
+              json.dump(payload, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          PY
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r38-observable-${{ matrix.label }}
+          path: result
+          if-no-files-found: error
+          retention-days: 30
+
+  summarize:
+    if: always()
+    needs: differential
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-quality-validation
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r38-observable-*
+          path: .r38-platform
+          merge-multiple: false
+      - name: Build exact-source summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path(".r38-platform")
+          results = []
+          for label in ("ubuntu", "windows", "macos"):
+              path = root / f"r38-observable-{label}" / "result.json"
+              if path.is_file():
+                  results.append(json.loads(path.read_text(encoding="utf-8")))
+              else:
+                  results.append({"platform": label, "ok": False, "reason": "result missing"})
+          heads = sorted({item.get("source_head") for item in results if item.get("source_head")})
+          payload = {
+              "source_heads": heads,
+              "platforms": results,
+              "ok": len(heads) == 1 and all(item.get("ok") is True for item in results),
+          }
+          (root / "summary.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Commit observable results
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin agent/r38-quality-validation
+          git rebase origin/agent/r38-quality-validation
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f .r38-platform
+          git diff --cached --quiet && exit 0
+          git commit -m "[platform-result] R38 three-platform differential"
+          git push origin HEAD:agent/r38-quality-validation
