@@ -1,1 +1,1 @@
-repaired: syntavra.rs
+Selector option parsing already canonical
