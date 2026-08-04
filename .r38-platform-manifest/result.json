@@ -1,0 +1,11 @@
+{
+  "cargo_test_exit": 0,
+  "clippy_exit": 0,
+  "fmt_exit": 0,
+  "format_apply_exit": 0,
+  "ok": true,
+  "pytest_exit": 0,
+  "resync_exit": 0,
+  "source_head": "d51e5075ff0616135e6b7eb3ca77fac1828f2c74",
+  "sync_exit": 0
+}
