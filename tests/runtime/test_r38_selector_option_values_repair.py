@@ -66,6 +66,23 @@ def test_selector_option_value_repair_migrates_legacy_source(
     assert target.read_text(encoding="utf-8") == first
 
 
+def test_selector_option_value_repair_adds_session_hint(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "syntavra.rs"
+    target.write_text(
+        _source(MODULE.PRE_SESSION_OPTION_BLOCK, MODULE.CANONICAL_TRUNCATION),
+        encoding="utf-8",
+    )
+
+    assert MODULE.repair(target) is True
+    rendered = target.read_text(encoding="utf-8")
+    assert MODULE.PRE_SESSION_OPTION_BLOCK not in rendered
+    assert rendered.count(MODULE.CANONICAL_OPTION_BLOCK) == 1
+    assert rendered.count('"--session-hint"') == 1
+    assert MODULE.repair(target) is False
+
+
 def test_selector_option_value_repair_collapses_duplicate_branches(
     tmp_path: Path,
 ) -> None:
@@ -98,7 +115,7 @@ def test_selector_option_value_repair_rejects_missing_value_option(
 ) -> None:
     target = tmp_path / "syntavra.rs"
     broken_options = MODULE.CANONICAL_OPTION_BLOCK.replace(
-        '                | "--state-file"\n',
+        '                | "--session-hint"\n',
         "",
     )
     target.write_text(
