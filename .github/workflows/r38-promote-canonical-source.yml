@@ -1,0 +1,130 @@
+name: R38 Promote Canonical Source
+
+on:
+  push:
+    branches:
+      - "agent/r38-quality-validation"
+    paths:
+      - ".github/r38-promote-trigger"
+      - ".github/workflows/r38-promote-canonical-source.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-promote-canonical-source
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHONHASHSEED: "0"
+  PYTHONUNBUFFERED: "1"
+  RUSTUP_TOOLCHAIN: "1.82.0"
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: "never"
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-quality-validation
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          path: source
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install runtime and test dependencies
+        working-directory: source
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - name: Reproduce and verify canonical state
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/r38-manifest-refresh
+
+          python -m pytest -q \
+            tests/runtime/test_r38_selector_option_values_repair.py \
+            tests/runtime/test_r38_windows_rollout_identity_repair.py \
+            tests/runtime/test_r38_generated_metadata_sync.py
+
+          python tools/repair_r38_selector_option_values.py
+          python tools/repair_r38_windows_rollout_identity.py
+          python tools/sync_r38_generated_metadata.py
+          cargo fmt --all
+          python tools/sync_r38_generated_metadata.py
+          rm .github/r38-manifest-refresh
+          python tools/refresh_manifest.py
+
+          cargo fmt --all -- --check
+          python -m pytest -q \
+            tests/runtime/test_r38_selector_option_values_repair.py \
+            tests/runtime/test_r38_windows_rollout_identity_repair.py \
+            tests/runtime/test_r38_generated_metadata_sync.py \
+            tests/runtime/test_dual_engine_public_surface_r38.py
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path("contracts/engine/dual-engine-public-surface-v2.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          missing = json.loads(
+              Path("contracts/engine/r38-missing-native-commands-v1.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          rust = contract["rust_surface"]
+          python_count = contract["python_surface"]["public_command_count"]
+          assert python_count == 245
+          assert rust["native_public_command_count"] == 126
+          assert rust["missing_native_public_command_count"] == 119
+          assert rust["python_launcher_bridge_command_count"] == 0
+          assert missing["native_public_command_count"] == 126
+          assert missing["missing_native_public_command_count"] == 119
+          assert len(missing["missing_native_public_commands"]) == 119
+          assert not Path(".github/r38-manifest-refresh").exists()
+          PY
+      - name: Commit only if source head is unchanged
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head=$(git rev-parse HEAD)
+          git fetch origin agent/full-dual-engine-runtime
+          remote_head=$(git rev-parse origin/agent/full-dual-engine-runtime)
+          if [ "$remote_head" != "$expected_head" ]; then
+            echo "Product head moved from $expected_head to $remote_head; promotion is a no-op."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A \
+            .github/r38-manifest-refresh \
+            MANIFEST.sha256 \
+            contracts/engine/dual-engine-public-surface-v2.json \
+            contracts/engine/r38-missing-native-commands-v1.json \
+            crates/syntavra-cli/src/bin/syntavra.rs \
+            tests/runtime/test_dual_engine_public_surface_r38.py
+
+          if git diff --cached --quiet; then
+            echo "Canonical state already committed."
+            exit 0
+          fi
+
+          git commit -m "R38: commit canonical selector and rollout state"
+          git push origin HEAD:agent/full-dual-engine-runtime
