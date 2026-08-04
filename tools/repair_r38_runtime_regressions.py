@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUST_ROOT = ROOT / "crates" / "syntavra-cli" / "src"
 SELECTOR = RUST_ROOT / "bin" / "syntavra.rs"
 NATIVE_EVIDENCE_STATS = RUST_ROOT / "native_evidence_stats.rs"
+NATIVE_STATIC_SURFACES = RUST_ROOT / "native_static_surfaces.rs"
 PRERELEASE_CLI = ROOT / "syntavra_runtime" / "prerelease_cli.py"
 EVIDENCE_STATS_TEST = ROOT / "tests" / "runtime" / "test_native_evidence_stats_r38.py"
 
@@ -62,6 +63,11 @@ RUNTIME_EVIDENCE_NEIGHBORS_CANONICAL = (
 )
 EVIDENCE_TEST_LAYOUT_LEGACY = "    _prepare_runtime_evidence(source)\n"
 EVIDENCE_TEST_LAYOUT_CANONICAL = "    _prepare_runtime_evidence(source / \"unified\")\n"
+
+BENCHMARK_SCORE_20X_LEGACY = '"20X" => Ok(38.337_350_566_771_08),'
+BENCHMARK_SCORE_20X_CANONICAL = '"20X" => Ok(38.337_350_566_771_11),'
+BENCHMARK_SCORE_30X_LEGACY = '"30X" => Ok(63.345_278_851_520_46),'
+BENCHMARK_SCORE_30X_CANONICAL = '"30X" => Ok(63.345_278_851_520_476),'
 
 
 def rust_sources() -> list[Path]:
@@ -147,6 +153,24 @@ def repair_evidence_test_layout(source: str) -> tuple[str, int]:
     )
 
 
+def repair_benchmark_scores(source: str) -> tuple[str, int]:
+    return exact_repairs(
+        source,
+        (
+            (
+                BENCHMARK_SCORE_20X_LEGACY,
+                BENCHMARK_SCORE_20X_CANONICAL,
+                "20X benchmark score",
+            ),
+            (
+                BENCHMARK_SCORE_30X_LEGACY,
+                BENCHMARK_SCORE_30X_CANONICAL,
+                "30X benchmark score",
+            ),
+        ),
+    )
+
+
 def inspect(path: Path) -> tuple[str, int]:
     source = path.read_text(encoding="utf-8")
     return repaired_source(source)
@@ -191,6 +215,7 @@ def main() -> int:
         (PRERELEASE_CLI, repair_inline_json_argument),
         (NATIVE_EVIDENCE_STATS, repair_runtime_evidence_layout),
         (EVIDENCE_STATS_TEST, repair_evidence_test_layout),
+        (NATIVE_STATIC_SURFACES, repair_benchmark_scores),
     ):
         repair_file(path, repair, check=arguments.check, changed=changed)
 
@@ -229,6 +254,7 @@ def main() -> int:
     canonical_cli = PRERELEASE_CLI.read_text(encoding="utf-8")
     canonical_evidence = NATIVE_EVIDENCE_STATS.read_text(encoding="utf-8")
     canonical_evidence_test = EVIDENCE_STATS_TEST.read_text(encoding="utf-8")
+    canonical_static_surfaces = NATIVE_STATIC_SURFACES.read_text(encoding="utf-8")
     invariants = {
         "R38_SINGLE_SEGMENT_PATH_REPAIR_INCOMPLETE": (
             canonical_selector.count(SINGLE_SEGMENT_PATH_CANONICAL) == 1
@@ -245,6 +271,12 @@ def main() -> int:
             and RUNTIME_EVIDENCE_NEIGHBORS_LEGACY not in canonical_evidence
             and canonical_evidence_test.count(EVIDENCE_TEST_LAYOUT_CANONICAL) == 1
             and EVIDENCE_TEST_LAYOUT_LEGACY not in canonical_evidence_test
+        ),
+        "R38_BENCHMARK_SCORE_REPAIR_INCOMPLETE": (
+            canonical_static_surfaces.count(BENCHMARK_SCORE_20X_CANONICAL) == 1
+            and canonical_static_surfaces.count(BENCHMARK_SCORE_30X_CANONICAL) == 1
+            and BENCHMARK_SCORE_20X_LEGACY not in canonical_static_surfaces
+            and BENCHMARK_SCORE_30X_LEGACY not in canonical_static_surfaces
         ),
     }
     for code, valid in invariants.items():
