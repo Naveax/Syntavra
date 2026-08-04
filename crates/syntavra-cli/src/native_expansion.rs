@@ -55,6 +55,9 @@ mod native_session_recover;
 mod native_session_verify;
 #[path = "native_stats.rs"]
 mod native_stats;
+#[allow(clippy::pedantic)]
+#[path = "native_structural.rs"]
+mod native_structural;
 #[path = "native_telemetry_bundle.rs"]
 mod native_telemetry_bundle;
 #[path = "native_verifier.rs"]
@@ -82,6 +85,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_session_recover::supports(command)
         || native_session_verify::supports(command)
         || native_stats::supports(command)
+        || native_structural::supports(command)
         || native_telemetry_bundle::supports(command)
         || native_verifier::supports(command)
 }
@@ -173,6 +177,9 @@ pub fn execute(
     if native_stats::supports(command) {
         return native_stats::execute(state_root);
     }
+    if native_structural::supports(command) {
+        return native_structural::execute(command, arguments, project_root, state_root);
+    }
     if native_telemetry_bundle::supports(command) {
         return native_telemetry_bundle::execute(arguments, state_root);
     }
@@ -193,6 +200,11 @@ mod tests {
             vec!["host", "negotiate"],
             vec!["host", "detect"],
             vec!["host", "capabilities"],
+            vec!["inspect", "symbol"],
+            vec!["inspect", "impact"],
+            vec!["inspect", "paths"],
+            vec!["inspect", "map"],
+            vec!["inspect", "stats"],
             vec!["job", "cancel"],
             vec!["memory", "add"],
             vec!["memory", "search"],
