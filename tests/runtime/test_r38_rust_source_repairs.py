@@ -20,7 +20,9 @@ def test_r38_rust_source_repairs_are_complete_and_idempotent(
 ) -> None:
     fragments: dict[str, list[str]] = defaultdict(list)
     for replacement in MODULE.REPLACEMENTS:
-        fragments[replacement.path].append(replacement.old)
+        fragments[replacement.path].extend(
+            [replacement.old] * replacement.count
+        )
 
     for relative, values in fragments.items():
         path = tmp_path / relative
@@ -29,10 +31,11 @@ def test_r38_rust_source_repairs_are_complete_and_idempotent(
 
     product = tmp_path / "crates/syntavra-cli/src/native_product.rs"
     product.parent.mkdir(parents=True, exist_ok=True)
+    existing = product.read_text(encoding="utf-8") if product.exists() else ""
     product.write_text(
-        MODULE.STATE_RECEIPT_DECLARATION
-        + MODULE.STATE_LAYOUT_DECLARATION
-        + MODULE.STATE_RECEIPT_DECLARATION,
+        existing
+        + MODULE.STATE_RECEIPT_DECLARATION
+        + MODULE.STATE_LAYOUT_DECLARATION,
         encoding="utf-8",
     )
 
@@ -45,16 +48,13 @@ def test_r38_rust_source_repairs_are_complete_and_idempotent(
     }
     for replacement in MODULE.REPLACEMENTS:
         rendered = first[replacement.path]
-        assert rendered.count(replacement.new) == 1
+        assert rendered.count(replacement.new) == replacement.count
         if replacement.old not in replacement.new:
             assert replacement.old not in rendered
 
     normalized_product = product.read_text(encoding="utf-8")
-    assert normalized_product.count(MODULE.STATE_RECEIPT_DECLARATION) == 1
-    assert normalized_product.count(MODULE.STATE_LAYOUT_DECLARATION) == 1
-    assert normalized_product == (
-        MODULE.STATE_RECEIPT_DECLARATION + MODULE.STATE_LAYOUT_DECLARATION
-    )
+    assert MODULE.STATE_RECEIPT_DECLARATION not in normalized_product
+    assert MODULE.STATE_LAYOUT_DECLARATION not in normalized_product
 
     assert MODULE.repair() == 0
     second = {
