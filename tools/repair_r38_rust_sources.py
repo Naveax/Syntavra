@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+STATE_RECEIPT_DECLARATION = '#[path = "state_receipt_contract.rs"]\nmod state_receipt_contract;\n'
+STATE_LAYOUT_DECLARATION = '#[path = "state_layout_contract.rs"]\nmod state_layout_contract;\n'
 
 
 @dataclass(frozen=True)
@@ -34,11 +36,6 @@ REPLACEMENTS = (
         "crates/syntavra-cli/src/state_layout_contract.rs",
         "crate::state_snapshot_contract::project_id_for_root",
         "super::state_snapshot_contract::project_id_for_root",
-    ),
-    Replacement(
-        "crates/syntavra-cli/src/native_product.rs",
-        '#[path = "state_layout_contract.rs"]\nmod state_layout_contract;',
-        '#[path = "state_receipt_contract.rs"]\nmod state_receipt_contract;\n#[path = "state_layout_contract.rs"]\nmod state_layout_contract;',
     ),
     Replacement(
         "crates/syntavra-cli/src/native_benchmark_tools.rs",
@@ -127,11 +124,35 @@ def replace_once(replacement: Replacement) -> bool:
     return True
 
 
+def normalize_native_product_state_modules(
+    path: Path | None = None,
+) -> bool:
+    path = path or ROOT / "crates/syntavra-cli/src/native_product.rs"
+    source = path.read_text(encoding="utf-8")
+    without_receipt = source.replace(STATE_RECEIPT_DECLARATION, "")
+    layout_count = without_receipt.count(STATE_LAYOUT_DECLARATION)
+    if layout_count != 1:
+        raise RuntimeError(
+            f"expected exactly one state layout declaration in {path}, found {layout_count}"
+        )
+    rendered = without_receipt.replace(
+        STATE_LAYOUT_DECLARATION,
+        STATE_RECEIPT_DECLARATION + STATE_LAYOUT_DECLARATION,
+        1,
+    )
+    if rendered == source:
+        return False
+    path.write_text(rendered, encoding="utf-8", newline="\n")
+    return True
+
+
 def repair() -> int:
     changed = []
     for replacement in REPLACEMENTS:
         if replace_once(replacement):
             changed.append(replacement.path)
+    if normalize_native_product_state_modules():
+        changed.append("crates/syntavra-cli/src/native_product.rs")
     for path in sorted(set(changed)):
         print(f"repaired: {path}")
     if not changed:
