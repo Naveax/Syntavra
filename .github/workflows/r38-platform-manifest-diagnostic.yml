@@ -1,0 +1,103 @@
+name: R38 Platform Manifest Diagnostic
+
+on:
+  push:
+    branches:
+      - "agent/r38-quality-validation"
+    paths:
+      - ".github/r38-platform-manifest-trigger"
+      - ".github/workflows/r38-platform-manifest-diagnostic.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-platform-manifest-diagnostic
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHONHASHSEED: "0"
+  PYTHONUNBUFFERED: "1"
+  RUSTUP_TOOLCHAIN: "1.82.0"
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: "never"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-quality-validation
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          path: source
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Python engine
+        working-directory: source
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - name: Validate canonical migration and differential
+        shell: bash
+        run: |
+          set -u
+          mkdir -p .r38-platform-manifest
+          source_head=$(git -C source rev-parse HEAD)
+          set +e
+          (cd source && python tools/sync_r38_generated_metadata.py) > .r38-platform-manifest/sync.log 2>&1
+          sync_exit=$?
+          (cd source && cargo fmt --all) > .r38-platform-manifest/fmt-apply.log 2>&1
+          fmt_apply_exit=$?
+          (cd source && python tools/sync_r38_generated_metadata.py) > .r38-platform-manifest/resync.log 2>&1
+          resync_exit=$?
+          (cd source && python -m pytest -q tests/runtime/test_r38_generated_metadata_sync.py tests/runtime/test_native_platform_manifest_r38.py) > .r38-platform-manifest/pytest.log 2>&1
+          pytest_exit=$?
+          (cd source && cargo fmt --all -- --check) > .r38-platform-manifest/fmt.log 2>&1
+          fmt_exit=$?
+          (cd source && cargo test --workspace --all-targets --locked) > .r38-platform-manifest/cargo-test.log 2>&1
+          cargo_test_exit=$?
+          (cd source && cargo clippy --workspace --all-targets --locked -- -D warnings) > .r38-platform-manifest/clippy.log 2>&1
+          clippy_exit=$?
+          set -e
+          SOURCE_HEAD="$source_head" SYNC_EXIT="$sync_exit" FMT_APPLY_EXIT="$fmt_apply_exit" RESYNC_EXIT="$resync_exit" PYTEST_EXIT="$pytest_exit" FMT_EXIT="$fmt_exit" CARGO_TEST_EXIT="$cargo_test_exit" CLIPPY_EXIT="$clippy_exit" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = {
+              "source_head": os.environ["SOURCE_HEAD"],
+              "sync_exit": int(os.environ["SYNC_EXIT"]),
+              "format_apply_exit": int(os.environ["FMT_APPLY_EXIT"]),
+              "resync_exit": int(os.environ["RESYNC_EXIT"]),
+              "pytest_exit": int(os.environ["PYTEST_EXIT"]),
+              "fmt_exit": int(os.environ["FMT_EXIT"]),
+              "cargo_test_exit": int(os.environ["CARGO_TEST_EXIT"]),
+              "clippy_exit": int(os.environ["CLIPPY_EXIT"]),
+          }
+          result["ok"] = all(value == 0 for key, value in result.items() if key.endswith("_exit"))
+          Path(".r38-platform-manifest/result.json").write_text(
+              json.dumps(result, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Commit diagnostic result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .r38-platform-manifest
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "R38: record platform manifest exact-source diagnostic"
+          git push origin HEAD:agent/r38-quality-validation
