@@ -70,9 +70,7 @@ LEGACY_STATIC_EXECUTE_ARM = (
     '        ("benchmark", "generate-config") => benchmark_generate_config(arguments),\n'
 )
 CANONICAL_STATIC_EXECUTE_ARMS = """        (\"benchmark\", \"generate-config\") => benchmark_generate_config(arguments),
-        (\"run\", \"platform-manifest\") | (\"run\", \"competitive-manifest\") => {
-            Ok(platform_manifest())
-        }
+        (\"run\", \"platform-manifest\" | \"competitive-manifest\") => Ok(platform_manifest()),
 """
 STATIC_EXECUTE_SIGNATURE = (
     "pub fn execute(command: &[String], arguments: &[String]) -> Result<Value, String> {"
