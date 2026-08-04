@@ -1,0 +1,279 @@
+name: R38 Three-Platform Differential Certification
+
+on:
+  push:
+    branches:
+      - "agent/r38-differential-validation"
+    paths-ignore:
+      - ".r38-matrix/**"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-three-platform-differential
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHONHASHSEED: "0"
+  PYTHONUNBUFFERED: "1"
+  RUSTUP_TOOLCHAIN: "1.82.0"
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: "never"
+
+jobs:
+  inventory:
+    name: Inventory and contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Run inventory gates
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .r38-matrix
+          python -m pip install --disable-pip-version-check -e . pytest > .r38-matrix/inventory-install.txt 2>&1
+          install_code=$?
+          if [ "$install_code" -eq 0 ]; then
+            python tools/verify_dual_engine_public_surface.py > .r38-matrix/coverage.json 2> .r38-matrix/inventory-verify.txt
+            verify_code=$?
+            python -m pytest -q \
+              tests/runtime/test_dual_engine_public_surface_r38.py \
+              tests/runtime/test_installed_python_surface_r38.py \
+              tests/runtime/test_r38_generated_metadata_sync.py \
+              tests/runtime/test_r38_rust_source_repairs.py \
+              > .r38-matrix/inventory-tests.txt 2>&1
+            test_code=$?
+          else
+            verify_code=125
+            test_code=125
+            printf 'skipped: install failed\n' > .r38-matrix/inventory-verify.txt
+            printf 'skipped: install failed\n' > .r38-matrix/inventory-tests.txt
+          fi
+          python - "$install_code" "$verify_code" "$test_code" <<'PY'
+          import json, subprocess, sys
+          codes = [int(value) for value in sys.argv[1:]]
+          payload = {
+              "gate": "inventory",
+              "source_head": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "install_exit": codes[0],
+              "verify_exit": codes[1],
+              "test_exit": codes[2],
+              "ok": all(value == 0 for value in codes),
+          }
+          with open('.r38-matrix/inventory-result.json', 'w', encoding='utf-8', newline='\n') as handle:
+              json.dump(payload, handle, indent=2, sort_keys=True)
+              handle.write('\n')
+          PY
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r38-inventory-result
+          path: .r38-matrix
+          if-no-files-found: error
+          retention-days: 30
+
+  differential:
+    name: Differential (${{ matrix.label }})
+    needs: inventory
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: ubuntu
+            extension: ""
+          - os: windows-latest
+            label: windows
+            extension: ".exe"
+          - os: macos-latest
+            label: macos
+            extension: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r38-differential-${{ matrix.label }}
+          cache-on-failure: false
+      - name: Run exact Python-Rust differential gates
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .r38-matrix
+          label='${{ matrix.label }}'
+          selector="target/debug/syntavra${{ matrix.extension }}"
+
+          python -m pip install --disable-pip-version-check -e . pytest > ".r38-matrix/${label}-install.txt" 2>&1
+          install_code=$?
+
+          if [ "$install_code" -eq 0 ]; then
+            cargo build --locked --bins > ".r38-matrix/${label}-build.txt" 2>&1
+            build_code=$?
+          else
+            build_code=125
+            printf 'skipped: install failed\n' > ".r38-matrix/${label}-build.txt"
+          fi
+
+          if [ "$build_code" -eq 0 ]; then
+            python -m pytest -q tests/runtime/test_evidence_key_rotation_r38.py > ".r38-matrix/${label}-evidence.txt" 2>&1
+            evidence_code=$?
+            python -m pytest -q tests/runtime/test_native_*_r38.py > ".r38-matrix/${label}-native.txt" 2>&1
+            native_code=$?
+
+            "$selector" --engine rust version > ".r38-matrix/${label}-rust-version.json" 2> ".r38-matrix/${label}-rust-version.txt"
+            rust_version_code=$?
+            "$selector" --engine python version > ".r38-matrix/${label}-python-version.json" 2> ".r38-matrix/${label}-python-version.txt"
+            python_version_code=$?
+            "$selector" engine status > ".r38-matrix/${label}-engine-status.json" 2> ".r38-matrix/${label}-engine-status.txt"
+            engine_status_code=$?
+            grep -q '"fallback": "forbidden"' ".r38-matrix/${label}-engine-status.json"
+            fallback_code=$?
+
+            "$selector" --engine rust run rewrite -- git status > ".r38-matrix/${label}-missing.json" 2> ".r38-matrix/${label}-missing.txt"
+            missing_command_code=$?
+            grep -q 'RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED' ".r38-matrix/${label}-missing.json"
+            missing_contract_code=$?
+            if [ "$missing_command_code" -eq 0 ]; then
+              missing_nonzero_code=1
+            else
+              missing_nonzero_code=0
+            fi
+          else
+            evidence_code=125
+            native_code=125
+            rust_version_code=125
+            python_version_code=125
+            engine_status_code=125
+            fallback_code=125
+            missing_command_code=125
+            missing_contract_code=125
+            missing_nonzero_code=125
+            for name in evidence native rust-version python-version engine-status missing; do
+              printf 'skipped: build failed\n' > ".r38-matrix/${label}-${name}.txt"
+            done
+          fi
+
+          python - \
+            "$label" "$install_code" "$build_code" "$evidence_code" "$native_code" \
+            "$rust_version_code" "$python_version_code" "$engine_status_code" \
+            "$fallback_code" "$missing_nonzero_code" "$missing_contract_code" <<'PY'
+          import json, subprocess, sys
+          label = sys.argv[1]
+          keys = [
+              "install_exit",
+              "build_exit",
+              "evidence_exit",
+              "native_differential_exit",
+              "rust_version_exit",
+              "python_version_exit",
+              "engine_status_exit",
+              "fallback_contract_exit",
+              "missing_command_nonzero_exit",
+              "missing_contract_exit",
+          ]
+          codes = [int(value) for value in sys.argv[2:]]
+          payload = {
+              "gate": "differential",
+              "platform": label,
+              "source_head": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              **dict(zip(keys, codes, strict=True)),
+              "ok": all(value == 0 for value in codes),
+          }
+          with open(f'.r38-matrix/{label}-result.json', 'w', encoding='utf-8', newline='\n') as handle:
+              json.dump(payload, handle, indent=2, sort_keys=True)
+              handle.write('\n')
+          PY
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r38-${{ matrix.label }}-result
+          path: .r38-matrix
+          if-no-files-found: error
+          retention-days: 30
+
+  aggregate:
+    name: Aggregate certification
+    if: always()
+    needs: [inventory, differential]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-differential-validation
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r38-*-result
+          path: .r38-matrix
+          merge-multiple: true
+      - name: Build certification summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.r38-matrix')
+          expected = [
+              'inventory-result.json',
+              'ubuntu-result.json',
+              'windows-result.json',
+              'macos-result.json',
+          ]
+          results = {}
+          missing = []
+          for name in expected:
+              path = root / name
+              if not path.is_file():
+                  missing.append(name)
+                  continue
+              results[name.removesuffix('-result.json')] = json.loads(path.read_text(encoding='utf-8'))
+          payload = {
+              'claim': 'R38_THREE_PLATFORM_DIFFERENTIAL',
+              'expected_results': expected,
+              'missing_results': missing,
+              'results': results,
+              'ok': not missing and all(result.get('ok') is True for result in results.values()),
+          }
+          (root / 'summary.json').write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+              newline='\n',
+          )
+          PY
+      - name: Commit certification summary
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f \
+            .r38-matrix/inventory-result.json \
+            .r38-matrix/ubuntu-result.json \
+            .r38-matrix/windows-result.json \
+            .r38-matrix/macos-result.json \
+            .r38-matrix/summary.json
+          git diff --cached --quiet || git commit -m "[matrix-result] R38 three-platform differential"
+          git push origin HEAD:agent/r38-differential-validation
+      - name: Enforce certification
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          summary = json.loads(Path('.r38-matrix/summary.json').read_text(encoding='utf-8'))
+          raise SystemExit(0 if summary['ok'] else 1)
+          PY
