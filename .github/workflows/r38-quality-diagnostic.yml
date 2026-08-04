@@ -6,6 +6,7 @@ on:
       - "agent/r38-quality-validation"
     paths-ignore:
       - ".r38-diagnostics/**"
+      - ".r38-windows/**"
   workflow_dispatch:
 
 concurrency:
@@ -16,20 +17,24 @@ permissions:
   contents: write
 
 env:
-  PYTHONPATH: ${{ github.workspace }}
   RUSTUP_TOOLCHAIN: "1.82.0"
   CARGO_INCREMENTAL: "0"
   CARGO_TERM_COLOR: "never"
 
 jobs:
   diagnose:
-    if: ${{ !contains(github.event.head_commit.message || '', '[diag-result]') }}
+    if: ${{ !contains(github.event.head_commit.message || '', '[diag-result]') && !contains(github.event.head_commit.message || '', '[windows-result]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           ref: agent/r38-quality-validation
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          path: source
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
@@ -38,11 +43,12 @@ jobs:
         with:
           shared-key: r38-canonical-quality-diagnostic
           cache-on-failure: false
-      - name: Run exact canonical quality gates
+      - name: Run exact current-source quality gates
         shell: bash
         run: |
           set +e
           mkdir -p .r38-diagnostics
+          cd source
           cargo fmt --all -- --check > /tmp/r38-fmt.log 2>&1
           fmt_code=$?
           cargo build --workspace --all-targets --locked > /tmp/r38-build.log 2>&1
@@ -58,11 +64,14 @@ jobs:
             test_code=125
             clippy_code=125
           fi
-          python - "$fmt_code" "$build_code" "$test_code" "$clippy_code" <<'PY'
-          import json, subprocess, sys
-          values = [int(value) for value in sys.argv[1:]]
+          source_head=$(git rev-parse HEAD)
+          cd ..
+          python - "$source_head" "$fmt_code" "$build_code" "$test_code" "$clippy_code" <<'PY'
+          import json, sys
+          source_head = sys.argv[1]
+          values = [int(value) for value in sys.argv[2:]]
           payload = {
-              "source_head": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "source_head": source_head,
               "fmt_exit": values[0],
               "build_exit": values[1],
               "test_exit": values[2],
