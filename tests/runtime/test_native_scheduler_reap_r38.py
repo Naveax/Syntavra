@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from syntavra_runtime.job_scheduler import DurableJobScheduler
+from syntavra_runtime.job_scheduler import DurableJobScheduler, JobSpec
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -89,82 +89,31 @@ def _rust_reap(state_root: Path) -> Any:
 
 
 def _seed(path: Path) -> None:
-    DurableJobScheduler(path)
-    now = time.time()
-    connection = sqlite3.connect(path)
-    try:
-        rows = [
-            (
-                "retry-job",
-                "test",
-                "{}",
-                "running",
-                5,
-                now - 20,
-                now - 20,
-                now - 10,
-                None,
-                now - 1,
-                "worker-a",
-                1,
-                3,
-                2.0,
-                None,
-                None,
-                None,
-                "{}",
+    scheduler = DurableJobScheduler(path)
+    for job_id, attempt, max_attempts, lease_until in [
+        ("retry-job", 1, 3, time.time() - 1),
+        ("dead-job", 3, 3, time.time() - 1),
+        ("active-job", 1, 3, time.time() + 3600),
+    ]:
+        scheduler.submit(
+            JobSpec(
+                project_id="project-r38",
+                argv=("python", "-V"),
+                max_attempts=max_attempts,
+                metadata={"fixture": job_id},
             ),
-            (
-                "dead-job",
-                "test",
-                "{}",
-                "running",
-                4,
-                now - 30,
-                now - 30,
-                now - 20,
-                None,
-                now - 1,
-                "worker-b",
-                3,
-                3,
-                4.0,
-                None,
-                None,
-                None,
-                "{}",
-            ),
-            (
-                "active-job",
-                "test",
-                "{}",
-                "running",
-                3,
-                now - 10,
-                now - 10,
-                now - 5,
-                None,
-                now + 3600,
-                "worker-c",
-                1,
-                3,
-                1.0,
-                None,
-                None,
-                None,
-                "{}",
-            ),
-        ]
-        connection.executemany(
-            "INSERT INTO jobs("
-            "job_id,kind,payload_json,state,priority,created_at,available_at,started_at,finished_at,"
-            "lease_expires_at,worker_id,attempts,max_attempts,retry_backoff_seconds,idempotency_key,"
-            "result_json,error,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            rows,
+            job_id=job_id,
         )
-        connection.commit()
-    finally:
-        connection.close()
+        connection = sqlite3.connect(path)
+        try:
+            connection.execute(
+                "UPDATE scheduled_jobs SET state='running',attempt=?,lease_owner=?,lease_until=? "
+                "WHERE job_id=?",
+                (attempt, f"worker-{job_id}", lease_until, job_id),
+            )
+            connection.commit()
+        finally:
+            connection.close()
 
 
 def _snapshot(path: Path) -> dict[str, Any]:
@@ -173,27 +122,29 @@ def _snapshot(path: Path) -> dict[str, Any]:
     try:
         jobs = {}
         for row in connection.execute(
-            "SELECT job_id,state,lease_expires_at,worker_id,attempts,max_attempts,error,"
-            "finished_at,retry_backoff_seconds,available_at FROM jobs ORDER BY job_id"
+            "SELECT job_id,state,lease_owner,lease_until,attempt,max_attempts,last_error "
+            "FROM scheduled_jobs ORDER BY job_id"
         ):
             jobs[str(row["job_id"])] = {
                 "state": row["state"],
-                "lease_expires_at": row["lease_expires_at"],
-                "worker_id": row["worker_id"],
-                "attempts": row["attempts"],
+                "lease_owner": row["lease_owner"],
+                "lease_until": row["lease_until"],
+                "attempt": row["attempt"],
                 "max_attempts": row["max_attempts"],
-                "error": row["error"],
-                "finished": row["finished_at"] is not None,
-                "retry_backoff_seconds": row["retry_backoff_seconds"],
-                "available_in_future": float(row["available_at"]) > time.time() - 1,
+                "last_error": row["last_error"],
             }
-        dead_letters = [
-            dict(row)
+        events = [
+            {
+                "job_id": row["job_id"],
+                "event": row["event"],
+                "payload": json.loads(row["payload_json"]),
+            }
             for row in connection.execute(
-                "SELECT job_id,kind,payload_json,attempts,error,metadata_json FROM dead_letters ORDER BY dead_id"
+                "SELECT job_id,event,payload_json FROM scheduler_events "
+                "WHERE event='lease-expired' ORDER BY sequence"
             )
         ]
-        return {"jobs": jobs, "dead_letters": dead_letters}
+        return {"jobs": jobs, "events": events}
     finally:
         connection.close()
 
@@ -224,22 +175,27 @@ def test_native_scheduler_reap_matches_python_state_transitions(tmp_path: Path) 
     assert rust_snapshot == python_snapshot
 
     jobs = rust_snapshot["jobs"]
-    assert jobs["retry-job"]["state"] == "queued"
-    assert jobs["retry-job"]["lease_expires_at"] is None
-    assert jobs["retry-job"]["worker_id"] is None
-    assert jobs["retry-job"]["error"] == "lease expired"
-    assert jobs["retry-job"]["finished"] is False
+    assert jobs["retry-job"] == {
+        "state": "queued",
+        "lease_owner": "",
+        "lease_until": 0.0,
+        "attempt": 1,
+        "max_attempts": 3,
+        "last_error": "lease-expired",
+    }
     assert jobs["dead-job"]["state"] == "dead-letter"
-    assert jobs["dead-job"]["finished"] is True
+    assert jobs["dead-job"]["last_error"] == "lease-expired"
     assert jobs["active-job"]["state"] == "running"
-    assert jobs["active-job"]["worker_id"] == "worker-c"
-    assert rust_snapshot["dead_letters"] == [
+    assert jobs["active-job"]["lease_owner"] == "worker-active-job"
+    assert rust_snapshot["events"] == [
+        {
+            "job_id": "retry-job",
+            "event": "lease-expired",
+            "payload": {"next_state": "queued"},
+        },
         {
             "job_id": "dead-job",
-            "kind": "test",
-            "payload_json": "{}",
-            "attempts": 3,
-            "error": "lease expired",
-            "metadata_json": "{}",
-        }
+            "event": "lease-expired",
+            "payload": {"next_state": "dead-letter"},
+        },
     ]
