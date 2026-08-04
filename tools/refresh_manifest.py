@@ -14,6 +14,7 @@ GENERATED_FILES = {
     "release-smoke.json",
     "platform-registry.json",
     "native-dry-run.json",
+    "r38-user-head",
 }
 TRANSIENT_PARTS = {
     "__pycache__",
