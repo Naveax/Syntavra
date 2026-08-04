@@ -12,6 +12,18 @@ LEGACY_OPTION_BLOCK = """        if matches!(
         ) {
 """
 
+PRE_SESSION_OPTION_BLOCK = """        if matches!(
+            value.as_str(),
+            "--project"
+                | "--state-root"
+                | "--budget"
+                | "--max-tier"
+                | "--codex-home"
+                | "--rollout"
+                | "--state-file"
+        ) {
+"""
+
 CANONICAL_OPTION_BLOCK = """        if matches!(
             value.as_str(),
             "--project"
@@ -21,6 +33,7 @@ CANONICAL_OPTION_BLOCK = """        if matches!(
                 | "--codex-home"
                 | "--rollout"
                 | "--state-file"
+                | "--session-hint"
         ) {
 """
 
@@ -49,6 +62,7 @@ VALUE_OPTIONS = (
     "--codex-home",
     "--rollout",
     "--state-file",
+    "--session-hint",
 )
 
 
@@ -92,13 +106,17 @@ def repair(path: Path | None = None) -> bool:
     rendered = source
     changed = False
 
-    rendered, applied = _replace_optional_once(
-        rendered,
-        LEGACY_OPTION_BLOCK,
-        CANONICAL_OPTION_BLOCK,
-        "selector option-value",
-    )
-    changed = changed or applied
+    for legacy, label in (
+        (LEGACY_OPTION_BLOCK, "legacy selector option-value"),
+        (PRE_SESSION_OPTION_BLOCK, "pre-session selector option-value"),
+    ):
+        rendered, applied = _replace_optional_once(
+            rendered,
+            legacy,
+            CANONICAL_OPTION_BLOCK,
+            label,
+        )
+        changed = changed or applied
 
     rendered, applied = _replace_optional_once(
         rendered,
