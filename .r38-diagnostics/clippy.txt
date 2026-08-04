@@ -4,21 +4,18 @@
     Checking libsqlite3-sys v0.30.1
     Checking zmij v1.0.23
     Checking serde_core v1.0.229
-    Checking fallible-iterator v0.3.0
-    Checking itoa v1.0.18
     Checking bitflags v2.13.1
-    Checking fallible-streaming-iterator v0.1.9
     Checking smallvec v1.15.2
+    Checking fallible-iterator v0.3.0
+    Checking fallible-streaming-iterator v0.1.9
     Checking memchr v2.8.3
-    Checking syntavra-core v0.0.1 (/home/runner/work/Syntavra/Syntavra/source/crates/syntavra-core)
+    Checking itoa v1.0.18
     Checking syntavra-contracts v0.0.1 (/home/runner/work/Syntavra/Syntavra/source/crates/syntavra-contracts)
+    Checking syntavra-core v0.0.1 (/home/runner/work/Syntavra/Syntavra/source/crates/syntavra-core)
     Checking serde_json v1.0.151
     Checking ahash v0.8.12
     Checking hashbrown v0.14.5
     Checking hashlink v0.9.1
     Checking rusqlite v0.32.1
     Checking syntavra-cli v0.0.1 (/home/runner/work/Syntavra/Syntavra/source/crates/syntavra-cli)
-crates/syntavra-cli/src/bin/syntavra.rs:198:9: error: unnested or-patterns
-error: could not compile `syntavra-cli` (bin "syntavra") due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
-error: could not compile `syntavra-cli` (bin "syntavra" test) due to 1 previous error
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.85s
