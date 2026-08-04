@@ -1,0 +1,89 @@
+name: R38 Windows Rollout Diagnostic
+
+on:
+  push:
+    branches:
+      - "agent/r38-quality-validation"
+    paths:
+      - ".github/r38-windows-trigger"
+      - ".github/workflows/r38-windows-rollout-diagnostic.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-windows-rollout-diagnostic
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows-rollout:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-quality-validation
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          path: source
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt
+      - name: Run Windows stable-identity gates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force .r38-windows | Out-Null
+          Push-Location source
+          python -m pip install --disable-pip-version-check -e . pytest *> ../.r38-windows/install.txt
+          $install = $LASTEXITCODE
+          if ($install -eq 0) {
+            python tools/repair_r38_windows_rollout_identity.py *> ../.r38-windows/repair.txt
+            $repair = $LASTEXITCODE
+          } else {
+            $repair = 125
+          }
+          if ($repair -eq 0) {
+            cargo fmt --all -- --check *> ../.r38-windows/fmt.txt
+            $fmt = $LASTEXITCODE
+            cargo build --locked --bins *> ../.r38-windows/build.txt
+            $build = $LASTEXITCODE
+          } else {
+            $fmt = 125
+            $build = 125
+          }
+          if ($build -eq 0) {
+            python -m pytest -q tests/runtime/test_native_rollout_tail_r38.py *> ../.r38-windows/rollout.txt
+            $rollout = $LASTEXITCODE
+          } else {
+            $rollout = 125
+          }
+          $sourceHead = (git rev-parse HEAD).Trim()
+          Pop-Location
+          $payload = [ordered]@{
+            source_head = $sourceHead
+            install_exit = $install
+            repair_exit = $repair
+            fmt_exit = $fmt
+            build_exit = $build
+            rollout_differential_exit = $rollout
+            ok = ($install -eq 0 -and $repair -eq 0 -and $fmt -eq 0 -and $build -eq 0 -and $rollout -eq 0)
+          }
+          $payload | ConvertTo-Json | Set-Content -Encoding utf8 .r38-windows/result.json
+          exit 0
+      - name: Commit Windows diagnostic result
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f .r38-windows
+          git diff --cached --quiet && exit 0
+          git commit -m "[windows-result] R38 stable rollout identity"
+          git push origin HEAD:agent/r38-quality-validation
