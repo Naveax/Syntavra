@@ -1565,14 +1565,13 @@ fn personalized_rank(
     for _ in 0..32 {
         let mut updated = nodes
             .iter()
-            .map(|node| (node.clone(), 0.15 * teleport[node]))
+            .map(|node| (node.clone(), (1.0 - 0.85) * teleport[node]))
             .collect::<BTreeMap<_, _>>();
         for (target, callers) in reverse {
             let total = callers
                 .iter()
                 .map(|(_, weight)| weight.max(0.01))
-                .sum::<f64>()
-                .max(1.0);
+                .sum::<f64>();
             for (caller, weight) in callers {
                 *updated.entry(caller.clone()).or_default() +=
                     0.85 * rank.get(target).copied().unwrap_or(0.0) * weight.max(0.01) / total;
@@ -1688,14 +1687,12 @@ fn short_name(value: &str) -> String {
 }
 
 fn stable_project_id(project: &Path) -> String {
-    let mut normalized = project.to_string_lossy().into_owned();
+    let normalized = project.to_string_lossy().into_owned();
     #[cfg(windows)]
-    {
-        normalized = normalized
-            .strip_prefix(r"\\?\")
-            .unwrap_or(&normalized)
-            .to_lowercase();
-    }
+    let normalized = normalized
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&normalized)
+        .to_lowercase();
     sha256_hex(normalized.as_bytes())
 }
 

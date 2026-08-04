@@ -200,7 +200,7 @@ fn validate_config_value(config: &Value) -> Result<Value, String> {
             CRITICAL
                 .iter()
                 .filter(|axis| {
-                    safe.get(*axis)
+                    safe.get(**axis)
                         .is_some_and(|value| *value >= rule.critical_high)
                 })
                 .count()

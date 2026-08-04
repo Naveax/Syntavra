@@ -454,11 +454,12 @@ fn migration_logical_database(project_root: &Path, raw: &str) -> Result<String, 
     }
     let root = normalize_lexical(project_root)?;
     let candidate = Path::new(value);
-    let selected = normalize_lexical(if candidate.is_absolute() {
-        candidate
+    let selected_path = if candidate.is_absolute() {
+        candidate.to_path_buf()
     } else {
-        &root.join(candidate)
-    })?;
+        root.join(candidate)
+    };
+    let selected = normalize_lexical(&selected_path)?;
     let relative = selected
         .strip_prefix(&root)
         .map_err(|_| "MIGRATION_PLAN_DATABASE_PATH_ESCAPE".to_owned())?;

@@ -137,7 +137,7 @@ fn initialize(state_root: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn positional_job_id(arguments: &[String], action: &str) -> Result<&str, String> {
+fn positional_job_id<'a>(arguments: &'a [String], action: &str) -> Result<&'a str, String> {
     arguments
         .windows(3)
         .find(|window| window[0] == "job" && window[1] == action)

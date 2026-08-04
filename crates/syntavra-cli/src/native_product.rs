@@ -89,8 +89,12 @@ mod native_wrap;
 mod read_only_cli_contract;
 #[path = "scheduler_read_only_contract.rs"]
 mod scheduler_read_only_contract;
+#[path = "state_receipt_contract.rs"]
+mod state_receipt_contract;
 #[path = "state_layout_contract.rs"]
 mod state_layout_contract;
+#[path = "state_receipt_contract.rs"]
+mod state_receipt_contract;
 #[path = "state_snapshot_contract.rs"]
 mod state_snapshot_contract;
 #[path = "telemetry_metrics_contract.rs"]
