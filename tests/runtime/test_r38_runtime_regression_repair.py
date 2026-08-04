@@ -5,9 +5,12 @@ import sys
 from pathlib import Path
 
 from tools.repair_r38_runtime_regressions import (
-    CLAIM_PATH_CANONICAL,
-    CLAIM_PATH_LEGACY,
-    repair_claim_command_path,
+    JSON_ARGUMENT_CANONICAL,
+    JSON_ARGUMENT_LEGACY,
+    SINGLE_SEGMENT_PATH_CANONICAL,
+    SINGLE_SEGMENT_PATH_LEGACY,
+    repair_inline_json_argument,
+    repair_single_segment_command_paths,
     repaired_source,
 )
 
@@ -36,14 +39,25 @@ def test_runtime_sql_repair_is_idempotent() -> None:
     assert repeated == source
 
 
-def test_claim_command_path_repair_is_exact_and_idempotent() -> None:
-    source = f"prefix {CLAIM_PATH_LEGACY} suffix"
-    rendered, first_count = repair_claim_command_path(source)
-    repeated, second_count = repair_claim_command_path(rendered)
+def test_single_segment_command_path_repair_is_exact_and_idempotent() -> None:
+    source = f"prefix {SINGLE_SEGMENT_PATH_LEGACY} suffix"
+    rendered, first_count = repair_single_segment_command_paths(source)
+    repeated, second_count = repair_single_segment_command_paths(rendered)
     assert first_count == 1
     assert second_count == 0
-    assert CLAIM_PATH_LEGACY not in rendered
-    assert rendered.count(CLAIM_PATH_CANONICAL) == 1
+    assert SINGLE_SEGMENT_PATH_LEGACY not in rendered
+    assert rendered.count(SINGLE_SEGMENT_PATH_CANONICAL) == 1
+    assert repeated == rendered
+
+
+def test_inline_json_path_probe_repair_is_exact_and_idempotent() -> None:
+    source = f"prefix\n{JSON_ARGUMENT_LEGACY}suffix\n"
+    rendered, first_count = repair_inline_json_argument(source)
+    repeated, second_count = repair_inline_json_argument(rendered)
+    assert first_count == 1
+    assert second_count == 0
+    assert JSON_ARGUMENT_LEGACY not in rendered
+    assert rendered.count(JSON_ARGUMENT_CANONICAL) == 1
     assert repeated == rendered
 
 
