@@ -1,4 +1,0 @@
-info: syncing channel updates for 1.82.0-x86_64-pc-windows-msvc
-info: latest update on 2024-10-17 for version 1.82.0 (f6e511eec 2024-10-15)
-info: component rustfmt is up to date
-info: downloading component clippy

@@ -33,21 +33,21 @@ Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
 Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
 Downloading colorama-0.4.6-py2.py3-none-any.whl (25 kB)
 Downloading cryptography-50.0.0-cp311-abi3-win_amd64.whl (3.8 MB)
-   ---------------------------------------- 3.8/3.8 MB 58.4 MB/s  0:00:00
+   ---------------------------------------- 3.8/3.8 MB 61.4 MB/s  0:00:00
 Downloading cffi-2.1.1-cp313-cp313-win_amd64.whl (185 kB)
 Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
 Using cached packaging-26.2-py3-none-any.whl (100 kB)
 Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
-   ---------------------------------------- 1.2/1.2 MB 29.7 MB/s  0:00:00
+   ---------------------------------------- 1.2/1.2 MB 31.0 MB/s  0:00:00
 Downloading tree_sitter_language_pack-1.14.1-cp310-abi3-win_amd64.whl (2.1 MB)
-   ---------------------------------------- 2.1/2.1 MB 49.7 MB/s  0:00:00
+   ---------------------------------------- 2.1/2.1 MB 46.4 MB/s  0:00:00
 Downloading tree_sitter-0.26.0-cp313-cp313-win_amd64.whl (129 kB)
 Downloading pycparser-3.0-py3-none-any.whl (48 kB)
 Building wheels for collected packages: syntavra-runtime
   Building editable for syntavra-runtime (pyproject.toml): started
   Building editable for syntavra-runtime (pyproject.toml): finished with status 'done'
-  Created wheel for syntavra-runtime: filename=syntavra_runtime-0.0.1-0.editable-py3-none-any.whl size=7916 sha256=146b50e3faed23f83e94f5e1bb43cd6be7f9d0565a0114b65338e5b406afb91d
-  Stored in directory: C:\Users\runneradmin\AppData\Local\Temp\pip-ephem-wheel-cache-e18wfj33\wheels\53\29\cb\9bdcf63b82cf461a83e9559f0765763081d894b9928c570f93
+  Created wheel for syntavra-runtime: filename=syntavra_runtime-0.0.1-0.editable-py3-none-any.whl size=7916 sha256=5ce05a1db62ad13ad60d1382dfbaf936fbb1bb18e8a0219413904aea90dc49b1
+  Stored in directory: C:\Users\runneradmin\AppData\Local\Temp\pip-ephem-wheel-cache-7_6h8bwl\wheels\53\29\cb\9bdcf63b82cf461a83e9559f0765763081d894b9928c570f93
 Successfully built syntavra-runtime
 Installing collected packages: tree-sitter, pygments, pycparser, pluggy, packaging, iniconfig, colorama, tree-sitter-language-pack, pytest, cffi, cryptography, syntavra-runtime
 

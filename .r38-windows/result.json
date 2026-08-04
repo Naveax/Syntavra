@@ -1,7 +1,9 @@
 {
-  "source_head": "16763cfb89c008ff778db65d33b78d8a86b288df",
+  "source_head": "1f6ba0094351cf0f856c1c648de8529d1b26b061",
   "install_exit": 0,
-  "repair_exit": 0,
+  "selector_repair_exit": 0,
+  "windows_repair_exit": 0,
+  "format_apply_exit": 0,
   "fmt_exit": 0,
   "build_exit": 0,
   "rollout_differential_exit": 1,
