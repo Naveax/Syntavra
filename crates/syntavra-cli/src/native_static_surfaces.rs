@@ -12,6 +12,7 @@ pub fn supports(command: &[String]) -> bool {
             ("provider", "capabilities")
                 | ("output", "profiles")
                 | ("benchmark", "generate-config")
+                | ("run", "platform-manifest" | "competitive-manifest")
         )
 }
 
@@ -295,11 +296,61 @@ fn benchmark_generate_config(arguments: &[String]) -> Result<Value, String> {
     Ok(json!({"config": config, "validation": validation}))
 }
 
+fn platform_manifest() -> Value {
+    json!({
+        "product": "Syntavra",
+        "version": "0.0.1",
+        "channel": "pre-release",
+        "runtime": "unified",
+        "components": [
+            "context-compiler",
+            "terminal-output-engine",
+            "output-firewall",
+            "artifact-store",
+            "canonical-repository-graph",
+            "indexed-repository-query",
+            "tree-sitter-syntax-adapter",
+            "semantic-intelligence",
+            "runtime-evidence",
+            "universal-language-platform",
+            "sandboxed-language-services",
+            "generic-lsp-bridge",
+            "semantic-index-import",
+            "session-memory",
+            "capability-security",
+            "execution-sandbox",
+            "provider-gateway",
+            "adapter-platform",
+            "model-gateway",
+            "agent-runtime",
+            "coding-agent",
+            "headless-runtime",
+            "interactive-console",
+            "reliability-laboratory",
+            "distribution-manager",
+            "signalbench"
+        ],
+        "adapter_contract": {
+            "ok": true,
+            "inventory_gate": true,
+            "adapters": 20,
+            "levels": {"A": 4, "B": 10, "C": 5, "D": 1},
+            "surfaces": {"cli": 8, "ide": 7, "ide-extension": 3, "platform": 2},
+            "non_cli_adapters": 12,
+            "invalid": [],
+            "live_certified": 0,
+            "live_boundary": "live certification requires external execution receipts"
+        },
+        "external_claims": "NOT_PROVEN_WITHOUT_EXTERNAL_RECEIPTS"
+    })
+}
+
 pub fn execute(command: &[String], arguments: &[String]) -> Result<Value, String> {
     match (command[0].as_str(), command[1].as_str()) {
         ("provider", "capabilities") => provider_capabilities(arguments),
         ("output", "profiles") => Ok(output_profiles()),
         ("benchmark", "generate-config") => benchmark_generate_config(arguments),
+        ("run", "platform-manifest" | "competitive-manifest") => Ok(platform_manifest()),
         _ => Err("STATIC_SURFACE_COMMAND_UNSUPPORTED".to_owned()),
     }
 }

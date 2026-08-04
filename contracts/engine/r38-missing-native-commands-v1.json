@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 119,
+  "missing_native_public_command_count": 117,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -54,7 +54,6 @@
     "run capability-verify",
     "run code-intel",
     "run competitive-doctor",
-    "run competitive-manifest",
     "run competitive-status",
     "run console",
     "run context-compile",
@@ -96,7 +95,6 @@
     "run notify",
     "run output-capture",
     "run platform-doctor",
-    "run platform-manifest",
     "run platform-status",
     "run provider-pool",
     "run proxy-service install",
@@ -121,7 +119,7 @@
     "status",
     "uninstall"
   ],
-  "native_public_command_count": 126,
+  "native_public_command_count": 128,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
