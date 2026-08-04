@@ -1,0 +1,93 @@
+name: R38 Release Identity Diagnostic
+
+on:
+  push:
+    branches:
+      - "agent/r38-quality-validation"
+    paths:
+      - ".github/r38-release-trigger"
+      - ".github/workflows/r38-release-identity-diagnostic.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-release-identity-diagnostic
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHONHASHSEED: "0"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-quality-validation
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-dual-engine-runtime
+          path: source
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install build dependencies
+        working-directory: source
+        run: |
+          python -m pip install --disable-pip-version-check build pytest
+          python -m pip install --disable-pip-version-check -e .
+      - name: Validate release identity and build artifacts
+        shell: bash
+        run: |
+          set -u
+          mkdir -p .r38-release
+          source_head=$(git -C source rev-parse HEAD)
+
+          set +e
+          (cd source && python -m tools.check_repository_hygiene) > .r38-release/hygiene.log 2>&1
+          hygiene_exit=$?
+          (cd source && python -m tools.validate) > .r38-release/validate.log 2>&1
+          validate_exit=$?
+          (cd source && python -m build --wheel --sdist --outdir dist) > .r38-release/build.log 2>&1
+          build_exit=$?
+          set -e
+
+          SOURCE_HEAD="$source_head" \
+          HYGIENE_EXIT="$hygiene_exit" \
+          VALIDATE_EXIT="$validate_exit" \
+          BUILD_EXIT="$build_exit" \
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = {
+              "source_head": os.environ["SOURCE_HEAD"],
+              "hygiene_exit": int(os.environ["HYGIENE_EXIT"]),
+              "validate_exit": int(os.environ["VALIDATE_EXIT"]),
+              "build_exit": int(os.environ["BUILD_EXIT"]),
+          }
+          result["ok"] = all(result[key] == 0 for key in ("hygiene_exit", "validate_exit", "build_exit"))
+          Path(".r38-release/result.json").write_text(
+              json.dumps(result, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Commit diagnostic result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .r38-release
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "R38: record exact-source release identity diagnostic"
+          git push origin HEAD:agent/r38-quality-validation
