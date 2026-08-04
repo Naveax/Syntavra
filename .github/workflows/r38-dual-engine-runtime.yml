@@ -1,34 +1,13 @@
 name: R38 Full Dual-Engine Runtime
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - ".github/r38-user-head"
-      - ".github/workflows/r38-dual-engine-runtime.yml"
-      - ".github/workflows/r38-refresh-branch-manifest.yml"
-      - "MANIFEST.sha256"
-      - "contracts/engine/dual-engine-public-surface-v2.json"
-      - "contracts/engine/r38-missing-native-commands-v1.json"
-      - "crates/syntavra-cli/**"
-      - "syntavra_runtime/evidence_rotation.py"
-      - "syntavra_runtime/production_extension.py"
-      - "syntavra_runtime/unified_cli.py"
-      - "tools/export_python_surface.py"
-      - "tools/export_rust_surface.py"
-      - "tools/refresh_manifest.py"
-      - "tools/sync_r38_generated_metadata.py"
-      - "tools/verify_dual_engine_public_surface.py"
-      - "tests/runtime/test_dual_engine_public_surface_r38.py"
-      - "tests/runtime/test_evidence_key_rotation_r38.py"
-      - "tests/runtime/test_installed_python_surface_r38.py"
-      - "tests/runtime/test_native_*_r38.py"
-      - "tests/runtime/test_r38_generated_metadata_sync.py"
-      - "docs/adr/0035-full-dual-engine-product-runtime.md"
+  push:
+    branches:
+      - "agent/r38-validation"
   workflow_dispatch:
 
 concurrency:
-  group: r38-dual-engine-${{ github.event.pull_request.number || github.ref }}
+  group: r38-dual-engine-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -62,7 +41,8 @@ jobs:
           python -m pytest -q \
             tests/runtime/test_dual_engine_public_surface_r38.py \
             tests/runtime/test_installed_python_surface_r38.py \
-            tests/runtime/test_r38_generated_metadata_sync.py
+            tests/runtime/test_r38_generated_metadata_sync.py \
+            tests/runtime/test_r38_rust_source_repairs.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
