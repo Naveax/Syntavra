@@ -4,49 +4,115 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".github/workflows/r38-dual-engine-runtime.yml"
+      - ".github/workflows/r38-refresh-branch-manifest.yml"
+      - "MANIFEST.sha256"
       - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "contracts/engine/r38-missing-native-commands-v1.json"
       - "crates/syntavra-cli/**"
       - "syntavra_runtime/evidence_rotation.py"
       - "syntavra_runtime/production_extension.py"
       - "syntavra_runtime/unified_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
+      - "tools/sync_r38_generated_metadata.py"
       - "tools/verify_dual_engine_public_surface.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_evidence_key_rotation_r38.py"
       - "tests/runtime/test_installed_python_surface_r38.py"
       - "tests/runtime/test_native_*_r38.py"
+      - "tests/runtime/test_r38_generated_metadata_sync.py"
       - "docs/adr/0035-full-dual-engine-product-runtime.md"
-      - ".github/workflows/r38-dual-engine-runtime.yml"
-  push:
-    branches: [main, "agent/full-dual-engine-runtime"]
-    paths:
-      - "contracts/engine/dual-engine-public-surface-v2.json"
-      - "crates/syntavra-cli/**"
-      - "syntavra_runtime/evidence_rotation.py"
-      - "syntavra_runtime/production_extension.py"
-      - "syntavra_runtime/unified_cli.py"
-      - "tools/export_python_surface.py"
-      - "tools/export_rust_surface.py"
-      - "tools/verify_dual_engine_public_surface.py"
-      - "tests/runtime/test_dual_engine_public_surface_r38.py"
-      - "tests/runtime/test_evidence_key_rotation_r38.py"
-      - "tests/runtime/test_installed_python_surface_r38.py"
-      - "tests/runtime/test_native_*_r38.py"
-      - "docs/adr/0035-full-dual-engine-product-runtime.md"
-      - ".github/workflows/r38-dual-engine-runtime.yml"
   workflow_dispatch:
 
 concurrency:
-  group: r38-dual-engine-${{ github.ref }}
+  group: r38-dual-engine-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
+env:
+  PYTHONHASHSEED: "0"
+  PYTHONUNBUFFERED: "1"
+  RUSTUP_TOOLCHAIN: "1.82.0"
+  CARGO_INCREMENTAL: "0"
+
 jobs:
-  dual-engine:
-    name: Dual engine (${{ matrix.os }})
+  inventory-contract:
+    name: Inventory and contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Python engine
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - name: Verify complete public-command inventory
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/verify_dual_engine_public_surface.py | tee dual-engine-coverage.json
+      - name: Run canonical inventory and metadata regressions
+        run: |
+          python -m pytest -q \
+            tests/runtime/test_dual_engine_public_surface_r38.py \
+            tests/runtime/test_installed_python_surface_r38.py \
+            tests/runtime/test_r38_generated_metadata_sync.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r38-inventory-contract
+          path: dual-engine-coverage.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  rust-quality:
+    name: Rust quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r38-rust-quality
+          cache-on-failure: false
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Build complete Rust workspace
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo build --workspace --all-targets --locked 2>&1 | tee rust-build.log
+      - name: Run complete Rust workspace tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --workspace --all-targets --locked 2>&1 | tee rust-tests.log
+      - name: Run strict Rust lint
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r38-rust-quality-diagnostics
+          path: |
+            rust-build.log
+            rust-tests.log
+            clippy.log
+          if-no-files-found: warn
+          retention-days: 90
+
+  differential:
+    name: Differential (${{ matrix.os }})
+    needs: [inventory-contract, rust-quality]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -59,11 +125,6 @@ jobs:
             extension: ".exe"
           - os: macos-latest
             extension: ""
-    env:
-      PYTHONHASHSEED: "0"
-      PYTHONUNBUFFERED: "1"
-      RUSTUP_TOOLCHAIN: "1.82.0"
-      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -72,65 +133,42 @@ jobs:
       - name: Install Python engine
         run: python -m pip install --disable-pip-version-check -e . pytest
       - uses: dtolnay/rust-toolchain@1.82.0
-        with:
-          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: r38-dual-engine
+          shared-key: r38-differential-${{ matrix.os }}
           cache-on-failure: false
-      - name: Verify complete public-command inventory
-        run: python tools/verify_dual_engine_public_surface.py | tee dual-engine-coverage.json
-      - name: Run dual-engine contract regressions
+      - name: Build selector and sibling Rust binaries once
         shell: bash
         run: |
-          python -m pytest -q \
-            tests/runtime/test_dual_engine_public_surface_r38.py \
-            tests/runtime/test_evidence_key_rotation_r38.py \
-            tests/runtime/test_installed_python_surface_r38.py \
-            tests/runtime/test_native_*_r38.py
-      - name: Verify Rust formatting
-        run: cargo fmt --all -- --check
-      - name: Run launcher unit tests
-        run: cargo test --locked --bin syntavra
-      - name: Run strict Rust lint
+          set -o pipefail
+          cargo build --locked --bins 2>&1 | tee platform-build.log
+          echo "SYNTAVRA_R38_SELECTOR=$PWD/target/debug/syntavra${{ matrix.extension }}" >> "$GITHUB_ENV"
+      - name: Run Python evidence lifecycle regression
+        run: python -m pytest -q tests/runtime/test_evidence_key_rotation_r38.py
+      - name: Run native Python-Rust differential regressions
         shell: bash
-        run: |
-          set +e
-          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
-          code=${PIPESTATUS[0]}
-          set -e
-          exit "$code"
-      - name: Build both engines and selector
-        run: cargo build --locked --bins
-      - name: Verify explicit Rust execution and no fallback
+        run: python -m pytest -q tests/runtime/test_native_*_r38.py
+      - name: Verify explicit engine selection and fallback prohibition
         shell: bash
         run: |
           selector="target/debug/syntavra${{ matrix.extension }}"
           "$selector" --engine rust version > rust-version.json
+          "$selector" --engine python version > python-version.json
+          "$selector" engine status > engine-status.json
+          grep -q '"fallback": "forbidden"' engine-status.json
+
           set +e
           "$selector" --engine rust run rewrite -- git status > rust-missing.json
           code=$?
           set -e
           test "$code" -ne 0
           grep -q 'RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED' rust-missing.json
-      - name: Verify explicit Python execution
-        shell: bash
-        run: |
-          selector="target/debug/syntavra${{ matrix.extension }}"
-          "$selector" --engine python version > python-version.json
-      - name: Verify engine inspection
-        shell: bash
-        run: |
-          selector="target/debug/syntavra${{ matrix.extension }}"
-          "$selector" engine status > engine-status.json
-          grep -q '"fallback": "forbidden"' engine-status.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r38-dual-engine-${{ matrix.os }}
+          name: r38-differential-${{ matrix.os }}
           path: |
-            dual-engine-coverage.json
-            clippy.log
+            platform-build.log
             rust-version.json
             rust-missing.json
             python-version.json
