@@ -27,21 +27,30 @@ fn initialize(path: &Path) -> Result<Connection, String> {
         .map_err(|error| format!("SCHEDULER_DATABASE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
-            "PRAGMA journal_mode=WAL;\
-             PRAGMA synchronous=FULL;\
-             CREATE TABLE IF NOT EXISTS jobs(\
-               job_id TEXT PRIMARY KEY,kind TEXT NOT NULL,payload_json TEXT NOT NULL,state TEXT NOT NULL,\
-               priority INTEGER NOT NULL,created_at REAL NOT NULL,available_at REAL NOT NULL,\
-               started_at REAL,finished_at REAL,lease_expires_at REAL,worker_id TEXT,attempts INTEGER NOT NULL,\
-               max_attempts INTEGER NOT NULL,retry_backoff_seconds REAL NOT NULL,idempotency_key TEXT UNIQUE,\
-               result_json TEXT,error TEXT,metadata_json TEXT NOT NULL);\
-             CREATE INDEX IF NOT EXISTS jobs_ready_idx ON jobs(state,available_at,priority,created_at);\
-             CREATE INDEX IF NOT EXISTS jobs_lease_idx ON jobs(state,lease_expires_at);\
-             CREATE TABLE IF NOT EXISTS dead_letters(\
-               dead_id INTEGER PRIMARY KEY AUTOINCREMENT,job_id TEXT NOT NULL,kind TEXT NOT NULL,\
-               payload_json TEXT NOT NULL,attempts INTEGER NOT NULL,error TEXT,failed_at REAL NOT NULL,\
-               metadata_json TEXT NOT NULL);\
-             CREATE INDEX IF NOT EXISTS dead_job_idx ON dead_letters(job_id);",
+            "PRAGMA busy_timeout=30000;\
+             PRAGMA journal_mode=WAL;\
+             PRAGMA foreign_keys=ON;\
+             PRAGMA synchronous=NORMAL;\
+             CREATE TABLE IF NOT EXISTS scheduled_jobs(\
+               job_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,argv_json TEXT NOT NULL,\
+               priority INTEGER NOT NULL,state TEXT NOT NULL,attempt INTEGER NOT NULL,\
+               max_attempts INTEGER NOT NULL,timeout_seconds REAL NOT NULL,\
+               sandbox_profile TEXT NOT NULL,resource_class TEXT NOT NULL,\
+               metadata_json TEXT NOT NULL,scheduled_at REAL NOT NULL,created_at REAL NOT NULL,\
+               updated_at REAL NOT NULL,lease_owner TEXT NOT NULL DEFAULT '',\
+               lease_until REAL NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '',\
+               result_json TEXT NOT NULL DEFAULT '{}');\
+             CREATE INDEX IF NOT EXISTS scheduled_jobs_ready_idx \
+               ON scheduled_jobs(state,scheduled_at,priority,created_at);\
+             CREATE INDEX IF NOT EXISTS scheduled_jobs_project_idx \
+               ON scheduled_jobs(project_id,state);\
+             CREATE TABLE IF NOT EXISTS job_dependencies(\
+               job_id TEXT NOT NULL,dependency_id TEXT NOT NULL,\
+               PRIMARY KEY(job_id,dependency_id),\
+               FOREIGN KEY(job_id) REFERENCES scheduled_jobs(job_id) ON DELETE CASCADE);\
+             CREATE TABLE IF NOT EXISTS scheduler_events(\
+               sequence INTEGER PRIMARY KEY AUTOINCREMENT,job_id TEXT NOT NULL,\
+               event TEXT NOT NULL,payload_json TEXT NOT NULL,created_at REAL NOT NULL);",
         )
         .map_err(|error| format!("SCHEDULER_SCHEMA_INITIALIZE_FAILED:{error}"))?;
     Ok(connection)
@@ -53,51 +62,47 @@ pub fn execute(state_root: &Path) -> Result<Value, String> {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| format!("SCHEDULER_REAP_TRANSACTION_FAILED:{error}"))?;
-    let mut statement = transaction
-        .prepare(
-            "SELECT job_id,attempts,max_attempts,retry_backoff_seconds \
-             FROM jobs WHERE state='running' AND lease_expires_at IS NOT NULL AND lease_expires_at<=?1",
-        )
-        .map_err(|error| format!("SCHEDULER_REAP_PREPARE_FAILED:{error}"))?;
-    let rows = statement
-        .query_map([now], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, f64>(3)?,
-            ))
-        })
-        .map_err(|error| format!("SCHEDULER_REAP_QUERY_FAILED:{error}"))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("SCHEDULER_REAP_ROW_FAILED:{error}"))?;
-    drop(statement);
+    let rows = {
+        let mut statement = transaction
+            .prepare(
+                "SELECT job_id,attempt,max_attempts FROM scheduled_jobs \
+                 WHERE state='running' AND lease_until>0 AND lease_until<=?1",
+            )
+            .map_err(|error| format!("SCHEDULER_REAP_PREPARE_FAILED:{error}"))?;
+        statement
+            .query_map([now], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })
+            .map_err(|error| format!("SCHEDULER_REAP_QUERY_FAILED:{error}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("SCHEDULER_REAP_ROW_FAILED:{error}"))?
+    };
 
-    for (job_id, attempts, max_attempts, retry_backoff_seconds) in &rows {
-        if attempts >= max_attempts {
-            transaction
-                .execute(
-                    "UPDATE jobs SET state='dead-letter',finished_at=?1,lease_expires_at=NULL,\
-                     worker_id=NULL,error='lease expired' WHERE job_id=?2",
-                    params![now, job_id],
-                )
-                .map_err(|error| format!("SCHEDULER_REAP_DEAD_UPDATE_FAILED:{error}"))?;
-            transaction
-                .execute(
-                    "INSERT INTO dead_letters(job_id,kind,payload_json,attempts,error,failed_at,metadata_json) \
-                     SELECT job_id,kind,payload_json,attempts,error,?1,metadata_json FROM jobs WHERE job_id=?2",
-                    params![now, job_id],
-                )
-                .map_err(|error| format!("SCHEDULER_REAP_DEAD_INSERT_FAILED:{error}"))?;
+    for (job_id, attempt, max_attempts) in &rows {
+        let next_state = if attempt < max_attempts {
+            "queued"
         } else {
-            transaction
-                .execute(
-                    "UPDATE jobs SET state='queued',available_at=?1,lease_expires_at=NULL,\
-                     worker_id=NULL,error='lease expired' WHERE job_id=?2",
-                    params![now + retry_backoff_seconds, job_id],
-                )
-                .map_err(|error| format!("SCHEDULER_REAP_REQUEUE_FAILED:{error}"))?;
-        }
+            "dead-letter"
+        };
+        transaction
+            .execute(
+                "UPDATE scheduled_jobs SET state=?1,lease_owner='',lease_until=0,\
+                 scheduled_at=?2,last_error='lease-expired',updated_at=?2 WHERE job_id=?3",
+                params![next_state, now, job_id],
+            )
+            .map_err(|error| format!("SCHEDULER_REAP_UPDATE_FAILED:{error}"))?;
+        let payload = format!("{{\"next_state\": \"{next_state}\"}}");
+        transaction
+            .execute(
+                "INSERT INTO scheduler_events(job_id,event,payload_json,created_at) \
+                 VALUES(?1,'lease-expired',?2,?3)",
+                params![job_id, payload, now_seconds()?],
+            )
+            .map_err(|error| format!("SCHEDULER_REAP_EVENT_FAILED:{error}"))?;
     }
     transaction
         .commit()
