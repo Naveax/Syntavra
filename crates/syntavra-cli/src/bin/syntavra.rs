@@ -166,7 +166,13 @@ fn command_path(arguments: &[String]) -> Vec<String> {
         let value = &arguments[index];
         if matches!(
             value.as_str(),
-            "--project" | "--state-root" | "--budget" | "--max-tier"
+            "--project"
+                | "--state-root"
+                | "--budget"
+                | "--max-tier"
+                | "--codex-home"
+                | "--rollout"
+                | "--state-file"
         ) {
             index += 2;
             continue;
@@ -186,7 +192,9 @@ fn command_path(arguments: &[String]) -> Vec<String> {
         positional.push(value.clone());
         index += 1;
     }
-    if positional.first().map(String::as_str) == Some("context-stress") {
+    if positional.first().map(String::as_str) == Some("rollout-tail") {
+        positional.truncate(1);
+    } else if positional.first().map(String::as_str) == Some("context-stress") {
         positional.truncate(1);
     } else if positional.first().map(String::as_str) == Some("engine")
         && positional.get(1).map(String::as_str) == Some("route")

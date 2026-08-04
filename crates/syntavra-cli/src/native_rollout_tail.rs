@@ -76,15 +76,27 @@ fn file_numbers(metadata: &fs::Metadata) -> (u64, u64) {
 #[cfg(windows)]
 fn file_numbers(metadata: &fs::Metadata) -> (u64, u64) {
     use std::os::windows::fs::MetadataExt;
-    (
-        metadata.file_index().unwrap_or(0),
-        u64::from(metadata.volume_serial_number().unwrap_or(0)),
-    )
+    (metadata.creation_time(), 0)
 }
 
 #[cfg(not(any(unix, windows)))]
 fn file_numbers(_metadata: &fs::Metadata) -> (u64, u64) {
     (0, 0)
+}
+
+#[cfg(windows)]
+fn identity_path(path: &Path) -> String {
+    let value = path.to_string_lossy().into_owned();
+    if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        value.strip_prefix(r"\\?\").unwrap_or(&value).to_owned()
+    }
+}
+
+#[cfg(not(windows))]
+fn identity_path(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }
 
 fn file_identity(path: &Path) -> Result<String, String> {
@@ -93,7 +105,7 @@ fn file_identity(path: &Path) -> Result<String, String> {
     let metadata =
         fs::metadata(&resolved).map_err(|error| format!("ROLLOUT_METADATA_FAILED:{error}"))?;
     let (inode, device) = file_numbers(&metadata);
-    let material = format!("{}|{inode}|{device}", resolved.display());
+    let material = format!("{}|{inode}|{device}", identity_path(&resolved));
     Ok(sha256_hex(material.as_bytes()))
 }
 
@@ -573,7 +585,7 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
         .ok_or_else(|| "ROLLOUT_RESULT_OBJECT_INVALID".to_owned())?;
     object.insert(
         "rollout".to_owned(),
-        Value::String(selected.to_string_lossy().into_owned()),
+        Value::String(identity_path(&selected)),
     );
     Ok(Value::Object(object))
 }
