@@ -212,7 +212,9 @@ fn index_repository(connection: &mut Connection, project: &Path) -> Result<(), S
             .prepare("SELECT path,content_hash FROM structural_files")
             .map_err(|error| format!("STRUCTURAL_KNOWN_PREPARE_FAILED:{error}"))?;
         let rows = statement
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
             .map_err(|error| format!("STRUCTURAL_KNOWN_QUERY_FAILED:{error}"))?;
         let mut values = BTreeMap::new();
         for row in rows {
@@ -257,10 +259,16 @@ fn index_repository(connection: &mut Connection, project: &Path) -> Result<(), S
                 )
                 .map_err(|error| format!("STRUCTURAL_REMOVE_EDGES_FAILED:{error}"))?;
             transaction
-                .execute("DELETE FROM structural_symbols WHERE path=?", params![relative])
+                .execute(
+                    "DELETE FROM structural_symbols WHERE path=?",
+                    params![relative],
+                )
                 .map_err(|error| format!("STRUCTURAL_REMOVE_SYMBOLS_FAILED:{error}"))?;
             transaction
-                .execute("DELETE FROM structural_files WHERE path=?", params![relative])
+                .execute(
+                    "DELETE FROM structural_files WHERE path=?",
+                    params![relative],
+                )
                 .map_err(|error| format!("STRUCTURAL_REMOVE_FILE_FAILED:{error}"))?;
         }
         transaction
@@ -280,10 +288,16 @@ fn replace_file(
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| format!("STRUCTURAL_INDEX_TRANSACTION_FAILED:{error}"))?;
     transaction
-        .execute("DELETE FROM structural_edges WHERE source_path=?", params![relative])
+        .execute(
+            "DELETE FROM structural_edges WHERE source_path=?",
+            params![relative],
+        )
         .map_err(|error| format!("STRUCTURAL_INDEX_DELETE_EDGES_FAILED:{error}"))?;
     transaction
-        .execute("DELETE FROM structural_symbols WHERE path=?", params![relative])
+        .execute(
+            "DELETE FROM structural_symbols WHERE path=?",
+            params![relative],
+        )
         .map_err(|error| format!("STRUCTURAL_INDEX_DELETE_SYMBOLS_FAILED:{error}"))?;
     for symbol in &parsed.symbols {
         transaction
@@ -369,7 +383,9 @@ fn resolve_edges(connection: &mut Connection) -> Result<(), String> {
             )
             .map_err(|error| format!("STRUCTURAL_RESOLVE_PREPARE_FAILED:{error}"))?;
         let rows = statement
-            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
             .map_err(|error| format!("STRUCTURAL_RESOLVE_QUERY_FAILED:{error}"))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| format!("STRUCTURAL_RESOLVE_ROW_FAILED:{error}"))?
@@ -406,9 +422,18 @@ fn source_paths(project: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(paths)
 }
 
-fn visit_directory(project: &Path, directory: &Path, output: &mut Vec<PathBuf>) -> Result<(), String> {
+fn visit_directory(
+    project: &Path,
+    directory: &Path,
+    output: &mut Vec<PathBuf>,
+) -> Result<(), String> {
     let mut entries = fs::read_dir(directory)
-        .map_err(|error| format!("STRUCTURAL_DIRECTORY_READ_FAILED:{}:{error}", directory.display()))?
+        .map_err(|error| {
+            format!(
+                "STRUCTURAL_DIRECTORY_READ_FAILED:{}:{error}",
+                directory.display()
+            )
+        })?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("STRUCTURAL_DIRECTORY_ENTRY_FAILED:{error}"))?;
     entries.sort_by_key(|entry| entry.file_name());
@@ -443,9 +468,27 @@ fn supported_path(path: &Path) -> bool {
             .map(str::to_ascii_lowercase)
             .as_deref(),
         Some(
-            "py" | "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "rs" | "go" | "java"
-                | "cs" | "c" | "h" | "cc" | "cpp" | "cxx" | "hpp" | "hh" | "rb"
-                | "php" | "lua" | "luau"
+            "py" | "js"
+                | "jsx"
+                | "mjs"
+                | "cjs"
+                | "ts"
+                | "tsx"
+                | "rs"
+                | "go"
+                | "java"
+                | "cs"
+                | "c"
+                | "h"
+                | "cc"
+                | "cpp"
+                | "cxx"
+                | "hpp"
+                | "hh"
+                | "rb"
+                | "php"
+                | "lua"
+                | "luau"
         )
     )
 }
@@ -482,7 +525,10 @@ fn parse_python(relative: &str, text: &str) -> ParseResult {
             continue;
         }
         let indent = indentation(raw_line);
-        while contexts.last().is_some_and(|context| indent <= context.indent) {
+        while contexts
+            .last()
+            .is_some_and(|context| indent <= context.indent)
+        {
             contexts.pop();
         }
         let current = context_name(&contexts);
@@ -499,7 +545,14 @@ fn parse_python(relative: &str, text: &str) -> ParseResult {
                 };
                 if !module.is_empty() {
                     aliases.insert(alias.to_owned(), module.to_owned());
-                    edges.push(edge(relative, &current, "imports", module, line_number, 1.0));
+                    edges.push(edge(
+                        relative,
+                        &current,
+                        "imports",
+                        module,
+                        line_number,
+                        1.0,
+                    ));
                 }
             }
             continue;
@@ -508,7 +561,14 @@ fn parse_python(relative: &str, text: &str) -> ParseResult {
             if let Some((module, imported)) = rest.split_once(" import ") {
                 let module = module.trim();
                 if !module.is_empty() {
-                    edges.push(edge(relative, &current, "imports", module, line_number, 1.0));
+                    edges.push(edge(
+                        relative,
+                        &current,
+                        "imports",
+                        module,
+                        line_number,
+                        1.0,
+                    ));
                 }
                 for item in imported.split(',') {
                     let item = item.trim();
@@ -540,9 +600,23 @@ fn parse_python(relative: &str, text: &str) -> ParseResult {
                 confidence: 1.0,
                 parser: "python-ast-v3".to_owned(),
             });
-            edges.push(edge(relative, &current, "defines", &qualified, line_number, 1.0));
+            edges.push(edge(
+                relative,
+                &current,
+                "defines",
+                &qualified,
+                line_number,
+                1.0,
+            ));
             for base in class.1 {
-                edges.push(edge(relative, &qualified, "inherits", &base, line_number, 0.98));
+                edges.push(edge(
+                    relative,
+                    &qualified,
+                    "inherits",
+                    &base,
+                    line_number,
+                    0.98,
+                ));
             }
             contexts.push(Context {
                 indent,
@@ -568,7 +642,14 @@ fn parse_python(relative: &str, text: &str) -> ParseResult {
                 confidence: 1.0,
                 parser: "python-ast-v3".to_owned(),
             });
-            edges.push(edge(relative, &current, "defines", &qualified, line_number, 1.0));
+            edges.push(edge(
+                relative,
+                &current,
+                "defines",
+                &qualified,
+                line_number,
+                1.0,
+            ));
             contexts.push(Context {
                 indent,
                 name: function.0,
@@ -576,7 +657,14 @@ fn parse_python(relative: &str, text: &str) -> ParseResult {
             continue;
         }
 
-        add_python_calls(relative, trimmed, &current, line_number, &aliases, &mut edges);
+        add_python_calls(
+            relative,
+            trimmed,
+            &current,
+            line_number,
+            &aliases,
+            &mut edges,
+        );
         add_python_names(relative, trimmed, &current, line_number, &mut edges);
     }
 
@@ -677,11 +765,7 @@ fn python_function(line: &str) -> Option<(String, String)> {
             if value.is_empty() {
                 return None;
             }
-            let name = value
-                .split([':', '='])
-                .next()
-                .unwrap_or("")
-                .trim();
+            let name = value.split([':', '=']).next().unwrap_or("").trim();
             (!name.is_empty()).then(|| name.to_owned())
         })
         .collect::<Vec<_>>()
@@ -757,7 +841,14 @@ fn add_python_calls(
         );
         output.push(edge(relative, source, "calls", &target, line_number, 0.99));
         if let Some((_, short)) = target.rsplit_once('.') {
-            output.push(edge(relative, source, "calls-short", short, line_number, 0.9));
+            output.push(edge(
+                relative,
+                source,
+                "calls-short",
+                short,
+                line_number,
+                0.9,
+            ));
         }
     }
 }
@@ -772,8 +863,8 @@ fn add_python_names(
     let assignment = line.find('=');
     for token in identifiers(line) {
         if [
-            "return", "if", "else", "elif", "for", "while", "in", "and", "or", "not",
-            "True", "False", "None", "with", "as", "try", "except", "raise", "yield",
+            "return", "if", "else", "elif", "for", "while", "in", "and", "or", "not", "True",
+            "False", "None", "with", "as", "try", "except", "raise", "yield",
         ]
         .contains(&token.as_str())
         {
@@ -835,9 +926,11 @@ fn lexical_definition(line: &str, extension: &str) -> Option<(String, String)> {
             ("interface ", "interface"),
             ("export interface ", "interface"),
         ],
-        "java" | "cs" | "c" | "h" | "cc" | "cpp" | "cxx" | "hpp" | "hh" => {
-            &[("class ", "class"), ("struct ", "struct"), ("enum ", "enum")]
-        }
+        "java" | "cs" | "c" | "h" | "cc" | "cpp" | "cxx" | "hpp" | "hh" => &[
+            ("class ", "class"),
+            ("struct ", "struct"),
+            ("enum ", "enum"),
+        ],
         "rb" => &[("def ", "function"), ("class ", "class")],
         "php" => &[("function ", "function"), ("class ", "class")],
         "lua" | "luau" => &[("function ", "function")],
@@ -875,9 +968,7 @@ fn lexical_import(line: &str, extension: &str) -> Option<String> {
         "cs" => line
             .strip_prefix("using ")
             .map(|value| value.trim_end_matches(';').trim().to_owned()),
-        "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" => {
-            quoted_value(line).map(str::to_owned)
-        }
+        "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" => quoted_value(line).map(str::to_owned),
         _ => None,
     }
 }
@@ -938,7 +1029,9 @@ fn qualify(contexts: &[Context], name: &str) -> String {
     }
 }
 
-fn load_symbol_identities(connection: &Connection) -> Result<Vec<(String, String, String)>, String> {
+fn load_symbol_identities(
+    connection: &Connection,
+) -> Result<Vec<(String, String, String)>, String> {
     let mut statement = connection
         .prepare("SELECT path,name,qualified_name FROM structural_symbols")
         .map_err(|error| format!("STRUCTURAL_SYMBOL_IDENTITIES_PREPARE_FAILED:{error}"))?;
@@ -1006,15 +1099,18 @@ fn inspect_impact(connection: &Connection, query: &str, max_depth: i64) -> Resul
         let path = string_field(row, "path")?;
         let name = string_field(row, "name")?;
         let qualified = string_field(row, "qualified_name")?;
-        symbol_paths.entry(qualified).or_default().insert(path.clone());
+        symbol_paths
+            .entry(qualified)
+            .or_default()
+            .insert(path.clone());
         symbol_paths.entry(name).or_default().insert(path);
     }
     for row in &edges {
         let target = string_field(row, "target")?;
         let short_target = short_name(&target);
         let source = string_field(row, "source_symbol")?;
-        let confidence = number_field(row, "confidence")?
-            * edge_weight(&string_field(row, "edge_type")?);
+        let confidence =
+            number_field(row, "confidence")? * edge_weight(&string_field(row, "edge_type")?);
         reverse
             .entry(target.clone())
             .or_default()
@@ -1028,7 +1124,10 @@ fn inspect_impact(connection: &Connection, query: &str, max_depth: i64) -> Resul
             .or_default()
             .push(row.clone());
         if short_target != target {
-            edges_by_target.entry(short_target).or_default().push(row.clone());
+            edges_by_target
+                .entry(short_target)
+                .or_default()
+                .push(row.clone());
         }
     }
 
@@ -1097,22 +1196,16 @@ fn inspect_impact(connection: &Connection, query: &str, max_depth: i64) -> Resul
     ranked_symbols.sort_by(|left, right| {
         integer_json(left, "depth")
             .cmp(&integer_json(right, "depth"))
-            .then_with(|| {
-                number_json(right, "rank")
-                    .total_cmp(&number_json(left, "rank"))
-            })
+            .then_with(|| number_json(right, "rank").total_cmp(&number_json(left, "rank")))
             .then_with(|| string_json(left, "symbol").cmp(&string_json(right, "symbol")))
     });
     traversed.sort_by(|left, right| {
         integer_json(left, "depth")
             .cmp(&integer_json(right, "depth"))
             .then_with(|| {
-                number_json(right, "confidence")
-                    .total_cmp(&number_json(left, "confidence"))
+                number_json(right, "confidence").total_cmp(&number_json(left, "confidence"))
             })
-            .then_with(|| {
-                string_json(left, "source_path").cmp(&string_json(right, "source_path"))
-            })
+            .then_with(|| string_json(left, "source_path").cmp(&string_json(right, "source_path")))
             .then_with(|| integer_json(left, "line").cmp(&integer_json(right, "line")))
     });
 
@@ -1164,7 +1257,11 @@ fn impacted_by_paths(
             if normalized.contains(&path) {
                 let qualified = string_field(&row, "qualified_name")?;
                 let name = string_field(&row, "name")?;
-                symbols.insert(if qualified.is_empty() { name } else { qualified });
+                symbols.insert(if qualified.is_empty() {
+                    name
+                } else {
+                    qualified
+                });
             }
         }
     }
@@ -1203,12 +1300,7 @@ fn repository_map(
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|row| {
-            Some((
-                row["symbol"].as_str()?.to_owned(),
-                row["rank"].as_f64()?,
-            ))
-        })
+        .filter_map(|row| Some((row["symbol"].as_str()?.to_owned(), row["rank"].as_f64()?)))
         .collect::<BTreeMap<_, _>>();
     let seeds = impact["definitions"]
         .as_array()
@@ -1247,8 +1339,8 @@ fn repository_map(
             )
             .trim()
             .to_owned();
-            let estimated = i64::try_from(text.chars().count().div_ceil(4).max(1))
-                .unwrap_or(i64::MAX);
+            let estimated =
+                i64::try_from(text.chars().count().div_ceil(4).max(1)).unwrap_or(i64::MAX);
             let lexical = if qualified.to_lowercase().contains(&query_lower) {
                 1.0
             } else {
@@ -1449,11 +1541,12 @@ fn personalized_rank(
     if nodes.is_empty() {
         return BTreeMap::new();
     }
-    let actual = seeds
-        .intersection(&nodes)
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    let actual = if actual.is_empty() { nodes.clone() } else { actual };
+    let actual = seeds.intersection(&nodes).cloned().collect::<BTreeSet<_>>();
+    let actual = if actual.is_empty() {
+        nodes.clone()
+    } else {
+        actual
+    };
     let denominator = actual.len() as f64;
     let teleport = nodes
         .iter()
@@ -1515,7 +1608,10 @@ fn required_verifiers(paths: &[String]) -> Vec<String> {
     if suffixes.contains("py") {
         commands.push("python -m unittest discover -s tests -q".to_owned());
     }
-    if suffixes.iter().any(|value| ["js", "jsx", "ts", "tsx"].contains(&value.as_str())) {
+    if suffixes
+        .iter()
+        .any(|value| ["js", "jsx", "ts", "tsx"].contains(&value.as_str()))
+    {
         commands.push("npm test -- --runInBand".to_owned());
     }
     if suffixes.contains("rs") {
@@ -1563,7 +1659,9 @@ fn grouped_counts(connection: &Connection, query: &str) -> Result<Value, String>
         .prepare(query)
         .map_err(|error| format!("STRUCTURAL_GROUP_PREPARE_FAILED:{error}"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|error| format!("STRUCTURAL_GROUP_QUERY_FAILED:{error}"))?;
     let mut values = Map::new();
     for row in rows {
@@ -1609,7 +1707,11 @@ fn canonical_json(value: &Value) -> String {
         Value::String(value) => serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_owned()),
         Value::Array(values) => format!(
             "[{}]",
-            values.iter().map(canonical_json).collect::<Vec<_>>().join(",")
+            values
+                .iter()
+                .map(canonical_json)
+                .collect::<Vec<_>>()
+                .join(",")
         ),
         Value::Object(values) => {
             let mut keys = values.keys().collect::<Vec<_>>();
@@ -1653,7 +1755,12 @@ fn positional_after<'a>(
         .get(index)
         .filter(|value| !value.starts_with("--"))
         .map(String::as_str)
-        .ok_or_else(|| format!("STRUCTURAL_{}_ARGUMENT_MISSING:{offset}", action.to_ascii_uppercase()))
+        .ok_or_else(|| {
+            format!(
+                "STRUCTURAL_{}_ARGUMENT_MISSING:{offset}",
+                action.to_ascii_uppercase()
+            )
+        })
 }
 
 fn positionals_after(arguments: &[String], action: &str) -> Result<Vec<String>, String> {
@@ -1667,7 +1774,10 @@ fn positionals_after(arguments: &[String], action: &str) -> Result<Vec<String>, 
         index += 1;
     }
     if output.is_empty() {
-        return Err(format!("STRUCTURAL_{}_ARGUMENT_MISSING:0", action.to_ascii_uppercase()));
+        return Err(format!(
+            "STRUCTURAL_{}_ARGUMENT_MISSING:0",
+            action.to_ascii_uppercase()
+        ));
     }
     Ok(output)
 }
@@ -1742,7 +1852,10 @@ mod tests {
 
     #[test]
     fn canonical_json_orders_keys() {
-        assert_eq!(canonical_json(&json!({"z": 1, "a": [true, null]})), "{\"a\":[true,null],\"z\":1}");
+        assert_eq!(
+            canonical_json(&json!({"z": 1, "a": [true, null]})),
+            "{\"a\":[true,null],\"z\":1}"
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 124,
+  "missing_native_public_command_count": 119,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -28,11 +28,6 @@
     "fabric verify-install",
     "hook",
     "init",
-    "inspect impact",
-    "inspect map",
-    "inspect paths",
-    "inspect stats",
-    "inspect symbol",
     "install",
     "mcp",
     "prove integrations",
@@ -126,7 +121,7 @@
     "status",
     "uninstall"
   ],
-  "native_public_command_count": 121,
+  "native_public_command_count": 126,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
