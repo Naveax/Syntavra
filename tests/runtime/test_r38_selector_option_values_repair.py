@@ -99,6 +99,22 @@ def test_selector_option_value_repair_collapses_duplicate_branches(
     assert MODULE.repair(target) is False
 
 
+def test_selector_option_value_repair_nests_or_pattern(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "syntavra.rs"
+    target.write_text(
+        _source(MODULE.CANONICAL_OPTION_BLOCK, MODULE.UNNESTED_TRUNCATION),
+        encoding="utf-8",
+    )
+
+    assert MODULE.repair(target) is True
+    rendered = target.read_text(encoding="utf-8")
+    assert MODULE.UNNESTED_TRUNCATION not in rendered
+    assert rendered.count(MODULE.CANONICAL_TRUNCATION) == 1
+    assert MODULE.repair(target) is False
+
+
 def test_selector_option_value_repair_accepts_canonical_source(
     tmp_path: Path,
 ) -> None:
