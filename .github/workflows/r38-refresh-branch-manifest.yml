@@ -1,7 +1,7 @@
 # Verification-only generated metadata gate for the active R38 branch.
 # Normal pull-request runs never create bot-authored branch heads. A same-repo
 # PR may opt into one atomic refresh by committing .github/r38-manifest-refresh;
-# the marker is removed in the generated commit.
+# the marker is removed before the manifest is generated and in the same commit.
 name: Verify R38 Generated Metadata
 
 on:
@@ -139,12 +139,15 @@ jobs:
           components: rustfmt
       - name: Generate canonical metadata and manifest
         if: steps.marker.outputs.present == 'true'
+        shell: bash
         run: |
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
           python tools/sync_r38_generated_metadata.py
-          python tools/refresh_manifest.py
           rm .github/r38-manifest-refresh
+          python tools/refresh_manifest.py
+          test ! -e .github/r38-manifest-refresh
+          ! grep -q '  .github/r38-manifest-refresh$' MANIFEST.sha256
       - name: Commit one-shot generated refresh
         if: steps.marker.outputs.present == 'true'
         shell: bash
