@@ -8,11 +8,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST_ROOT = ROOT / "crates" / "syntavra-cli" / "src"
+SELECTOR = RUST_ROOT / "bin" / "syntavra.rs"
 
 # Rust removes a backslash-newline pair and the indentation that follows it.
 # SQL assembled from source such as `scope_idx\` + `ON ...` therefore becomes
 # `scope_idxON ...` unless the source contains an explicit space before the
-# continuation.  Restrict the repair to SQL clause boundaries and fail closed
+# continuation. Restrict the repair to SQL clause boundaries and fail closed
 # on any malformed continuation that remains.
 SQL_CLAUSE = (
     r"(?:AND|AS|CREATE|DELETE|FOREIGN|FROM|GROUP|HAVING|INNER|INSERT|JOIN|LEFT|"
@@ -25,6 +26,9 @@ MISSING_SPACE = re.compile(
 MALFORMED_RUNTIME_SQL = re.compile(
     rf"[A-Za-z0-9_')?]\\\n[ \t]+{SQL_CLAUSE}\b"
 )
+
+CLAIM_PATH_LEGACY = 'Some("rollout-tail" | "context-stress")'
+CLAIM_PATH_CANONICAL = 'Some("rollout-tail" | "context-stress" | "claim")'
 
 
 def rust_sources() -> list[Path]:
@@ -41,10 +45,21 @@ def repaired_source(source: str) -> tuple[str, int]:
     )
 
 
+def repair_claim_command_path(source: str) -> tuple[str, int]:
+    legacy_count = source.count(CLAIM_PATH_LEGACY)
+    canonical_count = source.count(CLAIM_PATH_CANONICAL)
+    if canonical_count == 1 and legacy_count == 0:
+        return source, 0
+    if legacy_count != 1 or canonical_count != 0:
+        raise RuntimeError(
+            "selector claim path state is neither one legacy fragment nor one canonical fragment"
+        )
+    return source.replace(CLAIM_PATH_LEGACY, CLAIM_PATH_CANONICAL, 1), 1
+
+
 def inspect(path: Path) -> tuple[str, int]:
     source = path.read_text(encoding="utf-8")
-    rendered, count = repaired_source(source)
-    return rendered, count
+    return repaired_source(source)
 
 
 def main() -> int:
@@ -52,7 +67,7 @@ def main() -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="fail when a canonical runtime SQL repair is still required",
+        help="fail when a canonical runtime repair is still required",
     )
     arguments = parser.parse_args()
 
@@ -65,12 +80,20 @@ def main() -> int:
             if not arguments.check:
                 path.write_text(rendered, encoding="utf-8", newline="\n")
 
+    selector_source = SELECTOR.read_text(encoding="utf-8")
+    selector_rendered, selector_count = repair_claim_command_path(selector_source)
+    if selector_count:
+        relative = SELECTOR.relative_to(ROOT).as_posix()
+        changed[relative] = selector_count
+        if not arguments.check:
+            SELECTOR.write_text(selector_rendered, encoding="utf-8", newline="\n")
+
     if arguments.check and changed:
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "code": "R38_RUNTIME_SQL_REPAIR_REQUIRED",
+                    "code": "R38_RUNTIME_REPAIR_REQUIRED",
                     "files": changed,
                 },
                 sort_keys=True,
@@ -90,6 +113,19 @@ def main() -> int:
                     "ok": False,
                     "code": "R38_RUNTIME_SQL_REPAIR_INCOMPLETE",
                     "files": malformed,
+                },
+                sort_keys=True,
+            )
+        )
+        return 1
+
+    canonical_selector = SELECTOR.read_text(encoding="utf-8")
+    if canonical_selector.count(CLAIM_PATH_CANONICAL) != 1 or CLAIM_PATH_LEGACY in canonical_selector:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "code": "R38_CLAIM_COMMAND_PATH_REPAIR_INCOMPLETE",
                 },
                 sort_keys=True,
             )
