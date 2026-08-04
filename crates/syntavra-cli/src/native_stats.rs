@@ -8,7 +8,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 
 use rusqlite::{Connection, Row};
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
 const MAX_ANALYTICS_BYTES: u64 = 64 * 1024 * 1024;
@@ -79,8 +79,7 @@ fn json_truthy(value: &Value) -> bool {
 fn truncated_i64(number: f64) -> Option<i64> {
     let truncated = number.trunc();
     if !truncated.is_finite()
-        || !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
-            .contains(&truncated)
+        || !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&truncated)
     {
         return None;
     }
@@ -189,8 +188,8 @@ fn session_analytics(state_root: &Path) -> Result<Value, String> {
             repositories.insert(value);
         }
         input_tokens = input_tokens.saturating_add(python_int(object.get("input_tokens"))?.max(0));
-        cached_tokens = cached_tokens
-            .saturating_add(python_int(object.get("cached_input_tokens"))?.max(0));
+        cached_tokens =
+            cached_tokens.saturating_add(python_int(object.get("cached_input_tokens"))?.max(0));
         output_tokens =
             output_tokens.saturating_add(python_int(object.get("output_tokens"))?.max(0));
         wall_time_ms += python_float(object.get("wall_time_ms"))?.max(0.0);
@@ -285,8 +284,8 @@ fn token_attribution_summary(path: &Path) -> Result<Value, String> {
                 })
                 .map_err(|error| format!("STATS_ATTRIBUTION_QUERY_FAILED:{error}"))?;
             for row in rows {
-                let (sources_json, confidence_json, baseline_tokens) = row
-                    .map_err(|error| format!("STATS_ATTRIBUTION_ROW_FAILED:{error}"))?;
+                let (sources_json, confidence_json, baseline_tokens) =
+                    row.map_err(|error| format!("STATS_ATTRIBUTION_ROW_FAILED:{error}"))?;
                 let sources: Value = serde_json::from_str(&sources_json)
                     .map_err(|_| "STATS_ATTRIBUTION_SOURCES_INVALID".to_owned())?;
                 let confidence: Value = serde_json::from_str(&confidence_json)
@@ -381,10 +380,16 @@ fn hmac_sha256_hex(key: &[u8], message: &[u8]) -> Option<String> {
         key.to_vec()
     };
     normalized.resize(64, 0);
-    let mut inner = normalized.iter().map(|byte| byte ^ 0x36).collect::<Vec<_>>();
+    let mut inner = normalized
+        .iter()
+        .map(|byte| byte ^ 0x36)
+        .collect::<Vec<_>>();
     inner.extend_from_slice(message);
     let inner_digest = decode_hex(&sha256_hex(&inner))?;
-    let mut outer = normalized.iter().map(|byte| byte ^ 0x5c).collect::<Vec<_>>();
+    let mut outer = normalized
+        .iter()
+        .map(|byte| byte ^ 0x5c)
+        .collect::<Vec<_>>();
     outer.extend_from_slice(&inner_digest);
     Some(sha256_hex(&outer))
 }
@@ -470,7 +475,10 @@ fn provider_usage_integrity(path: &Path) -> Result<Value, String> {
     for (offset, row) in rows.iter().enumerate() {
         let expected_sequence = i64::try_from(offset + 1).unwrap_or(i64::MAX);
         if row.sequence != expected_sequence {
-            reasons.push(format!("sequence-gap:{expected_sequence}->{}", row.sequence));
+            reasons.push(format!(
+                "sequence-gap:{expected_sequence}->{}",
+                row.sequence
+            ));
         }
         if row.previous_chain_hash != previous {
             reasons.push(format!("previous-chain-mismatch:{}", row.sequence));
@@ -507,10 +515,7 @@ fn provider_usage_integrity(path: &Path) -> Result<Value, String> {
         }
         previous = calculated_chain;
     }
-    let hmac = !rows.is_empty()
-        && rows
-            .iter()
-            .all(|row| row.signature_mode == "hmac-sha256");
+    let hmac = !rows.is_empty() && rows.iter().all(|row| row.signature_mode == "hmac-sha256");
     Ok(json!({
         "ok": reasons.is_empty(),
         "entries": rows.len(),

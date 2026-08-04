@@ -150,7 +150,7 @@ fn initialize(state_root: &Path) -> Result<Connection, String> {
                environment_hash TEXT NOT NULL,dependency_hash TEXT NOT NULL,toolchain_hash TEXT NOT NULL,\
                success INTEGER NOT NULL,exit_code INTEGER NOT NULL,evidence_handle TEXT NOT NULL,\
                affected_paths_json TEXT NOT NULL,created_at REAL NOT NULL);\
-             INSERT INTO metadata(key,value) VALUES('schema_version','2')\
+             INSERT INTO metadata(key,value) VALUES('schema_version','2') \
                ON CONFLICT(key) DO UPDATE SET value=excluded.value;",
         )
         .map_err(|error| format!("JOB_BROKER_DATABASE_INITIALIZE_FAILED:{error}"))?;
@@ -304,7 +304,7 @@ fn completions(arguments: &[String], state_root: &Path) -> Result<Value, String>
     let connection = initialize(state_root)?;
     let mut statement = connection
         .prepare(
-            "SELECT sequence,job_id,state,exit_code,completed_at,evidence_handle\
+            "SELECT sequence,job_id,state,exit_code,completed_at,evidence_handle \
              FROM completion_events WHERE sequence>?1 ORDER BY sequence LIMIT ?2",
         )
         .map_err(|error| format!("JOB_COMPLETIONS_PREPARE_FAILED:{error}"))?;

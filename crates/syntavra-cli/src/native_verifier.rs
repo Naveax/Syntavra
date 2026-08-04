@@ -46,7 +46,7 @@ fn initialize(path: &Path) -> Result<Connection, String> {
                environment_hash TEXT NOT NULL,dependency_hash TEXT NOT NULL,toolchain_hash TEXT NOT NULL,\
                success INTEGER NOT NULL,exit_code INTEGER NOT NULL,evidence_handle TEXT NOT NULL,\
                affected_paths_json TEXT NOT NULL,created_at REAL NOT NULL);\
-             INSERT INTO metadata(key,value) VALUES('schema_version','2')\
+             INSERT INTO metadata(key,value) VALUES('schema_version','2') \
                ON CONFLICT(key) DO UPDATE SET value=excluded.value;",
         )
         .map_err(|error| format!("VERIFIER_DATABASE_INITIALIZE_FAILED:{error}"))?;
@@ -164,7 +164,7 @@ fn lookup(arguments: &[String], state_root: &Path) -> Result<Value, String> {
     let row = connection
         .query_row(
             "SELECT cache_key,command_json,tree_hash,environment_hash,dependency_hash,toolchain_hash,\
-             success,exit_code,evidence_handle,affected_paths_json,created_at\
+             success,exit_code,evidence_handle,affected_paths_json,created_at \
              FROM verifier_results WHERE cache_key=?1",
             [&key],
             |row| {

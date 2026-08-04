@@ -185,7 +185,7 @@ def _runtime_state_pair(tmp_path: Path) -> tuple[Path, Path]:
     source = tmp_path / "source"
     python_state = tmp_path / "python"
     rust_state = tmp_path / "rust"
-    _prepare_runtime_evidence(source)
+    _prepare_runtime_evidence(source / "unified")
     shutil.copytree(source, python_state)
     shutil.copytree(source, rust_state)
     return python_state, rust_state

@@ -312,10 +312,10 @@ pub fn execute(
             evidence_store_stats(state_root)
         }
         [root, action] if root == "run" && action == "evidence-stats" => {
-            runtime_evidence_stats(state_root)
+            runtime_evidence_stats(&state_root.join("unified"))
         }
         [root, action] if root == "run" && action == "evidence-neighbors" => {
-            runtime_evidence_neighbors(arguments, state_root)
+            runtime_evidence_neighbors(arguments, &state_root.join("unified"))
         }
         _ => Err("EVIDENCE_COMMAND_UNSUPPORTED".to_owned()),
     }

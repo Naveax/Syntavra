@@ -130,7 +130,7 @@ fn initialize(state_root: &Path) -> Result<Connection, String> {
                environment_hash TEXT NOT NULL,dependency_hash TEXT NOT NULL,toolchain_hash TEXT NOT NULL,\
                success INTEGER NOT NULL,exit_code INTEGER NOT NULL,evidence_handle TEXT NOT NULL,\
                affected_paths_json TEXT NOT NULL,created_at REAL NOT NULL);\
-             INSERT INTO metadata(key,value) VALUES('schema_version','2')\
+             INSERT INTO metadata(key,value) VALUES('schema_version','2') \
                ON CONFLICT(key) DO UPDATE SET value=excluded.value;",
         )
         .map_err(|error| format!("JOB_MUTATION_DATABASE_INITIALIZE_FAILED:{error}"))?;
@@ -255,8 +255,8 @@ fn append_completion(
         .map_err(|_| "JOB_RECOVER_COMPLETION_JSON_INVALID".to_owned())?;
     connection
         .execute(
-            "INSERT INTO completion_events(job_id,state,exit_code,completed_at,evidence_handle,payload_json)\
-             VALUES(?1,?2,NULL,?3,?4,?5)\
+            "INSERT INTO completion_events(job_id,state,exit_code,completed_at,evidence_handle,payload_json) \
+             VALUES(?1,?2,NULL,?3,?4,?5) \
              ON CONFLICT(job_id) DO UPDATE SET state=excluded.state,exit_code=excluded.exit_code,\
              completed_at=excluded.completed_at,evidence_handle=excluded.evidence_handle,payload_json=excluded.payload_json",
             params![job_id, state, completed_at, evidence_handle, payload_json],

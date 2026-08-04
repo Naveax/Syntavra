@@ -65,7 +65,7 @@ fn initialize(path: &Path) -> Result<Connection, String> {
                source_start INTEGER NOT NULL,source_end INTEGER NOT NULL,child_ids_json TEXT NOT NULL,\
                source_hash TEXT NOT NULL,order_level INTEGER NOT NULL,created_at REAL NOT NULL,\
                invalidated_at REAL,FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE);\
-             CREATE INDEX IF NOT EXISTS session_summary_range_idx\
+             CREATE INDEX IF NOT EXISTS session_summary_range_idx \
                ON session_summaries(session_id,source_start,source_end);\
              CREATE TABLE IF NOT EXISTS session_checkpoints(\
                checkpoint_id TEXT PRIMARY KEY,session_id TEXT NOT NULL,through_sequence INTEGER NOT NULL,\

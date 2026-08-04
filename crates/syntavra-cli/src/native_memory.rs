@@ -93,7 +93,7 @@ fn initialize(state_root: &Path) -> Result<(Connection, bool), String> {
                provenance_json TEXT NOT NULL,content_hash TEXT NOT NULL,created_at REAL NOT NULL,\
                superseded_by TEXT,expires_at REAL,tags_json TEXT NOT NULL DEFAULT '[]',\
                FOREIGN KEY(superseded_by) REFERENCES memories(memory_id));\
-             CREATE INDEX IF NOT EXISTS memories_scope_idx\
+             CREATE INDEX IF NOT EXISTS memories_scope_idx \
                ON memories(project_id,user_id,memory_class,created_at DESC);\
              CREATE TABLE IF NOT EXISTS memory_relations(\
                source_id TEXT NOT NULL,relation TEXT NOT NULL,target_id TEXT NOT NULL,\
@@ -101,7 +101,7 @@ fn initialize(state_root: &Path) -> Result<(Connection, bool), String> {
                PRIMARY KEY(source_id,relation,target_id),\
                FOREIGN KEY(source_id) REFERENCES memories(memory_id),\
                FOREIGN KEY(target_id) REFERENCES memories(memory_id));\
-             CREATE INDEX IF NOT EXISTS memory_relation_target_idx\
+             CREATE INDEX IF NOT EXISTS memory_relation_target_idx \
                ON memory_relations(target_id,relation);",
         )
         .map_err(|error| format!("MEMORY_DATABASE_INITIALIZE_FAILED:{error}"))?;
@@ -273,7 +273,7 @@ fn record_by_id(
     connection
         .query_row(
             "SELECT memory_id,memory_class,text,confidence,provenance_json,created_at,\
-                    superseded_by,expires_at,tags_json\
+                    superseded_by,expires_at,tags_json \
              FROM memories WHERE memory_id=?1 AND project_id=?2 AND user_id=?3",
             params![memory_id, project_id, user_id],
             |row| MemoryRow::from_row(row, 0),
@@ -323,8 +323,8 @@ fn add(
     let existing = transaction
         .query_row(
             "SELECT memory_id,memory_class,text,confidence,provenance_json,created_at,\
-                    superseded_by,expires_at,tags_json\
-             FROM memories WHERE project_id=?1 AND user_id=?2 AND memory_class=?3\
+                    superseded_by,expires_at,tags_json \
+             FROM memories WHERE project_id=?1 AND user_id=?2 AND memory_class=?3 \
                AND content_hash=?4 AND superseded_by IS NULL",
             params![project_id, user_id, memory_class, digest],
             |row| MemoryRow::from_row(row, 0),
@@ -348,7 +348,7 @@ fn add(
         .execute(
             "INSERT INTO memories(\
                memory_id,project_id,user_id,memory_class,text,confidence,provenance_json,\
-               content_hash,created_at,superseded_by,expires_at,tags_json)\
+               content_hash,created_at,superseded_by,expires_at,tags_json) \
              VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,NULL,?10,?11)",
             params![
                 memory_id,
@@ -401,7 +401,7 @@ fn link(
         .map_err(|error| format!("MEMORY_LINK_TRANSACTION_FAILED:{error}"))?;
     let mut statement = transaction
         .prepare(
-            "SELECT memory_id FROM memories WHERE memory_id IN (?1,?2)\
+            "SELECT memory_id FROM memories WHERE memory_id IN (?1,?2) \
              AND project_id=?3 AND user_id=?4",
         )
         .map_err(|error| format!("MEMORY_LINK_SCOPE_PREPARE_FAILED:{error}"))?;
@@ -423,7 +423,7 @@ fn link(
     }
     transaction
         .execute(
-            "INSERT OR REPLACE INTO memory_relations(source_id,relation,target_id,weight,created_at)\
+            "INSERT OR REPLACE INTO memory_relations(source_id,relation,target_id,weight,created_at) \
              VALUES(?1,?2,?3,?4,?5)",
             params![source_id, relation, target_id, weight, now()?],
         )
@@ -446,8 +446,8 @@ fn neighbors(
     let mut sql = String::from(
         "SELECT r.relation,r.weight,\
                 m.memory_id,m.memory_class,m.text,m.confidence,m.provenance_json,m.created_at,\
-                m.superseded_by,m.expires_at,m.tags_json\
-         FROM memory_relations r JOIN memories m ON m.memory_id=r.target_id\
+                m.superseded_by,m.expires_at,m.tags_json \
+         FROM memory_relations r JOIN memories m ON m.memory_id=r.target_id \
          WHERE r.source_id=? AND m.project_id=? AND m.user_id=?",
     );
     let mut values = vec![
@@ -550,9 +550,9 @@ fn search_rows(
         let sql = format!(
             "SELECT m.memory_id,m.memory_class,m.text,m.confidence,m.provenance_json,m.created_at,\
                     m.superseded_by,m.expires_at,m.tags_json,bm25(memories_fts) AS lexical_rank,\
-                    COALESCE((SELECT SUM(r.weight) FROM memory_relations r\
-                              WHERE r.target_id=m.memory_id),0) AS relation_weight\
-             FROM memories_fts JOIN memories m ON m.memory_id=memories_fts.memory_id\
+                    COALESCE((SELECT SUM(r.weight) FROM memory_relations r \
+                              WHERE r.target_id=m.memory_id),0) AS relation_weight \
+             FROM memories_fts JOIN memories m ON m.memory_id=memories_fts.memory_id \
              WHERE memories_fts MATCH ? AND {} ORDER BY lexical_rank LIMIT ?",
             clauses.join(" AND ")
         );
@@ -586,8 +586,8 @@ fn search_rows(
         let sql = format!(
             "SELECT m.memory_id,m.memory_class,m.text,m.confidence,m.provenance_json,m.created_at,\
                     m.superseded_by,m.expires_at,m.tags_json,0 AS lexical_rank,\
-                    COALESCE(SUM(r.weight),0) AS relation_weight\
-             FROM memories m LEFT JOIN memory_relations r ON r.target_id=m.memory_id\
+                    COALESCE(SUM(r.weight),0) AS relation_weight \
+             FROM memories m LEFT JOIN memory_relations r ON r.target_id=m.memory_id \
              WHERE m.text LIKE ? AND {}\
              GROUP BY m.memory_id ORDER BY m.created_at DESC LIMIT ?",
             clauses.join(" AND ")

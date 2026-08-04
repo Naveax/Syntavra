@@ -168,9 +168,9 @@ fn initialize(path: &Path) -> Result<Connection, String> {
                confidence REAL NOT NULL DEFAULT 1.0,\
                parser TEXT NOT NULL DEFAULT '',\
                UNIQUE(path,qualified_name,kind,line));\
-             CREATE INDEX IF NOT EXISTS structural_symbol_name_idx\
+             CREATE INDEX IF NOT EXISTS structural_symbol_name_idx \
                ON structural_symbols(name,qualified_name);\
-             CREATE INDEX IF NOT EXISTS structural_symbol_path_idx\
+             CREATE INDEX IF NOT EXISTS structural_symbol_path_idx \
                ON structural_symbols(path,line);\
              CREATE TABLE IF NOT EXISTS structural_edges(\
                source_path TEXT NOT NULL,\
@@ -182,11 +182,11 @@ fn initialize(path: &Path) -> Result<Connection, String> {
                confidence REAL NOT NULL,\
                metadata_json TEXT NOT NULL DEFAULT '{}',\
                UNIQUE(source_path,source_symbol,edge_type,target,line));\
-             CREATE INDEX IF NOT EXISTS structural_edge_target_idx\
+             CREATE INDEX IF NOT EXISTS structural_edge_target_idx \
                ON structural_edges(target,edge_type);\
-             CREATE INDEX IF NOT EXISTS structural_edge_source_idx\
+             CREATE INDEX IF NOT EXISTS structural_edge_source_idx \
                ON structural_edges(source_symbol,edge_type);\
-             CREATE INDEX IF NOT EXISTS structural_edge_path_idx\
+             CREATE INDEX IF NOT EXISTS structural_edge_path_idx \
                ON structural_edges(source_path,target_path);",
         )
         .map_err(|error| format!("STRUCTURAL_DATABASE_INITIALIZE_FAILED:{error}"))?;
@@ -303,7 +303,7 @@ fn replace_file(
         transaction
             .execute(
                 "INSERT OR IGNORE INTO structural_symbols(\
-                   path,name,qualified_name,kind,line,end_line,signature,confidence,parser)\
+                   path,name,qualified_name,kind,line,end_line,signature,confidence,parser) \
                  VALUES(?,?,?,?,?,?,?,?,?)",
                 params![
                     symbol.path,
@@ -323,7 +323,7 @@ fn replace_file(
         transaction
             .execute(
                 "INSERT OR IGNORE INTO structural_edges(\
-                   source_path,source_symbol,edge_type,target,target_path,line,confidence,metadata_json)\
+                   source_path,source_symbol,edge_type,target,target_path,line,confidence,metadata_json) \
                  VALUES(?,?,?,?,?,?,?,?)",
                 params![
                     edge.source_path,
@@ -341,8 +341,8 @@ fn replace_file(
     transaction
         .execute(
             "INSERT INTO structural_files(\
-               path,content_hash,language,parser,semantic,diagnostics_json,indexed_at)\
-             VALUES(?,?,?,?,?,?,?)\
+               path,content_hash,language,parser,semantic,diagnostics_json,indexed_at) \
+             VALUES(?,?,?,?,?,?,?) \
              ON CONFLICT(path) DO UPDATE SET\
                content_hash=excluded.content_hash,\
                language=excluded.language,\
@@ -1045,11 +1045,11 @@ fn load_symbol_identities(
 fn inspect_symbol(connection: &Connection, query: &str, limit: i64) -> Result<Value, String> {
     let mut statement = connection
         .prepare(
-            "SELECT path,name,qualified_name,kind,line,end_line,signature,confidence,parser\
-             FROM structural_symbols\
-             WHERE name LIKE ? OR qualified_name LIKE ? OR signature LIKE ?\
+            "SELECT path,name,qualified_name,kind,line,end_line,signature,confidence,parser \
+             FROM structural_symbols \
+             WHERE name LIKE ? OR qualified_name LIKE ? OR signature LIKE ? \
              ORDER BY CASE WHEN name=? OR qualified_name=? THEN 0 ELSE 1 END,\
-                      confidence DESC,path,line\
+                      confidence DESC,path,line \
              LIMIT ?",
         )
         .map_err(|error| format!("STRUCTURAL_SYMBOL_PREPARE_FAILED:{error}"))?;
