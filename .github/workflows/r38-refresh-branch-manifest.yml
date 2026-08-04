@@ -159,7 +159,6 @@ jobs:
         run: |
           python tools/repair_r38_selector_option_values.py
           python tools/repair_r38_windows_rollout_identity.py
-          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
           python tools/sync_r38_generated_metadata.py
