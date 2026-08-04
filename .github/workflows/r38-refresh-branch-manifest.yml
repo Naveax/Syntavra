@@ -64,10 +64,8 @@ jobs:
             tests/runtime/test_r38_generated_metadata_sync.py
       - name: Reproduce canonical generated state
         run: |
-          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
-          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           python tools/refresh_manifest.py
       - name: Validate generated contract consistency
@@ -153,7 +151,6 @@ jobs:
           python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
-          python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
           rm .github/r38-manifest-refresh
           python tools/refresh_manifest.py
