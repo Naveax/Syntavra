@@ -1,0 +1,99 @@
+name: R38 Validation Diagnostic
+
+on:
+  push:
+    branches:
+      - "agent/r38-validation"
+    paths-ignore:
+      - ".r38-diagnostics/**"
+  workflow_dispatch:
+
+concurrency:
+  group: r38-validation-diagnostic
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  RUSTUP_TOOLCHAIN: "1.82.0"
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: "never"
+
+jobs:
+  diagnose:
+    if: ${{ !contains(github.event.head_commit.message || '', '[diag-result]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r38-validation
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: r38-validation-diagnostic
+          cache-on-failure: false
+      - name: Apply canonical repairs in workspace
+        shell: bash
+        run: |
+          python tools/repair_r38_rust_sources.py
+          python -m pytest -q tests/runtime/test_r38_rust_source_repairs.py
+          cargo fmt --all
+      - name: Run isolated quality gates
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .r38-diagnostics
+          cargo fmt --all -- --check > /tmp/r38-fmt.log 2>&1
+          fmt_code=$?
+          cargo build --workspace --all-targets --locked > /tmp/r38-build.log 2>&1
+          build_code=$?
+          if [ "$build_code" -eq 0 ]; then
+            cargo test --workspace --all-targets --locked --no-fail-fast > /tmp/r38-test.log 2>&1
+            test_code=$?
+            cargo clippy --workspace --all-targets --locked --message-format=short -- -D warnings > /tmp/r38-clippy.log 2>&1
+            clippy_code=$?
+          else
+            printf 'skipped: build failed\n' > /tmp/r38-test.log
+            printf 'skipped: build failed\n' > /tmp/r38-clippy.log
+            test_code=125
+            clippy_code=125
+          fi
+          python - "$fmt_code" "$build_code" "$test_code" "$clippy_code" <<'PY'
+          import json, subprocess, sys
+          values = [int(value) for value in sys.argv[1:]]
+          payload = {
+              "source_head": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "fmt_exit": values[0],
+              "build_exit": values[1],
+              "test_exit": values[2],
+              "clippy_exit": values[3],
+              "ok": all(value == 0 for value in values),
+          }
+          with open('.r38-diagnostics/result.json', 'w', encoding='utf-8', newline='\n') as handle:
+              json.dump(payload, handle, indent=2, sort_keys=True)
+              handle.write('\n')
+          PY
+          for name in fmt build test clippy; do
+            tail -n 600 "/tmp/r38-${name}.log" > ".r38-diagnostics/${name}.txt"
+          done
+          set -e
+      - name: Commit diagnostic result
+        shell: bash
+        run: |
+          git restore .
+          git clean -fd -e .r38-diagnostics
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f .r38-diagnostics
+          git diff --cached --quiet && exit 0
+          git commit -m "[diag-result] R38 repaired quality result"
+          git push origin HEAD:agent/r38-validation
