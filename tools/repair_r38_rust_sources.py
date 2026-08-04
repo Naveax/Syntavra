@@ -273,8 +273,8 @@ fn python_int(value: Option<&Value>) -> Result<i64, String> {""",
     ),
     Replacement(
         "crates/syntavra-cli/src/native_structural.rs",
-        "line.find(|character| character == '\\'' || character == '\"')?",
-        "line.find(['\\'', '\"'])?",
+        r"""line.find(|character| character == '\'' || character == '"')?""",
+        r"""line.find(['\'', '"'])?""",
     ),
     Replacement(
         "crates/syntavra-cli/src/native_session_continuity.rs",
