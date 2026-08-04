@@ -54,6 +54,7 @@ jobs:
           test -f .github/r38-manifest-refresh
 
           python -m pytest -q \
+            tests/runtime/test_full_parity_catalog_v1.py \
             tests/runtime/test_r38_selector_option_values_repair.py \
             tests/runtime/test_r38_windows_rollout_identity_repair.py \
             tests/runtime/test_r38_generated_metadata_sync.py
@@ -68,6 +69,7 @@ jobs:
 
           cargo fmt --all -- --check
           python -m pytest -q \
+            tests/runtime/test_full_parity_catalog_v1.py \
             tests/runtime/test_r38_selector_option_values_repair.py \
             tests/runtime/test_r38_windows_rollout_identity_repair.py \
             tests/runtime/test_r38_generated_metadata_sync.py \
@@ -126,5 +128,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "R38: commit canonical selector and rollout state"
+          git commit -m "R38: commit reachable command verifier manifest"
           git push origin HEAD:agent/full-dual-engine-runtime
