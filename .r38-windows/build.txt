@@ -1,52 +1,52 @@
     Updating crates.io index
  Downloading crates ...
-  Downloaded bitflags v2.13.1
-  Downloaded version_check v0.9.5
+  Downloaded itoa v1.0.18
+  Downloaded serde_core v1.0.229
   Downloaded zmij v1.0.23
   Downloaded once_cell v1.21.4
-  Downloaded smallvec v1.15.2
-  Downloaded serde_core v1.0.229
   Downloaded cc v1.4.0
-  Downloaded memchr v2.8.3
-  Downloaded hashlink v0.9.1
-  Downloaded serde_json v1.0.151
-  Downloaded rusqlite v0.32.1
-  Downloaded hashbrown v0.14.5
-  Downloaded find-msvc-tools v0.1.9
-  Downloaded vcpkg v0.2.15
-  Downloaded fallible-streaming-iterator v0.1.9
-  Downloaded zerocopy v0.8.55
-  Downloaded ahash v0.8.12
   Downloaded shlex v2.0.1
   Downloaded pkg-config v0.3.33
+  Downloaded memchr v2.8.3
   Downloaded cfg-if v1.0.4
-  Downloaded itoa v1.0.18
+  Downloaded vcpkg v0.2.15
+  Downloaded serde_json v1.0.151
+  Downloaded bitflags v2.13.1
+  Downloaded version_check v0.9.5
+  Downloaded hashlink v0.9.1
+  Downloaded ahash v0.8.12
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded fallible-streaming-iterator v0.1.9
+  Downloaded smallvec v1.15.2
+  Downloaded rusqlite v0.32.1
+  Downloaded hashbrown v0.14.5
   Downloaded fallible-iterator v0.3.0
+  Downloaded zerocopy v0.8.55
   Downloaded libsqlite3-sys v0.30.1
    Compiling version_check v0.9.5
    Compiling zerocopy v0.8.55
-   Compiling shlex v2.0.1
    Compiling find-msvc-tools v0.1.9
-   Compiling once_cell v1.21.4
+   Compiling shlex v2.0.1
    Compiling cfg-if v1.0.4
+   Compiling vcpkg v0.2.15
    Compiling ahash v0.8.12
    Compiling cc v1.4.0
-   Compiling vcpkg v0.2.15
+   Compiling once_cell v1.21.4
    Compiling pkg-config v0.3.33
-   Compiling zmij v1.0.23
    Compiling serde_core v1.0.229
-   Compiling serde_json v1.0.151
    Compiling libsqlite3-sys v0.30.1
-   Compiling smallvec v1.15.2
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
    Compiling itoa v1.0.18
-   Compiling bitflags v2.13.1
-   Compiling fallible-streaming-iterator v0.1.9
    Compiling fallible-iterator v0.3.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling bitflags v2.13.1
    Compiling memchr v2.8.3
+   Compiling smallvec v1.15.2
    Compiling syntavra-contracts v0.0.1 (D:\a\Syntavra\Syntavra\source\crates\syntavra-contracts)
    Compiling syntavra-core v0.0.1 (D:\a\Syntavra\Syntavra\source\crates\syntavra-core)
    Compiling hashbrown v0.14.5
    Compiling hashlink v0.9.1
    Compiling rusqlite v0.32.1
    Compiling syntavra-cli v0.0.1 (D:\a\Syntavra\Syntavra\source\crates\syntavra-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.50s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 31.70s
