@@ -13,6 +13,11 @@ REQUIRED_NATIVE_COMMANDS = {
     "host capabilities",
     "host detect",
     "host negotiate",
+    "inspect impact",
+    "inspect map",
+    "inspect paths",
+    "inspect stats",
+    "inspect symbol",
     "output compact",
     "output govern",
 }
