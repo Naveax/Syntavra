@@ -45,17 +45,23 @@ jobs:
           python -m pip install --disable-pip-version-check -e . pytest *> ../.r38-windows/install.txt
           $install = $LASTEXITCODE
           if ($install -eq 0) {
-            python tools/repair_r38_windows_rollout_identity.py *> ../.r38-windows/repair.txt
-            $repair = $LASTEXITCODE
+            python tools/repair_r38_selector_option_values.py *> ../.r38-windows/selector-repair.txt
+            $selectorRepair = $LASTEXITCODE
+            python tools/repair_r38_windows_rollout_identity.py *> ../.r38-windows/windows-repair.txt
+            $windowsRepair = $LASTEXITCODE
           } else {
-            $repair = 125
+            $selectorRepair = 125
+            $windowsRepair = 125
           }
-          if ($repair -eq 0) {
+          if ($selectorRepair -eq 0 -and $windowsRepair -eq 0) {
+            cargo fmt --all *> ../.r38-windows/format-apply.txt
+            $formatApply = $LASTEXITCODE
             cargo fmt --all -- --check *> ../.r38-windows/fmt.txt
             $fmt = $LASTEXITCODE
             cargo build --locked --bins *> ../.r38-windows/build.txt
             $build = $LASTEXITCODE
           } else {
+            $formatApply = 125
             $fmt = 125
             $build = 125
           }
@@ -70,11 +76,13 @@ jobs:
           $payload = [ordered]@{
             source_head = $sourceHead
             install_exit = $install
-            repair_exit = $repair
+            selector_repair_exit = $selectorRepair
+            windows_repair_exit = $windowsRepair
+            format_apply_exit = $formatApply
             fmt_exit = $fmt
             build_exit = $build
             rollout_differential_exit = $rollout
-            ok = ($install -eq 0 -and $repair -eq 0 -and $fmt -eq 0 -and $build -eq 0 -and $rollout -eq 0)
+            ok = ($install -eq 0 -and $selectorRepair -eq 0 -and $windowsRepair -eq 0 -and $formatApply -eq 0 -and $fmt -eq 0 -and $build -eq 0 -and $rollout -eq 0)
           }
           $payload | ConvertTo-Json | Set-Content -Encoding utf8 .r38-windows/result.json
           exit 0
