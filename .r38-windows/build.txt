@@ -1,52 +1,52 @@
     Updating crates.io index
  Downloading crates ...
-  Downloaded serde_core v1.0.229
+  Downloaded bitflags v2.13.1
   Downloaded version_check v0.9.5
   Downloaded zmij v1.0.23
-  Downloaded pkg-config v0.3.33
-  Downloaded ahash v0.8.12
   Downloaded once_cell v1.21.4
-  Downloaded find-msvc-tools v0.1.9
-  Downloaded cc v1.4.0
-  Downloaded rusqlite v0.32.1
-  Downloaded memchr v2.8.3
-  Downloaded serde_json v1.0.151
-  Downloaded hashbrown v0.14.5
-  Downloaded vcpkg v0.2.15
-  Downloaded fallible-iterator v0.3.0
   Downloaded smallvec v1.15.2
-  Downloaded zerocopy v0.8.55
+  Downloaded serde_core v1.0.229
+  Downloaded cc v1.4.0
+  Downloaded memchr v2.8.3
   Downloaded hashlink v0.9.1
-  Downloaded cfg-if v1.0.4
-  Downloaded bitflags v2.13.1
-  Downloaded shlex v2.0.1
-  Downloaded itoa v1.0.18
+  Downloaded serde_json v1.0.151
+  Downloaded rusqlite v0.32.1
+  Downloaded hashbrown v0.14.5
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded vcpkg v0.2.15
   Downloaded fallible-streaming-iterator v0.1.9
+  Downloaded zerocopy v0.8.55
+  Downloaded ahash v0.8.12
+  Downloaded shlex v2.0.1
+  Downloaded pkg-config v0.3.33
+  Downloaded cfg-if v1.0.4
+  Downloaded itoa v1.0.18
+  Downloaded fallible-iterator v0.3.0
   Downloaded libsqlite3-sys v0.30.1
-   Compiling zerocopy v0.8.55
    Compiling version_check v0.9.5
-   Compiling find-msvc-tools v0.1.9
+   Compiling zerocopy v0.8.55
    Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.9
    Compiling once_cell v1.21.4
    Compiling cfg-if v1.0.4
-   Compiling cc v1.4.0
    Compiling ahash v0.8.12
+   Compiling cc v1.4.0
    Compiling vcpkg v0.2.15
    Compiling pkg-config v0.3.33
-   Compiling serde_core v1.0.229
    Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
    Compiling serde_json v1.0.151
    Compiling libsqlite3-sys v0.30.1
-   Compiling fallible-iterator v0.3.0
-   Compiling bitflags v2.13.1
-   Compiling memchr v2.8.3
    Compiling smallvec v1.15.2
    Compiling itoa v1.0.18
+   Compiling bitflags v2.13.1
    Compiling fallible-streaming-iterator v0.1.9
-   Compiling syntavra-core v0.0.1 (D:\a\Syntavra\Syntavra\source\crates\syntavra-core)
+   Compiling fallible-iterator v0.3.0
+   Compiling memchr v2.8.3
    Compiling syntavra-contracts v0.0.1 (D:\a\Syntavra\Syntavra\source\crates\syntavra-contracts)
+   Compiling syntavra-core v0.0.1 (D:\a\Syntavra\Syntavra\source\crates\syntavra-core)
    Compiling hashbrown v0.14.5
    Compiling hashlink v0.9.1
    Compiling rusqlite v0.32.1
    Compiling syntavra-cli v0.0.1 (D:\a\Syntavra\Syntavra\source\crates\syntavra-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.83s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.50s
