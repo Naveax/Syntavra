@@ -175,7 +175,7 @@ pub fn execute(
         return native_session_verify::execute(arguments, project_root, state_root);
     }
     if native_stats::supports(command) {
-        return native_stats::execute(state_root);
+        return native_stats::execute(project_root, state_root);
     }
     if native_structural::supports(command) {
         return native_structural::execute(command, arguments, project_root, state_root);
