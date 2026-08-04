@@ -114,7 +114,7 @@ fn collect(
 ) -> Result<Value, String> {
     let root = state_root.join("evidence");
     fs::create_dir_all(root.join("objects"))
-        .and_then(|_| fs::create_dir_all(root.join("metadata")))
+        .and_then(|()| fs::create_dir_all(root.join("metadata")))
         .map_err(|error| format!("EVIDENCE_GC_DIRECTORY_CREATE_FAILED:{error}"))?;
     let mut connection = Connection::open(root.join("evidence.sqlite3"))
         .map_err(|error| format!("EVIDENCE_GC_DATABASE_OPEN_FAILED:{error}"))?;

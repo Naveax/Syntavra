@@ -80,7 +80,9 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
     year += i64::from(month <= 2);
-    (year, month as u32, day as u32)
+    let month = u32::try_from(month).expect("civil month is within 1..=12");
+    let day = u32::try_from(day).expect("civil day is within 1..=31");
+    (year, month, day)
 }
 
 fn utc_isoformat() -> Result<String, String> {
@@ -144,7 +146,7 @@ pub fn record_event(event: &Value, state_root: &Path) -> Result<Value, String> {
         .map_err(|_| "ANALYTICS_EVENT_OPEN_FAILED".to_owned())?;
     handle
         .write_all(&encoded)
-        .and_then(|_| handle.write_all(b"\n"))
+        .and_then(|()| handle.write_all(b"\n"))
         .map_err(|_| "ANALYTICS_EVENT_WRITE_FAILED".to_owned())?;
 
     Ok(json!({

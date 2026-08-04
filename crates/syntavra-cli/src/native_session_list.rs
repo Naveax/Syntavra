@@ -138,15 +138,17 @@ pub fn execute(
 }
 
 fn session_json(row: (String, String, String, String, f64, f64, String)) -> Result<Value, String> {
-    let metadata: Value =
-        serde_json::from_str(&row.6).map_err(|_| "SESSION_LIST_METADATA_INVALID".to_owned())?;
+    let (session_id, project_id, parent_ids_json, state, created_at, updated_at, metadata_json) =
+        row;
+    let metadata: Value = serde_json::from_str(&metadata_json)
+        .map_err(|_| "SESSION_LIST_METADATA_INVALID".to_owned())?;
     Ok(json!({
-        "session_id": row.0,
-        "project_id": row.1,
-        "parent_ids": decode_array(&row.2, "SESSION_LIST_PARENT_IDS_INVALID")?,
-        "state": row.3,
-        "created_at": row.4,
-        "updated_at": row.5,
+        "session_id": session_id,
+        "project_id": project_id,
+        "parent_ids": decode_array(&parent_ids_json, "SESSION_LIST_PARENT_IDS_INVALID")?,
+        "state": state,
+        "created_at": created_at,
+        "updated_at": updated_at,
         "metadata": metadata,
     }))
 }

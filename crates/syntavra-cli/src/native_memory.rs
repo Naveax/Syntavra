@@ -509,6 +509,7 @@ fn fts_query(query: &str) -> String {
         .join(" OR ")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn search_rows(
     connection: &Connection,
     project_id: &str,

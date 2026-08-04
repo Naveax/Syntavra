@@ -24,6 +24,17 @@ fn json_truthy(value: &Value) -> bool {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
+fn truncated_i64(number: f64) -> Option<i64> {
+    let truncated = number.trunc();
+    if !truncated.is_finite()
+        || !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&truncated)
+    {
+        return None;
+    }
+    Some(truncated as i64)
+}
+
 fn python_int(value: Option<&Value>) -> Result<i64, String> {
     match value {
         None => Ok(0),
@@ -31,7 +42,7 @@ fn python_int(value: Option<&Value>) -> Result<i64, String> {
         Some(Value::Number(value)) => value
             .as_i64()
             .or_else(|| value.as_u64().and_then(|number| i64::try_from(number).ok()))
-            .or_else(|| value.as_f64().map(|number| number.trunc() as i64))
+            .or_else(|| value.as_f64().and_then(truncated_i64))
             .ok_or_else(|| "ANALYTICS_INTEGER_INVALID".to_owned()),
         Some(Value::String(value)) => value
             .trim()

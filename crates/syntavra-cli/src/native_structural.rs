@@ -974,7 +974,7 @@ fn lexical_import(line: &str, extension: &str) -> Option<String> {
 }
 
 fn quoted_value(line: &str) -> Option<&str> {
-    let quote = line.find(|character| character == '\'' || character == '"')?;
+    let quote = line.find(['\'', '"'])?;
     let delimiter = line.as_bytes()[quote];
     let end = line.as_bytes()[quote + 1..]
         .iter()

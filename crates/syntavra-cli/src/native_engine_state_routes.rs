@@ -69,6 +69,7 @@ fn selection() -> Value {
     })
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn envelope(command: &str, input: Value, result: Value) -> Value {
     json!({
         "ok": true,

@@ -144,6 +144,7 @@ fn selection() -> Value {
     })
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn envelope(command: &str, capability: &str, input: Value, result: Value) -> Value {
     json!({
         "ok": true,
@@ -525,7 +526,8 @@ fn scheduler_limit(arguments: &[String]) -> Result<usize, String> {
         item.parse::<i64>()
             .map_err(|_| "SCHEDULER_READ_ONLY_LIMIT_INVALID".to_owned())
     })?;
-    Ok(parsed.clamp(1, 1000) as usize)
+    usize::try_from(parsed.clamp(1, 1000))
+        .map_err(|_| "SCHEDULER_READ_ONLY_LIMIT_INVALID".to_owned())
 }
 
 fn route_scheduler(route: &str, arguments: &[String], state_root: &Path) -> Result<Value, String> {

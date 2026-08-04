@@ -12,6 +12,7 @@ use syntavra_core::sha256_hex;
 const ZERO_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_field_names)]
 struct Event {
     session_id: String,
     sequence: i64,
@@ -305,6 +306,7 @@ fn deterministic_summary(rows: &[Event]) -> String {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn compact(
     connection: &mut Connection,
     session_id: &str,

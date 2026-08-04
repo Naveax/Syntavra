@@ -345,7 +345,13 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
 }
 
 fn encode_hex(value: &[u8]) -> String {
-    value.iter().map(|byte| format!("{byte:02x}")).collect()
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(value.len().saturating_mul(2));
+    for byte in value {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
 }
 
 fn poll(rollout: &Path, state_file: &Path) -> Result<Value, String> {

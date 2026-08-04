@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_field_names)]
 struct Event {
     session_id: String,
     sequence: i64,
@@ -245,6 +246,7 @@ fn deterministic_summary(rows: &[Event]) -> String {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn compact(
     connection: &mut Connection,
     session_id: &str,
@@ -415,12 +417,14 @@ fn json_text(value: &Value) -> Result<String, String> {
 }
 
 fn selected_start(length: usize, recent_events: i64) -> usize {
-    if recent_events > 0 {
-        length.saturating_sub(usize::try_from(recent_events).unwrap_or(usize::MAX))
-    } else if recent_events == 0 {
-        0
-    } else {
-        length.min(usize::try_from(recent_events.unsigned_abs()).unwrap_or(usize::MAX))
+    match recent_events.cmp(&0) {
+        std::cmp::Ordering::Greater => {
+            length.saturating_sub(usize::try_from(recent_events).unwrap_or(usize::MAX))
+        }
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Less => {
+            length.min(usize::try_from(recent_events.unsigned_abs()).unwrap_or(usize::MAX))
+        }
     }
 }
 

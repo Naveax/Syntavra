@@ -54,7 +54,7 @@ fn active_key_version(keys_root: &Path) -> Result<i64, String> {
 fn evidence_store_stats(state_root: &Path) -> Result<Value, String> {
     let root = state_root.join("evidence");
     fs::create_dir_all(root.join("objects"))
-        .and_then(|_| fs::create_dir_all(root.join("metadata")))
+        .and_then(|()| fs::create_dir_all(root.join("metadata")))
         .map_err(|error| format!("EVIDENCE_DIRECTORY_CREATE_FAILED:{error}"))?;
     let active_version = active_key_version(&root.join("keys"))?;
     let connection = Connection::open(root.join("evidence.sqlite3"))
@@ -203,7 +203,7 @@ fn linked_node(connection: &Connection, node_id: &str) -> Result<Value, String> 
 
 fn neighbor_value(
     connection: &Connection,
-    row: EdgeRow,
+    row: &EdgeRow,
     linked_node_id: &str,
 ) -> Result<Value, String> {
     let metadata: Value = serde_json::from_str(&row.7)
@@ -282,7 +282,7 @@ fn runtime_evidence_neighbors(arguments: &[String], state_root: &Path) -> Result
             } else {
                 row.2.clone()
             };
-            neighbors.push(neighbor_value(&connection, row, &linked)?);
+            neighbors.push(neighbor_value(&connection, &row, &linked)?);
         }
     } else {
         let rows = statement
@@ -296,7 +296,7 @@ fn runtime_evidence_neighbors(arguments: &[String], state_root: &Path) -> Result
             } else {
                 row.2.clone()
             };
-            neighbors.push(neighbor_value(&connection, row, &linked)?);
+            neighbors.push(neighbor_value(&connection, &row, &linked)?);
         }
     }
     Ok(json!({"ok": true, "neighbors": neighbors}))
