@@ -12,6 +12,7 @@ RUST_ROOT = ROOT / "crates" / "syntavra-cli" / "src"
 SELECTOR = RUST_ROOT / "bin" / "syntavra.rs"
 NATIVE_EVIDENCE_STATS = RUST_ROOT / "native_evidence_stats.rs"
 NATIVE_STATIC_SURFACES = RUST_ROOT / "native_static_surfaces.rs"
+NATIVE_STATS = RUST_ROOT / "native_stats.rs"
 PRERELEASE_CLI = ROOT / "syntavra_runtime" / "prerelease_cli.py"
 EVIDENCE_STATS_TEST = ROOT / "tests" / "runtime" / "test_native_evidence_stats_r38.py"
 
@@ -68,6 +69,9 @@ BENCHMARK_SCORE_20X_LEGACY = '"20X" => Ok(38.337_350_566_771_08),'
 BENCHMARK_SCORE_20X_CANONICAL = '"20X" => Ok(38.337_350_566_771_11),'
 BENCHMARK_SCORE_30X_LEGACY = '"30X" => Ok(63.345_278_851_520_46),'
 BENCHMARK_SCORE_30X_CANONICAL = '"30X" => Ok(63.345_278_851_520_476),'
+
+STATS_IMPORT_LEGACY = "use serde_json::{json, Map, Value};"
+STATS_IMPORT_CANONICAL = "use serde_json::{json, Value};"
 
 
 def rust_sources() -> list[Path]:
@@ -171,6 +175,15 @@ def repair_benchmark_scores(source: str) -> tuple[str, int]:
     )
 
 
+def repair_stats_imports(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        STATS_IMPORT_LEGACY,
+        STATS_IMPORT_CANONICAL,
+        "native stats imports",
+    )
+
+
 def inspect(path: Path) -> tuple[str, int]:
     source = path.read_text(encoding="utf-8")
     return repaired_source(source)
@@ -216,6 +229,7 @@ def main() -> int:
         (NATIVE_EVIDENCE_STATS, repair_runtime_evidence_layout),
         (EVIDENCE_STATS_TEST, repair_evidence_test_layout),
         (NATIVE_STATIC_SURFACES, repair_benchmark_scores),
+        (NATIVE_STATS, repair_stats_imports),
     ):
         repair_file(path, repair, check=arguments.check, changed=changed)
 
@@ -255,6 +269,7 @@ def main() -> int:
     canonical_evidence = NATIVE_EVIDENCE_STATS.read_text(encoding="utf-8")
     canonical_evidence_test = EVIDENCE_STATS_TEST.read_text(encoding="utf-8")
     canonical_static_surfaces = NATIVE_STATIC_SURFACES.read_text(encoding="utf-8")
+    canonical_stats = NATIVE_STATS.read_text(encoding="utf-8")
     invariants = {
         "R38_SINGLE_SEGMENT_PATH_REPAIR_INCOMPLETE": (
             canonical_selector.count(SINGLE_SEGMENT_PATH_CANONICAL) == 1
@@ -277,6 +292,10 @@ def main() -> int:
             and canonical_static_surfaces.count(BENCHMARK_SCORE_30X_CANONICAL) == 1
             and BENCHMARK_SCORE_20X_LEGACY not in canonical_static_surfaces
             and BENCHMARK_SCORE_30X_LEGACY not in canonical_static_surfaces
+        ),
+        "R38_STATS_IMPORT_REPAIR_INCOMPLETE": (
+            canonical_stats.count(STATS_IMPORT_CANONICAL) == 1
+            and STATS_IMPORT_LEGACY not in canonical_stats
         ),
     }
     for code, valid in invariants.items():
