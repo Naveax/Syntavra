@@ -1,12 +1,15 @@
-# Canonical formatter, inventory and manifest synchronization for the active R38 branch.
-name: Refresh R38 Generated Metadata
+# Verification-only generated metadata gate for the active R38 branch.
+# Generated files must be committed together with implementation changes; this
+# workflow never creates bot-authored branch heads.
+name: Verify R38 Generated Metadata
 
 on:
-  push:
-    branches: ["agent/full-dual-engine-runtime"]
+  pull_request:
+    branches: [main]
     paths:
       - ".github/workflows/r38-refresh-branch-manifest.yml"
       - ".github/workflows/r38-dual-engine-runtime.yml"
+      - "MANIFEST.sha256"
       - "contracts/engine/dual-engine-public-surface-v2.json"
       - "contracts/engine/r38-missing-native-commands-v1.json"
       - "crates/syntavra-cli/src/bin/syntavra.rs"
@@ -15,87 +18,82 @@ on:
       - "syntavra_runtime/prerelease_cli.py"
       - "tools/export_python_surface.py"
       - "tools/export_rust_surface.py"
+      - "tools/refresh_manifest.py"
       - "tools/sync_r38_generated_metadata.py"
       - "tools/sync_r38_native_command_count.py"
       - "tests/runtime/test_dual_engine_public_surface_r38.py"
       - "tests/runtime/test_native_*_r38.py"
+      - "tests/runtime/test_r38_generated_metadata_sync.py"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: r38-generated-metadata-current
+  group: r38-generated-metadata-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  refresh:
+  verify-generated:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       PYTHONPATH: ${{ github.workspace }}
+      RUSTUP_TOOLCHAIN: "1.82.0"
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/full-dual-engine-runtime
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install runtime dependencies
-        run: python -m pip install .
+      - name: Install runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check -e . pytest
       - uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: rustfmt
-      - name: Repair sources and synchronize R38 metadata
-        run: python tools/sync_r38_generated_metadata.py
-      - name: Format Rust workspace
-        run: cargo fmt --all
-      - name: Recheck synchronized R38 metadata
-        run: python tools/sync_r38_generated_metadata.py
-      - name: Refresh deterministic root manifest
-        run: python tools/refresh_manifest.py
-      - name: Validate generated scope
+      - name: Verify metadata synchronizer idempotence
+        run: python -m pytest -q tests/runtime/test_r38_generated_metadata_sync.py
+      - name: Reproduce canonical generated state
+        run: |
+          python tools/sync_r38_generated_metadata.py
+          cargo fmt --all
+          python tools/sync_r38_generated_metadata.py
+          python tools/refresh_manifest.py
+      - name: Validate generated contract consistency
         run: |
           python - <<'PY'
           import json
-          import subprocess
           from pathlib import Path
-
-          changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
-          fixed = {
-              "MANIFEST.sha256",
-              "contracts/engine/dual-engine-public-surface-v2.json",
-              "contracts/engine/r38-missing-native-commands-v1.json",
-              "crates/syntavra-cli/src/bin/syntavra.rs",
-              "tests/runtime/test_dual_engine_public_surface_r38.py",
-          }
-          unexpected = {
-              path for path in changed
-              if path not in fixed
-              and not (path.startswith("crates/syntavra-cli/src/native_") and path.endswith(".rs"))
-          }
-          assert not unexpected, unexpected
 
           contract = json.loads(Path("contracts/engine/dual-engine-public-surface-v2.json").read_text(encoding="utf-8"))
           missing = json.loads(Path("contracts/engine/r38-missing-native-commands-v1.json").read_text(encoding="utf-8"))
           rust = contract["rust_surface"]
-          assert missing["python_public_command_count"] == contract["python_surface"]["public_command_count"]
+          python_count = contract["python_surface"]["public_command_count"]
+
+          assert missing["python_public_command_count"] == python_count
           assert missing["native_public_command_count"] == rust["native_public_command_count"]
           assert missing["missing_native_public_command_count"] == rust["missing_native_public_command_count"]
           assert len(missing["missing_native_public_commands"]) == rust["missing_native_public_command_count"]
+          assert rust["native_public_command_count"] + rust["missing_native_public_command_count"] == python_count
+          assert rust["python_launcher_bridge_command_count"] == 0
+          assert missing["python_launcher_bridge_command_count"] == 0
           assert Path("MANIFEST.sha256").is_file()
           PY
-      - name: Commit generated metadata
+      - name: Reject stale generated files
+        shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MANIFEST.sha256 \
+          set +e
+          git diff --exit-code -- \
+            MANIFEST.sha256 \
             contracts/engine/dual-engine-public-surface-v2.json \
             contracts/engine/r38-missing-native-commands-v1.json \
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/native_*.rs \
             tests/runtime/test_dual_engine_public_surface_r38.py
-          git diff --cached --quiet && exit 0
-          git commit -m "R38: synchronize complete surface metadata"
-          git push origin HEAD:agent/full-dual-engine-runtime
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "Generated R38 metadata is stale. Run the synchronizer, formatter and manifest refresh locally, then commit all generated changes with the implementation."
+            exit "$code"
+          fi
