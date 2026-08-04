@@ -84,7 +84,20 @@ def _rust_stats(state_root: Path) -> Any:
 
 def test_native_empty_stats_match_python_exactly(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    assert _rust_stats(state_root) == _python_stats(state_root)
+    rust_result = _rust_stats(state_root)
+    python_result = _python_stats(state_root)
+    assert rust_result == python_result
+    assert rust_result["installed"] is False
+    assert rust_result["onboarding"]["claim"] == "ONBOARDING_NOT_MEASURED"
+    assert rust_result["session_analytics"]["events"] == 0
+    assert rust_result["savings_receipts"] == 0
+    assert rust_result["provider_usage_integrity"] == {
+        "attestation": "HASH_CHAIN_ONLY",
+        "entries": 0,
+        "last_chain_hash": "0" * 64,
+        "ok": True,
+        "reasons": [],
+    }
 
 
 def test_native_populated_stats_match_python_exactly(tmp_path: Path) -> None:
@@ -125,7 +138,10 @@ def test_native_populated_stats_match_python_exactly(tmp_path: Path) -> None:
         },
     ]
     (analytics / "events.jsonl").write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) for row in rows)
+        "\n".join(
+            json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            for row in rows
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -134,11 +150,12 @@ def test_native_populated_stats_match_python_exactly(tmp_path: Path) -> None:
     python_result = _python_stats(state_root)
 
     assert rust_result == python_result
-    assert rust_result["events"] == 3
-    assert rust_result["sessions"] == 1
-    assert rust_result["repositories"] == 2
-    assert rust_result["usage"]["input_tokens"] == 130
-    assert rust_result["usage"]["cached_input_tokens"] == 1021
-    assert rust_result["usage"]["billable_input_tokens"] == 0
-    assert rust_result["continuity"]["restores"] == 2
-    assert rust_result["routing"]["denied"] == 1
+    analytics_result = rust_result["session_analytics"]
+    assert analytics_result["events"] == 3
+    assert analytics_result["sessions"] == 1
+    assert analytics_result["repositories"] == 2
+    assert analytics_result["usage"]["input_tokens"] == 130
+    assert analytics_result["usage"]["cached_input_tokens"] == 1021
+    assert analytics_result["usage"]["billable_input_tokens"] == 0
+    assert analytics_result["continuity"]["restores"] == 2
+    assert analytics_result["routing"]["denied"] == 1
