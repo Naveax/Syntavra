@@ -1,12 +1,14 @@
 # Verification-only generated metadata gate for the active R38 branch.
-# Generated files must be committed together with implementation changes; this
-# workflow never creates bot-authored branch heads.
+# Normal pull-request runs never create bot-authored branch heads. A same-repo
+# PR may opt into one atomic refresh by committing .github/r38-manifest-refresh;
+# the marker is removed in the generated commit.
 name: Verify R38 Generated Metadata
 
 on:
   pull_request:
     branches: [main]
     paths:
+      - ".github/r38-manifest-refresh"
       - ".github/workflows/r38-refresh-branch-manifest.yml"
       - ".github/workflows/r38-dual-engine-runtime.yml"
       - "MANIFEST.sha256"
@@ -81,6 +83,7 @@ jobs:
           assert Path("MANIFEST.sha256").is_file()
           PY
       - name: Reject stale generated files
+        if: ${{ hashFiles('.github/r38-manifest-refresh') == '' }}
         shell: bash
         run: |
           set +e
@@ -97,3 +100,65 @@ jobs:
             echo "Generated R38 metadata is stale. Run the synchronizer, formatter and manifest refresh locally, then commit all generated changes with the implementation."
             exit "$code"
           fi
+
+  refresh-when-marked:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      RUSTUP_TOOLCHAIN: "1.82.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Detect one-shot refresh marker
+        id: marker
+        shell: bash
+        run: |
+          if [ -f .github/r38-manifest-refresh ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.marker.outputs.present == 'true'
+        with:
+          python-version: "3.13"
+      - name: Install runtime dependencies
+        if: steps.marker.outputs.present == 'true'
+        run: python -m pip install --disable-pip-version-check -e .
+      - uses: dtolnay/rust-toolchain@1.82.0
+        if: steps.marker.outputs.present == 'true'
+        with:
+          components: rustfmt
+      - name: Generate canonical metadata and manifest
+        if: steps.marker.outputs.present == 'true'
+        run: |
+          python tools/sync_r38_generated_metadata.py
+          cargo fmt --all
+          python tools/sync_r38_generated_metadata.py
+          python tools/refresh_manifest.py
+          rm .github/r38-manifest-refresh
+      - name: Commit one-shot generated refresh
+        if: steps.marker.outputs.present == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A \
+            .github/r38-manifest-refresh \
+            MANIFEST.sha256 \
+            contracts/engine/dual-engine-public-surface-v2.json \
+            contracts/engine/r38-missing-native-commands-v1.json \
+            crates/syntavra-cli/src/bin/syntavra.rs \
+            crates/syntavra-cli/src/native_*.rs \
+            tests/runtime/test_dual_engine_public_surface_r38.py
+          git diff --cached --quiet && exit 0
+          git commit -m "R38: commit canonical generated state"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
