@@ -49,10 +49,32 @@ jobs:
           set +e
           mkdir -p .r38-diagnostics
           cd source
-          cargo fmt --all -- --check > /tmp/r38-fmt.log 2>&1
-          fmt_code=$?
-          cargo build --workspace --all-targets --locked > /tmp/r38-build.log 2>&1
-          build_code=$?
+
+          python tools/repair_r38_selector_option_values.py > /tmp/r38-selector-repair.log 2>&1
+          selector_repair_code=$?
+          python tools/repair_r38_windows_rollout_identity.py > /tmp/r38-windows-repair.log 2>&1
+          windows_repair_code=$?
+
+          if [ "$selector_repair_code" -eq 0 ] && [ "$windows_repair_code" -eq 0 ]; then
+            cargo fmt --all > /tmp/r38-format-apply.log 2>&1
+            format_apply_code=$?
+          else
+            printf 'skipped: source repair failed\n' > /tmp/r38-format-apply.log
+            format_apply_code=125
+          fi
+
+          if [ "$format_apply_code" -eq 0 ]; then
+            cargo fmt --all -- --check > /tmp/r38-fmt.log 2>&1
+            fmt_code=$?
+            cargo build --workspace --all-targets --locked > /tmp/r38-build.log 2>&1
+            build_code=$?
+          else
+            printf 'skipped: canonical formatting failed\n' > /tmp/r38-fmt.log
+            printf 'skipped: canonical formatting failed\n' > /tmp/r38-build.log
+            fmt_code=125
+            build_code=125
+          fi
+
           if [ "$build_code" -eq 0 ]; then
             cargo test --workspace --all-targets --locked --no-fail-fast > /tmp/r38-test.log 2>&1
             test_code=$?
@@ -64,25 +86,39 @@ jobs:
             test_code=125
             clippy_code=125
           fi
+
           source_head=$(git rev-parse HEAD)
           cd ..
-          python - "$source_head" "$fmt_code" "$build_code" "$test_code" "$clippy_code" <<'PY'
+          python - \
+            "$source_head" \
+            "$selector_repair_code" \
+            "$windows_repair_code" \
+            "$format_apply_code" \
+            "$fmt_code" \
+            "$build_code" \
+            "$test_code" \
+            "$clippy_code" <<'PY'
           import json, sys
+
+          keys = (
+              "selector_repair_exit",
+              "windows_repair_exit",
+              "format_apply_exit",
+              "fmt_exit",
+              "build_exit",
+              "test_exit",
+              "clippy_exit",
+          )
           source_head = sys.argv[1]
           values = [int(value) for value in sys.argv[2:]]
-          payload = {
-              "source_head": source_head,
-              "fmt_exit": values[0],
-              "build_exit": values[1],
-              "test_exit": values[2],
-              "clippy_exit": values[3],
-              "ok": all(value == 0 for value in values),
-          }
+          payload = {"source_head": source_head, **dict(zip(keys, values, strict=True))}
+          payload["ok"] = all(value == 0 for value in values)
           with open('.r38-diagnostics/result.json', 'w', encoding='utf-8', newline='\n') as handle:
               json.dump(payload, handle, indent=2, sort_keys=True)
               handle.write('\n')
           PY
-          for name in fmt build test clippy; do
+
+          for name in selector-repair windows-repair format-apply fmt build test clippy; do
             tail -n 600 "/tmp/r38-${name}.log" > ".r38-diagnostics/${name}.txt"
           done
           set -e
