@@ -1,5 +1,28 @@
     Updating crates.io index
-   Compiling syntavra-core v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-core)
-   Compiling syntavra-contracts v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-contracts)
-   Compiling syntavra-cli v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.86s
+   Compiling version_check v0.9.5
+   Compiling zerocopy v0.8.55
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling cc v1.4.0
+   Compiling vcpkg v0.2.15
+   Compiling ahash v0.8.12
+   Compiling cfg-if v1.0.4
+   Compiling once_cell v1.21.4
+   Compiling pkg-config v0.3.33
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling libsqlite3-sys v0.30.1
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling bitflags v2.13.1
+   Compiling fallible-iterator v0.3.0
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling smallvec v1.15.2
+   Compiling syntavra-core v0.0.1 (/home/runner/work/Syntavra/Syntavra/source/crates/syntavra-core)
+   Compiling syntavra-contracts v0.0.1 (/home/runner/work/Syntavra/Syntavra/source/crates/syntavra-contracts)
+   Compiling hashbrown v0.14.5
+   Compiling hashlink v0.9.1
+   Compiling rusqlite v0.32.1
+   Compiling syntavra-cli v0.0.1 (/home/runner/work/Syntavra/Syntavra/source/crates/syntavra-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 28.68s
