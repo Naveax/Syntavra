@@ -24,6 +24,7 @@ on:
       - "tools/export_rust_surface.py"
       - "tools/refresh_manifest.py"
       - "tools/repair_r38_rust_sources.py"
+      - "tools/repair_r38_selector_option_values.py"
       - "tools/repair_r38_windows_rollout_identity.py"
       - "tools/sync_r38_generated_metadata.py"
       - "tools/sync_r38_native_command_count.py"
@@ -31,6 +32,7 @@ on:
       - "tests/runtime/test_native_*_r38.py"
       - "tests/runtime/test_r38_generated_metadata_sync.py"
       - "tests/runtime/test_r38_rust_source_repairs.py"
+      - "tests/runtime/test_r38_selector_option_values_repair.py"
       - "tests/runtime/test_r38_windows_rollout_identity_repair.py"
   workflow_dispatch:
 
@@ -64,10 +66,12 @@ jobs:
         run: |
           python -m pytest -q \
             tests/runtime/test_r38_rust_source_repairs.py \
+            tests/runtime/test_r38_selector_option_values_repair.py \
             tests/runtime/test_r38_windows_rollout_identity_repair.py \
             tests/runtime/test_r38_generated_metadata_sync.py
       - name: Reproduce canonical generated state
         run: |
+          python tools/repair_r38_selector_option_values.py
           python tools/repair_r38_windows_rollout_identity.py
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
@@ -153,6 +157,7 @@ jobs:
         if: steps.marker.outputs.present == 'true'
         shell: bash
         run: |
+          python tools/repair_r38_selector_option_values.py
           python tools/repair_r38_windows_rollout_identity.py
           python tools/repair_r38_rust_sources.py
           python tools/sync_r38_generated_metadata.py
