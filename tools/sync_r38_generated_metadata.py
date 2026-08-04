@@ -61,8 +61,7 @@ CANONICAL_STATIC_SUPPORT = """pub fn supports(command: &[String]) -> bool {
             (\"provider\", \"capabilities\")
                 | (\"output\", \"profiles\")
                 | (\"benchmark\", \"generate-config\")
-                | (\"run\", \"platform-manifest\")
-                | (\"run\", \"competitive-manifest\")
+                | (\"run\", \"platform-manifest\" | \"competitive-manifest\")
         )
 }
 """
