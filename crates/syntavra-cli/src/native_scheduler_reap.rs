@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::{params, Connection, TransactionBehavior};
+use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 use serde_json::{json, Value};
 
 pub fn supports(command: &[String]) -> bool {
@@ -56,32 +56,37 @@ fn initialize(path: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
+fn expired_jobs(
+    transaction: &Transaction<'_>,
+    now: f64,
+) -> Result<Vec<(String, i64, i64)>, String> {
+    let mut statement = transaction
+        .prepare(
+            "SELECT job_id,attempt,max_attempts FROM scheduled_jobs \
+             WHERE state='running' AND lease_until>0 AND lease_until<=?1",
+        )
+        .map_err(|error| format!("SCHEDULER_REAP_PREPARE_FAILED:{error}"))?;
+    let rows = statement
+        .query_map([now], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })
+        .map_err(|error| format!("SCHEDULER_REAP_QUERY_FAILED:{error}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("SCHEDULER_REAP_ROW_FAILED:{error}"))?;
+    Ok(rows)
+}
+
 pub fn execute(state_root: &Path) -> Result<Value, String> {
     let mut connection = initialize(&state_root.join("scheduler.sqlite3"))?;
     let now = now_seconds()?;
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| format!("SCHEDULER_REAP_TRANSACTION_FAILED:{error}"))?;
-    let rows = {
-        let mut statement = transaction
-            .prepare(
-                "SELECT job_id,attempt,max_attempts FROM scheduled_jobs \
-                 WHERE state='running' AND lease_until>0 AND lease_until<=?1",
-            )
-            .map_err(|error| format!("SCHEDULER_REAP_PREPARE_FAILED:{error}"))?;
-        let rows = statement
-            .query_map([now], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, i64>(2)?,
-                ))
-            })
-            .map_err(|error| format!("SCHEDULER_REAP_QUERY_FAILED:{error}"))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("SCHEDULER_REAP_ROW_FAILED:{error}"))?;
-        rows
-    };
+    let rows = expired_jobs(&transaction, now)?;
 
     for (job_id, attempt, max_attempts) in &rows {
         let next_state = if attempt < max_attempts {
