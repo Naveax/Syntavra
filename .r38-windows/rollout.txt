@@ -1,0 +1,317 @@
+FFF                                                                      [100%]
+================================== FAILURES ===================================
+_________ test_native_rollout_tail_matches_incremental_python_polling _________
+
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_native_rollout_tail_match0')
+
+    def test_native_rollout_tail_matches_incremental_python_polling(tmp_path: Path) -> None:
+        project = tmp_path / "project"
+        project.mkdir()
+        rollout = tmp_path / "rollout.jsonl"
+        python_state = tmp_path / "python-state"
+        rust_state = tmp_path / "rust-state"
+        python_cursor = tmp_path / "python-cursor.json"
+        rust_cursor = tmp_path / "rust-cursor.json"
+    
+        model = {
+            "id": "event-1",
+            "type": "response.completed",
+            "usage": {
+                "input_tokens": 100,
+                "cached_input_tokens": 20,
+                "output_tokens": 10,
+                "reasoning_tokens": 5,
+            },
+        }
+        tool = {
+            "id": "event-2",
+            "type": "tool_call",
+            "name": "exec_command",
+            "arguments": {"action": "wait"},
+        }
+        partial = b'{"id":"event-3","type":"response.completed","input_tokens":40'
+        rollout.write_bytes(
+            _line(model)
+            + _line(tool)
+            + _line(tool)
+            + b"not-json\n"
+            + partial
+        )
+    
+        python_code, python_first = _run(
+            "python",
+            project,
+            python_state,
+            "rollout-tail",
+            "--rollout",
+            str(rollout),
+            "--state-file",
+            str(python_cursor),
+        )
+        rust_code, rust_first = _run(
+            "rust",
+            project,
+            rust_state,
+            "rollout-tail",
+            "--rollout",
+            str(rollout),
+            "--state-file",
+            str(rust_cursor),
+        )
+>       assert rust_code == python_code == 0
+E       assert 4 == 0
+
+tests\runtime\test_native_rollout_tail_r38.py:129: AssertionError
+__________ test_native_rollout_tail_matches_python_truncation_reset ___________
+
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_native_rollout_tail_match1')
+
+    def test_native_rollout_tail_matches_python_truncation_reset(tmp_path: Path) -> None:
+        project = tmp_path / "project"
+        project.mkdir()
+        rollout = tmp_path / "rollout.jsonl"
+        python_state = tmp_path / "python-state"
+        rust_state = tmp_path / "rust-state"
+        python_cursor = tmp_path / "python-cursor.json"
+        rust_cursor = tmp_path / "rust-cursor.json"
+        rollout.write_bytes(
+            _line(
+                {
+                    "id": "old-event",
+                    "type": "response.completed",
+                    "input_tokens": 500,
+                }
+            )
+            + b"x" * 256
+        )
+    
+        for engine, state_root, cursor in (
+            ("python", python_state, python_cursor),
+            ("rust", rust_state, rust_cursor),
+        ):
+            _run(
+                engine,
+                project,
+                state_root,
+                "rollout-tail",
+                "--rollout",
+                str(rollout),
+                "--state-file",
+                str(cursor),
+            )
+    
+        rollout.write_bytes(
+            _line(
+                {
+                    "id": "new-event",
+                    "type": "response.completed",
+                    "input_tokens": 20,
+                    "cached_input_tokens": 5,
+                }
+            )
+        )
+        python_result = _run(
+            "python",
+            project,
+            python_state,
+            "rollout-tail",
+            "--rollout",
+            str(rollout),
+            "--state-file",
+            str(python_cursor),
+        )
+        rust_result = _run(
+            "rust",
+            project,
+            rust_state,
+            "rollout-tail",
+            "--rollout",
+            str(rollout),
+            "--state-file",
+            str(rust_cursor),
+        )
+>       assert rust_result == python_result
+E       AssertionError: assert (4, {'error':... 'ok': False}) == (0, {'counter...tes': 0, ...})
+E         
+E         At index 0 diff: 4 != 0
+E         
+E         Full diff:
+E           (
+E         -     0,
+E         ?     ^
+E         +     4,
+E         ?     ^
+E               {
+E         -         'counters': {
+E         ?          -----  ^
+E         +         'error': {
+E         ?            ^^^
+E         -             'cached_input_tokens': 5,
+E         +             'code': 'RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED',
+E         +             'details': {
+E         -             'command_calls': 0,
+E         ?                      ^ ^^^   ^^
+E         +                 'command_path': [
+E         ? ++++                     ^ ^^   ^
+E         +                     'rollout-tail',
+E         +                     'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\test_native_rollout_tail_match1\\rollout.jsonl',
+E         +                 ],
+E         +                 'fallback': 'forbidden',
+E         +             },
+E         +             'message': 'The selected Rust engine does not implement this public command.',
+E         -             'compactions': 0,
+E         -             'duplicate_events': 0,
+E         -             'fresh_input_tokens': 15,
+E         -             'malformed_lines': 0,
+E         -             'model_turns': 1,
+E         -             'output_tokens': 0,
+E         -             'reasoning_tokens': 0,
+E         -             'tool_calls': 0,
+E         -             'wait_calls': 0,
+E                   },
+E         +         'ok': False,
+E         -         'efficiency': {
+E         -             'fresh_fraction': 0.75,
+E         -             'wait_calls_per_turn': 0.0,
+E         -         },
+E         -         'offset': 96,
+E         -         'partial_bytes': 0,
+E         -         'processed_events': 1,
+E         -         'rollout': 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\test_native_rollout_tail_match1\\rollout.jsonl',
+E               },
+E           )
+
+tests\runtime\test_native_rollout_tail_r38.py:278: AssertionError
+________ test_native_rollout_tail_no_candidate_matches_python_exit_two ________
+
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_native_rollout_tail_no_ca0')
+
+    def test_native_rollout_tail_no_candidate_matches_python_exit_two(tmp_path: Path) -> None:
+        project = tmp_path / "project"
+        codex_home = tmp_path / "empty-codex"
+        project.mkdir()
+        codex_home.mkdir()
+    
+        python_result = _run(
+            "python",
+            project,
+            tmp_path / "python-state",
+            "--codex-home",
+            str(codex_home),
+            "rollout-tail",
+        )
+        rust_result = _run(
+            "rust",
+            project,
+            tmp_path / "rust-state",
+            "--codex-home",
+            str(codex_home),
+            "rollout-tail",
+        )
+>       assert rust_result == python_result == (2, {"ok": False, "reason": "no rollout found"})
+E       AssertionError: assert (4, {'error':... 'ok': False}) == (2, {'ok': Fa...llout found'})
+E         
+E         At index 0 diff: 4 != 2
+E         
+E         Full diff:
+E           (
+E         -     2,
+E         ?     ^
+E         +     4,
+E         ?     ^
+E               {
+E         +         'error': {
+E         +             'code': 'RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED',
+E         +             'details': {
+E         +                 'command_path': [
+E         +                     'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\test_native_rollout_tail_no_ca0\\empty-codex',
+E         +                     'rollout-tail',
+E         +                 ],
+E         +                 'fallback': 'forbidden',
+E         +             },
+E         +             'message': 'The selected Rust engine does not implement this public command.',
+E         +         },
+E                   'ok': False,
+E         -         'reason': 'no rollout found',
+E               },
+E           )
+
+tests\runtime\test_native_rollout_tail_r38.py:308: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/runtime/test_native_rollout_tail_r38.py::test_native_rollout_tail_matches_incremental_python_polling - assert 4 == 0
+FAILED tests/runtime/test_native_rollout_tail_r38.py::test_native_rollout_tail_matches_python_truncation_reset - AssertionError: assert (4, {'error':... 'ok': False}) == (0, {'counter...tes': 0, ...})
+  
+  At index 0 diff: 4 != 0
+  
+  Full diff:
+    (
+  -     0,
+  ?     ^
+  +     4,
+  ?     ^
+        {
+  -         'counters': {
+  ?          -----  ^
+  +         'error': {
+  ?            ^^^
+  -             'cached_input_tokens': 5,
+  +             'code': 'RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED',
+  +             'details': {
+  -             'command_calls': 0,
+  ?                      ^ ^^^   ^^
+  +                 'command_path': [
+  ? ++++                     ^ ^^   ^
+  +                     'rollout-tail',
+  +                     'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\test_native_rollout_tail_match1\\rollout.jsonl',
+  +                 ],
+  +                 'fallback': 'forbidden',
+  +             },
+  +             'message': 'The selected Rust engine does not implement this public command.',
+  -             'compactions': 0,
+  -             'duplicate_events': 0,
+  -             'fresh_input_tokens': 15,
+  -             'malformed_lines': 0,
+  -             'model_turns': 1,
+  -             'output_tokens': 0,
+  -             'reasoning_tokens': 0,
+  -             'tool_calls': 0,
+  -             'wait_calls': 0,
+            },
+  +         'ok': False,
+  -         'efficiency': {
+  -             'fresh_fraction': 0.75,
+  -             'wait_calls_per_turn': 0.0,
+  -         },
+  -         'offset': 96,
+  -         'partial_bytes': 0,
+  -         'processed_events': 1,
+  -         'rollout': 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\test_native_rollout_tail_match1\\rollout.jsonl',
+        },
+    )
+FAILED tests/runtime/test_native_rollout_tail_r38.py::test_native_rollout_tail_no_candidate_matches_python_exit_two - AssertionError: assert (4, {'error':... 'ok': False}) == (2, {'ok': Fa...llout found'})
+  
+  At index 0 diff: 4 != 2
+  
+  Full diff:
+    (
+  -     2,
+  ?     ^
+  +     4,
+  ?     ^
+        {
+  +         'error': {
+  +             'code': 'RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED',
+  +             'details': {
+  +                 'command_path': [
+  +                     'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\test_native_rollout_tail_no_ca0\\empty-codex',
+  +                     'rollout-tail',
+  +                 ],
+  +                 'fallback': 'forbidden',
+  +             },
+  +             'message': 'The selected Rust engine does not implement this public command.',
+  +         },
+            'ok': False,
+  -         'reason': 'no rollout found',
+        },
+    )
+3 failed in 3.77s
