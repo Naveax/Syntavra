@@ -1,0 +1,52 @@
+Obtaining file:///home/runner/work/Syntavra/Syntavra/source
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting pytest
+  Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting cryptography>=43 (from syntavra-runtime==0.0.1)
+  Downloading cryptography-50.0.0-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.3 kB)
+Collecting tree-sitter-language-pack>=0.9 (from syntavra-runtime==0.0.1)
+  Downloading tree_sitter_language_pack-1.14.1-cp310-abi3-manylinux_2_34_x86_64.whl.metadata (713 bytes)
+Collecting iniconfig>=1.0.1 (from pytest)
+  Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting packaging>=22 (from pytest)
+  Using cached packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting pygments>=2.7.2 (from pytest)
+  Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting cffi>=2.0.0 (from cryptography>=43->syntavra-runtime==0.0.1)
+  Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=43->syntavra-runtime==0.0.1)
+  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting tree-sitter>=0.23 (from tree-sitter-language-pack>=0.9->syntavra-runtime==0.0.1)
+  Downloading tree_sitter-0.26.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (10 kB)
+Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading cryptography-50.0.0-cp311-abi3-manylinux_2_34_x86_64.whl (4.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 47.4 MB/s  0:00:00
+Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Using cached packaging-26.2-py3-none-any.whl (100 kB)
+Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 223.5 MB/s  0:00:00
+Downloading tree_sitter_language_pack-1.14.1-cp310-abi3-manylinux_2_34_x86_64.whl (2.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.4/2.4 MB 223.8 MB/s  0:00:00
+Downloading tree_sitter-0.26.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (668 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 668.1/668.1 kB 148.5 MB/s  0:00:00
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+Building wheels for collected packages: syntavra-runtime
+  Building editable for syntavra-runtime (pyproject.toml): started
+  Building editable for syntavra-runtime (pyproject.toml): finished with status 'done'
+  Created wheel for syntavra-runtime: filename=syntavra_runtime-0.0.1-0.editable-py3-none-any.whl size=7887 sha256=0cb1f1c5b09dd0471111e3af61b74b6d75356d7f0e1df4d794ef6921748d0513
+  Stored in directory: /tmp/pip-ephem-wheel-cache-s2i7tpok/wheels/9c/c2/d5/ef4de32853009269e529e3643020a4b12325fcabdb41e1c14b
+Successfully built syntavra-runtime
+Installing collected packages: tree-sitter, pygments, pycparser, pluggy, packaging, iniconfig, tree-sitter-language-pack, pytest, cffi, cryptography, syntavra-runtime
+
+Successfully installed cffi-2.1.1 cryptography-50.0.0 iniconfig-2.3.0 packaging-26.2 pluggy-1.6.0 pycparser-3.0 pygments-2.20.0 pytest-9.1.1 syntavra-runtime-0.0.1 tree-sitter-0.26.0 tree-sitter-language-pack-1.14.1

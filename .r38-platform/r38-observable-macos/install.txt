@@ -1,0 +1,51 @@
+Obtaining file:///Users/runner/work/Syntavra/Syntavra/source
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting pytest
+  Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting cryptography>=43 (from syntavra-runtime==0.0.1)
+  Downloading cryptography-50.0.0-cp311-abi3-macosx_11_0_arm64.whl.metadata (4.3 kB)
+Collecting tree-sitter-language-pack>=0.9 (from syntavra-runtime==0.0.1)
+  Downloading tree_sitter_language_pack-1.14.1-cp310-abi3-macosx_11_0_arm64.whl.metadata (713 bytes)
+Collecting iniconfig>=1.0.1 (from pytest)
+  Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting packaging>=22 (from pytest)
+  Using cached packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting pygments>=2.7.2 (from pytest)
+  Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting cffi>=2.0.0 (from cryptography>=43->syntavra-runtime==0.0.1)
+  Downloading cffi-2.1.1-cp313-cp313-macosx_11_0_arm64.whl.metadata (2.5 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=43->syntavra-runtime==0.0.1)
+  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting tree-sitter>=0.23 (from tree-sitter-language-pack>=0.9->syntavra-runtime==0.0.1)
+  Downloading tree_sitter-0.26.0-cp313-cp313-macosx_11_0_arm64.whl.metadata (10 kB)
+Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading cryptography-50.0.0-cp311-abi3-macosx_11_0_arm64.whl (4.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.0/4.0 MB 163.4 MB/s  0:00:00
+Downloading cffi-2.1.1-cp313-cp313-macosx_11_0_arm64.whl (184 kB)
+Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Using cached packaging-26.2-py3-none-any.whl (100 kB)
+Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 156.1 MB/s  0:00:00
+Downloading tree_sitter_language_pack-1.14.1-cp310-abi3-macosx_11_0_arm64.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 177.3 MB/s  0:00:00
+Downloading tree_sitter-0.26.0-cp313-cp313-macosx_11_0_arm64.whl (140 kB)
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+Building wheels for collected packages: syntavra-runtime
+  Building editable for syntavra-runtime (pyproject.toml): started
+  Building editable for syntavra-runtime (pyproject.toml): finished with status 'done'
+  Created wheel for syntavra-runtime: filename=syntavra_runtime-0.0.1-0.editable-py3-none-any.whl size=7889 sha256=b5edf0095b4aef2fdbf4a47a8cb1ac332be514c9f510aae7f4c7918b91b42f64
+  Stored in directory: /private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-ephem-wheel-cache-nj7qzd1z/wheels/37/e1/4f/782498b41077d992a72b427c2461b6181fe960eef2191ae2b4
+Successfully built syntavra-runtime
+Installing collected packages: tree-sitter, pygments, pycparser, pluggy, packaging, iniconfig, tree-sitter-language-pack, pytest, cffi, cryptography, syntavra-runtime
+
+Successfully installed cffi-2.1.1 cryptography-50.0.0 iniconfig-2.3.0 packaging-26.2 pluggy-1.6.0 pycparser-3.0 pygments-2.20.0 pytest-9.1.1 syntavra-runtime-0.0.1 tree-sitter-0.26.0 tree-sitter-language-pack-1.14.1

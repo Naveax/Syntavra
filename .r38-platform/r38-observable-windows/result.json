@@ -1,0 +1,8 @@
+{
+  "build_exit": 0,
+  "differential_exit": 1,
+  "install_exit": 0,
+  "ok": false,
+  "platform": "windows",
+  "source_head": "c94e5bfb798ac87cbc8417caba73e7bb6710fb29"
+}
