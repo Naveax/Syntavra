@@ -69,7 +69,7 @@ pub fn execute(state_root: &Path) -> Result<Value, String> {
                  WHERE state='running' AND lease_until>0 AND lease_until<=?1",
             )
             .map_err(|error| format!("SCHEDULER_REAP_PREPARE_FAILED:{error}"))?;
-        statement
+        let rows = statement
             .query_map([now], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
@@ -79,7 +79,8 @@ pub fn execute(state_root: &Path) -> Result<Value, String> {
             })
             .map_err(|error| format!("SCHEDULER_REAP_QUERY_FAILED:{error}"))?
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("SCHEDULER_REAP_ROW_FAILED:{error}"))?
+            .map_err(|error| format!("SCHEDULER_REAP_ROW_FAILED:{error}"))?;
+        rows
     };
 
     for (job_id, attempt, max_attempts) in &rows {
