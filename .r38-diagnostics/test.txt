@@ -7,43 +7,43 @@ test native_product::config_contract::tests::falls_back_to_last_good ... ok
 test native_product::config_contract::tests::rejects_invalid_explain_paths ... ok
 test native_product::config_contract::tests::emits_valid_contract_json ... ok
 test native_product::config_contract::tests::explains_latest_provenance_and_missing_paths ... ok
-test native_product::legacy::native_delegate::tests::delegated_groups_are_sorted_and_dependency_bounded ... ok
+test native_product::config_contract::tests::resolves_default_config_deterministically ... ok
 test native_product::legacy::native_delegate::tests::sentence_split_and_capability_order_match_reference ... ok
-test native_product::legacy::native_delegate::tests::small_task_stays_with_one_agent ... ok
 test native_product::legacy::tests::empty_cache_health_matches_python_shape ... ok
 test native_product::legacy::tests::cache_health_classifies_active_due_and_expired_plans ... ok
+test native_product::legacy::native_delegate::tests::small_task_stays_with_one_agent ... ok
 test native_product::legacy::tests::provider_complexity_matches_reference_thresholds ... ok
-test native_product::config_contract::tests::resolves_default_config_deterministically ... ok
-test native_product::native_analytics::tests::record_command_is_supported ... ok
 test native_product::native_analytics::tests::epoch_day_is_1970_01_01 ... ok
-test native_product::legacy::tests::provider_route_matches_reference_receipt ... ok
+test native_product::native_analytics::tests::record_command_is_supported ... ok
+test native_product::legacy::native_delegate::tests::delegated_groups_are_sorted_and_dependency_bounded ... ok
 test native_product::native_audit_config::tests::extracts_bounded_relative_paths ... ok
 test native_product::native_audit_config::tests::normalizes_bullets_and_numbered_rules ... ok
+test native_product::legacy::tests::provider_route_matches_reference_receipt ... ok
 test native_product::native_cache_amortize::tests::matches_reference_example ... ok
 test native_product::native_audit_config::tests::normalizes_cross_platform_newlines ... ok
-test native_product::native_cache_amortize::tests::parses_required_flags ... ok
 test native_product::native_config_read_only::tests::parses_bounded_toml_scalars ... ok
+test native_product::native_cache_amortize::tests::parses_required_flags ... ok
 test native_product::native_config_read_only::tests::parses_environment_values_like_python ... ok
 test native_product::native_context_governor::tests::threshold_actions_match_reference_order ... ok
-test native_product::native_context_stress::tests::max_tier_filters_fail_closed ... ok
 test native_product::native_engine_routes::tests::explain_path_validation_is_fail_closed ... ok
+test native_product::native_context_stress::tests::max_tier_filters_fail_closed ... ok
 test native_product::native_engine_routes::tests::recognizes_complete_non_state_route_family ... ok
 test native_product::native_engine_state_routes::tests::recognizes_complete_state_route_family ... ok
 test native_product::native_expansion::native_benchmark_tools::tests::benchmark_tools_are_supported ... ok
-test native_product::native_expansion::native_evidence_describe::tests::evidence_describe_command_is_supported ... ok
-test native_product::native_expansion::native_evidence_gc::tests::evidence_collection_commands_are_supported ... ok
 test native_product::native_expansion::native_claim::tests::claim_command_is_supported ... ok
+test native_product::native_expansion::native_evidence_describe::tests::evidence_describe_command_is_supported ... ok
 test native_product::native_expansion::native_evidence_describe::tests::evidence_handle_is_strict_lower_hex ... ok
+test native_product::native_expansion::native_evidence_gc::tests::evidence_collection_commands_are_supported ... ok
 test native_product::native_expansion::native_evidence_stats::tests::evidence_commands_are_supported ... ok
 test native_product::native_expansion::native_host::tests::routes_public_host_surface ... ok
-test native_product::native_expansion::native_host::tests::known_and_unknown_tiers_match_contract ... ok
 test native_product::native_expansion::native_job_mutations::tests::broker_job_mutations_are_supported ... ok
 test native_product::native_expansion::native_job_queries::tests::broker_job_queries_are_supported ... ok
 test native_product::native_expansion::native_memory::tests::memory_commands_are_supported ... ok
+test native_product::native_expansion::native_migrations::tests::migration_mutation_paths_are_supported ... ok
 test native_product::native_expansion::native_output_governor::tests::compact_preserves_critical_path_and_deduplicates ... ok
 test native_product::native_expansion::native_output_governor::tests::govern_generic_payload ... ok
-test native_product::native_expansion::native_migrations::tests::migration_mutation_paths_are_supported ... ok
 test native_product::native_expansion::native_output_governor::tests::routes_output_commands ... ok
+test native_product::native_expansion::native_host::tests::known_and_unknown_tiers_match_contract ... ok
 test native_product::native_expansion::native_rollout_tail::tests::rollout_tail_is_supported ... ok
 test native_product::native_expansion::native_scheduler_reap::tests::scheduler_reap_is_supported ... ok
 test native_product::native_expansion::native_session_archive::tests::session_archive_commands_are_supported ... ok
@@ -52,53 +52,53 @@ test native_product::native_expansion::native_session_context::tests::session_co
 test native_product::native_expansion::native_session_lifecycle::tests::lifecycle_commands_are_supported ... ok
 test native_product::native_expansion::native_session_list::tests::session_list_command_is_supported ... ok
 test native_product::native_expansion::native_session_public::tests::public_session_commands_are_supported ... ok
-test native_product::native_expansion::native_session_recover::tests::session_recover_command_is_supported ... ok
 test native_product::native_expansion::native_session_verify::tests::session_verify_command_is_supported ... ok
+test native_product::native_expansion::native_session_recover::tests::session_recover_command_is_supported ... ok
 test native_product::native_expansion::native_stats::tests::stats_command_is_supported ... ok
-test native_product::native_expansion::native_structural::tests::canonical_json_orders_keys ... ok
 test native_product::native_expansion::native_structural::tests::routes_all_structural_inspection_commands ... ok
+test native_product::native_expansion::native_structural::tests::canonical_json_orders_keys ... ok
 test native_product::native_expansion::native_structural::tests::short_names_normalize_rust_and_python_qualification ... ok
 test native_product::native_expansion::native_telemetry_bundle::tests::telemetry_bundle_is_supported ... ok
 test native_product::native_expansion::native_verifier::tests::verifier_commands_are_supported ... ok
 test native_product::native_expansion::tests::routes_recent_expansion_commands ... ok
-test native_product::native_expansion::native_host::tests::capabilities_report_has_canonical_totals ... ok
 test native_product::native_external_suite_gate::tests::defaults_are_invalid ... ok
 test native_product::native_external_suite_gate::tests::empty_receipts_fail_closed ... ok
 test native_product::native_external_suites::tests::manifest_has_five_pinned_suites ... ok
 test native_product::native_integrations::tests::filters_one_family_without_reordering ... ok
 test native_product::native_live_config::tests::canonical_json_sorts_object_keys ... ok
 test native_product::native_live_config::tests::override_hex_must_be_lowercase ... ok
-test native_product::native_long_context::tests::manifest_has_required_tiers ... ok
+test native_product::native_integrations::tests::all_records_match_contract_counts ... ok
 test native_product::native_long_context::tests::empty_receipts_fail_closed ... ok
+test native_product::native_long_context::tests::manifest_has_required_tiers ... ok
 test native_product::native_long_context::tests::receipt_defaults_are_fail_closed ... ok
 test native_product::native_mode::tests::aliases_are_canonical ... ok
-test native_product::native_integrations::tests::all_records_match_contract_counts ... ok
-test native_product::native_mode::tests::empty_state_exposes_full_manifest ... ok
+test native_product::native_expansion::native_host::tests::capabilities_report_has_canonical_totals ... ok
 test native_product::native_manifest::tests::empty_project_fails_only_artifact_gate ... ok
 test native_product::native_proof_evidence::tests::valid_receipt_is_accepted ... ok
+test native_product::native_mode::tests::empty_state_exposes_full_manifest ... ok
 test native_product::native_proof_evidence::tests::undersized_benchmark_fails_closed ... ok
 test native_product::native_proof_maturity::tests::empty_maturity_document_fails_closed ... ok
 test native_product::native_proof_maturity::tests::python_random_seed_1337_starts_with_reference_choices ... ok
 test native_product::native_prove_plan::tests::emits_fail_closed_proof_plan ... ok
 test native_product::native_prove_schema::tests::output_option_and_default_match_python_cli ... ok
 test native_product::native_proof_status::tests::emits_fail_closed_public_proof_status ... ok
-test native_product::native_prove_schema::tests::schema_has_required_contract ... ok
 test native_product::native_proxy_plan::tests::openai_default_is_ready ... ok
+test native_product::native_prove_schema::tests::schema_has_required_contract ... ok
 test native_product::native_proxy_plan::tests::signed_provider_requires_adapter_and_upstream ... ok
 test native_product::native_read_only_product::tests::exposes_all_catalogued_read_only_paths ... ok
 test native_product::native_read_only_product::tests::version_identity_remains_locked ... ok
 test native_product::native_redact::tests::authorization_match_wins_over_nested_key ... ok
+test native_product::native_redact::tests::nested_json_receipt_is_deterministic ... ok
 test native_product::native_redact::tests::redacts_prefixed_keys_and_preserves_fingerprints ... ok
 test native_product::native_route::tests::categories_match_python_prefix_rules ... ok
-test native_product::native_redact::tests::nested_json_receipt_is_deterministic ... ok
-test native_product::native_route::tests::execute_route_requires_authorization_and_sandbox ... ok
 test native_product::native_route::tests::read_route_is_allowed_with_exact_receipt ... ok
 test native_product::native_rust_subprocess::tests::runtime_binary_name_is_platform_specific ... ok
+test native_product::native_route::tests::execute_route_requires_authorization_and_sandbox ... ok
 test native_product::native_session_continuity::tests::session_continuity_commands_are_supported ... ok
-test native_product::native_semantic_demo::tests::auth_query_returns_auth_first ... ok
 test native_product::native_session_mutations::tests::session_mutation_commands_are_supported ... ok
 test native_product::native_session_status::tests::json_truth_matches_python_container_rules ... ok
 test native_product::native_session_status::tests::session_status_command_is_supported ... ok
+test native_product::native_semantic_demo::tests::auth_query_returns_auth_first ... ok
 test native_product::native_signalbench_gate::tests::incomplete_fixture_fails_closed ... ok
 test native_product::native_signalbench_gate::tests::zero_baseline_renders_python_infinity_literal ... ok
 test native_product::native_static_surfaces::tests::generated_benchmark_config_is_written ... ok
@@ -128,7 +128,7 @@ test native_product::native_proof_maturity::tests::constant_bootstrap_interval_i
 test native_product::native_signalbench_plan::tests::default_plan_has_expected_shape ... ok
 test native_product::native_context_stress::tests::default_tiers_match_reference_boundaries ... ok
 
-test result: ok. 125 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 125 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 
      Running unittests src/bin/syntavra-config-lifecycle-apply.rs (target/debug/deps/syntavra_config_lifecycle_apply-0e18f752ee2ecf2f)
 
@@ -155,15 +155,15 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 running 12 tests
 test config_contract::tests::applies_scope_precedence ... ok
 test config_contract::tests::rejects_invalid_explain_paths ... ok
-test config_contract::tests::falls_back_to_last_good ... ok
 test config_contract::tests::emits_valid_contract_json ... ok
+test config_contract::tests::falls_back_to_last_good ... ok
 test config_last_good_plan::tests::rejects_ephemeral_config_scopes ... ok
 test config_last_good_plan::tests::validates_lowercase_project_ids ... ok
 test config_contract::tests::explains_latest_provenance_and_missing_paths ... ok
-test state_snapshot_contract::tests::current_directory_can_be_inspected_without_mutation ... ok
-test tests::decodes_hex ... ok
 test state_snapshot_contract::tests::rejects_invalid_expected_project_id ... ok
+test tests::decodes_hex ... ok
 test tests::requires_exact_arguments ... ok
+test state_snapshot_contract::tests::current_directory_can_be_inspected_without_mutation ... ok
 test config_contract::tests::resolves_default_config_deterministically ... ok
 
 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -173,17 +173,17 @@ test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 running 13 tests
 test config_contract::tests::applies_scope_precedence ... ok
 test config_contract::tests::rejects_invalid_explain_paths ... ok
-test config_contract::tests::emits_valid_contract_json ... ok
 test config_contract::tests::falls_back_to_last_good ... ok
-test config_contract::tests::explains_latest_provenance_and_missing_paths ... ok
-test config_contract::tests::resolves_default_config_deterministically ... ok
-test config_last_good_apply::tests::canonicalizes_one_trailing_newline ... ok
+test config_contract::tests::emits_valid_contract_json ... ok
 test config_last_good_apply::tests::crash_faults_are_marked ... ok
+test config_last_good_apply::tests::canonicalizes_one_trailing_newline ... ok
+test config_contract::tests::explains_latest_provenance_and_missing_paths ... ok
 test config_last_good_plan::tests::rejects_ephemeral_config_scopes ... ok
 test config_last_good_plan::tests::validates_lowercase_project_ids ... ok
 test state_snapshot_contract::tests::rejects_invalid_expected_project_id ... ok
 test tests::request_hex_is_strict ... ok
 test state_snapshot_contract::tests::current_directory_can_be_inspected_without_mutation ... ok
+test config_contract::tests::resolves_default_config_deterministically ... ok
 
 test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
@@ -193,29 +193,29 @@ running 34 tests
 test broker_live_snapshot_contract::tests::embeds_the_r10_contract ... ok
 test broker_live_snapshot_contract::tests::rejects_invalid_expected_project_id_before_open ... ok
 test broker_snapshot_contract::tests::embeds_the_r9_contract ... ok
-test config_contract::tests::applies_scope_precedence ... ok
 test broker_snapshot_contract::tests::rejects_invalid_expected_project_id_before_open ... ok
-test config_contract::tests::rejects_invalid_explain_paths ... ok
+test config_contract::tests::applies_scope_precedence ... ok
 test config_contract::tests::emits_valid_contract_json ... ok
 test config_contract::tests::falls_back_to_last_good ... ok
+test config_contract::tests::rejects_invalid_explain_paths ... ok
+test read_only_cli_contract::tests::emits_empty_explicit_plugin_inventory ... ok
+test read_only_cli_contract::tests::emits_pipeline_description_from_shared_contract ... ok
 test config_contract::tests::explains_latest_provenance_and_missing_paths ... ok
 test read_only_cli_contract::tests::rejects_unknown_static_route ... ok
-test read_only_cli_contract::tests::emits_pipeline_description_from_shared_contract ... ok
-test state_layout_contract::tests::embeds_r8_read_only_layout_contract ... ok
 test state_receipt_contract::tests::rejects_project_mismatch ... ok
+test state_layout_contract::tests::embeds_r8_read_only_layout_contract ... ok
 test state_receipt_contract::tests::parses_valid_receipt ... ok
-test config_contract::tests::resolves_default_config_deterministically ... ok
-test state_receipt_contract::tests::rejects_tampered_receipt ... ok
-test read_only_cli_contract::tests::emits_empty_explicit_plugin_inventory ... ok
 test state_receipt_contract::tests::state_layout_is_read_only_r7 ... ok
+test state_receipt_contract::tests::rejects_tampered_receipt ... ok
 test state_snapshot_contract::tests::rejects_invalid_expected_project_id ... ok
 test telemetry_metrics_contract::tests::invalid_format_is_rejected ... ok
+test config_contract::tests::resolves_default_config_deterministically ... ok
+test state_snapshot_contract::tests::current_directory_can_be_inspected_without_mutation ... ok
 test telemetry_metrics_contract::tests::json_result_is_deterministic ... ok
 test telemetry_metrics_contract::tests::prometheus_result_is_empty ... ok
-test state_snapshot_contract::tests::current_directory_can_be_inspected_without_mutation ... ok
-test tests::contract_hash_is_sha256 ... ok
 test tests::decodes_hex_case_insensitively ... ok
 test tests::parses_initial_commands ... ok
+test tests::contract_hash_is_sha256 ... ok
 test tests::parses_r24_migration_plan_command ... ok
 test tests::parses_r24_scheduler_read_only_commands ... ok
 test tests::parses_r24_static_read_only_cli_commands ... ok
@@ -244,8 +244,8 @@ test tests::manifest_digest_matches_python_reference_vector ... ok
 test tests::matches_abc_vector ... ok
 test tests::normalizes_repository_paths_lexically ... ok
 test tests::preserves_real_task_receipts_byte_for_byte ... ok
-test tests::rejects_unsafe_repository_paths ... ok
 test tests::matches_empty_vector ... ok
+test tests::rejects_unsafe_repository_paths ... ok
 
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
