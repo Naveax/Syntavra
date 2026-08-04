@@ -4,12 +4,15 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST_ROOT = ROOT / "crates" / "syntavra-cli" / "src"
 SELECTOR = RUST_ROOT / "bin" / "syntavra.rs"
+NATIVE_EVIDENCE_STATS = RUST_ROOT / "native_evidence_stats.rs"
 PRERELEASE_CLI = ROOT / "syntavra_runtime" / "prerelease_cli.py"
+EVIDENCE_STATS_TEST = ROOT / "tests" / "runtime" / "test_native_evidence_stats_r38.py"
 
 # Rust removes a backslash-newline pair and the indentation that follows it.
 # SQL assembled from source such as `scope_idx\` + `ON ...` therefore becomes
@@ -51,6 +54,15 @@ JSON_ARGUMENT_CANONICAL = '''def _load_json_argument(value: str) -> Any:
     return json.loads(value)
 '''
 
+RUNTIME_EVIDENCE_STATS_LEGACY = "runtime_evidence_stats(state_root)"
+RUNTIME_EVIDENCE_STATS_CANONICAL = 'runtime_evidence_stats(&state_root.join("unified"))'
+RUNTIME_EVIDENCE_NEIGHBORS_LEGACY = "runtime_evidence_neighbors(arguments, state_root)"
+RUNTIME_EVIDENCE_NEIGHBORS_CANONICAL = (
+    'runtime_evidence_neighbors(arguments, &state_root.join("unified"))'
+)
+EVIDENCE_TEST_LAYOUT_LEGACY = "    _prepare_runtime_evidence(source)\n"
+EVIDENCE_TEST_LAYOUT_CANONICAL = "    _prepare_runtime_evidence(source / \"unified\")\n"
+
 
 def rust_sources() -> list[Path]:
     return sorted(RUST_ROOT.glob("native_*.rs"))
@@ -78,6 +90,18 @@ def exact_repair(source: str, legacy: str, canonical: str, label: str) -> tuple[
     return source.replace(legacy, canonical, 1), 1
 
 
+def exact_repairs(
+    source: str,
+    replacements: tuple[tuple[str, str, str], ...],
+) -> tuple[str, int]:
+    rendered = source
+    changed = 0
+    for legacy, canonical, label in replacements:
+        rendered, count = exact_repair(rendered, legacy, canonical, label)
+        changed += count
+    return rendered, changed
+
+
 def repair_single_segment_command_paths(source: str) -> tuple[str, int]:
     return exact_repair(
         source,
@@ -96,6 +120,33 @@ def repair_inline_json_argument(source: str) -> tuple[str, int]:
     )
 
 
+def repair_runtime_evidence_layout(source: str) -> tuple[str, int]:
+    return exact_repairs(
+        source,
+        (
+            (
+                RUNTIME_EVIDENCE_STATS_LEGACY,
+                RUNTIME_EVIDENCE_STATS_CANONICAL,
+                "runtime evidence stats state layout",
+            ),
+            (
+                RUNTIME_EVIDENCE_NEIGHBORS_LEGACY,
+                RUNTIME_EVIDENCE_NEIGHBORS_CANONICAL,
+                "runtime evidence neighbors state layout",
+            ),
+        ),
+    )
+
+
+def repair_evidence_test_layout(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        EVIDENCE_TEST_LAYOUT_LEGACY,
+        EVIDENCE_TEST_LAYOUT_CANONICAL,
+        "runtime evidence test state layout",
+    )
+
+
 def inspect(path: Path) -> tuple[str, int]:
     source = path.read_text(encoding="utf-8")
     return repaired_source(source)
@@ -103,7 +154,7 @@ def inspect(path: Path) -> tuple[str, int]:
 
 def repair_file(
     path: Path,
-    repair: callable,
+    repair: Callable[[str], tuple[str, int]],
     *,
     check: bool,
     changed: dict[str, int],
@@ -135,18 +186,13 @@ def main() -> int:
             if not arguments.check:
                 path.write_text(rendered, encoding="utf-8", newline="\n")
 
-    repair_file(
-        SELECTOR,
-        repair_single_segment_command_paths,
-        check=arguments.check,
-        changed=changed,
-    )
-    repair_file(
-        PRERELEASE_CLI,
-        repair_inline_json_argument,
-        check=arguments.check,
-        changed=changed,
-    )
+    for path, repair in (
+        (SELECTOR, repair_single_segment_command_paths),
+        (PRERELEASE_CLI, repair_inline_json_argument),
+        (NATIVE_EVIDENCE_STATS, repair_runtime_evidence_layout),
+        (EVIDENCE_STATS_TEST, repair_evidence_test_layout),
+    ):
+        repair_file(path, repair, check=arguments.check, changed=changed)
 
     if arguments.check and changed:
         print(
@@ -180,36 +226,31 @@ def main() -> int:
         return 1
 
     canonical_selector = SELECTOR.read_text(encoding="utf-8")
-    if (
-        canonical_selector.count(SINGLE_SEGMENT_PATH_CANONICAL) != 1
-        or SINGLE_SEGMENT_PATH_LEGACY in canonical_selector
-    ):
-        print(
-            json.dumps(
-                {
-                    "ok": False,
-                    "code": "R38_SINGLE_SEGMENT_PATH_REPAIR_INCOMPLETE",
-                },
-                sort_keys=True,
-            )
-        )
-        return 1
-
     canonical_cli = PRERELEASE_CLI.read_text(encoding="utf-8")
-    if (
-        canonical_cli.count(JSON_ARGUMENT_CANONICAL) != 1
-        or JSON_ARGUMENT_LEGACY in canonical_cli
-    ):
-        print(
-            json.dumps(
-                {
-                    "ok": False,
-                    "code": "R38_INLINE_JSON_ARGUMENT_REPAIR_INCOMPLETE",
-                },
-                sort_keys=True,
-            )
-        )
-        return 1
+    canonical_evidence = NATIVE_EVIDENCE_STATS.read_text(encoding="utf-8")
+    canonical_evidence_test = EVIDENCE_STATS_TEST.read_text(encoding="utf-8")
+    invariants = {
+        "R38_SINGLE_SEGMENT_PATH_REPAIR_INCOMPLETE": (
+            canonical_selector.count(SINGLE_SEGMENT_PATH_CANONICAL) == 1
+            and SINGLE_SEGMENT_PATH_LEGACY not in canonical_selector
+        ),
+        "R38_INLINE_JSON_ARGUMENT_REPAIR_INCOMPLETE": (
+            canonical_cli.count(JSON_ARGUMENT_CANONICAL) == 1
+            and JSON_ARGUMENT_LEGACY not in canonical_cli
+        ),
+        "R38_RUNTIME_EVIDENCE_LAYOUT_REPAIR_INCOMPLETE": (
+            canonical_evidence.count(RUNTIME_EVIDENCE_STATS_CANONICAL) == 1
+            and canonical_evidence.count(RUNTIME_EVIDENCE_NEIGHBORS_CANONICAL) == 1
+            and RUNTIME_EVIDENCE_STATS_LEGACY not in canonical_evidence
+            and RUNTIME_EVIDENCE_NEIGHBORS_LEGACY not in canonical_evidence
+            and canonical_evidence_test.count(EVIDENCE_TEST_LAYOUT_CANONICAL) == 1
+            and EVIDENCE_TEST_LAYOUT_LEGACY not in canonical_evidence_test
+        ),
+    }
+    for code, valid in invariants.items():
+        if not valid:
+            print(json.dumps({"ok": False, "code": code}, sort_keys=True))
+            return 1
 
     print(
         json.dumps(
