@@ -27,6 +27,15 @@ def test_r38_rust_source_repairs_are_complete_and_idempotent(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n\n".join(values) + "\n", encoding="utf-8")
 
+    product = tmp_path / "crates/syntavra-cli/src/native_product.rs"
+    product.parent.mkdir(parents=True, exist_ok=True)
+    product.write_text(
+        MODULE.STATE_RECEIPT_DECLARATION
+        + MODULE.STATE_LAYOUT_DECLARATION
+        + MODULE.STATE_RECEIPT_DECLARATION,
+        encoding="utf-8",
+    )
+
     monkeypatch.setattr(MODULE, "ROOT", tmp_path)
 
     assert MODULE.repair() == 0
@@ -40,9 +49,17 @@ def test_r38_rust_source_repairs_are_complete_and_idempotent(
         if replacement.old not in replacement.new:
             assert replacement.old not in rendered
 
+    normalized_product = product.read_text(encoding="utf-8")
+    assert normalized_product.count(MODULE.STATE_RECEIPT_DECLARATION) == 1
+    assert normalized_product.count(MODULE.STATE_LAYOUT_DECLARATION) == 1
+    assert normalized_product == (
+        MODULE.STATE_RECEIPT_DECLARATION + MODULE.STATE_LAYOUT_DECLARATION
+    )
+
     assert MODULE.repair() == 0
     second = {
         relative: (tmp_path / relative).read_text(encoding="utf-8")
         for relative in fragments
     }
     assert second == first
+    assert product.read_text(encoding="utf-8") == normalized_product
