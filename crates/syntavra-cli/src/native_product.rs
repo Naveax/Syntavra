@@ -93,8 +93,6 @@ mod scheduler_read_only_contract;
 mod state_receipt_contract;
 #[path = "state_layout_contract.rs"]
 mod state_layout_contract;
-#[path = "state_receipt_contract.rs"]
-mod state_receipt_contract;
 #[path = "state_snapshot_contract.rs"]
 mod state_snapshot_contract;
 #[path = "telemetry_metrics_contract.rs"]
