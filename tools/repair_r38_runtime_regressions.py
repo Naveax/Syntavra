@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUST_ROOT = ROOT / "crates" / "syntavra-cli" / "src"
 SELECTOR = RUST_ROOT / "bin" / "syntavra.rs"
+PRERELEASE_CLI = ROOT / "syntavra_runtime" / "prerelease_cli.py"
 
 # Rust removes a backslash-newline pair and the indentation that follows it.
 # SQL assembled from source such as `scope_idx\` + `ON ...` therefore becomes
@@ -27,8 +28,28 @@ MALFORMED_RUNTIME_SQL = re.compile(
     rf"[A-Za-z0-9_')?]\\\n[ \t]+{SQL_CLAUSE}\b"
 )
 
-CLAIM_PATH_LEGACY = 'Some("rollout-tail" | "context-stress")'
-CLAIM_PATH_CANONICAL = 'Some("rollout-tail" | "context-stress" | "claim")'
+SINGLE_SEGMENT_PATH_LEGACY = 'Some("rollout-tail" | "context-stress")'
+SINGLE_SEGMENT_PATH_CANONICAL = (
+    'Some("rollout-tail" | "context-stress" | "claim" | "context")'
+)
+
+JSON_ARGUMENT_LEGACY = '''def _load_json_argument(value: str) -> Any:
+    path = Path(value)
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(value)
+'''
+JSON_ARGUMENT_CANONICAL = '''def _load_json_argument(value: str) -> Any:
+    path = Path(value)
+    try:
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        # Long inline JSON is data, not a filesystem path. Path.is_file() may
+        # raise ENAMETOOLONG before the JSON parser gets a chance to consume it.
+        pass
+    return json.loads(value)
+'''
 
 
 def rust_sources() -> list[Path]:
@@ -45,21 +66,55 @@ def repaired_source(source: str) -> tuple[str, int]:
     )
 
 
-def repair_claim_command_path(source: str) -> tuple[str, int]:
-    legacy_count = source.count(CLAIM_PATH_LEGACY)
-    canonical_count = source.count(CLAIM_PATH_CANONICAL)
+def exact_repair(source: str, legacy: str, canonical: str, label: str) -> tuple[str, int]:
+    legacy_count = source.count(legacy)
+    canonical_count = source.count(canonical)
     if canonical_count == 1 and legacy_count == 0:
         return source, 0
     if legacy_count != 1 or canonical_count != 0:
         raise RuntimeError(
-            "selector claim path state is neither one legacy fragment nor one canonical fragment"
+            f"{label} state is neither one legacy fragment nor one canonical fragment"
         )
-    return source.replace(CLAIM_PATH_LEGACY, CLAIM_PATH_CANONICAL, 1), 1
+    return source.replace(legacy, canonical, 1), 1
+
+
+def repair_single_segment_command_paths(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        SINGLE_SEGMENT_PATH_LEGACY,
+        SINGLE_SEGMENT_PATH_CANONICAL,
+        "selector single-segment command path",
+    )
+
+
+def repair_inline_json_argument(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        JSON_ARGUMENT_LEGACY,
+        JSON_ARGUMENT_CANONICAL,
+        "pre-release inline JSON argument",
+    )
 
 
 def inspect(path: Path) -> tuple[str, int]:
     source = path.read_text(encoding="utf-8")
     return repaired_source(source)
+
+
+def repair_file(
+    path: Path,
+    repair: callable,
+    *,
+    check: bool,
+    changed: dict[str, int],
+) -> None:
+    source = path.read_text(encoding="utf-8")
+    rendered, count = repair(source)
+    if not count:
+        return
+    changed[path.relative_to(ROOT).as_posix()] = count
+    if not check:
+        path.write_text(rendered, encoding="utf-8", newline="\n")
 
 
 def main() -> int:
@@ -80,13 +135,18 @@ def main() -> int:
             if not arguments.check:
                 path.write_text(rendered, encoding="utf-8", newline="\n")
 
-    selector_source = SELECTOR.read_text(encoding="utf-8")
-    selector_rendered, selector_count = repair_claim_command_path(selector_source)
-    if selector_count:
-        relative = SELECTOR.relative_to(ROOT).as_posix()
-        changed[relative] = selector_count
-        if not arguments.check:
-            SELECTOR.write_text(selector_rendered, encoding="utf-8", newline="\n")
+    repair_file(
+        SELECTOR,
+        repair_single_segment_command_paths,
+        check=arguments.check,
+        changed=changed,
+    )
+    repair_file(
+        PRERELEASE_CLI,
+        repair_inline_json_argument,
+        check=arguments.check,
+        changed=changed,
+    )
 
     if arguments.check and changed:
         print(
@@ -120,12 +180,31 @@ def main() -> int:
         return 1
 
     canonical_selector = SELECTOR.read_text(encoding="utf-8")
-    if canonical_selector.count(CLAIM_PATH_CANONICAL) != 1 or CLAIM_PATH_LEGACY in canonical_selector:
+    if (
+        canonical_selector.count(SINGLE_SEGMENT_PATH_CANONICAL) != 1
+        or SINGLE_SEGMENT_PATH_LEGACY in canonical_selector
+    ):
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "code": "R38_CLAIM_COMMAND_PATH_REPAIR_INCOMPLETE",
+                    "code": "R38_SINGLE_SEGMENT_PATH_REPAIR_INCOMPLETE",
+                },
+                sort_keys=True,
+            )
+        )
+        return 1
+
+    canonical_cli = PRERELEASE_CLI.read_text(encoding="utf-8")
+    if (
+        canonical_cli.count(JSON_ARGUMENT_CANONICAL) != 1
+        or JSON_ARGUMENT_LEGACY in canonical_cli
+    ):
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "code": "R38_INLINE_JSON_ARGUMENT_REPAIR_INCOMPLETE",
                 },
                 sort_keys=True,
             )
