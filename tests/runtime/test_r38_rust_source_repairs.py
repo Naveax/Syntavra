@@ -35,8 +35,10 @@ def test_r38_rust_source_repairs_are_complete_and_idempotent(
         for relative in fragments
     }
     for replacement in MODULE.REPLACEMENTS:
-        assert replacement.old not in first[replacement.path]
-        assert replacement.new in first[replacement.path]
+        rendered = first[replacement.path]
+        assert rendered.count(replacement.new) == 1
+        if replacement.old not in replacement.new:
+            assert replacement.old not in rendered
 
     assert MODULE.repair() == 0
     second = {
