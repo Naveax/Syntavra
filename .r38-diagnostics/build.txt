@@ -1,5 +1,5 @@
     Updating crates.io index
-   Compiling syntavra-contracts v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-contracts)
    Compiling syntavra-core v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-core)
+   Compiling syntavra-contracts v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-contracts)
    Compiling syntavra-cli v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.56s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.86s

@@ -1,4 +1,4 @@
     Checking syntavra-core v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-core)
     Checking syntavra-contracts v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-contracts)
     Checking syntavra-cli v0.0.1 (/home/runner/work/Syntavra/Syntavra/crates/syntavra-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.18s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.59s
