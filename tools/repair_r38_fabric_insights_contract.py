@@ -6,7 +6,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTOR = ROOT / "crates" / "syntavra-cli" / "src" / "native_fabric_doctor.rs"
-INSIGHTS = ROOT / "crates" / "syntavra-cli" / "src" / "native_fabric_insights.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 
 DOCTOR_REPLACEMENTS = (
@@ -36,23 +35,6 @@ DOCTOR_REPLACEMENTS = (
     ),
 )
 
-OLD_COUNTER_SORT = '''    ordered.sort_by(|left, right| {
-        right
-            .1
-             .0
-            .cmp(&left.1 .0)
-            .then_with(|| left.1 .1.cmp(&right.1 .1))
-    });
-'''
-NEW_COUNTER_SORT = '''    ordered.sort_by(|left, right| {
-        right
-            .1
-            .0
-            .cmp(&left.1.0)
-            .then_with(|| left.1.1.cmp(&right.1.1))
-    });
-'''
-
 INSIGHTS_MODULE = '''#[path = "native_fabric_insights.rs"]
 mod native_fabric_insights;
 '''
@@ -65,6 +47,7 @@ INSIGHTS_EXECUTE = '''    if native_fabric_insights::supports(command) {
         return native_fabric_insights::execute(&arguments, state_root).map(Some);
     }
 '''
+INSIGHTS_EXECUTE_SIGNATURE = "native_fabric_insights::execute(&arguments"
 EXECUTE_ANCHOR = '''    if native_fabric_route::supports(command) {
         return native_fabric_route::execute(&arguments, state_root).map(Some);
     }
@@ -111,19 +94,6 @@ def repair_doctor_api() -> bool:
     return changed
 
 
-def repair_insights_source() -> bool:
-    source = INSIGHTS.read_text(encoding="utf-8")
-    rendered, changed = replace_once(
-        source,
-        OLD_COUNTER_SORT,
-        NEW_COUNTER_SORT,
-        "fabric insights counter ordering",
-    )
-    if changed:
-        INSIGHTS.write_text(rendered, encoding="utf-8", newline="\n")
-    return changed
-
-
 def repair_product() -> bool:
     source = PRODUCT.read_text(encoding="utf-8")
     rendered = source
@@ -131,15 +101,23 @@ def repair_product() -> bool:
     for token, anchor, label in (
         (INSIGHTS_MODULE, MODULE_ANCHOR, "fabric insights module"),
         (INSIGHTS_SUPPORT, SUPPORT_ANCHOR, "fabric insights support"),
-        (INSIGHTS_EXECUTE, EXECUTE_ANCHOR, "fabric insights execute"),
     ):
         rendered, applied = insert_once(rendered, token, anchor, label)
         changed = changed or applied
-    if any(
-        rendered.count(token) != 1
-        for token in (INSIGHTS_MODULE, INSIGHTS_SUPPORT, INSIGHTS_EXECUTE)
-    ):
-        raise RuntimeError("fabric insights product wiring invariant failed")
+
+    execute_count = rendered.count(INSIGHTS_EXECUTE_SIGNATURE)
+    if execute_count == 0:
+        if rendered.count(EXECUTE_ANCHOR) != 1:
+            raise RuntimeError("fabric insights execute anchor must be unique")
+        rendered = rendered.replace(EXECUTE_ANCHOR, INSIGHTS_EXECUTE + EXECUTE_ANCHOR, 1)
+        changed = True
+    elif execute_count != 1:
+        raise RuntimeError(f"fabric insights execute count invalid: {execute_count}")
+
+    if rendered.count(INSIGHTS_MODULE) != 1 or rendered.count(INSIGHTS_SUPPORT) != 1:
+        raise RuntimeError("fabric insights wiring invariant failed")
+    if rendered.count(INSIGHTS_EXECUTE_SIGNATURE) != 1:
+        raise RuntimeError("fabric insights semantic execute invariant failed")
     if changed:
         PRODUCT.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
@@ -147,9 +125,8 @@ def repair_product() -> bool:
 
 def repair() -> bool:
     doctor_changed = repair_doctor_api()
-    insights_changed = repair_insights_source()
     product_changed = repair_product()
-    return doctor_changed or insights_changed or product_changed
+    return doctor_changed or product_changed
 
 
 def main() -> int:
