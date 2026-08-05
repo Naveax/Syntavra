@@ -31,12 +31,8 @@ fn load_config(path: &Path) -> Value {
 }
 
 fn doctor(project_root: &Path, state_root: &Path) -> Result<Value, String> {
-    super::native_operator_lifecycle::execute(
-        &["doctor".to_owned()],
-        project_root,
-        state_root,
-    )
-    .map(|decision| decision.value)
+    super::native_operator_lifecycle::execute(&["doctor".to_owned()], project_root, state_root)
+        .map(|decision| decision.value)
 }
 
 fn finding_rows(value: &Value) -> Vec<Value> {
@@ -101,25 +97,13 @@ fn repair(
                 "--mcp-profile".to_owned(),
                 profile.to_owned(),
             ];
-            let _ = super::native_install::execute(
-                &install_arguments,
-                project_root,
-                state_root,
-            )?;
+            let _ = super::native_install::execute(&install_arguments, project_root, state_root)?;
         } else if codes.contains(&"product-bundle-incomplete") {
-            let _ = super::native_install::repair_bundle(
-                project_root,
-                state_root,
-                profile,
-            )?;
+            let _ = super::native_install::repair_bundle(project_root, state_root, profile)?;
         }
         if codes.contains(&"host-integration-verification-failed") {
             for host in configured_hosts(&config) {
-                let _ = super::native_install::reapply_host(
-                    &host,
-                    project_root,
-                    state_root,
-                )?;
+                let _ = super::native_install::reapply_host(&host, project_root, state_root)?;
             }
         }
     }

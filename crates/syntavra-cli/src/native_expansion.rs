@@ -59,6 +59,8 @@ mod native_session_public;
 mod native_session_recover;
 #[path = "native_session_verify.rs"]
 mod native_session_verify;
+#[path = "native_setup_repair.rs"]
+mod native_setup_repair;
 #[path = "native_stats.rs"]
 mod native_stats;
 #[allow(clippy::pedantic)]
@@ -80,6 +82,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_host::supports(command)
         || native_init::supports(command)
         || native_install::supports(command)
+        || native_setup_repair::supports(command)
         || native_job_mutations::supports(command)
         || native_job_queries::supports(command)
         || native_memory::supports(command)
@@ -145,6 +148,13 @@ pub fn execute(
     }
     if native_install::supports(command) {
         return native_install::execute(arguments, project_root, state_root);
+    }
+    if native_setup_repair::supports(command) {
+        let decision = native_setup_repair::execute(command, arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_value(&decision.value, decision.exit_code);
+        }
+        return Ok(decision.value);
     }
     if native_job_mutations::supports(command) {
         return native_job_mutations::execute(command, arguments, state_root);
@@ -231,6 +241,8 @@ mod tests {
             vec!["host", "capabilities"],
             vec!["init"],
             vec!["install"],
+            vec!["setup"],
+            vec!["repair"],
             vec!["inspect", "symbol"],
             vec!["inspect", "impact"],
             vec!["inspect", "paths"],

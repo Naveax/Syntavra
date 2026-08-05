@@ -659,6 +659,29 @@ fn quarantine(
     Ok(())
 }
 
+fn python_export_payload_hash(raw: &str, saved_hash: &str) -> Result<String, String> {
+    if saved_hash.len() != 64 || !saved_hash.bytes().all(|value| value.is_ascii_hexdigit()) {
+        return Err("SESSION_EXPORT_HASH_INVALID".to_owned());
+    }
+    let candidates = [
+        (format!(",\"export_hash\":\"{saved_hash}\","), ","),
+        (format!("{{\"export_hash\":\"{saved_hash}\","), "{"),
+        (format!(",\"export_hash\":\"{saved_hash}\"}}"), "}"),
+    ];
+    let mut stripped = None;
+    for (needle, replacement) in candidates {
+        let count = raw.match_indices(&needle).count();
+        if count > 1 || (count == 1 && stripped.is_some()) {
+            return Err("SESSION_EXPORT_HASH_FIELD_AMBIGUOUS".to_owned());
+        }
+        if count == 1 {
+            stripped = Some(raw.replacen(&needle, replacement, 1));
+        }
+    }
+    let payload = stripped.ok_or_else(|| "SESSION_EXPORT_HASH_FIELD_NOT_CANONICAL".to_owned())?;
+    Ok(sha256_hex(payload.as_bytes()))
+}
+
 fn import(
     arguments: &[String],
     project_id: &str,
@@ -669,14 +692,21 @@ fn import(
         .ok_or_else(|| "SESSION_IMPORT_INPUT_REQUIRED".to_owned())?;
     let explicit_id = option_value(arguments, "--session-id")?.filter(|value| !value.is_empty());
     let bytes = fs::read(&input).map_err(|error| format!("SESSION_IMPORT_READ_FAILED:{error}"))?;
+    let raw = std::str::from_utf8(&bytes)
+        .map_err(|_| "SESSION_IMPORT_UTF8_INVALID".to_owned())?
+        .trim();
     let mut value: Value =
         serde_json::from_slice(&bytes).map_err(|_| "SESSION_IMPORT_JSON_INVALID".to_owned())?;
     let object = value
         .as_object_mut()
         .ok_or_else(|| "SESSION_IMPORT_OBJECT_REQUIRED".to_owned())?;
     let saved_hash = object.remove("export_hash");
-    let calculated = sha256_hex(&canonical_bytes(&value)?);
-    if saved_hash.as_ref().and_then(Value::as_str) != Some(calculated.as_str()) {
+    let saved = saved_hash
+        .as_ref()
+        .and_then(Value::as_str)
+        .ok_or_else(|| "SESSION_EXPORT_HASH_MISSING".to_owned())?;
+    let calculated = python_export_payload_hash(raw, saved)?;
+    if saved != calculated {
         return Err("SESSION_EXPORT_HASH_MISMATCH".to_owned());
     }
     let source = value

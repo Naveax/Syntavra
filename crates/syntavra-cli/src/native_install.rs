@@ -1590,6 +1590,41 @@ fn write_bundle(project: &Path, state: &Path, profile_name: &str) -> Result<Valu
     }))
 }
 
+pub(super) fn repair_bundle(
+    project_root: &Path,
+    state_root: &Path,
+    profile_name: &str,
+) -> Result<Value, String> {
+    fs::create_dir_all(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root)
+        .map_err(|error| format!("INSTALL_STATE_CREATE_FAILED:{error}"))?;
+    let project = fs::canonicalize(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let state = fs::canonicalize(state_root)
+        .map_err(|error| format!("INSTALL_STATE_RESOLVE_FAILED:{error}"))?;
+    profile(profile_name)?;
+    write_bundle(&project, &state, profile_name)
+}
+
+pub(super) fn reapply_host(
+    host: &str,
+    project_root: &Path,
+    state_root: &Path,
+) -> Result<Value, String> {
+    fs::create_dir_all(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root)
+        .map_err(|error| format!("INSTALL_STATE_CREATE_FAILED:{error}"))?;
+    let project = fs::canonicalize(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let state = fs::canonicalize(state_root)
+        .map_err(|error| format!("INSTALL_STATE_RESOLVE_FAILED:{error}"))?;
+    let spec = host_spec(host).ok_or_else(|| format!("unsupported concrete host: {host}"))?;
+    let source = skill_root(&project);
+    apply_host(spec, &project, &state, &source, false)
+}
+
 pub fn execute(
     arguments: &[String],
     project_root: &Path,
