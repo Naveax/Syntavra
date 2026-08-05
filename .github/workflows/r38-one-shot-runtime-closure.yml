@@ -4,13 +4,18 @@ on:
   push:
     branches:
       - agent/full-dual-engine-runtime
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
 
 permissions:
   contents: write
 
 concurrency:
   group: r38-one-shot-runtime-closure
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   repair:
@@ -18,11 +23,12 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       RUSTUP_TOOLCHAIN: 1.82.0
+      VALIDATION_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Check out exact triggering head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.VALIDATION_SHA }}
           fetch-depth: 0
 
       - name: Detect one-shot repair marker
@@ -89,7 +95,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git rev-parse HEAD)" = "${VALIDATION_SHA}"
           rm .github/workflows/r38-one-shot-runtime-closure.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
