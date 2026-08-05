@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 114,
+  "missing_native_public_command_count": 113,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -26,7 +26,6 @@
     "fabric route",
     "fabric verify-install",
     "hook",
-    "install",
     "mcp",
     "prove integrations",
     "provider capture",
@@ -116,7 +115,7 @@
     "setup",
     "status"
   ],
-  "native_public_command_count": 131,
+  "native_public_command_count": 132,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
