@@ -30,19 +30,14 @@ def run_checked(argv: list[str], label: str) -> None:
         timeout=1800,
     )
     if completed.returncode != 0:
-        raise RuntimeError(
-            json.dumps(
-                {
-                    "code": "R38_TARGETED_VALIDATION_FAILED",
-                    "label": label,
-                    "argv": argv,
-                    "returncode": completed.returncode,
-                    "stdout": completed.stdout[-20000:],
-                    "stderr": completed.stderr[-20000:],
-                },
-                sort_keys=True,
-            )
-        )
+        payload = {
+            "code": "R38_TARGETED_VALIDATION_FAILED",
+            "label": label,
+            "returncode": completed.returncode,
+            "stdout_tail": completed.stdout[-4000:],
+            "stderr_tail": completed.stderr[-4000:],
+        }
+        raise RuntimeError(json.dumps(payload, sort_keys=True))
 
 
 def main() -> int:
