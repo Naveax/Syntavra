@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from repair_r38_mcp_decision_shape import repair as repair_decision_shape
+from repair_r38_mcp_parse_error import repair as repair_parse_error
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_expansion.rs"
@@ -76,12 +77,14 @@ def repair() -> bool:
 def main() -> int:
     wiring_changed = repair()
     decision_changed = repair_decision_shape()
+    parse_error_changed = repair_parse_error()
     print(
         json.dumps(
             {
-                "changed": wiring_changed or decision_changed,
+                "changed": wiring_changed or decision_changed or parse_error_changed,
                 "decision_shape_changed": decision_changed,
                 "ok": True,
+                "parse_error_changed": parse_error_changed,
                 "surface": "native-mcp",
                 "wiring_changed": wiring_changed,
             },
