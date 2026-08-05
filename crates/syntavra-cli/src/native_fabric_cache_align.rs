@@ -63,7 +63,11 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
         let item = &arguments[index];
         match item.as_str() {
             "--input" => input = Some(take_value(arguments, &mut index, "--input")?),
-            "--output" => output = Some(PathBuf::from(take_value(arguments, &mut index, "--output")?)),
+            "--output" => {
+                output = Some(PathBuf::from(take_value(
+                    arguments, &mut index, "--output",
+                )?))
+            }
             "--payload" => payload = take_value(arguments, &mut index, "--payload")?,
             "--keep-tail" => {
                 let raw = take_value(arguments, &mut index, "--keep-tail")?;
@@ -131,8 +135,7 @@ fn read_payload(options: &Options) -> Result<Value, String> {
     if raw.trim().is_empty() {
         return Ok(Value::Object(Map::new()));
     }
-    serde_json::from_str(&raw)
-        .map_err(|error| format!("FABRIC_CACHE_ALIGN_JSON_INVALID:{error}"))
+    serde_json::from_str(&raw).map_err(|error| format!("FABRIC_CACHE_ALIGN_JSON_INVALID:{error}"))
 }
 
 fn volatile(name: &str) -> bool {
@@ -216,9 +219,9 @@ fn align(payload: Value, keep_tail: i64) -> Result<Value, String> {
         Value::Object(mut values) => values.remove("messages").unwrap_or(Value::Null),
         value => value,
     };
-    let values = messages
-        .as_array()
-        .ok_or_else(|| "input must be a message list or an object containing messages".to_owned())?;
+    let values = messages.as_array().ok_or_else(|| {
+        "input must be a message list or an object containing messages".to_owned()
+    })?;
     let stable_message_count = values.len().saturating_sub(keep_tail as usize);
     let mut volatile_fields = BTreeSet::new();
     let stable = Value::Array(

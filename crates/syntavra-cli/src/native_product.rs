@@ -35,6 +35,8 @@ mod native_expansion;
 mod native_external_suite_gate;
 #[path = "native_external_suites.rs"]
 mod native_external_suites;
+#[path = "native_fabric_cache_align.rs"]
+mod native_fabric_cache_align;
 #[path = "native_fabric_route.rs"]
 mod native_fabric_route;
 #[path = "native_integrations.rs"]
@@ -106,6 +108,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_engine_route_control::supports(command)
         || native_engine_routes::supports(command)
         || native_engine_state_routes::supports(command)
+        || native_fabric_cache_align::supports(command)
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
         || native_session_continuity::supports(command)
@@ -344,12 +347,31 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
     }
     if native_engine_state_routes::supports(command) {
         return native_engine_state_routes::execute(command, &arguments, project_root).map(Some);
+    }
+    if native_fabric_cache_align::supports(command) {
+        return native_fabric_cache_align::execute(&arguments, state_root).map(Some);
     }
     if native_fabric_route::supports(command) {
         return native_fabric_route::execute(&arguments, state_root).map(Some);
