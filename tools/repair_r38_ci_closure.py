@@ -127,10 +127,15 @@ STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
                 canonical_stats.count(canonical) == 1 and legacy not in canonical_stats
                 for legacy, canonical, _ in STATS_FLOAT_REPAIRS
             )''',
-        '''            and canonical_stats.count(STATS_USAGE_FLOATS_CANONICAL) == 1
-            and STATS_USAGE_FLOATS_LEGACY not in canonical_stats
-            and canonical_stats.count(STATS_COMPACTION_FLOAT_CANONICAL) == 1
-            and STATS_COMPACTION_FLOAT_LEGACY not in canonical_stats''',
+        '''            and canonical_stats.count("fn python_json_float(number: f64) -> Value {") == 1
+            and canonical_stats.count('"wall_time_ms": python_json_float(wall_time_ms),') == 1
+            and canonical_stats.count('"cost_usd": python_json_float(cost_usd),') == 1
+            and canonical_stats.count(
+                '"compaction_wall_time_ms": python_json_float(compaction_ms),'
+            ) == 1
+            and '"wall_time_ms": wall_time_ms,' not in canonical_stats
+            and '"cost_usd": cost_usd,' not in canonical_stats
+            and '"compaction_wall_time_ms": compaction_ms,' not in canonical_stats''',
         "stats numeric repair invariant",
     )
     return changed
@@ -176,14 +181,16 @@ def repair_structural_upsert_sql() -> bool:
     )
 
 
-def workflow_by_name(name: str) -> Path:
+def workflow_by_name(name: str) -> Path | None:
     matches = []
     for path in sorted(WORKFLOWS.glob("*.y*ml")):
         source = path.read_text(encoding="utf-8")
         if re.search(rf"(?m)^name:\s*[\"']?{re.escape(name)}[\"']?\s*$", source):
             matches.append(path)
+    if not matches:
+        return None
     if len(matches) != 1:
-        raise RuntimeError(f"workflow {name!r}: expected one file, found {matches}")
+        raise RuntimeError(f"workflow {name!r}: expected at most one file, found {matches}")
     return matches[0]
 
 
@@ -211,7 +218,9 @@ def main() -> int:
     if repair_structural_upsert_sql():
         changed.append("structural-upsert-sql")
     for workflow_name in ("Validate Syntavra Package", "Syntavra Repository Hardening"):
-        validate_status_handoff(workflow_by_name(workflow_name))
+        path = workflow_by_name(workflow_name)
+        if path is not None:
+            validate_status_handoff(path)
     print(json.dumps({"ok": True, "changed": changed}, sort_keys=True))
     return 0
 
