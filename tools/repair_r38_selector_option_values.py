@@ -68,6 +68,33 @@ CANONICAL_OPTION_BLOCK = """        if matches!(
         ) {
 """
 
+PRE_INSTALL_EQUALS_BLOCK = """        if value.starts_with("--project=")
+            || value.starts_with("--state-root=")
+            || value.starts_with("--skill-root=")
+            || value.starts_with("--host=")
+            || value.starts_with("--codex-home=")
+            || value.starts_with("--rollout=")
+            || value.starts_with("--state-file=")
+            || value.starts_with("--session-hint=")
+            || value.starts_with("--budget=")
+            || value.starts_with("--max-tier=")
+        {
+"""
+
+CANONICAL_EQUALS_BLOCK = """        if value.starts_with("--project=")
+            || value.starts_with("--state-root=")
+            || value.starts_with("--skill-root=")
+            || value.starts_with("--host=")
+            || value.starts_with("--mcp-profile=")
+            || value.starts_with("--codex-home=")
+            || value.starts_with("--rollout=")
+            || value.starts_with("--state-file=")
+            || value.starts_with("--session-hint=")
+            || value.starts_with("--budget=")
+            || value.starts_with("--max-tier=")
+        {
+"""
+
 LEGACY_CONTEXT_TRUNCATION = """    if positional.first().map(String::as_str) == Some("context-stress") {
         positional.truncate(1);
 """
@@ -199,6 +226,14 @@ def repair(path: Path | None = None) -> bool:
             label,
         )
         changed = changed or applied
+
+    rendered, applied = _replace_optional_once(
+        rendered,
+        PRE_INSTALL_EQUALS_BLOCK,
+        CANONICAL_EQUALS_BLOCK,
+        "pre-install selector equals-option",
+    )
+    changed = changed or applied
 
     for legacy, label in (
         (DUPLICATE_TRUNCATION, "duplicate selector truncation"),
