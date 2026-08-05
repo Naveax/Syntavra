@@ -227,8 +227,8 @@ fn benchmark_difficulty_axes(tier: &str) -> Result<Value, String> {
 fn benchmark_score(tier: &str) -> Result<f64, String> {
     match tier {
         "1X" => Ok(1.0),
-        "20X" => Ok(38.337_350_566_771_11),
-        "30X" => Ok(63.345_278_851_520_476),
+        "20X" => Ok(38.337_350_566_771_08),
+        "30X" => Ok(63.345_278_851_520_46),
         "100X" => Ok(240.269_546_443_110_8),
         _ => Err(format!("BENCHMARK_TIER_INVALID:{tier}")),
     }

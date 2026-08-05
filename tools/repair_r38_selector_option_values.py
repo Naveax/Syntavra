@@ -56,7 +56,7 @@ UNNESTED_TRUNCATION = """    if matches!(
 
 CANONICAL_TRUNCATION = """    if matches!(
         positional.first().map(String::as_str),
-        Some("rollout-tail" | "context-stress")
+        Some("rollout-tail" | "context-stress" | "claim" | "context")
     ) {
         positional.truncate(1);
 """
@@ -97,14 +97,13 @@ def _validate_canonical(source: str, path: Path) -> None:
         raise RuntimeError(
             f"selector value options missing from command_path in {path}: {missing_options}"
         )
-    if command_path.count('"rollout-tail"') != 1:
-        raise RuntimeError(f"rollout-tail truncation invariant failed in {path}")
-    if command_path.count('"context-stress"') != 1:
-        raise RuntimeError(f"context-stress truncation invariant failed in {path}")
+    for route in ("rollout-tail", "context-stress", "claim", "context"):
+        if command_path.count(f'"{route}"') != 1:
+            raise RuntimeError(f"{route} truncation invariant failed in {path}")
     if command_path.count("positional.truncate(1);") != 1:
         raise RuntimeError(f"single-segment truncation must have one branch in {path}")
-    if 'Some("rollout-tail" | "context-stress")' not in command_path:
-        raise RuntimeError(f"nested selector truncation pattern missing in {path}")
+    if 'Some("rollout-tail" | "context-stress" | "claim" | "context")' not in command_path:
+        raise RuntimeError(f"canonical selector truncation pattern missing in {path}")
 
 
 def repair(path: Path | None = None) -> bool:
