@@ -10,6 +10,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
 BENCHMARK_HARNESS = ROOT / "syntavra_runtime" / "benchmark_harness.py"
 MEMORY_DIFFERENTIAL = ROOT / "tests" / "runtime" / "test_native_memory_r38.py"
+NATIVE_STRUCTURAL = ROOT / "crates" / "syntavra-cli" / "src" / "native_structural.rs"
 
 
 def replace_exact(path: Path, old: str, new: str, label: str) -> bool:
@@ -166,6 +167,15 @@ def repair_memory_utf8_decode() -> bool:
     )
 
 
+def repair_structural_upsert_sql() -> bool:
+    return replace_exact(
+        NATIVE_STRUCTURAL,
+        "             ON CONFLICT(path) DO UPDATE SET\\\n               content_hash=excluded.content_hash,",
+        "             ON CONFLICT(path) DO UPDATE SET \\\n               content_hash=excluded.content_hash,",
+        "structural upsert SET separator",
+    )
+
+
 def workflow_by_name(name: str) -> Path:
     matches = []
     for path in sorted(WORKFLOWS.glob("*.y*ml")):
@@ -198,6 +208,8 @@ def main() -> int:
         changed.append("benchmark-newlines")
     if repair_memory_utf8_decode():
         changed.append("memory-utf8-decode")
+    if repair_structural_upsert_sql():
+        changed.append("structural-upsert-sql")
     for workflow_name in ("Validate Syntavra Package", "Syntavra Repository Hardening"):
         validate_status_handoff(workflow_by_name(workflow_name))
     print(json.dumps({"ok": True, "changed": changed}, sort_keys=True))
