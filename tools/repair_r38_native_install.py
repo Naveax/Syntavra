@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_install.rs"
+EXPANSION = ROOT / "crates" / "syntavra-cli" / "src" / "native_expansion.rs"
 UNUSED_IMPORT = "use std::collections::{BTreeMap, BTreeSet};\n"
 
 CANONICAL_TOKENS = (
@@ -80,8 +81,104 @@ PATTERN = re.compile(
     re.DOTALL,
 )
 
+REPAIR_HELPERS = '''pub(super) fn repair_bundle(
+    project_root: &Path,
+    state_root: &Path,
+    profile_name: &str,
+) -> Result<Value, String> {
+    fs::create_dir_all(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root)
+        .map_err(|error| format!("INSTALL_STATE_CREATE_FAILED:{error}"))?;
+    let project = fs::canonicalize(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let state = fs::canonicalize(state_root)
+        .map_err(|error| format!("INSTALL_STATE_RESOLVE_FAILED:{error}"))?;
+    profile(profile_name)?;
+    write_bundle(&project, &state, profile_name)
+}
 
-def repair(path: Path = TARGET) -> bool:
+pub(super) fn reapply_host(
+    host: &str,
+    project_root: &Path,
+    state_root: &Path,
+) -> Result<Value, String> {
+    fs::create_dir_all(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root)
+        .map_err(|error| format!("INSTALL_STATE_CREATE_FAILED:{error}"))?;
+    let project = fs::canonicalize(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let state = fs::canonicalize(state_root)
+        .map_err(|error| format!("INSTALL_STATE_RESOLVE_FAILED:{error}"))?;
+    let spec = host_spec(host).ok_or_else(|| format!("unsupported concrete host: {host}"))?;
+    let source = skill_root(&project);
+    apply_host(spec, &project, &state, &source, false)
+}
+
+'''
+
+EXPANSION_MODULE_ANCHOR = '''#[path = "native_session_status.rs"]
+mod native_session_status;
+'''
+EXPANSION_MODULE_CANONICAL = '''#[path = "native_session_status.rs"]
+mod native_session_status;
+#[path = "native_setup_repair.rs"]
+mod native_setup_repair;
+'''
+EXPANSION_SUPPORT_ANCHOR = '''        || native_session_status::supports(command)
+        || native_stats::supports(command)
+'''
+EXPANSION_SUPPORT_CANONICAL = '''        || native_session_status::supports(command)
+        || native_setup_repair::supports(command)
+        || native_stats::supports(command)
+'''
+EXPANSION_EXECUTE_ANCHOR = '''    if native_install::supports(command) {
+        return native_install::execute(arguments, project_root, state_root);
+    }
+    if native_job_mutations::supports(command) {
+'''
+EXPANSION_EXECUTE_CANONICAL = '''    if native_install::supports(command) {
+        return native_install::execute(arguments, project_root, state_root);
+    }
+    if native_setup_repair::supports(command) {
+        let decision = native_setup_repair::execute(
+            command,
+            arguments,
+            project_root,
+            state_root,
+        )?;
+        if decision.exit_code != 0 {
+            emit_failed_value(&decision.value, decision.exit_code);
+        }
+        return Ok(decision.value);
+    }
+    if native_job_mutations::supports(command) {
+'''
+EXPANSION_TEST_ANCHOR = '''            vec!["session", "import"],
+            vec!["uninstall"],
+'''
+EXPANSION_TEST_CANONICAL = '''            vec!["session", "import"],
+            vec!["setup"],
+            vec!["repair"],
+            vec!["uninstall"],
+'''
+
+
+def replace_once(source: str, old: str, new: str, label: str) -> tuple[str, bool]:
+    old_count = source.count(old)
+    new_count = source.count(new)
+    if old_count == 0 and new_count == 1:
+        return source, False
+    if old_count != 1 or new_count != 0:
+        raise RuntimeError(
+            f"{label}: expected one legacy or canonical fragment; "
+            f"legacy={old_count}, canonical={new_count}"
+        )
+    return source.replace(old, new, 1), True
+
+
+def repair_install(path: Path = TARGET) -> bool:
     source = path.read_text(encoding="utf-8")
     rendered = source
     changed = False
@@ -93,19 +190,58 @@ def repair(path: Path = TARGET) -> bool:
         if count != 1:
             raise RuntimeError(f"native install adapter contract boundary missing in {path}")
         changed = True
+    if "pub(super) fn repair_bundle(" not in rendered:
+        anchor = "pub fn execute(\n"
+        if rendered.count(anchor) != 1:
+            raise RuntimeError(f"native install execute anchor missing in {path}")
+        rendered = rendered.replace(anchor, REPAIR_HELPERS + anchor, 1)
+        changed = True
     if UNUSED_IMPORT in rendered:
         raise RuntimeError(f"unused native install imports remain in {path}")
     if not all(token in rendered for token in CANONICAL_TOKENS):
         missing = [token for token in CANONICAL_TOKENS if token not in rendered]
         raise RuntimeError(f"native install adapter contract incomplete: {missing}")
+    for token in ("pub(super) fn repair_bundle(", "pub(super) fn reapply_host("):
+        if rendered.count(token) != 1:
+            raise RuntimeError(f"native install repair helper invariant failed: {token}")
     if changed:
         path.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
 
 
+def repair_expansion(path: Path = EXPANSION) -> bool:
+    source = path.read_text(encoding="utf-8")
+    rendered = source
+    changed = False
+    for old, new, label in (
+        (EXPANSION_MODULE_ANCHOR, EXPANSION_MODULE_CANONICAL, "setup repair module"),
+        (EXPANSION_SUPPORT_ANCHOR, EXPANSION_SUPPORT_CANONICAL, "setup repair support"),
+        (EXPANSION_EXECUTE_ANCHOR, EXPANSION_EXECUTE_CANONICAL, "setup repair execute"),
+        (EXPANSION_TEST_ANCHOR, EXPANSION_TEST_CANONICAL, "setup repair route test"),
+    ):
+        rendered, applied = replace_once(rendered, old, new, label)
+        changed = changed or applied
+    for token in (
+        'mod native_setup_repair;',
+        'native_setup_repair::supports(command)',
+        'native_setup_repair::execute(',
+        'vec!["setup"]',
+        'vec!["repair"]',
+    ):
+        if token not in rendered:
+            raise RuntimeError(f"native expansion setup/repair invariant missing: {token}")
+    if changed:
+        path.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
+
+
+def repair(path: Path = TARGET) -> bool:
+    return repair_install(path) | repair_expansion()
+
+
 def main() -> int:
     changed = repair()
-    print("repaired: native_install.rs" if changed else "Native install adapter contract already canonical")
+    print("repaired: native install/setup lifecycle" if changed else "Native install/setup lifecycle already canonical")
     return 0
 
 
