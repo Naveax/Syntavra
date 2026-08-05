@@ -172,10 +172,12 @@ def repair_pytest_status_handoff(path: Path) -> bool:
 
 def main() -> int:
     changed: list[str] = []
+    # Self-mutating GitHub App runs cannot push workflow-file changes without
+    # the separate workflows permission. Keep source/metadata repair atomic;
+    # the runtime-matrix workflow change is handled as an explicit gate.
     operations = (
         ("selector-option-contract", repair_selector_option_contract),
         ("benchmark-parity", repair_benchmark_parity),
-        ("runtime-matrix", repair_runtime_matrix),
     )
     for label, operation in operations:
         if operation():
