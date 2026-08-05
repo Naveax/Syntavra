@@ -41,6 +41,44 @@ EXECUTE_INSERT = '''    if native_setup_repair::supports(command) {
 '''
 TEST_ANCHOR = '            vec!["install"],\n'
 TEST_INSERT = '            vec!["setup"],\n            vec!["repair"],\n'
+INSTALL_EXECUTE_ANCHOR = 'pub fn execute(\n'
+
+REPAIR_HELPERS = '''pub(super) fn repair_bundle(
+    project_root: &Path,
+    state_root: &Path,
+    profile_name: &str,
+) -> Result<Value, String> {
+    fs::create_dir_all(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root)
+        .map_err(|error| format!("INSTALL_STATE_CREATE_FAILED:{error}"))?;
+    let project = fs::canonicalize(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let state = fs::canonicalize(state_root)
+        .map_err(|error| format!("INSTALL_STATE_RESOLVE_FAILED:{error}"))?;
+    profile(profile_name)?;
+    write_bundle(&project, &state, profile_name)
+}
+
+pub(super) fn reapply_host(
+    host: &str,
+    project_root: &Path,
+    state_root: &Path,
+) -> Result<Value, String> {
+    fs::create_dir_all(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root)
+        .map_err(|error| format!("INSTALL_STATE_CREATE_FAILED:{error}"))?;
+    let project = fs::canonicalize(project_root)
+        .map_err(|error| format!("INSTALL_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let state = fs::canonicalize(state_root)
+        .map_err(|error| format!("INSTALL_STATE_RESOLVE_FAILED:{error}"))?;
+    let spec = host_spec(host).ok_or_else(|| format!("unsupported concrete host: {host}"))?;
+    let source = skill_root(&project);
+    apply_host(spec, &project, &state, &source, false)
+}
+
+'''
 
 INSTALL_INVARIANTS = (
     'pub(super) fn repair_bundle(',
@@ -62,11 +100,29 @@ def insert_after_once(source: str, *, token: str, anchor: str, addition: str, la
     return source.replace(anchor, anchor + addition, 1), True
 
 
-def validate_install_contract() -> None:
+def repair_install_contract() -> bool:
     source = INSTALL.read_text(encoding="utf-8")
-    missing = [token for token in INSTALL_INVARIANTS if source.count(token) != 1]
-    if missing:
-        raise RuntimeError(f"native install/setup contract incomplete: {missing}")
+    rendered = source
+    helper_counts = (
+        rendered.count('pub(super) fn repair_bundle('),
+        rendered.count('pub(super) fn reapply_host('),
+    )
+    changed = False
+    if helper_counts == (0, 0):
+        anchor_count = rendered.count(INSTALL_EXECUTE_ANCHOR)
+        if anchor_count != 1:
+            raise RuntimeError(f"native install execute anchor count must be 1, got {anchor_count}")
+        rendered = rendered.replace(INSTALL_EXECUTE_ANCHOR, REPAIR_HELPERS + INSTALL_EXECUTE_ANCHOR, 1)
+        changed = True
+    elif helper_counts != (1, 1):
+        raise RuntimeError(f"native install repair helper counts invalid: {helper_counts}")
+
+    invalid = {token: rendered.count(token) for token in INSTALL_INVARIANTS if rendered.count(token) != 1}
+    if invalid:
+        raise RuntimeError(f"native install/setup contract incomplete: {invalid}")
+    if changed:
+        INSTALL.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
 
 
 def repair_expansion() -> bool:
@@ -119,8 +175,7 @@ def repair_expansion() -> bool:
 
 
 def main() -> int:
-    validate_install_contract()
-    changed = repair_expansion()
+    changed = repair_install_contract() | repair_expansion()
     print(json.dumps({"changed": changed, "ok": True, "surface": "setup-repair"}, sort_keys=True))
     return 0
 
