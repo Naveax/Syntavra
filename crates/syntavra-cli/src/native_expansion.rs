@@ -29,6 +29,8 @@ mod native_install;
 mod native_job_mutations;
 #[path = "native_job_queries.rs"]
 mod native_job_queries;
+#[path = "native_mcp.rs"]
+mod native_mcp;
 #[allow(clippy::pedantic)]
 #[path = "native_memory.rs"]
 mod native_memory;
@@ -91,6 +93,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_job_mutations::supports(command)
         || native_job_queries::supports(command)
         || native_memory::supports(command)
+        || native_mcp::supports(command)
         || native_migrations::supports(command)
         || native_operator_lifecycle::supports(command)
         || native_output_governor::supports(command)
@@ -174,6 +177,9 @@ pub fn execute(
     if native_memory::supports(command) {
         return native_memory::execute(command, arguments, project_root, state_root);
     }
+    if native_mcp::supports(command) {
+        native_mcp::serve(arguments, project_root, state_root);
+    }
     if native_migrations::supports(command) {
         return native_migrations::execute(command, arguments);
     }
@@ -256,6 +262,7 @@ mod tests {
             vec!["host", "detect"],
             vec!["host", "capabilities"],
             vec!["hook"],
+            vec!["mcp"],
             vec!["init"],
             vec!["install"],
             vec!["setup"],

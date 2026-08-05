@@ -201,8 +201,7 @@ fn risk(tool: &str, arguments: &Map<String, Value>) -> &'static str {
         "syntavra.policy.record",
         "syntavra.data.route",
     ];
-    const SANDBOX_EXECUTION: &[&str] =
-        &["syntavra.sandbox.execute", "syntavra.sandbox.batch"];
+    const SANDBOX_EXECUTION: &[&str] = &["syntavra.sandbox.execute", "syntavra.sandbox.batch"];
     if SAFE_STATE_WRITES.contains(&tool) {
         return "safe-state-write";
     }
@@ -252,11 +251,8 @@ fn decision(
     let listed = exposed.contains(tool);
     let (user_authorized, exact_evidence, declared_sandboxed) = authorization(arguments);
     let risk = risk(tool, arguments);
-    let sandboxed = declared_sandboxed
-        || matches!(
-            tool,
-            "syntavra.sandbox.execute" | "syntavra.sandbox.batch"
-        );
+    let sandboxed =
+        declared_sandboxed || matches!(tool, "syntavra.sandbox.execute" | "syntavra.sandbox.batch");
     let mut allowed = listed;
     let mut reason = "profile-listed";
     if !listed {
@@ -305,10 +301,9 @@ fn decision(
         .as_object()
         .cloned()
         .ok_or_else(|| "MCP_DECISION_OBJECT_FAILED".to_owned())?;
-    value.insert(
-        "receipt_hash".to_owned(),
-        Value::String(hash_json(&body)?),
-    );
+    value.remove("version");
+    value.remove("channel");
+    value.insert("receipt_hash".to_owned(), Value::String(hash_json(&body)?));
     Ok(Value::Object(value))
 }
 
@@ -351,7 +346,6 @@ fn safe_call(tool: &str, project_root: &Path, state_root: &Path) -> Result<Value
 
 fn result_response(
     request_id: Value,
-    tool: &str,
     value: Value,
     decision: &Value,
     manifest: &Value,
@@ -392,7 +386,10 @@ fn handle(
     project_root: &Path,
     state_root: &Path,
 ) -> Result<Option<Value>, String> {
-    let method = message.get("method").and_then(Value::as_str).unwrap_or_default();
+    let method = message
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let request_id = message.get("id").cloned().unwrap_or(Value::Null);
     if method == "notifications/initialized" {
         return Ok(None);
@@ -455,7 +452,7 @@ fn handle(
         }
         let active_manifest = manifest(catalog, profile, mode)?;
         return match safe_call(tool, project_root, state_root) {
-            Ok(value) => result_response(request_id, tool, value, &decision, &active_manifest).map(Some),
+            Ok(value) => result_response(request_id, value, &decision, &active_manifest).map(Some),
             Err(_) => Ok(Some(json!({
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -464,7 +461,9 @@ fn handle(
         };
     }
     if method == "ping" {
-        return Ok(Some(json!({"jsonrpc": "2.0", "id": request_id, "result": {}})));
+        return Ok(Some(
+            json!({"jsonrpc": "2.0", "id": request_id, "result": {}}),
+        ));
     }
     Ok(Some(json!({
         "jsonrpc": "2.0",
@@ -476,7 +475,7 @@ fn handle(
 fn parse_error_message(line: &str, error: &serde_json::Error) -> String {
     let trimmed = line.trim();
     if trimmed == "{" {
-        return "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+        return "Expecting property name enclosed in double quotes: line 2 column 1 (char 2)"
             .to_owned();
     }
     format!(
@@ -523,20 +522,15 @@ pub fn serve(arguments: &[String], project_root: &Path, state_root: &Path) -> ! 
             continue;
         }
         let response = match serde_json::from_str::<Value>(&line) {
-            Ok(message) => match handle(
-                &message,
-                &catalog,
-                profile,
-                mode,
-                project_root,
-                state_root,
-            ) {
-                Ok(value) => value,
-                Err(error) => {
-                    eprintln!("{error}");
-                    std::process::exit(4);
+            Ok(message) => {
+                match handle(&message, &catalog, profile, mode, project_root, state_root) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        eprintln!("{error}");
+                        std::process::exit(4);
+                    }
                 }
-            },
+            }
             Err(error) => Some(json!({
                 "jsonrpc": "2.0",
                 "id": Value::Null,

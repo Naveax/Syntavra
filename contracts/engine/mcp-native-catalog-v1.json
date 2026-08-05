@@ -1,27 +1,6520 @@
 {
+  "catalog": {
+    "sha256": "6d7bc579b79517441003af0ce2dae2f12727ac7ec4fd785de744f4cb2c574420",
+    "tool_count": 93
+  },
+  "profile_aliases": {
+    "audit": "audit",
+    "balanced": "balanced",
+    "full": "audit",
+    "minimal": "minimal",
+    "optimized": "balanced",
+    "tiny": "minimal"
+  },
+  "profiles": {
+    "audit": {
+      "compact_manifest": {
+        "pipeline": [
+          "profile-selection",
+          "catalog-filter",
+          "schema-compilation",
+          "authorization",
+          "argument-decoding",
+          "execution",
+          "exact-output-capture",
+          "secret-redaction",
+          "optional-lossless-wire-encoding",
+          "route-receipt"
+        ],
+        "policy": {
+          "legacy_profile": "full",
+          "profile": "audit"
+        },
+        "schema": {
+          "compilation": {
+            "argument_aliases": {
+              "syntavra.compress": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.context.pack": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.data.route": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.fabric.compact": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.fabric.route": {
+                "untrusted_network": "network_untrusted"
+              },
+              "syntavra.inspect.map": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.inspect.source": {
+                "lines": "context_lines"
+              },
+              "syntavra.output.reveal": {
+                "budget": "budget_bytes",
+                "cursor": "continuation_token"
+              },
+              "syntavra.process.submit": {
+                "repo_tree": "repository_tree"
+              },
+              "syntavra.sandbox.batch": {
+                "stop_on_fail": "stop_on_failure"
+              },
+              "syntavra.session.context": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.session.search": {
+                "include_old": "include_superseded"
+              },
+              "syntavra.session.semantic_context": {
+                "budget": "budget_bytes",
+                "include_old": "include_superseded"
+              }
+            },
+            "catalog_hash": "6d7bc579b79517441003af0ce2dae2f12727ac7ec4fd785de744f4cb2c574420",
+            "compiled": {
+              "bytes": 27248,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 6812
+            },
+            "compiled_hash": "5c73e9ada97ce5e6f648581e2b3c5db195172803a1b80be65634a454cb09ab23",
+            "raw": {
+              "bytes": 27404,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 6851
+            },
+            "savings_ratio": 0.005692599620493399
+          },
+          "mode": "compact",
+          "profile": "audit"
+        }
+      },
+      "compilation": {
+        "argument_aliases": {
+          "syntavra.compress": {
+            "budget": "budget_bytes"
+          },
+          "syntavra.context.pack": {
+            "budget_tokens": "token_budget"
+          },
+          "syntavra.data.route": {
+            "budget": "budget_bytes"
+          },
+          "syntavra.fabric.compact": {
+            "budget": "budget_bytes"
+          },
+          "syntavra.fabric.route": {
+            "untrusted_network": "network_untrusted"
+          },
+          "syntavra.inspect.map": {
+            "budget_tokens": "token_budget"
+          },
+          "syntavra.inspect.source": {
+            "lines": "context_lines"
+          },
+          "syntavra.output.reveal": {
+            "budget": "budget_bytes",
+            "cursor": "continuation_token"
+          },
+          "syntavra.process.submit": {
+            "repo_tree": "repository_tree"
+          },
+          "syntavra.sandbox.batch": {
+            "stop_on_fail": "stop_on_failure"
+          },
+          "syntavra.session.context": {
+            "budget_tokens": "token_budget"
+          },
+          "syntavra.session.search": {
+            "include_old": "include_superseded"
+          },
+          "syntavra.session.semantic_context": {
+            "budget": "budget_bytes",
+            "include_old": "include_superseded"
+          }
+        },
+        "catalog_hash": "6d7bc579b79517441003af0ce2dae2f12727ac7ec4fd785de744f4cb2c574420",
+        "compiled": {
+          "bytes": 27248,
+          "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+          "tokens": 6812
+        },
+        "compiled_hash": "5c73e9ada97ce5e6f648581e2b3c5db195172803a1b80be65634a454cb09ab23",
+        "raw": {
+          "bytes": 27404,
+          "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+          "tokens": 6851
+        },
+        "savings_ratio": 0.005692599620493399
+      },
+      "compiled_tools": [
+        {
+          "description": "Show truthful runtime health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.status"
+        },
+        {
+          "description": "Detect installed coding-agent hosts",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.host.detect"
+        },
+        {
+          "description": "Submit a durable zero-poll command",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "repo_tree": {
+                "type": "string"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.process.submit"
+        },
+        {
+          "description": "Read durable completion events after cursor",
+          "inputSchema": {
+            "properties": {
+              "after": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.process.completions"
+        },
+        {
+          "description": "Find exact multi-language symbols",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.symbol"
+        },
+        {
+          "description": "Read exact bounded source for matching symbols",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "lines": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.source"
+        },
+        {
+          "description": "Read an exact bounded project file range",
+          "inputSchema": {
+            "properties": {
+              "end_line": {
+                "type": "integer"
+              },
+              "max_bytes": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "start_line": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.range"
+        },
+        {
+          "description": "Show transitive multi-language impact",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.impact"
+        },
+        {
+          "description": "Show impact from changed paths",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "paths"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.paths"
+        },
+        {
+          "description": "Build a task-scoped repository map",
+          "inputSchema": {
+            "properties": {
+              "budget_tokens": {
+                "type": "integer"
+              },
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.map"
+        },
+        {
+          "description": "Show structural-index coverage and parser health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.inspect.stats"
+        },
+        {
+          "description": "Evaluate context pressure",
+          "inputSchema": {
+            "properties": {
+              "churn": {
+                "type": "number"
+              },
+              "evidence_pressure": {
+                "type": "number"
+              },
+              "used": {
+                "type": "integer"
+              },
+              "window": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "used",
+              "window"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.evaluate"
+        },
+        {
+          "description": "Build minimum exact task context",
+          "inputSchema": {
+            "properties": {
+              "budget_tokens": {
+                "type": "integer"
+              },
+              "changed_paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.pack"
+        },
+        {
+          "description": "Reversibly compress generic content",
+          "inputSchema": {
+            "properties": {
+              "budget": {
+                "type": "integer"
+              },
+              "hint": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.compress"
+        },
+        {
+          "description": "Restore a compression or one exact chunk",
+          "inputSchema": {
+            "properties": {
+              "chunk": {
+                "type": "integer"
+              },
+              "compression_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "compression_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.expand"
+        },
+        {
+          "description": "Verify exact compression reconstruction",
+          "inputSchema": {
+            "properties": {
+              "compression_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "compression_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.compression.verify"
+        },
+        {
+          "description": "Plan a fail-closed sandbox execution",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.plan"
+        },
+        {
+          "description": "Run a command under sandbox policy",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.execute"
+        },
+        {
+          "description": "Run multiple commands in one sandbox call",
+          "inputSchema": {
+            "properties": {
+              "backend": {
+                "type": "string"
+              },
+              "commands": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              "network": {
+                "type": "string"
+              },
+              "stop_on_fail": {
+                "type": "boolean"
+              },
+              "strict": {
+                "type": "boolean"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "commands"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.batch"
+        },
+        {
+          "description": "Open an immutable long-session runtime",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.session.open"
+        },
+        {
+          "description": "Append an immutable session event",
+          "inputSchema": {
+            "properties": {
+              "event_type": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "event_type",
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.append"
+        },
+        {
+          "description": "Assemble bounded active context",
+          "inputSchema": {
+            "properties": {
+              "budget_tokens": {
+                "type": "integer"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.context"
+        },
+        {
+          "description": "Build or refresh the exact summary DAG",
+          "inputSchema": {
+            "properties": {
+              "fanout": {
+                "type": "integer"
+              },
+              "force": {
+                "type": "boolean"
+              },
+              "leaf_size": {
+                "type": "integer"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.compact"
+        },
+        {
+          "description": "Expand a summary DAG node to exact events",
+          "inputSchema": {
+            "properties": {
+              "summary_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "summary_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.expand"
+        },
+        {
+          "description": "Verify immutable session hash lineage",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.verify"
+        },
+        {
+          "description": "Create an exact session checkpoint",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.checkpoint"
+        },
+        {
+          "description": "Fork a session from a verified checkpoint",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.fork"
+        },
+        {
+          "description": "Merge verified parent sessions",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "session_ids"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.merge"
+        },
+        {
+          "description": "Capture tool output with exact recovery",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.capture"
+        },
+        {
+          "description": "Search exact externalized tool output",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.search"
+        },
+        {
+          "description": "Progressively reveal selected externalized evidence",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "budget": {
+                "type": "integer"
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.reveal"
+        },
+        {
+          "description": "Verify exact reconstruction and Merkle integrity",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.verify"
+        },
+        {
+          "description": "Show externalization statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.output.stats"
+        },
+        {
+          "description": "Record an attested provider usage receipt",
+          "inputSchema": {
+            "properties": {
+              "arm_id": {
+                "type": "string"
+              },
+              "cache_mode": {
+                "type": "string"
+              },
+              "hardware_hash": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "provider_response": {
+                "type": "object"
+              },
+              "quota_cost": {
+                "type": "number"
+              },
+              "repetition": {
+                "type": "integer"
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "task_id": {
+                "type": "string"
+              },
+              "usage": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "task_id",
+              "arm_id",
+              "repetition",
+              "cache_mode",
+              "provider",
+              "request_id",
+              "provider_response",
+              "usage",
+              "quota_cost",
+              "hardware_hash"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.usage.record"
+        },
+        {
+          "description": "Verify the provider usage hash chain + signatures",
+          "inputSchema": {
+            "properties": {
+              "require_hmac": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.usage.verify"
+        },
+        {
+          "description": "Record source-level token attribution",
+          "inputSchema": {
+            "properties": {
+              "arm_id": {
+                "type": "string"
+              },
+              "baseline_confidence": {
+                "type": "string"
+              },
+              "baseline_tokens": {
+                "type": "integer"
+              },
+              "confidence": {
+                "type": "object"
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "model": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "provider_receipt_hash": {
+                "type": "string"
+              },
+              "repetition": {
+                "type": "integer"
+              },
+              "request_id_hash": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "sources": {
+                "type": "object"
+              },
+              "task_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "task_id",
+              "arm_id",
+              "repetition",
+              "session_id",
+              "provider",
+              "model",
+              "request_id_hash",
+              "provider_receipt_hash",
+              "sources",
+              "confidence"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.usage.attribution.record"
+        },
+        {
+          "description": "Show token savings by source and confidence",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.usage.attribution.summary"
+        },
+        {
+          "description": "Semantic and temporal search over exact session events",
+          "inputSchema": {
+            "properties": {
+              "include_old": {
+                "type": "boolean"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.search"
+        },
+        {
+          "description": "Build task-scoped long-session context",
+          "inputSchema": {
+            "properties": {
+              "budget": {
+                "type": "integer"
+              },
+              "include_old": {
+                "type": "boolean"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.semantic_context"
+        },
+        {
+          "description": "Render a correctness-preserving bounded answer",
+          "inputSchema": {
+            "properties": {
+              "contract": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              },
+              "profile": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.govern"
+        },
+        {
+          "description": "Select a minimal task-conditioned MCP tool surface",
+          "inputSchema": {
+            "properties": {
+              "profile": {
+                "type": "string"
+              },
+              "task": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.profile"
+        },
+        {
+          "description": "Choose the safest exact-preserving execution route",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "repeated": {
+                "type": "boolean"
+              },
+              "untrusted_network": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.route"
+        },
+        {
+          "description": "Compact common command output while retaining failures and security signals",
+          "inputSchema": {
+            "properties": {
+              "budget": {
+                "type": "integer"
+              },
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "command",
+              "stdout"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.compact"
+        },
+        {
+          "description": "Build a stable provider-prefix cache fingerprint",
+          "inputSchema": {
+            "properties": {
+              "keep_tail": {
+                "type": "integer"
+              },
+              "messages": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "messages"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.cache_align"
+        },
+        {
+          "description": "Generate installation and enforcement plans for one or every host",
+          "inputSchema": {
+            "properties": {
+              "all": {
+                "type": "boolean"
+              },
+              "host": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.platform_plan"
+        },
+        {
+          "description": "Diagnose competitive-fabric runtime coverage",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.fabric.doctor"
+        },
+        {
+          "description": "Show local savings, reliability, cache, and routing analytics",
+          "inputSchema": {
+            "properties": {
+              "since_seconds": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.insights"
+        },
+        {
+          "description": "Get or switch optimization mode",
+          "inputSchema": {
+            "properties": {
+              "mode": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.mode"
+        },
+        {
+          "description": "Render live savings statusline",
+          "inputSchema": {
+            "properties": {
+              "verbose": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.statusline"
+        },
+        {
+          "description": "Fail-closed pre-tool command rewrite",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.command.rewrite"
+        },
+        {
+          "description": "Find missed token-saving opportunities",
+          "inputSchema": {
+            "properties": {
+              "source": {}
+            },
+            "required": [
+              "source"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.transcript.mine"
+        },
+        {
+          "description": "Plan stable prompt-cache prefix and expiry",
+          "inputSchema": {
+            "properties": {
+              "messages": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "model": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "ttl": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "messages",
+              "provider",
+              "model"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.cache.plan"
+        },
+        {
+          "description": "Show cache expiry and amortization health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.cache.health"
+        },
+        {
+          "description": "Audit agent configuration token waste",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.config.audit"
+        },
+        {
+          "description": "Redact secrets before MCP response",
+          "inputSchema": {
+            "properties": {
+              "value": {}
+            },
+            "required": [
+              "value"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.secret.redact"
+        },
+        {
+          "description": "Lossless compact MCP response wire codec",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "minimum_savings": {
+                "type": "number"
+              },
+              "value": {}
+            },
+            "required": [
+              "action",
+              "value"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.wire"
+        },
+        {
+          "description": "Query code graph analytics",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "query": {
+                "type": "string"
+              },
+              "target_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.code.intelligence"
+        },
+        {
+          "description": "Extract, rank, search, backfill or export memory",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.memory.intelligence"
+        },
+        {
+          "description": "Quota, rate-limit and complexity-aware provider routing",
+          "inputSchema": {
+            "properties": {
+              "candidates": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "changed_files": {
+                "type": "integer"
+              },
+              "task": {
+                "type": "string"
+              },
+              "token_estimate": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "task",
+              "candidates"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.route"
+        },
+        {
+          "description": "Manage credential references, account health, quota and failover",
+          "inputSchema": {
+            "properties": {
+              "account": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "credential_ref": {
+                "type": "string"
+              },
+              "latency_ms": {
+                "type": "number"
+              },
+              "model_rows": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "models": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "priority": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "quota_remaining": {
+                "type": "number"
+              },
+              "quota_reset_at": {
+                "type": "number"
+              },
+              "retry_after_seconds": {
+                "type": "number"
+              },
+              "subscription": {
+                "type": "boolean"
+              },
+              "success": {
+                "type": "boolean"
+              },
+              "task": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.accounts"
+        },
+        {
+          "description": "Build specialized short-handoff subtasks",
+          "inputSchema": {
+            "properties": {
+              "context_paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "max_tasks": {
+                "type": "integer"
+              },
+              "objective": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "objective"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.subtask.plan"
+        },
+        {
+          "description": "Poll changes and incrementally rebuild code index",
+          "inputSchema": {
+            "properties": {
+              "interval": {
+                "type": "number"
+              },
+              "iterations": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.repository.watch"
+        },
+        {
+          "description": "Read local dashboard state",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.dashboard.snapshot"
+        },
+        {
+          "description": "Show provider cache, usage, and request-shape capabilities",
+          "inputSchema": {
+            "properties": {
+              "provider": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.capabilities"
+        },
+        {
+          "description": "Prepare a cache-stable exact provider request",
+          "inputSchema": {
+            "properties": {
+              "allow_tool_replay": {
+                "type": "boolean"
+              },
+              "cache_policy": {
+                "type": "string"
+              },
+              "explicit_cache_name": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "prompt_cache_ttl_seconds": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "request": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "provider",
+              "request"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.prepare"
+        },
+        {
+          "description": "Capture an exact provider response with optional receipt and replay",
+          "inputSchema": {
+            "properties": {
+              "plan": {
+                "type": "object"
+              },
+              "preview_bytes": {
+                "type": "integer"
+              },
+              "receipt": {
+                "type": "object"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "response": {
+                "type": "object"
+              },
+              "store_replay": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "plan",
+              "response"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.capture"
+        },
+        {
+          "description": "Replay an exact deterministic provider response",
+          "inputSchema": {
+            "properties": {
+              "cache_key": {
+                "type": "string"
+              },
+              "plan": {
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.replay"
+        },
+        {
+          "description": "Show provider gateway request and replay statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.stats"
+        },
+        {
+          "description": "Verify provider request and response evidence integrity",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.verify"
+        },
+        {
+          "description": "Show SDK, framework, host, output, and benchmark product surfaces",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.ecosystem.capabilities"
+        },
+        {
+          "description": "Build query-aware bounded context with exact immutable references",
+          "inputSchema": {
+            "properties": {
+              "policy": {
+                "properties": {
+                  "chars_per_token": {
+                    "type": "number"
+                  },
+                  "event_preview_chars": {
+                    "type": "integer"
+                  },
+                  "forced_event_types": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "max_candidates": {
+                    "type": "integer"
+                  },
+                  "recent_events": {
+                    "type": "integer"
+                  },
+                  "summary_preview_chars": {
+                    "type": "integer"
+                  },
+                  "token_budget": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.plan"
+        },
+        {
+          "description": "Stress-test query-aware planning while verifying exact session history",
+          "inputSchema": {
+            "properties": {
+              "policy": {
+                "properties": {
+                  "chars_per_token": {
+                    "type": "number"
+                  },
+                  "event_preview_chars": {
+                    "type": "integer"
+                  },
+                  "forced_event_types": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "max_candidates": {
+                    "type": "integer"
+                  },
+                  "recent_events": {
+                    "type": "integer"
+                  },
+                  "summary_preview_chars": {
+                    "type": "integer"
+                  },
+                  "token_budget": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "queries": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "queries"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.stress"
+        },
+        {
+          "description": "Validate a strict real-task corpus and identical-arm parity",
+          "inputSchema": {
+            "properties": {
+              "arms": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "minimum_arms": {
+                "type": "integer"
+              },
+              "minimum_repetitions": {
+                "type": "integer"
+              },
+              "minimum_tasks": {
+                "type": "integer"
+              },
+              "tasks": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "tasks",
+              "arms"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.corpus.validate"
+        },
+        {
+          "description": "Create a deterministic randomized paired-run manifest",
+          "inputSchema": {
+            "properties": {
+              "arms": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "cache_modes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "repetitions": {
+                "type": "integer"
+              },
+              "seed": {
+                "type": "integer"
+              },
+              "tasks": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "tasks",
+              "arms"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.corpus.manifest"
+        },
+        {
+          "description": "Show product-parity V5 data, policy, service, SDK and arm-runner surfaces",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.product.capabilities"
+        },
+        {
+          "description": "Route and compact SQL/table, RAG, GraphQL and generic JSON while preserving exact",
+          "inputSchema": {
+            "properties": {
+              "budget": {
+                "type": "integer"
+              },
+              "hint": {
+                "type": "string"
+              },
+              "max_columns": {
+                "type": "integer"
+              },
+              "max_rows": {
+                "type": "integer"
+              },
+              "payload": {},
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.data.route"
+        },
+        {
+          "description": "Record one quality-gated local policy observation",
+          "inputSchema": {
+            "properties": {
+              "cache_hit": {
+                "type": "boolean"
+              },
+              "family": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "latency_ms": {
+                "type": "number"
+              },
+              "model": {
+                "type": "string"
+              },
+              "quality": {
+                "type": "number"
+              },
+              "raw_bytes": {
+                "type": "integer"
+              },
+              "security_regressions": {
+                "type": "integer"
+              },
+              "success": {
+                "type": "boolean"
+              },
+              "visible_bytes": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "family",
+              "raw_bytes",
+              "visible_bytes",
+              "latency_ms",
+              "success"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.policy.record"
+        },
+        {
+          "description": "Recommend a conservative canary policy without weakening security or quality gates",
+          "inputSchema": {
+            "properties": {
+              "family": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "minimum_samples": {
+                "type": "integer"
+              },
+              "model": {
+                "type": "string"
+              },
+              "window": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "family"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.policy.recommend"
+        },
+        {
+          "description": "Read the latest promoted policy for one workload scope",
+          "inputSchema": {
+            "properties": {
+              "family": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "family"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.policy.active"
+        },
+        {
+          "description": "Render a user-scoped systemd, launchd or Windows Task Scheduler proxy service",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "environment_file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "working_directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.service.plan"
+        },
+        {
+          "description": "Verify a generated service descriptor byte-for-byte",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "environment_file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "working_directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.service.verify"
+        },
+        {
+          "description": "Validate an external benchmark-arm result and provider receipt without executing it",
+          "inputSchema": {
+            "properties": {
+              "arm_id": {
+                "type": "string"
+              },
+              "pair_key": {
+                "type": "string"
+              },
+              "require_receipt": {
+                "type": "boolean"
+              },
+              "result": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "result",
+              "pair_key",
+              "arm_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.arm.validate_result"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": true,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin",
+              "filesystem-write"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 3600,
+            "syntavra/version": "1"
+          },
+          "description": "Create an encrypted point-in-time state backup",
+          "inputSchema": {
+            "properties": {
+              "encrypt": {
+                "type": "boolean"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.backup.create"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin",
+              "filesystem-read"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 3600,
+            "syntavra/version": "1"
+          },
+          "description": "Verify an encrypted state backup without restoring it",
+          "inputSchema": {
+            "properties": {
+              "encrypted": {
+                "type": "boolean"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.backup.verify"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Read effective canonical configuration and provenance",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.config.effective"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": true,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "evidence-write"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Plan or apply evidence retention garbage collection",
+          "inputSchema": {
+            "properties": {
+              "dry_run": {
+                "type": "boolean"
+              },
+              "max_delete_bytes": {
+                "type": "integer"
+              },
+              "ttl_seconds": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.evidence.gc"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": true,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin",
+              "evidence-write"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 3600,
+            "syntavra/version": "1"
+          },
+          "description": "Rotate and re-encrypt local evidence keys",
+          "inputSchema": {
+            "properties": {
+              "reencrypt": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.evidence.rotate_key"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "evidence-read"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Show encrypted evidence lifecycle statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.evidence.stats"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Read local structured metrics",
+          "inputSchema": {
+            "properties": {
+              "format": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.observability.metrics"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "evidence-read"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Describe the canonical request/output pipeline",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.pipeline.describe"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "List permissioned plugins and quarantine state",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.plugins.list"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Show durable job scheduler queue and dead-letter state",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.scheduler.stats"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Show the pre-release production-core security, lifecycle and extensibility capabilities",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.v6.capabilities"
+        }
+      ],
+      "raw_manifest": {
+        "pipeline": [
+          "profile-selection",
+          "catalog-filter",
+          "schema-compilation",
+          "authorization",
+          "argument-decoding",
+          "execution",
+          "exact-output-capture",
+          "secret-redaction",
+          "optional-lossless-wire-encoding",
+          "route-receipt"
+        ],
+        "policy": {
+          "legacy_profile": "full",
+          "profile": "audit"
+        },
+        "schema": {
+          "compilation": {
+            "argument_aliases": {
+              "syntavra.compress": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.context.pack": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.data.route": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.fabric.compact": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.fabric.route": {
+                "untrusted_network": "network_untrusted"
+              },
+              "syntavra.inspect.map": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.inspect.source": {
+                "lines": "context_lines"
+              },
+              "syntavra.output.reveal": {
+                "budget": "budget_bytes",
+                "cursor": "continuation_token"
+              },
+              "syntavra.process.submit": {
+                "repo_tree": "repository_tree"
+              },
+              "syntavra.sandbox.batch": {
+                "stop_on_fail": "stop_on_failure"
+              },
+              "syntavra.session.context": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.session.search": {
+                "include_old": "include_superseded"
+              },
+              "syntavra.session.semantic_context": {
+                "budget": "budget_bytes",
+                "include_old": "include_superseded"
+              }
+            },
+            "catalog_hash": "6d7bc579b79517441003af0ce2dae2f12727ac7ec4fd785de744f4cb2c574420",
+            "compiled": {
+              "bytes": 27248,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 6812
+            },
+            "compiled_hash": "5c73e9ada97ce5e6f648581e2b3c5db195172803a1b80be65634a454cb09ab23",
+            "raw": {
+              "bytes": 27404,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 6851
+            },
+            "savings_ratio": 0.005692599620493399
+          },
+          "mode": "raw",
+          "profile": "audit"
+        }
+      },
+      "raw_tools": [
+        {
+          "description": "Inspect truthful runtime health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.status"
+        },
+        {
+          "description": "Detect installed coding-agent hosts",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.host.detect"
+        },
+        {
+          "description": "Submit a durable zero-poll command",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "repository_tree": {
+                "type": "string"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.process.submit"
+        },
+        {
+          "description": "Read durable completion events after a cursor",
+          "inputSchema": {
+            "properties": {
+              "after": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.process.completions"
+        },
+        {
+          "description": "Find exact multi-language symbols",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.symbol"
+        },
+        {
+          "description": "Retrieve exact bounded source for matching symbols",
+          "inputSchema": {
+            "properties": {
+              "context_lines": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.source"
+        },
+        {
+          "description": "Read an exact bounded project file range",
+          "inputSchema": {
+            "properties": {
+              "end_line": {
+                "type": "integer"
+              },
+              "max_bytes": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "start_line": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.range"
+        },
+        {
+          "description": "Inspect transitive multi-language impact",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.impact"
+        },
+        {
+          "description": "Inspect impact from changed paths",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "paths"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.paths"
+        },
+        {
+          "description": "Build a query-conditioned repository map",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "token_budget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.map"
+        },
+        {
+          "description": "Inspect structural-index coverage and parser health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.inspect.stats"
+        },
+        {
+          "description": "Evaluate context pressure",
+          "inputSchema": {
+            "properties": {
+              "churn": {
+                "type": "number"
+              },
+              "evidence_pressure": {
+                "type": "number"
+              },
+              "used": {
+                "type": "integer"
+              },
+              "window": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "used",
+              "window"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.evaluate"
+        },
+        {
+          "description": "Build minimum exact task context",
+          "inputSchema": {
+            "properties": {
+              "changed_paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "token_budget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.pack"
+        },
+        {
+          "description": "Reversibly compress generic content",
+          "inputSchema": {
+            "properties": {
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "hint": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.compress"
+        },
+        {
+          "description": "Restore a compression or one exact chunk",
+          "inputSchema": {
+            "properties": {
+              "chunk": {
+                "type": "integer"
+              },
+              "compression_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "compression_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.expand"
+        },
+        {
+          "description": "Verify exact compression reconstruction",
+          "inputSchema": {
+            "properties": {
+              "compression_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "compression_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.compression.verify"
+        },
+        {
+          "description": "Plan a fail-closed sandbox execution",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.plan"
+        },
+        {
+          "description": "Execute a command under sandbox policy",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.execute"
+        },
+        {
+          "description": "Execute multiple commands in one sandbox call",
+          "inputSchema": {
+            "properties": {
+              "backend": {
+                "type": "string"
+              },
+              "commands": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              "network": {
+                "type": "string"
+              },
+              "stop_on_failure": {
+                "type": "boolean"
+              },
+              "strict": {
+                "type": "boolean"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "commands"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.batch"
+        },
+        {
+          "description": "Open an immutable long-session runtime",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.session.open"
+        },
+        {
+          "description": "Append an immutable session event",
+          "inputSchema": {
+            "properties": {
+              "event_type": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "event_type",
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.append"
+        },
+        {
+          "description": "Assemble bounded active context",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              },
+              "token_budget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.context"
+        },
+        {
+          "description": "Build or refresh the exact summary DAG",
+          "inputSchema": {
+            "properties": {
+              "fanout": {
+                "type": "integer"
+              },
+              "force": {
+                "type": "boolean"
+              },
+              "leaf_size": {
+                "type": "integer"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.compact"
+        },
+        {
+          "description": "Expand a summary DAG node to exact events",
+          "inputSchema": {
+            "properties": {
+              "summary_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "summary_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.expand"
+        },
+        {
+          "description": "Verify immutable session hash lineage",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.verify"
+        },
+        {
+          "description": "Create an exact session checkpoint",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.checkpoint"
+        },
+        {
+          "description": "Fork a session from a verified checkpoint",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.fork"
+        },
+        {
+          "description": "Merge verified parent sessions",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "session_ids"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.merge"
+        },
+        {
+          "description": "Capture tool output through exact externalization",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.capture"
+        },
+        {
+          "description": "Search exact externalized tool output",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.search"
+        },
+        {
+          "description": "Progressively reveal selected externalized evidence",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "continuation_token": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.reveal"
+        },
+        {
+          "description": "Verify exact reconstruction and Merkle integrity",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.verify"
+        },
+        {
+          "description": "Inspect externalization statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.output.stats"
+        },
+        {
+          "description": "Record an attested provider usage receipt",
+          "inputSchema": {
+            "properties": {
+              "arm_id": {
+                "type": "string"
+              },
+              "cache_mode": {
+                "type": "string"
+              },
+              "hardware_hash": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "provider_response": {
+                "type": "object"
+              },
+              "quota_cost": {
+                "type": "number"
+              },
+              "repetition": {
+                "type": "integer"
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "task_id": {
+                "type": "string"
+              },
+              "usage": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "task_id",
+              "arm_id",
+              "repetition",
+              "cache_mode",
+              "provider",
+              "request_id",
+              "provider_response",
+              "usage",
+              "quota_cost",
+              "hardware_hash"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.usage.record"
+        },
+        {
+          "description": "Verify the provider usage hash chain and signatures",
+          "inputSchema": {
+            "properties": {
+              "require_hmac": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.usage.verify"
+        },
+        {
+          "description": "Record source-level token attribution",
+          "inputSchema": {
+            "properties": {
+              "arm_id": {
+                "type": "string"
+              },
+              "baseline_confidence": {
+                "type": "string"
+              },
+              "baseline_tokens": {
+                "type": "integer"
+              },
+              "confidence": {
+                "type": "object"
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "model": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "provider_receipt_hash": {
+                "type": "string"
+              },
+              "repetition": {
+                "type": "integer"
+              },
+              "request_id_hash": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "sources": {
+                "type": "object"
+              },
+              "task_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "task_id",
+              "arm_id",
+              "repetition",
+              "session_id",
+              "provider",
+              "model",
+              "request_id_hash",
+              "provider_receipt_hash",
+              "sources",
+              "confidence"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.usage.attribution.record"
+        },
+        {
+          "description": "Show token savings by source and confidence",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.usage.attribution.summary"
+        },
+        {
+          "description": "Semantic and temporal search over exact session events",
+          "inputSchema": {
+            "properties": {
+              "include_superseded": {
+                "type": "boolean"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.search"
+        },
+        {
+          "description": "Build query-conditioned long-session context",
+          "inputSchema": {
+            "properties": {
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "include_superseded": {
+                "type": "boolean"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.semantic_context"
+        },
+        {
+          "description": "Render a correctness-preserving bounded answer",
+          "inputSchema": {
+            "properties": {
+              "contract": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              },
+              "profile": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.govern"
+        },
+        {
+          "description": "Select a minimal task-conditioned MCP tool surface",
+          "inputSchema": {
+            "properties": {
+              "profile": {
+                "type": "string"
+              },
+              "task": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.profile"
+        },
+        {
+          "description": "Choose the safest exact-preserving execution route",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "network_untrusted": {
+                "type": "boolean"
+              },
+              "repeated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.route"
+        },
+        {
+          "description": "Compact common command output while retaining failures and security signals",
+          "inputSchema": {
+            "properties": {
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "command",
+              "stdout"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.compact"
+        },
+        {
+          "description": "Build a stable provider-prefix cache fingerprint",
+          "inputSchema": {
+            "properties": {
+              "keep_tail": {
+                "type": "integer"
+              },
+              "messages": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "messages"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.cache_align"
+        },
+        {
+          "description": "Generate installation and enforcement plans for one or every host",
+          "inputSchema": {
+            "properties": {
+              "all": {
+                "type": "boolean"
+              },
+              "host": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.platform_plan"
+        },
+        {
+          "description": "Diagnose competitive-fabric runtime coverage",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.fabric.doctor"
+        },
+        {
+          "description": "Inspect local savings, reliability, cache, and routing analytics",
+          "inputSchema": {
+            "properties": {
+              "since_seconds": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.insights"
+        },
+        {
+          "description": "Get or switch optimization mode",
+          "inputSchema": {
+            "properties": {
+              "mode": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.mode"
+        },
+        {
+          "description": "Render live savings statusline",
+          "inputSchema": {
+            "properties": {
+              "verbose": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.statusline"
+        },
+        {
+          "description": "Fail-closed pre-tool command rewrite",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.command.rewrite"
+        },
+        {
+          "description": "Find missed token-saving opportunities",
+          "inputSchema": {
+            "properties": {
+              "source": {}
+            },
+            "required": [
+              "source"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.transcript.mine"
+        },
+        {
+          "description": "Plan stable prompt-cache prefix and expiry",
+          "inputSchema": {
+            "properties": {
+              "messages": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "model": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "ttl": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "messages",
+              "provider",
+              "model"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.cache.plan"
+        },
+        {
+          "description": "Show cache expiry and amortization health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.cache.health"
+        },
+        {
+          "description": "Audit agent configuration token waste",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.config.audit"
+        },
+        {
+          "description": "Redact secrets before MCP response",
+          "inputSchema": {
+            "properties": {
+              "value": {}
+            },
+            "required": [
+              "value"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.secret.redact"
+        },
+        {
+          "description": "Lossless compact MCP response wire codec",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "minimum_savings": {
+                "type": "number"
+              },
+              "value": {}
+            },
+            "required": [
+              "action",
+              "value"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.wire"
+        },
+        {
+          "description": "Query code graph analytics",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "query": {
+                "type": "string"
+              },
+              "target_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.code.intelligence"
+        },
+        {
+          "description": "Extract, rank, search, backfill or export memory",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.memory.intelligence"
+        },
+        {
+          "description": "Quota, rate-limit and complexity-aware provider routing",
+          "inputSchema": {
+            "properties": {
+              "candidates": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "changed_files": {
+                "type": "integer"
+              },
+              "task": {
+                "type": "string"
+              },
+              "token_estimate": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "task",
+              "candidates"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.route"
+        },
+        {
+          "description": "Manage credential references, account health, quota and failover",
+          "inputSchema": {
+            "properties": {
+              "account": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "credential_ref": {
+                "type": "string"
+              },
+              "latency_ms": {
+                "type": "number"
+              },
+              "model_rows": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "models": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "priority": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "quota_remaining": {
+                "type": "number"
+              },
+              "quota_reset_at": {
+                "type": "number"
+              },
+              "retry_after_seconds": {
+                "type": "number"
+              },
+              "subscription": {
+                "type": "boolean"
+              },
+              "success": {
+                "type": "boolean"
+              },
+              "task": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.accounts"
+        },
+        {
+          "description": "Build specialized short-handoff subtasks",
+          "inputSchema": {
+            "properties": {
+              "context_paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "max_tasks": {
+                "type": "integer"
+              },
+              "objective": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "objective"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.subtask.plan"
+        },
+        {
+          "description": "Poll changes and incrementally rebuild code index",
+          "inputSchema": {
+            "properties": {
+              "interval": {
+                "type": "number"
+              },
+              "iterations": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.repository.watch"
+        },
+        {
+          "description": "Read local dashboard state",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.dashboard.snapshot"
+        },
+        {
+          "description": "Inspect provider cache, usage, and request-shape capabilities",
+          "inputSchema": {
+            "properties": {
+              "provider": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.capabilities"
+        },
+        {
+          "description": "Prepare a cache-stable exact provider request",
+          "inputSchema": {
+            "properties": {
+              "allow_tool_replay": {
+                "type": "boolean"
+              },
+              "cache_policy": {
+                "type": "string"
+              },
+              "explicit_cache_name": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "prompt_cache_ttl_seconds": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "request": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "provider",
+              "request"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.prepare"
+        },
+        {
+          "description": "Capture an exact provider response with optional receipt and replay",
+          "inputSchema": {
+            "properties": {
+              "plan": {
+                "type": "object"
+              },
+              "preview_bytes": {
+                "type": "integer"
+              },
+              "receipt": {
+                "type": "object"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "response": {
+                "type": "object"
+              },
+              "store_replay": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "plan",
+              "response"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.capture"
+        },
+        {
+          "description": "Replay an exact deterministic provider response",
+          "inputSchema": {
+            "properties": {
+              "cache_key": {
+                "type": "string"
+              },
+              "plan": {
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.replay"
+        },
+        {
+          "description": "Inspect provider gateway request and replay statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.stats"
+        },
+        {
+          "description": "Verify provider request and response evidence integrity",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.verify"
+        },
+        {
+          "description": "Inspect SDK, framework, host, output, and benchmark product surfaces",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.ecosystem.capabilities"
+        },
+        {
+          "description": "Build query-aware bounded context with exact immutable references",
+          "inputSchema": {
+            "properties": {
+              "policy": {
+                "properties": {
+                  "chars_per_token": {
+                    "type": "number"
+                  },
+                  "event_preview_chars": {
+                    "type": "integer"
+                  },
+                  "forced_event_types": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "max_candidates": {
+                    "type": "integer"
+                  },
+                  "recent_events": {
+                    "type": "integer"
+                  },
+                  "summary_preview_chars": {
+                    "type": "integer"
+                  },
+                  "token_budget": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.plan"
+        },
+        {
+          "description": "Stress-test query-aware planning while verifying exact session history",
+          "inputSchema": {
+            "properties": {
+              "policy": {
+                "properties": {
+                  "chars_per_token": {
+                    "type": "number"
+                  },
+                  "event_preview_chars": {
+                    "type": "integer"
+                  },
+                  "forced_event_types": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "max_candidates": {
+                    "type": "integer"
+                  },
+                  "recent_events": {
+                    "type": "integer"
+                  },
+                  "summary_preview_chars": {
+                    "type": "integer"
+                  },
+                  "token_budget": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "queries": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "queries"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.stress"
+        },
+        {
+          "description": "Validate a strict real-task corpus and identical-arm parity",
+          "inputSchema": {
+            "properties": {
+              "arms": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "minimum_arms": {
+                "type": "integer"
+              },
+              "minimum_repetitions": {
+                "type": "integer"
+              },
+              "minimum_tasks": {
+                "type": "integer"
+              },
+              "tasks": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "tasks",
+              "arms"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.corpus.validate"
+        },
+        {
+          "description": "Create a deterministic randomized paired-run manifest",
+          "inputSchema": {
+            "properties": {
+              "arms": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "cache_modes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "repetitions": {
+                "type": "integer"
+              },
+              "seed": {
+                "type": "integer"
+              },
+              "tasks": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "tasks",
+              "arms"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.corpus.manifest"
+        },
+        {
+          "description": "Inspect product-parity V5 data, policy, service, SDK and arm-runner surfaces",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.product.capabilities"
+        },
+        {
+          "description": "Route and compact SQL/table, RAG, GraphQL and generic JSON while preserving exact evidence",
+          "inputSchema": {
+            "properties": {
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "hint": {
+                "type": "string"
+              },
+              "max_columns": {
+                "type": "integer"
+              },
+              "max_rows": {
+                "type": "integer"
+              },
+              "payload": {},
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.data.route"
+        },
+        {
+          "description": "Record one quality-gated local policy observation",
+          "inputSchema": {
+            "properties": {
+              "cache_hit": {
+                "type": "boolean"
+              },
+              "family": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "latency_ms": {
+                "type": "number"
+              },
+              "model": {
+                "type": "string"
+              },
+              "quality": {
+                "type": "number"
+              },
+              "raw_bytes": {
+                "type": "integer"
+              },
+              "security_regressions": {
+                "type": "integer"
+              },
+              "success": {
+                "type": "boolean"
+              },
+              "visible_bytes": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "family",
+              "raw_bytes",
+              "visible_bytes",
+              "latency_ms",
+              "success"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.policy.record"
+        },
+        {
+          "description": "Recommend a conservative canary policy without weakening security or quality gates",
+          "inputSchema": {
+            "properties": {
+              "family": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "minimum_samples": {
+                "type": "integer"
+              },
+              "model": {
+                "type": "string"
+              },
+              "window": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "family"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.policy.recommend"
+        },
+        {
+          "description": "Read the latest promoted policy for one workload scope",
+          "inputSchema": {
+            "properties": {
+              "family": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "family"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.policy.active"
+        },
+        {
+          "description": "Render a user-scoped systemd, launchd or Windows Task Scheduler proxy service",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "environment_file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "working_directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.service.plan"
+        },
+        {
+          "description": "Verify a generated service descriptor byte-for-byte",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "environment_file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "working_directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.service.verify"
+        },
+        {
+          "description": "Validate an external benchmark-arm result and provider receipt without executing it",
+          "inputSchema": {
+            "properties": {
+              "arm_id": {
+                "type": "string"
+              },
+              "pair_key": {
+                "type": "string"
+              },
+              "require_receipt": {
+                "type": "boolean"
+              },
+              "result": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "result",
+              "pair_key",
+              "arm_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.arm.validate_result"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": true,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin",
+              "filesystem-write"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 3600,
+            "syntavra/version": "1"
+          },
+          "description": "Create an encrypted point-in-time state backup",
+          "inputSchema": {
+            "properties": {
+              "encrypt": {
+                "type": "boolean"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.backup.create"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin",
+              "filesystem-read"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 3600,
+            "syntavra/version": "1"
+          },
+          "description": "Verify an encrypted state backup without restoring it",
+          "inputSchema": {
+            "properties": {
+              "encrypted": {
+                "type": "boolean"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.backup.verify"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Read effective canonical configuration and provenance",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.config.effective"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": true,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "evidence-write"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Plan or apply evidence retention garbage collection",
+          "inputSchema": {
+            "properties": {
+              "dry_run": {
+                "type": "boolean"
+              },
+              "max_delete_bytes": {
+                "type": "integer"
+              },
+              "ttl_seconds": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.evidence.gc"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": true,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin",
+              "evidence-write"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 3600,
+            "syntavra/version": "1"
+          },
+          "description": "Rotate and re-encrypt local evidence keys",
+          "inputSchema": {
+            "properties": {
+              "reencrypt": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.evidence.rotate_key"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "evidence-read"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Inspect encrypted evidence lifecycle statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.evidence.stats"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Read local structured metrics",
+          "inputSchema": {
+            "properties": {
+              "format": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.observability.metrics"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "evidence-read"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Describe the canonical request/output pipeline",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.pipeline.describe"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "List permissioned plugins and quarantine state",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.plugins.list"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [
+              "admin"
+            ],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Inspect durable job scheduler queue and dead-letter state",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.scheduler.stats"
+        },
+        {
+          "annotations": {
+            "syntavra/approval_required": false,
+            "syntavra/cost_budget": 0.0,
+            "syntavra/deprecated": false,
+            "syntavra/permissions": [],
+            "syntavra/replacement": "",
+            "syntavra/sandbox_profile": "none",
+            "syntavra/timeout_seconds": 60.0,
+            "syntavra/version": "1"
+          },
+          "description": "Inspect the pre-release production-core security, lifecycle and extensibility capabilities",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.v6.capabilities"
+        }
+      ]
+    },
+    "balanced": {
+      "compact_manifest": {
+        "pipeline": [
+          "profile-selection",
+          "catalog-filter",
+          "schema-compilation",
+          "authorization",
+          "argument-decoding",
+          "execution",
+          "exact-output-capture",
+          "secret-redaction",
+          "optional-lossless-wire-encoding",
+          "route-receipt"
+        ],
+        "policy": {
+          "legacy_profile": "optimized",
+          "profile": "balanced"
+        },
+        "schema": {
+          "compilation": {
+            "argument_aliases": {
+              "syntavra.context.pack": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.data.route": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.fabric.route": {
+                "untrusted_network": "network_untrusted"
+              },
+              "syntavra.inspect.map": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.inspect.source": {
+                "lines": "context_lines"
+              },
+              "syntavra.output.reveal": {
+                "budget": "budget_bytes",
+                "cursor": "continuation_token"
+              },
+              "syntavra.process.submit": {
+                "repo_tree": "repository_tree"
+              },
+              "syntavra.session.context": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.session.search": {
+                "include_old": "include_superseded"
+              },
+              "syntavra.session.semantic_context": {
+                "budget": "budget_bytes",
+                "include_old": "include_superseded"
+              }
+            },
+            "catalog_hash": "ec4796a59117a26f276dd4c14e968571523a3564c4628e6a75921a51b5b8d5e6",
+            "compiled": {
+              "bytes": 8776,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 2194
+            },
+            "compiled_hash": "935cd769c61ccaa6a83293b4d328eb7cf7f80372b7db2b74c811cd7bda0c7689",
+            "raw": {
+              "bytes": 8893,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 2224
+            },
+            "savings_ratio": 0.013489208633093552
+          },
+          "mode": "compact",
+          "profile": "balanced"
+        }
+      },
+      "compilation": {
+        "argument_aliases": {
+          "syntavra.context.pack": {
+            "budget_tokens": "token_budget"
+          },
+          "syntavra.data.route": {
+            "budget": "budget_bytes"
+          },
+          "syntavra.fabric.route": {
+            "untrusted_network": "network_untrusted"
+          },
+          "syntavra.inspect.map": {
+            "budget_tokens": "token_budget"
+          },
+          "syntavra.inspect.source": {
+            "lines": "context_lines"
+          },
+          "syntavra.output.reveal": {
+            "budget": "budget_bytes",
+            "cursor": "continuation_token"
+          },
+          "syntavra.process.submit": {
+            "repo_tree": "repository_tree"
+          },
+          "syntavra.session.context": {
+            "budget_tokens": "token_budget"
+          },
+          "syntavra.session.search": {
+            "include_old": "include_superseded"
+          },
+          "syntavra.session.semantic_context": {
+            "budget": "budget_bytes",
+            "include_old": "include_superseded"
+          }
+        },
+        "catalog_hash": "ec4796a59117a26f276dd4c14e968571523a3564c4628e6a75921a51b5b8d5e6",
+        "compiled": {
+          "bytes": 8776,
+          "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+          "tokens": 2194
+        },
+        "compiled_hash": "935cd769c61ccaa6a83293b4d328eb7cf7f80372b7db2b74c811cd7bda0c7689",
+        "raw": {
+          "bytes": 8893,
+          "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+          "tokens": 2224
+        },
+        "savings_ratio": 0.013489208633093552
+      },
+      "compiled_tools": [
+        {
+          "description": "Show truthful runtime health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.status"
+        },
+        {
+          "description": "Build a task-scoped repository map",
+          "inputSchema": {
+            "properties": {
+              "budget_tokens": {
+                "type": "integer"
+              },
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.map"
+        },
+        {
+          "description": "Capture tool output with exact recovery",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.capture"
+        },
+        {
+          "description": "Search exact externalized tool output",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.search"
+        },
+        {
+          "description": "Progressively reveal selected externalized evidence",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "budget": {
+                "type": "integer"
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.reveal"
+        },
+        {
+          "description": "Build task-scoped long-session context",
+          "inputSchema": {
+            "properties": {
+              "budget": {
+                "type": "integer"
+              },
+              "include_old": {
+                "type": "boolean"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.semantic_context"
+        },
+        {
+          "description": "Choose the safest exact-preserving execution route",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "repeated": {
+                "type": "boolean"
+              },
+              "untrusted_network": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.route"
+        },
+        {
+          "description": "Diagnose competitive-fabric runtime coverage",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.fabric.doctor"
+        },
+        {
+          "description": "Detect installed coding-agent hosts",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.host.detect"
+        },
+        {
+          "description": "Show transitive multi-language impact",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.impact"
+        },
+        {
+          "description": "Read exact bounded source for matching symbols",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "lines": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.source"
+        },
+        {
+          "description": "Read an exact bounded project file range",
+          "inputSchema": {
+            "properties": {
+              "end_line": {
+                "type": "integer"
+              },
+              "max_bytes": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "start_line": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.range"
+        },
+        {
+          "description": "Evaluate context pressure",
+          "inputSchema": {
+            "properties": {
+              "churn": {
+                "type": "number"
+              },
+              "evidence_pressure": {
+                "type": "number"
+              },
+              "used": {
+                "type": "integer"
+              },
+              "window": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "used",
+              "window"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.evaluate"
+        },
+        {
+          "description": "Verify exact reconstruction and Merkle integrity",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.verify"
+        },
+        {
+          "description": "Show externalization statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.output.stats"
+        },
+        {
+          "description": "Open an immutable long-session runtime",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.session.open"
+        },
+        {
+          "description": "Append an immutable session event",
+          "inputSchema": {
+            "properties": {
+              "event_type": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "event_type",
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.append"
+        },
+        {
+          "description": "Semantic and temporal search over exact session events",
+          "inputSchema": {
+            "properties": {
+              "include_old": {
+                "type": "boolean"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.search"
+        },
+        {
+          "description": "Assemble bounded active context",
+          "inputSchema": {
+            "properties": {
+              "budget_tokens": {
+                "type": "integer"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.context"
+        },
+        {
+          "description": "Build or refresh the exact summary DAG",
+          "inputSchema": {
+            "properties": {
+              "fanout": {
+                "type": "integer"
+              },
+              "force": {
+                "type": "boolean"
+              },
+              "leaf_size": {
+                "type": "integer"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.compact"
+        },
+        {
+          "description": "Verify immutable session hash lineage",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.verify"
+        },
+        {
+          "description": "Plan a fail-closed sandbox execution",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.plan"
+        },
+        {
+          "description": "Run a command under sandbox policy",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.execute"
+        },
+        {
+          "description": "Submit a durable zero-poll command",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "repo_tree": {
+                "type": "string"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.process.submit"
+        },
+        {
+          "description": "Read durable completion events after cursor",
+          "inputSchema": {
+            "properties": {
+              "after": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.process.completions"
+        },
+        {
+          "description": "Select a minimal task-conditioned MCP tool surface",
+          "inputSchema": {
+            "properties": {
+              "profile": {
+                "type": "string"
+              },
+              "task": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.profile"
+        },
+        {
+          "description": "Show local savings, reliability, cache, and routing analytics",
+          "inputSchema": {
+            "properties": {
+              "since_seconds": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.insights"
+        },
+        {
+          "description": "Show provider cache, usage, and request-shape capabilities",
+          "inputSchema": {
+            "properties": {
+              "provider": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.capabilities"
+        },
+        {
+          "description": "Prepare a cache-stable exact provider request",
+          "inputSchema": {
+            "properties": {
+              "allow_tool_replay": {
+                "type": "boolean"
+              },
+              "cache_policy": {
+                "type": "string"
+              },
+              "explicit_cache_name": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "prompt_cache_ttl_seconds": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "request": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "provider",
+              "request"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.prepare"
+        },
+        {
+          "description": "Capture an exact provider response with optional receipt and replay",
+          "inputSchema": {
+            "properties": {
+              "plan": {
+                "type": "object"
+              },
+              "preview_bytes": {
+                "type": "integer"
+              },
+              "receipt": {
+                "type": "object"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "response": {
+                "type": "object"
+              },
+              "store_replay": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "plan",
+              "response"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.capture"
+        },
+        {
+          "description": "Replay an exact deterministic provider response",
+          "inputSchema": {
+            "properties": {
+              "cache_key": {
+                "type": "string"
+              },
+              "plan": {
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.replay"
+        },
+        {
+          "description": "Verify provider request and response evidence integrity",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.verify"
+        },
+        {
+          "description": "Show provider gateway request and replay statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.stats"
+        },
+        {
+          "description": "Route and compact SQL/table, RAG, GraphQL and generic JSON while preserving exact",
+          "inputSchema": {
+            "properties": {
+              "budget": {
+                "type": "integer"
+              },
+              "hint": {
+                "type": "string"
+              },
+              "max_columns": {
+                "type": "integer"
+              },
+              "max_rows": {
+                "type": "integer"
+              },
+              "payload": {},
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.data.route"
+        },
+        {
+          "description": "Show SDK, framework, host, output, and benchmark product surfaces",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.ecosystem.capabilities"
+        },
+        {
+          "description": "Build minimum exact task context",
+          "inputSchema": {
+            "properties": {
+              "budget_tokens": {
+                "type": "integer"
+              },
+              "changed_paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.pack"
+        }
+      ],
+      "raw_manifest": {
+        "pipeline": [
+          "profile-selection",
+          "catalog-filter",
+          "schema-compilation",
+          "authorization",
+          "argument-decoding",
+          "execution",
+          "exact-output-capture",
+          "secret-redaction",
+          "optional-lossless-wire-encoding",
+          "route-receipt"
+        ],
+        "policy": {
+          "legacy_profile": "optimized",
+          "profile": "balanced"
+        },
+        "schema": {
+          "compilation": {
+            "argument_aliases": {
+              "syntavra.context.pack": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.data.route": {
+                "budget": "budget_bytes"
+              },
+              "syntavra.fabric.route": {
+                "untrusted_network": "network_untrusted"
+              },
+              "syntavra.inspect.map": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.inspect.source": {
+                "lines": "context_lines"
+              },
+              "syntavra.output.reveal": {
+                "budget": "budget_bytes",
+                "cursor": "continuation_token"
+              },
+              "syntavra.process.submit": {
+                "repo_tree": "repository_tree"
+              },
+              "syntavra.session.context": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.session.search": {
+                "include_old": "include_superseded"
+              },
+              "syntavra.session.semantic_context": {
+                "budget": "budget_bytes",
+                "include_old": "include_superseded"
+              }
+            },
+            "catalog_hash": "ec4796a59117a26f276dd4c14e968571523a3564c4628e6a75921a51b5b8d5e6",
+            "compiled": {
+              "bytes": 8776,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 2194
+            },
+            "compiled_hash": "935cd769c61ccaa6a83293b4d328eb7cf7f80372b7db2b74c811cd7bda0c7689",
+            "raw": {
+              "bytes": 8893,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 2224
+            },
+            "savings_ratio": 0.013489208633093552
+          },
+          "mode": "raw",
+          "profile": "balanced"
+        }
+      },
+      "raw_tools": [
+        {
+          "description": "Inspect truthful runtime health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.status"
+        },
+        {
+          "description": "Build a query-conditioned repository map",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "token_budget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.map"
+        },
+        {
+          "description": "Capture tool output through exact externalization",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.capture"
+        },
+        {
+          "description": "Search exact externalized tool output",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.search"
+        },
+        {
+          "description": "Progressively reveal selected externalized evidence",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "continuation_token": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.reveal"
+        },
+        {
+          "description": "Build query-conditioned long-session context",
+          "inputSchema": {
+            "properties": {
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "include_superseded": {
+                "type": "boolean"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.semantic_context"
+        },
+        {
+          "description": "Choose the safest exact-preserving execution route",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "network_untrusted": {
+                "type": "boolean"
+              },
+              "repeated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.route"
+        },
+        {
+          "description": "Diagnose competitive-fabric runtime coverage",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.fabric.doctor"
+        },
+        {
+          "description": "Detect installed coding-agent hosts",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.host.detect"
+        },
+        {
+          "description": "Inspect transitive multi-language impact",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.impact"
+        },
+        {
+          "description": "Retrieve exact bounded source for matching symbols",
+          "inputSchema": {
+            "properties": {
+              "context_lines": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.source"
+        },
+        {
+          "description": "Read an exact bounded project file range",
+          "inputSchema": {
+            "properties": {
+              "end_line": {
+                "type": "integer"
+              },
+              "max_bytes": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "start_line": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.range"
+        },
+        {
+          "description": "Evaluate context pressure",
+          "inputSchema": {
+            "properties": {
+              "churn": {
+                "type": "number"
+              },
+              "evidence_pressure": {
+                "type": "number"
+              },
+              "used": {
+                "type": "integer"
+              },
+              "window": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "used",
+              "window"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.evaluate"
+        },
+        {
+          "description": "Verify exact reconstruction and Merkle integrity",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.verify"
+        },
+        {
+          "description": "Inspect externalization statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.output.stats"
+        },
+        {
+          "description": "Open an immutable long-session runtime",
+          "inputSchema": {
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.session.open"
+        },
+        {
+          "description": "Append an immutable session event",
+          "inputSchema": {
+            "properties": {
+              "event_type": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "event_type",
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.append"
+        },
+        {
+          "description": "Semantic and temporal search over exact session events",
+          "inputSchema": {
+            "properties": {
+              "include_superseded": {
+                "type": "boolean"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.search"
+        },
+        {
+          "description": "Assemble bounded active context",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              },
+              "token_budget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.context"
+        },
+        {
+          "description": "Build or refresh the exact summary DAG",
+          "inputSchema": {
+            "properties": {
+              "fanout": {
+                "type": "integer"
+              },
+              "force": {
+                "type": "boolean"
+              },
+              "leaf_size": {
+                "type": "integer"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.compact"
+        },
+        {
+          "description": "Verify immutable session hash lineage",
+          "inputSchema": {
+            "properties": {
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.verify"
+        },
+        {
+          "description": "Plan a fail-closed sandbox execution",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.plan"
+        },
+        {
+          "description": "Execute a command under sandbox policy",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "strict": {
+                "type": "boolean"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.sandbox.execute"
+        },
+        {
+          "description": "Submit a durable zero-poll command",
+          "inputSchema": {
+            "properties": {
+              "argv": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "repository_tree": {
+                "type": "string"
+              },
+              "timeout": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "argv"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.process.submit"
+        },
+        {
+          "description": "Read durable completion events after a cursor",
+          "inputSchema": {
+            "properties": {
+              "after": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.process.completions"
+        },
+        {
+          "description": "Select a minimal task-conditioned MCP tool surface",
+          "inputSchema": {
+            "properties": {
+              "profile": {
+                "type": "string"
+              },
+              "task": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.profile"
+        },
+        {
+          "description": "Inspect local savings, reliability, cache, and routing analytics",
+          "inputSchema": {
+            "properties": {
+              "since_seconds": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.fabric.insights"
+        },
+        {
+          "description": "Inspect provider cache, usage, and request-shape capabilities",
+          "inputSchema": {
+            "properties": {
+              "provider": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.capabilities"
+        },
+        {
+          "description": "Prepare a cache-stable exact provider request",
+          "inputSchema": {
+            "properties": {
+              "allow_tool_replay": {
+                "type": "boolean"
+              },
+              "cache_policy": {
+                "type": "string"
+              },
+              "explicit_cache_name": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "prompt_cache_ttl_seconds": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "request": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "provider",
+              "request"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.prepare"
+        },
+        {
+          "description": "Capture an exact provider response with optional receipt and replay",
+          "inputSchema": {
+            "properties": {
+              "plan": {
+                "type": "object"
+              },
+              "preview_bytes": {
+                "type": "integer"
+              },
+              "receipt": {
+                "type": "object"
+              },
+              "replay_ttl_seconds": {
+                "type": "integer"
+              },
+              "response": {
+                "type": "object"
+              },
+              "store_replay": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "plan",
+              "response"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.provider.capture"
+        },
+        {
+          "description": "Replay an exact deterministic provider response",
+          "inputSchema": {
+            "properties": {
+              "cache_key": {
+                "type": "string"
+              },
+              "plan": {
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.provider.replay"
+        },
+        {
+          "description": "Verify provider request and response evidence integrity",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.verify"
+        },
+        {
+          "description": "Inspect provider gateway request and replay statistics",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.provider.stats"
+        },
+        {
+          "description": "Route and compact SQL/table, RAG, GraphQL and generic JSON while preserving exact evidence",
+          "inputSchema": {
+            "properties": {
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "hint": {
+                "type": "string"
+              },
+              "max_columns": {
+                "type": "integer"
+              },
+              "max_rows": {
+                "type": "integer"
+              },
+              "payload": {},
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "payload"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.data.route"
+        },
+        {
+          "description": "Inspect SDK, framework, host, output, and benchmark product surfaces",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.ecosystem.capabilities"
+        },
+        {
+          "description": "Build minimum exact task context",
+          "inputSchema": {
+            "properties": {
+              "changed_paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "token_budget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.context.pack"
+        }
+      ]
+    },
+    "minimal": {
+      "compact_manifest": {
+        "pipeline": [
+          "profile-selection",
+          "catalog-filter",
+          "schema-compilation",
+          "authorization",
+          "argument-decoding",
+          "execution",
+          "exact-output-capture",
+          "secret-redaction",
+          "optional-lossless-wire-encoding",
+          "route-receipt"
+        ],
+        "policy": {
+          "legacy_profile": "tiny",
+          "profile": "minimal"
+        },
+        "schema": {
+          "compilation": {
+            "argument_aliases": {
+              "syntavra.fabric.route": {
+                "untrusted_network": "network_untrusted"
+              },
+              "syntavra.inspect.map": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.output.reveal": {
+                "budget": "budget_bytes",
+                "cursor": "continuation_token"
+              },
+              "syntavra.session.semantic_context": {
+                "budget": "budget_bytes",
+                "include_old": "include_superseded"
+              }
+            },
+            "catalog_hash": "b6bc27af7f9f40708919de2b1eecb26a88f3d66302c71533e5b22b6c62b7b01a",
+            "compiled": {
+              "bytes": 1991,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 498
+            },
+            "compiled_hash": "1611f65dc8051b0112d45744f0ed7b446f9e945a40bb0f187277a35b2f2cb6a4",
+            "raw": {
+              "bytes": 2046,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 512
+            },
+            "savings_ratio": 0.02734375
+          },
+          "mode": "compact",
+          "profile": "minimal"
+        }
+      },
+      "compilation": {
+        "argument_aliases": {
+          "syntavra.fabric.route": {
+            "untrusted_network": "network_untrusted"
+          },
+          "syntavra.inspect.map": {
+            "budget_tokens": "token_budget"
+          },
+          "syntavra.output.reveal": {
+            "budget": "budget_bytes",
+            "cursor": "continuation_token"
+          },
+          "syntavra.session.semantic_context": {
+            "budget": "budget_bytes",
+            "include_old": "include_superseded"
+          }
+        },
+        "catalog_hash": "b6bc27af7f9f40708919de2b1eecb26a88f3d66302c71533e5b22b6c62b7b01a",
+        "compiled": {
+          "bytes": 1991,
+          "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+          "tokens": 498
+        },
+        "compiled_hash": "1611f65dc8051b0112d45744f0ed7b446f9e945a40bb0f187277a35b2f2cb6a4",
+        "raw": {
+          "bytes": 2046,
+          "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+          "tokens": 512
+        },
+        "savings_ratio": 0.02734375
+      },
+      "compiled_tools": [
+        {
+          "description": "Show truthful runtime health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.status"
+        },
+        {
+          "description": "Build a task-scoped repository map",
+          "inputSchema": {
+            "properties": {
+              "budget_tokens": {
+                "type": "integer"
+              },
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.map"
+        },
+        {
+          "description": "Capture tool output with exact recovery",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.capture"
+        },
+        {
+          "description": "Search exact externalized tool output",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.search"
+        },
+        {
+          "description": "Progressively reveal selected externalized evidence",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "budget": {
+                "type": "integer"
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.reveal"
+        },
+        {
+          "description": "Build task-scoped long-session context",
+          "inputSchema": {
+            "properties": {
+              "budget": {
+                "type": "integer"
+              },
+              "include_old": {
+                "type": "boolean"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.semantic_context"
+        },
+        {
+          "description": "Choose the safest exact-preserving execution route",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "repeated": {
+                "type": "boolean"
+              },
+              "untrusted_network": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.route"
+        },
+        {
+          "description": "Diagnose competitive-fabric runtime coverage",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.fabric.doctor"
+        }
+      ],
+      "raw_manifest": {
+        "pipeline": [
+          "profile-selection",
+          "catalog-filter",
+          "schema-compilation",
+          "authorization",
+          "argument-decoding",
+          "execution",
+          "exact-output-capture",
+          "secret-redaction",
+          "optional-lossless-wire-encoding",
+          "route-receipt"
+        ],
+        "policy": {
+          "legacy_profile": "tiny",
+          "profile": "minimal"
+        },
+        "schema": {
+          "compilation": {
+            "argument_aliases": {
+              "syntavra.fabric.route": {
+                "untrusted_network": "network_untrusted"
+              },
+              "syntavra.inspect.map": {
+                "budget_tokens": "token_budget"
+              },
+              "syntavra.output.reveal": {
+                "budget": "budget_bytes",
+                "cursor": "continuation_token"
+              },
+              "syntavra.session.semantic_context": {
+                "budget": "budget_bytes",
+                "include_old": "include_superseded"
+              }
+            },
+            "catalog_hash": "b6bc27af7f9f40708919de2b1eecb26a88f3d66302c71533e5b22b6c62b7b01a",
+            "compiled": {
+              "bytes": 1991,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 498
+            },
+            "compiled_hash": "1611f65dc8051b0112d45744f0ed7b446f9e945a40bb0f187277a35b2f2cb6a4",
+            "raw": {
+              "bytes": 2046,
+              "method": "LOCALLY_ESTIMATED:utf8-bytes-div-4",
+              "tokens": 512
+            },
+            "savings_ratio": 0.02734375
+          },
+          "mode": "raw",
+          "profile": "minimal"
+        }
+      },
+      "raw_tools": [
+        {
+          "description": "Inspect truthful runtime health",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.status"
+        },
+        {
+          "description": "Build a query-conditioned repository map",
+          "inputSchema": {
+            "properties": {
+              "max_depth": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "token_budget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.inspect.map"
+        },
+        {
+          "description": "Capture tool output through exact externalization",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.capture"
+        },
+        {
+          "description": "Search exact externalized tool output",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              },
+              "scope_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.output.search"
+        },
+        {
+          "description": "Progressively reveal selected externalized evidence",
+          "inputSchema": {
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "continuation_token": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": "syntavra.output.reveal"
+        },
+        {
+          "description": "Build query-conditioned long-session context",
+          "inputSchema": {
+            "properties": {
+              "budget_bytes": {
+                "type": "integer"
+              },
+              "include_superseded": {
+                "type": "boolean"
+              },
+              "query": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.session.semantic_context"
+        },
+        {
+          "description": "Choose the safest exact-preserving execution route",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "network_untrusted": {
+                "type": "boolean"
+              },
+              "repeated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          "name": "syntavra.fabric.route"
+        },
+        {
+          "description": "Diagnose competitive-fabric runtime coverage",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "syntavra.fabric.doctor"
+        }
+      ]
+    }
+  },
   "schema_version": 1,
-  "surface": "syntavra-native-mcp-catalog",
   "server": {
     "default_protocol_version": "2025-06-18",
     "instructions": "Token/context optimization with exact recovery and fail-closed tool routing.",
     "name": "syntavra",
     "version": "0.0.1"
   },
-  "catalog": {
-    "tool_count": 0,
-    "sha256": ""
-  },
-  "profile_aliases": {
-    "minimal": "minimal",
-    "tiny": "minimal",
-    "balanced": "balanced",
-    "optimized": "balanced",
-    "audit": "audit",
-    "full": "audit"
-  },
-  "profiles": {
-    "minimal": {"raw_tools": [], "compiled_tools": [], "compilation": null, "compact_manifest": {}, "raw_manifest": {}},
-    "balanced": {"raw_tools": [], "compiled_tools": [], "compilation": null, "compact_manifest": {}, "raw_manifest": {}},
-    "audit": {"raw_tools": [], "compiled_tools": [], "compilation": null, "compact_manifest": {}, "raw_manifest": {}}
-  }
+  "surface": "syntavra-native-mcp-catalog"
 }
