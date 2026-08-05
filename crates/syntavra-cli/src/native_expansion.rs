@@ -18,6 +18,8 @@ mod native_evidence_stats;
 #[allow(clippy::pedantic)]
 #[path = "native_host.rs"]
 mod native_host;
+#[path = "native_init.rs"]
+mod native_init;
 #[allow(clippy::pedantic)]
 #[path = "native_job_mutations.rs"]
 mod native_job_mutations;
@@ -74,6 +76,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_evidence_gc::supports(command)
         || native_evidence_stats::supports(command)
         || native_host::supports(command)
+        || native_init::supports(command)
         || native_job_mutations::supports(command)
         || native_job_queries::supports(command)
         || native_memory::supports(command)
@@ -133,6 +136,9 @@ pub fn execute(
     }
     if native_host::supports(command) {
         return native_host::execute(command, arguments, project_root);
+    }
+    if native_init::supports(command) {
+        return native_init::execute(arguments, project_root, state_root);
     }
     if native_job_mutations::supports(command) {
         return native_job_mutations::execute(command, arguments, state_root);
@@ -217,6 +223,7 @@ mod tests {
             vec!["host", "negotiate"],
             vec!["host", "detect"],
             vec!["host", "capabilities"],
+            vec!["init"],
             vec!["inspect", "symbol"],
             vec!["inspect", "impact"],
             vec!["inspect", "paths"],
