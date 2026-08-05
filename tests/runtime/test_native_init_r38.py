@@ -88,6 +88,16 @@ def _run(engine: str, project: Path, *, host: str = "codex") -> tuple[int, Any, 
     return completed.returncode, json.loads(completed.stdout), completed.stderr
 
 
+def _assert_success(engine: str, result: tuple[int, Any, str]) -> None:
+    code, value, stderr = result
+    assert code == 0, {
+        "engine": engine,
+        "returncode": code,
+        "value": value,
+        "stderr": stderr,
+    }
+
+
 def _normalize(value: Any, project: Path) -> Any:
     result = json.loads(json.dumps(value))
     session = result["session"]
@@ -137,6 +147,7 @@ def test_native_init_active_runtime_matches_python(tmp_path: Path) -> None:
     for engine, project in projects.items():
         project.mkdir()
         results[engine] = _run(engine, project)
+        _assert_success(engine, results[engine])
         _verify_side_effects(project, results[engine][1])
 
     python_code, python_value, python_stderr = results["python"]
@@ -161,6 +172,7 @@ def test_native_init_unknown_host_degrades_exactly_like_python(tmp_path: Path) -
     for engine, project in projects.items():
         project.mkdir()
         results[engine] = _run(engine, project, host="unknown-host")
+        _assert_success(engine, results[engine])
         _verify_side_effects(project, results[engine][1])
 
     python_code, python_value, python_stderr = results["python"]
