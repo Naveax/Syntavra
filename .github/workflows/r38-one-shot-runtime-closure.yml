@@ -78,8 +78,10 @@ jobs:
           set -euo pipefail
           python tools/repair_r38_selector_option_values.py
           python tools/repair_r38_windows_rollout_identity.py
+          python tools/repair_r38_native_expansion_sync.py
           python tools/sync_r38_generated_metadata.py
           cargo fmt --all
+          python tools/repair_r38_native_expansion_sync.py
           python tools/sync_r38_generated_metadata.py
           rm .github/r38-runtime-repair
           rm .github/workflows/r38-one-shot-runtime-closure.yml
