@@ -17,6 +17,7 @@ TARGETS = (
     "tests/runtime/test_native_session_public_r38.py::test_native_session_import_explicit_id_matches_python_without_quarantine",
     "tests/runtime/test_native_structural_r38.py::test_native_structural_fresh_python_symbol_index_matches_python",
     "tests/runtime/test_native_memory_r38.py",
+    "tests/runtime/test_native_operator_lifecycle_r38.py",
 )
 
 
