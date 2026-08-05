@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::pedantic)]
 
+use std::env;
 use std::fs;
 use std::path::Path;
 
@@ -169,6 +170,122 @@ fn evidence(stats: &Value) -> Value {
     })
 }
 
+fn executable_exists(name: &str) -> bool {
+    let path = env::var_os("PATH").unwrap_or_default();
+    let suffixes: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd", ".bat", ""]
+    } else {
+        &[""]
+    };
+    env::split_paths(&path).any(|directory| {
+        suffixes
+            .iter()
+            .any(|suffix| directory.join(format!("{name}{suffix}")).is_file())
+    })
+}
+
+fn home_dir() -> Option<std::path::PathBuf> {
+    env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(std::path::PathBuf::from)
+}
+
+fn candidate_exists(candidate: &str) -> bool {
+    if let Some(rest) = candidate.strip_prefix("~/") {
+        return home_dir().is_some_and(|home| home.join(rest).exists());
+    }
+    Path::new(candidate).exists()
+}
+
+fn detected_adapters() -> Vec<String> {
+    let rows: &[(&str, &[&str], &[&str])] = &[
+        (
+            "claude-code",
+            &["claude"],
+            &["~/.claude/settings.json", ".claude/settings.json"],
+        ),
+        ("codex", &["codex"], &["~/.codex/config.toml", "AGENTS.md"]),
+        (
+            "gemini-cli",
+            &["gemini"],
+            &["~/.gemini/settings.json", "GEMINI.md"],
+        ),
+        ("vscode-copilot", &[], &[".vscode/mcp.json"]),
+        ("jetbrains-copilot", &[], &[".idea/mcp.json"]),
+        (
+            "cursor",
+            &["cursor"],
+            &[".cursor/rules/syntavra.mdc", ".cursor/mcp.json"],
+        ),
+        (
+            "windsurf",
+            &["windsurf"],
+            &[".windsurfrules", ".codeium/windsurf/mcp_config.json"],
+        ),
+        (
+            "opencode",
+            &["opencode"],
+            &["opencode.json", "~/.config/opencode/opencode.json"],
+        ),
+        ("cline", &[], &[".clinerules", ".vscode/mcp.json"]),
+        (
+            "roo-code",
+            &[],
+            &[".roo/rules/syntavra.md", ".vscode/mcp.json"],
+        ),
+        (
+            "qwen-code",
+            &["qwen", "qwen-code"],
+            &["QWEN.md", "~/.qwen/settings.json"],
+        ),
+        (
+            "kiro",
+            &["kiro", "kiro-cli", "q"],
+            &[".kiro/settings/mcp.json", ".kiro/skills/syntavra/SKILL.md"],
+        ),
+        (
+            "zed",
+            &["zed"],
+            &[".zed/settings.json", "~/.config/zed/settings.json"],
+        ),
+        (
+            "pi",
+            &["pi"],
+            &[".pi/settings.json", ".pi/skills/syntavra/SKILL.md"],
+        ),
+        (
+            "omp",
+            &["omp"],
+            &[".omp/agent/config.yml", ".omp/skills/syntavra/SKILL.md"],
+        ),
+        (
+            "openclaw",
+            &["openclaw"],
+            &[
+                "skills/syntavra/SKILL.md",
+                ".openclaw/skills/syntavra/SKILL.md",
+            ],
+        ),
+        (
+            "aider",
+            &["aider"],
+            &[".aider.conf.yml", "~/.aider.conf.yml"],
+        ),
+        (
+            "continue",
+            &["continue"],
+            &[".continue/config.yaml", "~/.continue/config.yaml"],
+        ),
+    ];
+    rows.iter()
+        .filter(|(_, commands, candidates)| {
+            commands.iter().any(|command| executable_exists(command))
+                || candidates
+                    .iter()
+                    .any(|candidate| candidate_exists(candidate))
+        })
+        .map(|(host, _, _)| (*host).to_owned())
+        .collect()
+}
+
 pub fn execute(
     arguments: &[String],
     project_root: &Path,
@@ -180,11 +297,11 @@ pub fn execute(
         .map_err(|error| format!("STATUS_STATE_CREATE_FAILED:{error}"))?;
 
     let doctor_command = vec!["doctor".to_owned()];
-    let doctor = super::native_operator_lifecycle::execute(
-        &doctor_command,
-        project_root,
-        state_root,
-    )?;
+    let mut doctor =
+        super::native_operator_lifecycle::execute(&doctor_command, project_root, state_root)?;
+    if let Some(value) = doctor.value.as_object_mut() {
+        value.insert("detected_adapters".to_owned(), json!(detected_adapters()));
+    }
     let stats = super::native_stats::execute(project_root, state_root)?;
     let profile = active_profile(state_root);
     let evidence = evidence(&stats);
@@ -196,7 +313,10 @@ pub fn execute(
     if flag(arguments, "--savings") {
         focused.insert(
             "savings".to_owned(),
-            stats.get("token_attribution").cloned().unwrap_or_else(|| json!({})),
+            stats
+                .get("token_attribution")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
         );
     }
     if flag(arguments, "--profile") {

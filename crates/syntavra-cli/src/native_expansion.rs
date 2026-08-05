@@ -63,6 +63,8 @@ mod native_session_verify;
 mod native_setup_repair;
 #[path = "native_stats.rs"]
 mod native_stats;
+#[path = "native_status.rs"]
+mod native_status;
 #[allow(clippy::pedantic)]
 #[path = "native_structural.rs"]
 mod native_structural;
@@ -99,6 +101,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_session_recover::supports(command)
         || native_session_verify::supports(command)
         || native_stats::supports(command)
+        || native_status::supports(command)
         || native_structural::supports(command)
         || native_telemetry_bundle::supports(command)
         || native_uninstall::supports(command)
@@ -212,6 +215,13 @@ pub fn execute(
     if native_stats::supports(command) {
         return native_stats::execute(project_root, state_root);
     }
+    if native_status::supports(command) {
+        let decision = native_status::execute(arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_value(&decision.value, decision.exit_code);
+        }
+        return Ok(decision.value);
+    }
     if native_structural::supports(command) {
         return native_structural::execute(command, arguments, project_root, state_root);
     }
@@ -243,6 +253,7 @@ mod tests {
             vec!["install"],
             vec!["setup"],
             vec!["repair"],
+            vec!["status"],
             vec!["inspect", "symbol"],
             vec!["inspect", "impact"],
             vec!["inspect", "paths"],
