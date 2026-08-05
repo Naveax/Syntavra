@@ -85,7 +85,7 @@ def _workflow_by_name(name: str) -> Path:
     matches = []
     for path in sorted(WORKFLOWS.glob("*.y*ml")):
         source = path.read_text(encoding="utf-8")
-        if re.search(rf"(?m)^name:\s*{re.escape(name)}\s*$", source):
+        if re.search(rf"(?m)^name:\s*[\"']?{re.escape(name)}[\"']?\s*$", source):
             matches.append(path)
     if len(matches) != 1:
         raise RuntimeError(f"workflow {name!r}: expected one file, found {matches}")
@@ -140,21 +140,25 @@ def repair_pytest_status_handoff(path: Path) -> bool:
         if capture.strip() not in segment:
             if powershell:
                 lines.insert(command_end + 1, capture)
-                status_index += 1
             else:
                 indent = lines[command_start][: len(lines[command_start]) - len(lines[command_start].lstrip())]
                 if command_start == 0 or lines[command_start - 1].strip() != "set +e":
                     lines.insert(command_start, f"{indent}set +e")
                     command_end += 1
-                    status_index += 1
                 lines.insert(command_end + 1, f"{indent}pytest_status=$?")
                 lines.insert(command_end + 2, f"{indent}set -e")
             changed = True
 
     rendered = "\n".join(lines) + "\n"
     if changed:
-        if "pytest-exit-code.txt" in rendered and ("$LASTEXITCODE" in rendered or '"$?"' in rendered):
-            raise RuntimeError(f"stale pytest status handoff remains in {path}")
+        stale_status_lines = [
+            line
+            for line in rendered.splitlines()
+            if "pytest-exit-code.txt" in line
+            and ("$LASTEXITCODE" in line or re.search(r"(?<![A-Za-z0-9_])\$\?(?![A-Za-z0-9_])", line))
+        ]
+        if stale_status_lines:
+            raise RuntimeError(f"stale pytest status handoff remains in {path}: {stale_status_lines}")
         path.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
 
