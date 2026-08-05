@@ -28,6 +28,48 @@ def replace_exact(path: Path, old: str, new: str, label: str) -> bool:
     return True
 
 
+def repair_context_contract() -> bool:
+    changed = False
+    changed |= replace_exact(
+        RUNTIME_REPAIR,
+        '''def repair_context_dispatch(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        CONTEXT_DEFAULT_DISPATCH_LEGACY,
+        CONTEXT_DEFAULT_DISPATCH_CANONICAL,
+        "context pack selector dispatch",
+    )''',
+        '''def repair_context_dispatch(source: str) -> tuple[str, int]:
+    canonical_tokens = (
+        'window[0] == "context"',
+        'window[1] == "pack"',
+        "pack(arguments)",
+        "evaluate(arguments)",
+    )
+    if all(token in source for token in canonical_tokens):
+        return source, 0
+    return exact_repair(
+        source,
+        CONTEXT_DEFAULT_DISPATCH_LEGACY,
+        CONTEXT_DEFAULT_DISPATCH_CANONICAL,
+        "context pack selector dispatch",
+    )''',
+        "context dispatch rustfmt-stable repair",
+    )
+    changed |= replace_exact(
+        RUNTIME_REPAIR,
+        '''            canonical_context.count(CONTEXT_DEFAULT_DISPATCH_CANONICAL) == 1
+            and CONTEXT_DEFAULT_DISPATCH_LEGACY not in canonical_context''',
+        '''            'window[0] == "context"' in canonical_context
+            and 'window[1] == "pack"' in canonical_context
+            and "pack(arguments)" in canonical_context
+            and "evaluate(arguments)" in canonical_context
+            and CONTEXT_DEFAULT_DISPATCH_LEGACY not in canonical_context''',
+        "context dispatch rustfmt-stable invariant",
+    )
+    return changed
+
+
 def repair_stats_contract() -> bool:
     changed = False
     changed |= replace_exact(
@@ -203,6 +245,8 @@ def validate_status_handoff(path: Path) -> None:
 
 def main() -> int:
     changed = []
+    if repair_context_contract():
+        changed.append("runtime-context-contract")
     if repair_stats_contract():
         changed.append("runtime-stats-contract")
     if repair_benchmark_newlines():
