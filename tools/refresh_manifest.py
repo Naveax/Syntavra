@@ -26,6 +26,7 @@ TRANSIENT_PARTS = {
     ".nox",
     ".mypy_cache",
     ".ruff_cache",
+    "target",
 }
 
 
