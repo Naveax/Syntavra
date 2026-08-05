@@ -12,6 +12,7 @@ from advance_r38_fabric_route_inventory import advance as advance_route_inventor
 from repair_r38_fabric_compact_contract import repair as repair_compact_contract
 from repair_r38_fabric_doctor_contract import repair as repair_doctor_contract
 from repair_r38_fabric_insights_contract import repair as repair_insights_contract
+from repair_r38_fabric_insights_validator import repair as repair_insights_validator
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
@@ -112,6 +113,7 @@ def main() -> int:
     base_wiring_changed = repair()
     doctor_contract_changed = repair_doctor_contract()
     insights_contract_changed = repair_insights_contract()
+    insights_validator_changed = repair_insights_validator()
     route_inventory_changed = advance_route_inventory()
     cache_align_inventory_changed = advance_cache_align_inventory()
     compact_inventory_changed = advance_compact_inventory()
@@ -123,6 +125,7 @@ def main() -> int:
             base_wiring_changed,
             doctor_contract_changed,
             insights_contract_changed,
+            insights_validator_changed,
             route_inventory_changed,
             cache_align_inventory_changed,
             compact_inventory_changed,
@@ -141,6 +144,7 @@ def main() -> int:
                 "doctor_inventory_changed": doctor_inventory_changed,
                 "insights_contract_changed": insights_contract_changed,
                 "insights_inventory_changed": insights_inventory_changed,
+                "insights_validator_changed": insights_validator_changed,
                 "ok": True,
                 "route_inventory_changed": route_inventory_changed,
                 "surface": "native-fabric-control-plane",
