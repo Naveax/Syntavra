@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,8 +16,6 @@ MODULE_INSERT = '''#[path = "native_status_default.rs"]
 mod native_status_default;
 
 '''
-MODULE_SESSION_ARGUMENT = "    session_memory: Value,\n"
-MODULE_SESSION_FIELD = '        "session_memory": session_memory,\n'
 STATUS_SESSION_ARGUMENT = "            memory_status(state_root, &stats)?,\n"
 LEGACY_DEFAULT = '''    let value = if focused.is_empty() {
         json!({
@@ -48,21 +47,24 @@ CANONICAL_DEFAULT = '''    let value = if focused.is_empty() {
         )
     } else {
 '''
+SESSION_ARGUMENT_PATTERN = re.compile(r"(?m)^\s*session_memory\s*:\s*Value\s*,\s*\n")
+SESSION_FIELD_PATTERN = re.compile(
+    r'(?m)^\s*"session_memory"\s*:\s*session_memory\s*,\s*\n'
+)
 
 
 def repair_module() -> bool:
     source = MODULE.read_text(encoding="utf-8")
-    rendered = source
-    changed = False
-    for token in (MODULE_SESSION_ARGUMENT, MODULE_SESSION_FIELD):
-        count = rendered.count(token)
-        if count == 1:
-            rendered = rendered.replace(token, "", 1)
-            changed = True
-        elif count != 0:
-            raise RuntimeError(f"default status session token count invalid: {token!r}={count}")
-    if "session_memory" in rendered:
-        raise RuntimeError("default status must not expose session_memory")
+    rendered, argument_count = SESSION_ARGUMENT_PATTERN.subn("", source)
+    rendered, field_count = SESSION_FIELD_PATTERN.subn("", rendered)
+    if argument_count > 1 or field_count > 1:
+        raise RuntimeError(
+            "default status session-memory tokens must be absent or unique: "
+            f"argument={argument_count}, field={field_count}"
+        )
+    if SESSION_ARGUMENT_PATTERN.search(rendered) or SESSION_FIELD_PATTERN.search(rendered):
+        raise RuntimeError("default status still exposes a session-memory parameter or field")
+    changed = rendered != source
     if changed:
         MODULE.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
@@ -82,9 +84,12 @@ def repair_target() -> bool:
     elif module_count != 1:
         raise RuntimeError(f"native status default module count invalid: {module_count}")
 
-    if STATUS_SESSION_ARGUMENT in rendered:
+    session_call_count = rendered.count(STATUS_SESSION_ARGUMENT)
+    if session_call_count == 1:
         rendered = rendered.replace(STATUS_SESSION_ARGUMENT, "", 1)
         changed = True
+    elif session_call_count > 1:
+        raise RuntimeError(f"native default status session argument count invalid: {session_call_count}")
 
     legacy_count = rendered.count(LEGACY_DEFAULT)
     canonical_count = rendered.count(CANONICAL_DEFAULT)
