@@ -62,6 +62,8 @@ mod native_stats;
 mod native_structural;
 #[path = "native_telemetry_bundle.rs"]
 mod native_telemetry_bundle;
+#[path = "native_uninstall.rs"]
+mod native_uninstall;
 #[path = "native_verifier.rs"]
 mod native_verifier;
 
@@ -90,6 +92,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_stats::supports(command)
         || native_structural::supports(command)
         || native_telemetry_bundle::supports(command)
+        || native_uninstall::supports(command)
         || native_verifier::supports(command)
 }
 
@@ -193,6 +196,9 @@ pub fn execute(
     if native_telemetry_bundle::supports(command) {
         return native_telemetry_bundle::execute(arguments, state_root);
     }
+    if native_uninstall::supports(command) {
+        return native_uninstall::execute(arguments, project_root);
+    }
     if native_verifier::supports(command) {
         return native_verifier::execute(command, arguments, state_root);
     }
@@ -226,6 +232,7 @@ mod tests {
             vec!["rollout-tail"],
             vec!["telemetry", "bundle"],
             vec!["session", "import"],
+            vec!["uninstall"],
             vec!["verifier", "lookup"],
         ] {
             assert!(supports(
