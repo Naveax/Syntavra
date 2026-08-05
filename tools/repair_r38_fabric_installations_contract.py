@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from repair_r38_fabric_installations_behavior import repair as repair_behavior
+
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 
@@ -37,7 +39,7 @@ def insert_once(source: str, token: str, anchor: str, label: str) -> tuple[str, 
     return source.replace(anchor, token + anchor, 1), True
 
 
-def repair() -> bool:
+def repair_product() -> bool:
     source = PRODUCT.read_text(encoding="utf-8")
     rendered = source
     changed = False
@@ -64,6 +66,12 @@ def repair() -> bool:
     if changed:
         PRODUCT.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
+
+
+def repair() -> bool:
+    behavior_changed = repair_behavior()
+    product_changed = repair_product()
+    return behavior_changed or product_changed
 
 
 def main() -> int:
