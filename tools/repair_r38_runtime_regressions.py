@@ -138,9 +138,17 @@ HOST_REPAIRS = (
     ),
 )
 
-STATS_FLOAT_HELPER_LEGACY = '''
+STATS_FLOAT_HELPER_LEGACY = '''    } else {
+        Err("ANALYTICS_FLOAT_NONFINITE".to_owned())
+    }
+}
+
 fn identity_string(value: &Value) -> Option<String> {'''
-STATS_FLOAT_HELPER_CANONICAL = '''
+STATS_FLOAT_HELPER_CANONICAL = '''    } else {
+        Err("ANALYTICS_FLOAT_NONFINITE".to_owned())
+    }
+}
+
 fn python_json_float(number: f64) -> Value {
     if number == 0.0 {
         Value::from(0)
@@ -150,23 +158,21 @@ fn python_json_float(number: f64) -> Value {
 }
 
 fn identity_string(value: &Value) -> Option<String> {'''
-STATS_FLOAT_REPAIRS = (
-    (
-        '''            "wall_time_ms": wall_time_ms,''',
-        '''            "wall_time_ms": python_json_float(wall_time_ms),''',
-        "stats wall-time numeric type parity",
-    ),
-    (
-        '''            "cost_usd": cost_usd,''',
-        '''            "cost_usd": python_json_float(cost_usd),''',
-        "stats cost numeric type parity",
-    ),
-    (
-        '''            "compaction_wall_time_ms": compaction_ms,''',
-        '''            "compaction_wall_time_ms": python_json_float(compaction_ms),''',
-        "stats compaction numeric type parity",
-    ),
-)
+STATS_USAGE_FLOATS_LEGACY = '''            "output_tokens": output_tokens,
+            "wall_time_ms": wall_time_ms,
+            "cost_usd": cost_usd,'''
+STATS_USAGE_FLOATS_CANONICAL = '''            "output_tokens": output_tokens,
+            "wall_time_ms": python_json_float(wall_time_ms),
+            "cost_usd": python_json_float(cost_usd),'''
+STATS_COMPACTION_FLOAT_LEGACY = '''        "continuity": {
+            "restores": continuity,
+            "compaction_wall_time_ms": compaction_ms,
+        },'''
+STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
+            "restores": continuity,
+            "compaction_wall_time_ms": python_json_float(compaction_ms),
+        },'''
+
 
 SESSION_DIAGNOSTIC_LEGACY = '''    assert rust_code == python_code == 0
     assert _session_shape(rust_result) == _session_shape(python_result)'''
@@ -300,6 +306,14 @@ def repair_stats_imports(source: str) -> tuple[str, int]:
 
 
 def repair_context_dispatch(source: str) -> tuple[str, int]:
+    canonical_tokens = (
+        'window[0] == "context"',
+        'window[1] == "pack"',
+        "pack(arguments)",
+        "evaluate(arguments)",
+    )
+    if all(token in source for token in canonical_tokens):
+        return source, 0
     return exact_repair(
         source,
         CONTEXT_DEFAULT_DISPATCH_LEGACY,
@@ -319,8 +333,19 @@ def repair_stats_numeric_types(source: str) -> tuple[str, int]:
         STATS_FLOAT_HELPER_CANONICAL,
         "stats Python-compatible float renderer",
     )
-    rendered, count = exact_repairs(rendered, STATS_FLOAT_REPAIRS)
-    return rendered, changed + count
+    rendered, usage_count = exact_repair(
+        rendered,
+        STATS_USAGE_FLOATS_LEGACY,
+        STATS_USAGE_FLOATS_CANONICAL,
+        "stats usage numeric type parity",
+    )
+    rendered, compaction_count = exact_repair(
+        rendered,
+        STATS_COMPACTION_FLOAT_LEGACY,
+        STATS_COMPACTION_FLOAT_CANONICAL,
+        "stats compaction numeric type parity",
+    )
+    return rendered, changed + usage_count + compaction_count
 
 
 def repair_session_diagnostic(source: str) -> tuple[str, int]:
@@ -446,7 +471,10 @@ def main() -> int:
             and JSON_ARGUMENT_LEGACY not in canonical_cli
         ),
         "R38_CONTEXT_DISPATCH_REPAIR_INCOMPLETE": (
-            canonical_context.count(CONTEXT_DEFAULT_DISPATCH_CANONICAL) == 1
+            'window[0] == "context"' in canonical_context
+            and 'window[1] == "pack"' in canonical_context
+            and "pack(arguments)" in canonical_context
+            and "evaluate(arguments)" in canonical_context
             and CONTEXT_DEFAULT_DISPATCH_LEGACY not in canonical_context
         ),
         "R38_RUNTIME_EVIDENCE_LAYOUT_REPAIR_INCOMPLETE": (
@@ -474,10 +502,9 @@ def main() -> int:
         "R38_STATS_NUMERIC_TYPE_REPAIR_INCOMPLETE": (
             canonical_stats.count(STATS_FLOAT_HELPER_CANONICAL) == 1
             and STATS_FLOAT_HELPER_LEGACY not in canonical_stats
-            and all(
-                canonical_stats.count(canonical) == 1 and legacy not in canonical_stats
-                for legacy, canonical, _ in STATS_FLOAT_REPAIRS
-            )
+            and canonical_stats.count("fn python_json_float(number: f64) -> Value {") == 1
+            and canonical_stats.count(STATS_USAGE_FLOATS_CANONICAL) == 1
+            and canonical_stats.count(STATS_COMPACTION_FLOAT_CANONICAL) == 1
         ),
         "R38_SESSION_DIAGNOSTIC_REPAIR_INCOMPLETE": (
             canonical_session_test.count(SESSION_DIAGNOSTIC_CANONICAL) == 1

@@ -123,6 +123,14 @@ fn python_float(value: Option<&Value>) -> Result<f64, String> {
     }
 }
 
+fn python_json_float(number: f64) -> Value {
+    if number == 0.0 {
+        Value::from(0)
+    } else {
+        Value::from(number)
+    }
+}
+
 fn identity_string(value: &Value) -> Option<String> {
     if !json_truthy(value) {
         return None;
@@ -213,12 +221,12 @@ fn session_analytics(state_root: &Path) -> Result<Value, String> {
             "cached_input_tokens": cached_tokens,
             "billable_input_tokens": input_tokens.saturating_sub(cached_tokens).max(0),
             "output_tokens": output_tokens,
-            "wall_time_ms": wall_time_ms,
-            "cost_usd": cost_usd,
+            "wall_time_ms": python_json_float(wall_time_ms),
+            "cost_usd": python_json_float(cost_usd),
         },
         "continuity": {
             "restores": continuity,
-            "compaction_wall_time_ms": compaction_ms,
+            "compaction_wall_time_ms": python_json_float(compaction_ms),
         },
         "routing": {"denied": route_denied},
         "privacy": "content-free local aggregate",

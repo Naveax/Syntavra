@@ -251,7 +251,10 @@ def test_native_structural_fresh_python_symbol_index_matches_python(tmp_path: Pa
         "helper",
     )
 
-    assert rust_code == python_code == 0
+    assert rust_code == python_code == 0, {
+        "python": {"code": python_code, "result": python_result},
+        "rust": {"code": rust_code, "result": rust_result},
+    }
     assert rust_result == python_result
     assert rust_result == {
         "query": "helper",

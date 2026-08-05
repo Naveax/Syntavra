@@ -301,7 +301,10 @@ def test_native_session_import_explicit_id_matches_python_without_quarantine(tmp
     python_code, python_result, _ = _run("python", project, python_state, *arguments)
     rust_code, rust_result, _ = _run("rust", project, rust_state, *arguments)
 
-    assert rust_code == python_code == 0
+    assert rust_code == python_code == 0, {
+        "python": {"code": python_code, "result": python_result},
+        "rust": {"code": rust_code, "result": rust_result},
+    }
     assert _session_shape(rust_result) == _session_shape(python_result)
     assert rust_result["session_id"] == "imported-session"
     assert rust_result["parent_ids"] == []

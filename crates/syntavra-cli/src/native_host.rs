@@ -156,7 +156,7 @@ fn host_specs() -> Vec<HostSpec> {
             [
                 false, false, true, true, false, true, false, true, true, true,
             ],
-            &[".vscode", ".github/copilot-instructions.md"],
+            &[".vscode/mcp.json"],
             &[],
             ".vscode/mcp.json",
             ".github/skills/syntavra",
@@ -275,7 +275,7 @@ fn host_specs() -> Vec<HostSpec> {
             ],
             &[".pi"],
             &[".pi/agent"],
-            ".pi/settings.json",
+            "",
             ".pi/skills/syntavra",
             false,
             &[
@@ -292,7 +292,7 @@ fn host_specs() -> Vec<HostSpec> {
             ],
             &[".omp"],
             &[".omp/agent"],
-            ".omp/agent/config.yml",
+            "",
             ".omp/skills/syntavra",
             false,
             &[
@@ -309,7 +309,7 @@ fn host_specs() -> Vec<HostSpec> {
             ],
             &[".openclaw", "openclaw.json"],
             &[".openclaw"],
-            "openclaw.json",
+            "",
             "skills/syntavra",
             false,
             &[
@@ -337,8 +337,8 @@ fn host_specs() -> Vec<HostSpec> {
             [
                 false, false, true, true, false, true, false, true, false, false,
             ],
-            &[".idea"],
-            &[".config/JetBrains"],
+            &[".idea/mcp.json"],
+            &[],
             ".idea/mcp.json",
             ".github/skills/syntavra",
             false,

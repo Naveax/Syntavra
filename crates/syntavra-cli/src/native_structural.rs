@@ -343,7 +343,7 @@ fn replace_file(
             "INSERT INTO structural_files(\
                path,content_hash,language,parser,semantic,diagnostics_json,indexed_at) \
              VALUES(?,?,?,?,?,?,?) \
-             ON CONFLICT(path) DO UPDATE SET\
+             ON CONFLICT(path) DO UPDATE SET \
                content_hash=excluded.content_hash,\
                language=excluded.language,\
                parser=excluded.parser,\

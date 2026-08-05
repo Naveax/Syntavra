@@ -62,7 +62,8 @@ def _run(engine: str, project: Path, state_root: Path, *arguments: str) -> tuple
         cwd=ROOT,
         check=False,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        errors="strict",
         timeout=240,
     )
     assert completed.stdout.strip(), {

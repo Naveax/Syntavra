@@ -70,7 +70,16 @@ pub fn supports(command: &[String]) -> bool {
 
 pub fn execute(command: &[String], arguments: &[String]) -> Result<Value, String> {
     match command {
-        [group] if group == "context" => evaluate(arguments),
+        [group] if group == "context" => {
+            if arguments
+                .windows(2)
+                .any(|window| window[0] == "context" && window[1] == "pack")
+            {
+                pack(arguments)
+            } else {
+                evaluate(arguments)
+            }
+        }
         [group, action] if group == "context" && action == "evaluate" => evaluate(arguments),
         [group, action] if group == "context" && action == "pack" => pack(arguments),
         _ => Err("RUST_CONTEXT_COMMAND_UNSUPPORTED".to_owned()),
