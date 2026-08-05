@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 113,
+  "missing_native_public_command_count": 111,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -34,7 +34,6 @@
     "provider replay",
     "provider stats",
     "provider verify",
-    "repair",
     "run adapter-certify",
     "run adapter-configure",
     "run adapter-conformance",
@@ -112,10 +111,9 @@
     "sandbox backends",
     "sandbox execute",
     "sandbox plan",
-    "setup",
     "status"
   ],
-  "native_public_command_count": 132,
+  "native_public_command_count": 134,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
