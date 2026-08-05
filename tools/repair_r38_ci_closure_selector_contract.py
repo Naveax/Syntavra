@@ -40,7 +40,7 @@ CANONICAL_FUNCTION = '''def repair_init_selector_contract() -> bool:
         SELECTOR.write_text(
             source.replace(previous, canonical_single, 1),
             encoding="utf-8",
-            newline="\n",
+            newline="\\n",
         )
         changed = True
     else:
