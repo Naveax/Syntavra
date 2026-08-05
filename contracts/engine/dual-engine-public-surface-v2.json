@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 101,
-    "module_count": 104,
-    "native_coverage_ppm": 587755,
-    "native_public_command_count": 144,
+    "missing_native_public_command_count": 100,
+    "module_count": 105,
+    "native_coverage_ppm": 591836,
+    "native_public_command_count": 145,
     "native_public_commands": [
       "benchmark generate-config",
       "benchmark generate-repo",
@@ -66,6 +66,7 @@
       "fabric doctor",
       "fabric insights",
       "fabric install",
+      "fabric installations",
       "fabric route",
       "hook",
       "host",

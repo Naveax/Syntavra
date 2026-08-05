@@ -104,12 +104,6 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
                 success INTEGER NOT NULL,exit_code INTEGER NOT NULL,evidence_handle TEXT NOT NULL,\
                 affected_paths_json TEXT NOT NULL,created_at REAL NOT NULL\
              );\
-             CREATE TABLE IF NOT EXISTS host_install_transactions(\
-                transaction_id TEXT PRIMARY KEY,host TEXT NOT NULL,scope TEXT NOT NULL,root TEXT NOT NULL,\
-                status TEXT NOT NULL,manifest_json TEXT NOT NULL,created_at REAL NOT NULL,updated_at REAL NOT NULL\
-             );\
-             CREATE INDEX IF NOT EXISTS host_install_host_idx \
-                ON host_install_transactions(host,scope,created_at);\
              INSERT INTO metadata(key,value) VALUES('schema_version','2') \
                 ON CONFLICT(key) DO UPDATE SET value=excluded.value;",
         )
@@ -117,11 +111,15 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn rows(
-    connection: &Connection,
-    host: Option<&str>,
-    limit: i64,
-) -> Result<Vec<Value>, String> {
+fn initialize_host_schema(connection: &Connection) -> Result<(), String> {
+    connection
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS host_install_transactions(                transaction_id TEXT PRIMARY KEY,host TEXT NOT NULL,scope TEXT NOT NULL,root TEXT NOT NULL,                status TEXT NOT NULL,manifest_json TEXT NOT NULL,created_at REAL NOT NULL,updated_at REAL NOT NULL             );             CREATE INDEX IF NOT EXISTS host_install_host_idx                 ON host_install_transactions(host,scope,created_at);",
+        )
+        .map_err(|error| format!("FABRIC_INSTALLATIONS_HOST_SCHEMA_FAILED:{error}"))
+}
+
+fn rows(connection: &Connection, host: Option<&str>, limit: i64) -> Result<Vec<Value>, String> {
     let mut output = Vec::new();
     if let Some(host) = host.filter(|value| !value.is_empty()) {
         let mut statement = connection
@@ -145,9 +143,8 @@ fn rows(
             })
             .map_err(|error| format!("FABRIC_INSTALLATIONS_QUERY_FAILED:{error}"))?;
         for record in records {
-            output.push(
-                record.map_err(|error| format!("FABRIC_INSTALLATIONS_ROW_FAILED:{error}"))?,
-            );
+            output
+                .push(record.map_err(|error| format!("FABRIC_INSTALLATIONS_ROW_FAILED:{error}"))?);
         }
     } else {
         let mut statement = connection
@@ -170,9 +167,8 @@ fn rows(
             })
             .map_err(|error| format!("FABRIC_INSTALLATIONS_QUERY_FAILED:{error}"))?;
         for record in records {
-            output.push(
-                record.map_err(|error| format!("FABRIC_INSTALLATIONS_ROW_FAILED:{error}"))?,
-            );
+            output
+                .push(record.map_err(|error| format!("FABRIC_INSTALLATIONS_ROW_FAILED:{error}"))?);
         }
     }
     Ok(output)
@@ -189,6 +185,7 @@ pub fn execute(
         .map_err(|error| format!("FABRIC_INSTALLATIONS_STORAGE_FAILED:{error}"))?;
     let selected = configured.unwrap_or_else(|| bundled_skill_root(project_root));
     validate_skill_root(&selected)?;
+    initialize_host_schema(&database)?;
 
     let requested_limit = option_value(arguments, "--limit")?
         .unwrap_or_else(|| "20".to_owned())
@@ -209,13 +206,7 @@ mod tests {
 
     #[test]
     fn routes_fabric_installations_only() {
-        assert!(supports(&[
-            "fabric".to_owned(),
-            "installations".to_owned()
-        ]));
-        assert!(!supports(&[
-            "fabric".to_owned(),
-            "install".to_owned()
-        ]));
+        assert!(supports(&["fabric".to_owned(), "installations".to_owned()]));
+        assert!(!supports(&["fabric".to_owned(), "install".to_owned()]));
     }
 }

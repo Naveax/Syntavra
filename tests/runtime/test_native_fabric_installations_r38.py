@@ -284,4 +284,14 @@ def test_native_fabric_installations_incomplete_skill_fails_after_state_init(
         assert completed.returncode != 0
         assert _database(project).is_file()
         assert (project / "state" / "host-installations").is_dir()
-        assert _snapshot(project)["count"] == 0
+        with sqlite3.connect(_database(project)) as connection:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            assert "host_install_transactions" not in tables
+            assert connection.execute(
+                "SELECT value FROM metadata WHERE key='schema_version'"
+            ).fetchone()[0] == "2"
