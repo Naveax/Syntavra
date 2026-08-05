@@ -44,6 +44,7 @@ def _run(
         "--host",
         "codex",
         "mcp",
+        "serve",
     ]
     payload = "\n".join(
         row if isinstance(row, str) else json.dumps(row, ensure_ascii=False)
@@ -101,8 +102,8 @@ def _pair(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     python_project = tmp_path / "python-project"
     rust_project = tmp_path / "rust-project"
-    python_project.mkdir()
-    rust_project.mkdir()
+    python_project.mkdir(parents=True)
+    rust_project.mkdir(parents=True)
     python_result = _run(
         "python",
         python_project,
