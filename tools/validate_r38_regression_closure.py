@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -26,7 +27,12 @@ TARGETS = (
 )
 
 
-def run_checked(argv: list[str], label: str) -> None:
+def run_checked(
+    argv: list[str],
+    label: str,
+    *,
+    environment: dict[str, str] | None = None,
+) -> None:
     completed = subprocess.run(
         argv,
         cwd=ROOT,
@@ -34,16 +40,24 @@ def run_checked(argv: list[str], label: str) -> None:
         capture_output=True,
         text=True,
         timeout=1800,
+        env=environment,
     )
     if completed.returncode != 0:
         payload = {
             "code": "R38_TARGETED_VALIDATION_FAILED",
             "returncode": completed.returncode,
-            "stdout_tail": completed.stdout[-5000:],
-            "stderr_tail": completed.stderr[-5000:],
+            "stdout_tail": completed.stdout[-8000:],
+            "stderr_tail": completed.stderr[-8000:],
             "failed_target": label,
         }
         raise RuntimeError(json.dumps(payload, sort_keys=True))
+
+
+def selector_path() -> Path:
+    configured = os.environ.get("CARGO_TARGET_DIR")
+    target = Path(configured) if configured else ROOT / "target"
+    suffix = ".exe" if sys.platform == "win32" else ""
+    return target / "debug" / f"syntavra{suffix}"
 
 
 def main() -> int:
@@ -58,15 +72,35 @@ def main() -> int:
         ["cargo", "check", "--locked", "-p", "syntavra-cli", "--bin", "syntavra"],
         "cargo-check:syntavra",
     )
+    run_checked(
+        ["cargo", "build", "--locked", "-p", "syntavra-cli", "--bin", "syntavra"],
+        "cargo-build:syntavra",
+    )
+    selector = selector_path()
+    if not selector.is_file():
+        raise RuntimeError(
+            json.dumps(
+                {
+                    "code": "R38_SELECTOR_BINARY_MISSING",
+                    "expected": str(selector),
+                    "cargo_target_dir": os.environ.get("CARGO_TARGET_DIR"),
+                },
+                sort_keys=True,
+            )
+        )
+    test_environment = os.environ.copy()
+    test_environment["SYNTAVRA_R38_SELECTOR"] = str(selector)
     for target in TARGETS:
         run_checked(
             [sys.executable, "-m", "pytest", "-q", target],
             f"target:{target}",
+            environment=test_environment,
         )
     print(
         json.dumps(
             {
                 "ok": True,
+                "selector": str(selector),
                 "targets": list(TARGETS),
                 "claim": "R38_KNOWN_REGRESSION_DIFFERENTIALS_PASS",
             },
