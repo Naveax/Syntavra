@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
+BENCHMARK_HARNESS = ROOT / "syntavra_runtime" / "benchmark_harness.py"
 
 
 def replace_exact(path: Path, old: str, new: str, label: str) -> bool:
@@ -126,9 +127,26 @@ STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
             )''',
         '''            and canonical_stats.count(STATS_USAGE_FLOATS_CANONICAL) == 1
             and STATS_USAGE_FLOATS_LEGACY not in canonical_stats
-            and canonical_stats.count(STATS_COMPACTION_FLOAT_CANONICAL) == 1
-            and STATS_COMPACTION_FLOAT_LEGACY not in canonical_stats''',
+            and canonical_stats.count(STATS_COMPACTION_FLOATS_CANONICAL) == 1
+            and STATS_COMPACTION_FLOATS_LEGACY not in canonical_stats''',
         "stats numeric repair invariant",
+    )
+    return changed
+
+
+def repair_benchmark_newlines() -> bool:
+    changed = False
+    changed |= replace_exact(
+        BENCHMARK_HARNESS,
+        '        file_path.write_text("\\n".join(body) + "\\n", encoding="utf-8")',
+        '        file_path.write_text("\\n".join(body) + "\\n", encoding="utf-8", newline="\\n")',
+        "benchmark module newline",
+    )
+    changed |= replace_exact(
+        BENCHMARK_HARNESS,
+        '        file_path.write_text(f"def fault_{index}():\\n    raise RuntimeError(\'SC_FAULT_{index}\')\\n", encoding="utf-8")',
+        '        file_path.write_text(f"def fault_{index}():\\n    raise RuntimeError(\'SC_FAULT_{index}\')\\n", encoding="utf-8", newline="\\n")',
+        "benchmark fault newline",
     )
     return changed
 
@@ -161,6 +179,8 @@ def main() -> int:
     changed = []
     if repair_stats_contract():
         changed.append("runtime-stats-contract")
+    if repair_benchmark_newlines():
+        changed.append("benchmark-newlines")
     for workflow_name in ("Validate Syntavra Package", "Syntavra Repository Hardening"):
         validate_status_handoff(workflow_by_name(workflow_name))
     print(json.dumps({"ok": True, "changed": changed}, sort_keys=True))
