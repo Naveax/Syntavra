@@ -79,6 +79,14 @@ mod native_uninstall;
 #[path = "native_verifier.rs"]
 mod native_verifier;
 
+pub(crate) fn fabric_install_contract(
+    host: &str,
+    project: &Path,
+    scope: &str,
+) -> Result<Value, String> {
+    native_host::fabric_install_contract(host, project, scope)
+}
+
 pub(crate) fn doctor_host_contract(host: &str) -> Value {
     native_host::doctor_contract(host)
 }

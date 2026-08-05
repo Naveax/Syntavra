@@ -769,6 +769,86 @@ fn environment_capabilities() -> Value {
     })
 }
 
+pub(crate) fn fabric_install_contract(
+    host: &str,
+    project: &Path,
+    scope: &str,
+) -> Result<Value, String> {
+    let normalized = host.to_lowercase();
+    let specs = host_specs();
+    let active = specs
+        .into_iter()
+        .find(|spec| spec.host == normalized)
+        .filter(|spec| spec.host != "generic-mcp")
+        .ok_or_else(|| format!("unsupported concrete host: {host}"))?;
+
+    let mut overlay = Map::new();
+    overlay.insert(
+        "mcpServers".to_owned(),
+        json!({"syntavra": {"command": "syntavra", "args": ["mcp"]}}),
+    );
+    if active.host == "claude-code" {
+        overlay.insert(
+            "statusLine".to_owned(),
+            json!({"type": "command", "command": "syntavra run statusline"}),
+        );
+    }
+    if active.supports_pre_tool_hook || active.supports_post_tool_hook {
+        overlay.insert(
+            "hooks".to_owned(),
+            json!({
+                "PreToolUse": [{"type": "command", "command": "syntavra hook pre"}],
+                "PostToolUse": [{"type": "command", "command": "syntavra hook post"}],
+                "UserPromptSubmit": [{"type": "command", "command": "syntavra hook prompt"}],
+                "PreCompact": [{"type": "command", "command": "syntavra hook pre-compact"}],
+                "SessionStart": [{"type": "command", "command": "syntavra hook session-start"}],
+                "Stop": [{"type": "command", "command": "syntavra hook stop"}],
+                "SessionEnd": [{"type": "command", "command": "syntavra hook session-end"}],
+            }),
+        );
+    }
+
+    let negotiation = negotiate_value(&normalized, true, None);
+    let mut files = Vec::<Value>::new();
+    if !active.config_path.is_empty() {
+        files.push(json!({"path": active.config_path, "merge": Value::Object(overlay.clone())}));
+    }
+    if !active.skill_path.is_empty() {
+        let skill_plan_path = if active.skill_path.ends_with(".md") {
+            active.skill_path.clone()
+        } else {
+            format!("{}/SKILL.md", active.skill_path.trim_end_matches('/'))
+        };
+        files.push(json!({"path": skill_plan_path, "source": "bundled syntavra skill"}));
+    }
+    let plan = json!({
+        "host": active.host,
+        "display_name": active.display_name,
+        "scope": scope,
+        "project": project.to_string_lossy(),
+        "mode": negotiation["mode"],
+        "enforced": negotiation["enforced"],
+        "verified_adapter": active.verified,
+        "files": files,
+        "capabilities": capabilities(&active),
+        "validation": [
+            "syntavra doctor",
+            format!("syntavra host negotiate --host-name {}", active.host),
+            "syntavra status",
+        ],
+    });
+    Ok(json!({
+        "host": active.host,
+        "config_path": active.config_path,
+        "skill_path": active.skill_path,
+        "hooks_required": active.supports_pre_tool_hook || active.supports_post_tool_hook,
+        "overlay": Value::Object(overlay),
+        "negotiation_installed_true": negotiate_value(&normalized, true, Some(true)),
+        "negotiation_installed_false": negotiate_value(&normalized, true, Some(false)),
+        "plan": plan,
+    }))
+}
+
 pub(crate) fn doctor_contract(host: &str) -> Value {
     let active = host_spec(host);
     let specs = host_specs();

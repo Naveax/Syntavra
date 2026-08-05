@@ -206,15 +206,11 @@ fn safe_target(root: &Path, relative: &str) -> Result<PathBuf, String> {
             }
             _ => return Err(format!("host path escapes installation root: {relative}")),
         }
-        if fs::symlink_metadata(&cursor)
-            .is_ok_and(|metadata| metadata.file_type().is_symlink())
-        {
+        if fs::symlink_metadata(&cursor).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
             return Err(format!("host path symlink rejected: {relative}"));
         }
     }
-    let root = root
-        .canonicalize()
-        .unwrap_or_else(|_| root.to_path_buf());
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let parent = cursor
         .parent()
         .unwrap_or(root.as_path())
@@ -486,11 +482,7 @@ fn overlay(contract: &Value) -> Value {
     contract["overlay"].clone()
 }
 
-fn stage(
-    contract: &Value,
-    root: &Path,
-    source_skill: &Path,
-) -> Result<Vec<Staged>, String> {
+fn stage(contract: &Value, root: &Path, source_skill: &Path) -> Result<Vec<Staged>, String> {
     let mut staged = Vec::new();
     let config_path = contract["config_path"].as_str().unwrap_or_default();
     if !config_path.is_empty() {
@@ -702,11 +694,7 @@ pub fn execute(
     } else {
         home
     };
-    let contract = super::native_expansion::fabric_install_contract(
-        &host,
-        project_root,
-        &scope,
-    )?;
+    let contract = super::native_expansion::fabric_install_contract(&host, project_root, &scope)?;
     let database_path = state_root.join("host-installations.sqlite3");
     let connection = initialize_database(&database_path)?;
     let storage = state_root.join("host-installations");

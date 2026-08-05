@@ -519,7 +519,8 @@ def test_native_fabric_install_output_receipt_matches_python(tmp_path: Path) -> 
     )
     assert python.returncode == 0 and python.stderr == ""
     python_receipt = _json_stdout(python)
-    python_value = json.loads(output.read_text(encoding="utf-8"))
+    python_payload = output.read_bytes()
+    python_value = json.loads(python_payload)
 
     rust = _run(
         "rust",
@@ -533,8 +534,13 @@ def test_native_fabric_install_output_receipt_matches_python(tmp_path: Path) -> 
     )
     assert rust.returncode == 0 and rust.stderr == ""
     rust_receipt = _json_stdout(rust)
-    rust_value = json.loads(output.read_text(encoding="utf-8"))
-    assert rust_receipt == python_receipt
+    rust_payload = output.read_bytes()
+    rust_value = json.loads(rust_payload)
+    assert python_receipt["ok"] is True
+    assert rust_receipt["ok"] is True
+    assert python_receipt["output"] == rust_receipt["output"] == str(output)
+    assert python_receipt["bytes"] == len(python_payload)
+    assert rust_receipt["bytes"] == len(rust_payload)
     _assert_values_equal(
         rust_value,
         python_value,
