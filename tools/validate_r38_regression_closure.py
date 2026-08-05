@@ -11,10 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
 SELECTOR_REPAIR = ROOT / "tools" / "repair_r38_selector_option_values.py"
 INSTALL_REPAIR = ROOT / "tools" / "repair_r38_native_install.py"
+STATUS_REPAIR = ROOT / "tools" / "repair_r38_native_status.py"
 SESSION_HASH_REPAIR = ROOT / "tools" / "repair_r38_session_export_hash.py"
 INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_setup_repair_inventory.py"
 
 TARGETS = (
+    "tests/runtime/test_native_status_r38.py",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_empty_dry_run_matches_python",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_codex_apply_matches_python",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_repair_plan_matches_python",
@@ -75,12 +77,14 @@ def selector_path() -> Path:
 def main() -> int:
     run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair")
     run_checked([sys.executable, str(INSTALL_REPAIR)], "install-repair")
+    run_checked([sys.executable, str(STATUS_REPAIR)], "status-repair")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-advance")
     run_checked([sys.executable, str(RUNTIME_REPAIR)], "repair")
     run_checked(["cargo", "fmt", "--all"], "rustfmt")
     run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair-idempotence")
     run_checked([sys.executable, str(INSTALL_REPAIR)], "install-repair-idempotence")
+    run_checked([sys.executable, str(STATUS_REPAIR)], "status-repair-idempotence")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair-idempotence")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-idempotence")
     run_checked([sys.executable, str(RUNTIME_REPAIR), "--check"], "repair-idempotence")
