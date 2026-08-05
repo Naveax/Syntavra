@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
 SELECTOR_REPAIR = ROOT / "tools" / "repair_r38_selector_option_values.py"
+INSTALL_REPAIR = ROOT / "tools" / "repair_r38_native_install.py"
 
 TARGETS = (
     "tests/runtime/test_native_install_r38.py",
@@ -47,9 +48,11 @@ def run_checked(argv: list[str], label: str) -> None:
 
 def main() -> int:
     run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair")
+    run_checked([sys.executable, str(INSTALL_REPAIR)], "install-repair")
     run_checked([sys.executable, str(RUNTIME_REPAIR)], "repair")
     run_checked(["cargo", "fmt", "--all"], "rustfmt")
     run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair-idempotence")
+    run_checked([sys.executable, str(INSTALL_REPAIR)], "install-repair-idempotence")
     run_checked([sys.executable, str(RUNTIME_REPAIR), "--check"], "repair-idempotence")
     for target in TARGETS:
         run_checked(
