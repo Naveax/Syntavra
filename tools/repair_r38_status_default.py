@@ -15,6 +15,9 @@ MODULE_INSERT = '''#[path = "native_status_default.rs"]
 mod native_status_default;
 
 '''
+MODULE_SESSION_ARGUMENT = "    session_memory: Value,\n"
+MODULE_SESSION_FIELD = '        "session_memory": session_memory,\n'
+STATUS_SESSION_ARGUMENT = "            memory_status(state_root, &stats)?,\n"
 LEGACY_DEFAULT = '''    let value = if focused.is_empty() {
         json!({
             "product": "Syntavra",
@@ -42,15 +45,30 @@ CANONICAL_DEFAULT = '''    let value = if focused.is_empty() {
             stats.clone(),
             profile.clone(),
             evidence.clone(),
-            memory_status(state_root, &stats)?,
         )
     } else {
 '''
 
 
-def repair() -> bool:
-    if not MODULE.is_file():
-        raise RuntimeError("native default status module is missing")
+def repair_module() -> bool:
+    source = MODULE.read_text(encoding="utf-8")
+    rendered = source
+    changed = False
+    for token in (MODULE_SESSION_ARGUMENT, MODULE_SESSION_FIELD):
+        count = rendered.count(token)
+        if count == 1:
+            rendered = rendered.replace(token, "", 1)
+            changed = True
+        elif count != 0:
+            raise RuntimeError(f"default status session token count invalid: {token!r}={count}")
+    if "session_memory" in rendered:
+        raise RuntimeError("default status must not expose session_memory")
+    if changed:
+        MODULE.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
+
+
+def repair_target() -> bool:
     source = TARGET.read_text(encoding="utf-8")
     rendered = source
     changed = False
@@ -63,6 +81,10 @@ def repair() -> bool:
         changed = True
     elif module_count != 1:
         raise RuntimeError(f"native status default module count invalid: {module_count}")
+
+    if STATUS_SESSION_ARGUMENT in rendered:
+        rendered = rendered.replace(STATUS_SESSION_ARGUMENT, "", 1)
+        changed = True
 
     legacy_count = rendered.count(LEGACY_DEFAULT)
     canonical_count = rendered.count(CANONICAL_DEFAULT)
@@ -78,9 +100,17 @@ def repair() -> bool:
 
     if rendered.count(MODULE_TOKEN) != 1 or rendered.count(CALL_TOKEN) != 1:
         raise RuntimeError("native default status wiring invariant failed")
+    if STATUS_SESSION_ARGUMENT in rendered:
+        raise RuntimeError("native default status call still passes session memory")
     if changed:
         TARGET.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
+
+
+def repair() -> bool:
+    if not MODULE.is_file():
+        raise RuntimeError("native default status module is missing")
+    return repair_module() | repair_target()
 
 
 def main() -> int:
