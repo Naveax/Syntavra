@@ -4,6 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from tools.repair_r38_ci_closure import repair_pytest_status_handoff
 from tools.repair_r38_runtime_regressions import (
     BENCHMARK_SCORE_20X_CANONICAL,
     BENCHMARK_SCORE_20X_LEGACY,
@@ -77,6 +80,27 @@ def test_benchmark_score_repair_is_exact_and_idempotent() -> None:
     assert rendered.count(BENCHMARK_SCORE_20X_CANONICAL) == 1
     assert rendered.count(BENCHMARK_SCORE_30X_CANONICAL) == 1
     assert repeated == rendered
+
+
+def test_ci_status_handoff_accepts_canonical_status_file_free_workflow(tmp_path: Path) -> None:
+    workflow = tmp_path / "canonical.yml"
+    source = """name: Canonical\njobs:\n  test:\n    steps:\n      - name: Run tests\n        id: package-tests\n        continue-on-error: true\n        run: python -m pytest -q\n      - name: Enforce tests\n        if: steps.package-tests.outcome == 'failure'\n        run: exit 1\n"""
+    workflow.write_text(source, encoding="utf-8", newline="\n")
+
+    assert repair_pytest_status_handoff(workflow) is False
+    assert workflow.read_text(encoding="utf-8") == source
+
+
+def test_ci_status_handoff_rejects_orphaned_legacy_exit_token(tmp_path: Path) -> None:
+    workflow = tmp_path / "stale.yml"
+    workflow.write_text(
+        "name: Stale\njobs:\n  test:\n    steps:\n      - run: |\n          python -m pytest -q\n          echo $?\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    with pytest.raises(RuntimeError, match="legacy pytest status token"):
+        repair_pytest_status_handoff(workflow)
 
 
 def test_committed_runtime_sources_are_canonical() -> None:
