@@ -7,6 +7,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Map, Value};
 
+#[path = "native_hook_evidence.rs"]
+mod native_hook_evidence;
+#[path = "native_hook_output.rs"]
+mod native_hook_output;
+
 const DESTRUCTIVE_PATTERNS: &[&str] = &[
     "rm -rf /",
     "rm -rf ~",
@@ -142,23 +147,6 @@ fn pre_tool(payload: &Map<String, Value>, project_root: &Path) -> Result<Value, 
     }))
 }
 
-fn post_tool(payload: &Map<String, Value>) -> Value {
-    let result = payload.get("result").cloned().unwrap_or_else(|| json!({}));
-    match result {
-        Value::String(text) => json!({
-            "mode": "bounded",
-            "text": text.chars().take(4096).collect::<String>(),
-            "raw_length": text.chars().count(),
-        }),
-        Value::Object(value) => json!({
-            "mode": "bounded",
-            "result": value,
-            "compressions": {},
-        }),
-        value => json!({"mode": "pass-through", "result": value}),
-    }
-}
-
 fn cache_health() -> Value {
     json!({
         "plans": 0,
@@ -228,13 +216,13 @@ fn session_id(payload: &Map<String, Value>) -> Value {
 pub fn execute(
     arguments: &[String],
     project_root: &Path,
-    _state_root: &Path,
+    state_root: &Path,
 ) -> Result<Value, String> {
     let selected = phase(arguments)?;
     let payload = payload(arguments)?;
     match selected {
         "pre" => pre_tool(&payload, project_root),
-        "post" => Ok(post_tool(&payload)),
+        "post" => native_hook_output::post_tool(&payload, project_root, state_root),
         "session-start" => session_start(&payload, project_root),
         "prompt" => Ok(prompt_submit(&payload)),
         "pre-compact" => Ok(json!({

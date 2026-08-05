@@ -98,10 +98,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::create_dir_all(parent).map_err(|error| format!("HOOK_OUTPUT_DIR_FAILED:{error}"))?;
     let mut random = [0_u8; 8];
     OsRng.fill_bytes(&mut random);
-    let temp = parent.join(format!(
-        ".syntavra-{:016x}.tmp",
-        u64::from_be_bytes(random)
-    ));
+    let temp = parent.join(format!(".syntavra-{:016x}.tmp", u64::from_be_bytes(random)));
     let mut file =
         fs::File::create(&temp).map_err(|error| format!("HOOK_OUTPUT_TEMP_FAILED:{error}"))?;
     file.write_all(bytes)
@@ -129,8 +126,8 @@ fn private(_path: &Path) -> Result<(), String> {
 }
 
 fn evidence_schema(path: &Path) -> Result<Connection, String> {
-    let db = Connection::open(path)
-        .map_err(|error| format!("HOOK_EVIDENCE_DB_OPEN_FAILED:{error}"))?;
+    let db =
+        Connection::open(path).map_err(|error| format!("HOOK_EVIDENCE_DB_OPEN_FAILED:{error}"))?;
     db.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA foreign_keys=ON;
@@ -159,8 +156,7 @@ fn evidence_schema(path: &Path) -> Result<Connection, String> {
 }
 
 pub(super) fn externalization_schema(path: &Path) -> Result<Connection, String> {
-    let db = Connection::open(path)
-        .map_err(|error| format!("HOOK_EXT_DB_OPEN_FAILED:{error}"))?;
+    let db = Connection::open(path).map_err(|error| format!("HOOK_EXT_DB_OPEN_FAILED:{error}"))?;
     db.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA foreign_keys=ON;

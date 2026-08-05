@@ -8,9 +8,7 @@ use rusqlite::{params, OptionalExtension as _};
 use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
-use super::native_hook_evidence::{
-    evidence_put, externalization_schema, hash_json, now, policy,
-};
+use super::native_hook_evidence::{evidence_put, externalization_schema, hash_json, now, policy};
 
 const TEXT_KEYS: &[&str] = &[
     "stdout",
@@ -28,8 +26,7 @@ const TEXT_KEYS: &[&str] = &[
     "message",
     "data",
 ];
-const ROOT_CAPTURE_PATHS: &[&str] =
-    &["result", "stdout", "stderr", "output", "content", "text"];
+const ROOT_CAPTURE_PATHS: &[&str] = &["result", "stdout", "stderr", "output", "content", "text"];
 
 #[derive(Clone)]
 struct Capture {
@@ -70,7 +67,11 @@ fn payload_command(payload: &Map<String, Value>) -> String {
     match payload.get("command").or_else(|| payload.get("argv")) {
         Some(Value::Array(values)) => values
             .iter()
-            .map(|value| value.as_str().map_or_else(|| value.to_string(), str::to_owned))
+            .map(|value| {
+                value
+                    .as_str()
+                    .map_or_else(|| value.to_string(), str::to_owned)
+            })
             .collect::<Vec<_>>()
             .join(" "),
         Some(Value::String(value)) => value.clone(),
@@ -194,8 +195,8 @@ fn family(raw: &[u8], command: &str, path: &str) -> &'static str {
     {
         "test-output"
     } else if [
-        "py", "js", "jsx", "ts", "tsx", "rs", "go", "java", "cs", "c", "cpp", "h",
-        "hpp", "rb", "php", "lua", "luau",
+        "py", "js", "jsx", "ts", "tsx", "rs", "go", "java", "cs", "c", "cpp", "h", "hpp", "rb",
+        "php", "lua", "luau",
     ]
     .contains(&suffix.as_str())
     {
@@ -298,8 +299,7 @@ fn capture_text(
     let family = family(raw, command, path);
     let (artifact_id, stream, identity, policy_hash) =
         artifact_ids(tool, command, path, scope, &content_hash)?;
-    fs::create_dir_all(state_root)
-        .map_err(|error| format!("HOOK_STATE_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root).map_err(|error| format!("HOOK_STATE_CREATE_FAILED:{error}"))?;
     let db = externalization_schema(&state_root.join("tool-externalization.sqlite3"))?;
 
     let duplicate = db
@@ -332,9 +332,8 @@ fn capture_text(
             params![scope, identity, next, now()?],
         )
         .map_err(|error| format!("HOOK_EXT_DUPLICATE_UPDATE_FAILED:{error}"))?;
-        let preview = format!(
-            "[Syntavra externalized duplicate artifact={id} seen={next} exact={handle}]"
-        );
+        let preview =
+            format!("[Syntavra externalized duplicate artifact={id} seen={next} exact={handle}]");
         let capture = Capture {
             path: field_path.to_owned(),
             artifact_id: id,
@@ -554,13 +553,9 @@ pub(super) fn post_tool(
 ) -> Result<Value, String> {
     let tool = tool(payload);
     let result = payload.get("result").cloned().unwrap_or(Value::Null);
-    if [
-        "syntavra.output.",
-        "syntavra.usage.",
-        "syntavra.evidence.",
-    ]
-    .iter()
-    .any(|prefix| tool.starts_with(prefix))
+    if ["syntavra.output.", "syntavra.usage.", "syntavra.evidence."]
+        .iter()
+        .any(|prefix| tool.starts_with(prefix))
     {
         return Ok(json!({
             "mode": "pass-through",
