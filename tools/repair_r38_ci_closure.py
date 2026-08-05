@@ -79,7 +79,7 @@ def repair_runtime_repair_contract() -> bool:
     changed = False
     changed |= replace_exact(
         path,
-        '''STATS_FLOAT_REPAIRS = (
+        """STATS_FLOAT_REPAIRS = (
     (
         '''            "wall_time_ms": wall_time_ms,''',
         '''            "wall_time_ms": python_json_float(wall_time_ms),''',
@@ -95,8 +95,8 @@ def repair_runtime_repair_contract() -> bool:
         '''            "compaction_wall_time_ms": python_json_float(compaction_ms),''',
         "stats compaction numeric type parity",
     ),
-)''',
-        '''STATS_USAGE_FLOATS_LEGACY = '''            "output_tokens": output_tokens,
+)""",
+        """STATS_USAGE_FLOATS_LEGACY = '''            "output_tokens": output_tokens,
             "wall_time_ms": wall_time_ms,
             "cost_usd": cost_usd,'''
 STATS_USAGE_FLOATS_CANONICAL = '''            "output_tokens": output_tokens,
@@ -110,7 +110,7 @@ STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
             "restores": continuity,
             "compaction_wall_time_ms": python_json_float(compaction_ms),
         },'''
-''',
+""",
         "stats numeric repair fragments",
     )
     changed |= replace_exact(
