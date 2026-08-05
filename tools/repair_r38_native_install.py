@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_install.rs"
 
 CANONICAL_TOKENS = (
-    '"mcp_capable": 13',
+    '"mcp_capable": 14',
     '"host-specific-marker-contract-tested": 2',
     '"official-path-contract-tested": 1',
     '"official-skill-path-contract-tested": 3',
@@ -59,7 +59,7 @@ fn adapter_validation() -> Value {
         "adapters": 18,
         "missing_matrix_hosts": [],
         "extra_adapters": [],
-        "mcp_capable": 13,
+        "mcp_capable": 14,
         "continuity_capable": 15,
         "primary_certification_targets": ["claude-code", "codex", "cursor"],
         "evidence_levels": {
