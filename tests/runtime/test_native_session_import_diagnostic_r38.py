@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sys
 from pathlib import Path
 
 from tests.runtime.test_native_session_public_r38 import _run, _write_export
@@ -21,8 +23,15 @@ def test_native_session_import_reports_full_failure_details(tmp_path: Path) -> N
         str(export_path),
         "--session-id=imported-session",
     )
-    assert code == 0, {
-        "code": code,
-        "result": result,
-        "stderr": stderr,
-    }
+    if code != 0:
+        sys.stderr.write(
+            "R38_SESSION_IMPORT_DIAGNOSTIC="
+            + json.dumps(
+                {"code": code, "result": result, "stderr": stderr},
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        sys.stderr.flush()
+    assert code == 0
