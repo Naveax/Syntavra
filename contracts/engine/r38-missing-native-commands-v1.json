@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 117,
+  "missing_native_public_command_count": 116,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -11,7 +11,6 @@
     "compress get",
     "compress put",
     "compress verify",
-    "doctor",
     "engine route",
     "evidence get",
     "evidence rotate-key",
@@ -119,7 +118,7 @@
     "status",
     "uninstall"
   ],
-  "native_public_command_count": 128,
+  "native_public_command_count": 129,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
