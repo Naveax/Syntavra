@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "tools" / "repair_r38_ci_closure.py"
 
 IMPORT = (
-    "from repair_r38_runtime_selector_contract import "
+    "from tools.repair_r38_runtime_selector_contract import "
     "repair as repair_runtime_selector_contract\n"
 )
 FUNCTION_PATTERN = re.compile(
@@ -75,15 +75,26 @@ def render(source: str) -> tuple[str, bool]:
     rendered = source
     changed = False
 
+    legacy_import = (
+        "from repair_r38_runtime_selector_contract import "
+        "repair as repair_runtime_selector_contract\n"
+    )
+    legacy_count = rendered.count(legacy_import)
     import_count = rendered.count(IMPORT)
-    if import_count == 0:
+    if legacy_count == 1 and import_count == 0:
+        rendered = rendered.replace(legacy_import, IMPORT, 1)
+        changed = True
+    elif legacy_count == 0 and import_count == 0:
         anchor = "from pathlib import Path\n"
         if rendered.count(anchor) != 1:
             raise RuntimeError("CI closure pathlib import anchor must be unique")
         rendered = rendered.replace(anchor, anchor + "\n" + IMPORT, 1)
         changed = True
-    elif import_count != 1:
-        raise RuntimeError(f"CI closure selector helper import count invalid: {import_count}")
+    elif legacy_count != 0 or import_count != 1:
+        raise RuntimeError(
+            "CI closure selector helper import state invalid: "
+            f"legacy={legacy_count}, canonical={import_count}"
+        )
 
     canonical_marker = "    changed = repair_runtime_selector_contract()\n"
     marker_count = rendered.count(canonical_marker)
