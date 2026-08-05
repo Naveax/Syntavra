@@ -112,8 +112,8 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["claim"] == "DUAL_ENGINE_PARITY_INCOMPLETE"
     assert result["full"] is False
     assert result["python"]["public_command_count"] == 245
-    assert result["rust"]["native_public_command_count"] == 138
-    assert result["rust"]["missing_native_public_command_count"] == 107
+    assert result["rust"]["native_public_command_count"] == 139
+    assert result["rust"]["missing_native_public_command_count"] == 106
     assert result["policy"]["hidden_fallback_forbidden"] is True
     assert result["policy"]["one_install_contains_python_and_rust"] is True
 

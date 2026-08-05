@@ -328,6 +328,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
