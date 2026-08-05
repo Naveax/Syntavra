@@ -128,14 +128,8 @@ STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
                 for legacy, canonical, _ in STATS_FLOAT_REPAIRS
             )''',
         '''            and canonical_stats.count("fn python_json_float(number: f64) -> Value {") == 1
-            and canonical_stats.count('"wall_time_ms": python_json_float(wall_time_ms),') == 1
-            and canonical_stats.count('"cost_usd": python_json_float(cost_usd),') == 1
-            and canonical_stats.count(
-                '"compaction_wall_time_ms": python_json_float(compaction_ms),'
-            ) == 1
-            and '"wall_time_ms": wall_time_ms,' not in canonical_stats
-            and '"cost_usd": cost_usd,' not in canonical_stats
-            and '"compaction_wall_time_ms": compaction_ms,' not in canonical_stats''',
+            and canonical_stats.count(STATS_USAGE_FLOATS_CANONICAL) == 1
+            and canonical_stats.count(STATS_COMPACTION_FLOAT_CANONICAL) == 1''',
         "stats numeric repair invariant",
     )
     return changed
