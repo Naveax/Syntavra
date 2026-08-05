@@ -13,6 +13,12 @@ SELECTOR_REPAIR = ROOT / "tools" / "repair_r38_selector_option_values.py"
 INSTALL_REPAIR = ROOT / "tools" / "repair_r38_native_install.py"
 
 TARGETS = (
+    "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_empty_dry_run_matches_python",
+    "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_codex_apply_matches_python",
+    "tests/runtime/test_native_setup_repair_r38.py::test_native_repair_plan_matches_python",
+    "tests/runtime/test_native_setup_repair_r38.py::test_native_repair_apply_installs_missing_product",
+    "tests/runtime/test_native_setup_repair_r38.py::test_native_repair_restores_only_missing_bundle_files",
+    "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_repair_mode_matches_python",
     "tests/runtime/test_native_install_r38.py::test_native_install_empty_dry_run_matches_python",
     "tests/runtime/test_native_install_r38.py::test_native_install_codex_dry_run_matches_python",
     "tests/runtime/test_native_install_r38.py::test_native_install_empty_apply_matches_product_bundle",
