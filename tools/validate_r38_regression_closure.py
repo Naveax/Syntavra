@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
+RUNTIME_SELECTOR_REPAIR = ROOT / "tools" / "repair_r38_runtime_selector_contract.py"
 SELECTOR_REPAIR = ROOT / "tools" / "repair_r38_selector_option_values.py"
 INSTALL_REPAIR = ROOT / "tools" / "repair_r38_native_install.py"
 STATUS_REPAIR = ROOT / "tools" / "repair_r38_native_status.py"
@@ -85,6 +86,7 @@ def main() -> int:
     run_checked([sys.executable, str(HOOK_REPAIR)], "hook-repair")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-advance")
+    run_checked([sys.executable, str(RUNTIME_SELECTOR_REPAIR)], "runtime-selector-contract-repair")
     run_checked([sys.executable, str(RUNTIME_REPAIR)], "repair")
     run_checked(["cargo", "fmt", "--all"], "rustfmt")
     run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair-idempotence")
@@ -94,6 +96,7 @@ def main() -> int:
     run_checked([sys.executable, str(HOOK_REPAIR)], "hook-repair-idempotence")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair-idempotence")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-idempotence")
+    run_checked([sys.executable, str(RUNTIME_SELECTOR_REPAIR)], "runtime-selector-contract-idempotence")
     run_checked([sys.executable, str(RUNTIME_REPAIR), "--check"], "repair-idempotence")
     run_checked(
         ["cargo", "check", "--locked", "-p", "syntavra-cli", "--bin", "syntavra"],
