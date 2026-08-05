@@ -63,9 +63,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python tools/repair_r38_ci_closure_selector_contract.py
           python tools/repair_r38_ci_closure.py
           python tools/repair_r38_runtime_regressions.py
           cargo fmt --all
+          python tools/repair_r38_ci_closure_selector_contract.py --check
           python tools/repair_r38_runtime_regressions.py --check
           python -m pytest -q tests/runtime/test_r38_runtime_regression_repair.py
 
