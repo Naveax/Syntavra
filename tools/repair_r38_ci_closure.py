@@ -243,7 +243,7 @@ STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
     rendered, compaction_count = exact_repair(
         rendered,
         STATS_COMPACTION_FLOAT_LEGACY,
-        STATS_COMPACTION_FLOATS_CANONICAL,
+        STATS_COMPACTION_FLOAT_CANONICAL,
         "stats compaction numeric type parity",
     )
     return rendered, changed + usage_count + compaction_count''',
