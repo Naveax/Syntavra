@@ -9,6 +9,7 @@ from advance_r38_fabric_compact_inventory import advance as advance_compact_inve
 from advance_r38_fabric_doctor_inventory import advance as advance_doctor_inventory
 from advance_r38_fabric_insights_inventory import advance as advance_insights_inventory
 from advance_r38_fabric_install_inventory import advance as advance_install_inventory
+from advance_r38_fabric_installations_inventory import advance as advance_installations_inventory
 from advance_r38_fabric_route_inventory import advance as advance_route_inventory
 from repair_r38_fabric_compact_contract import repair as repair_compact_contract
 from repair_r38_fabric_doctor_contract import repair as repair_doctor_contract
@@ -16,6 +17,8 @@ from repair_r38_fabric_insights_contract import repair as repair_insights_contra
 from repair_r38_fabric_insights_validator import repair as repair_insights_validator
 from repair_r38_fabric_install_contract import repair as repair_install_contract
 from repair_r38_fabric_install_validator import repair as repair_install_validator
+from repair_r38_fabric_installations_contract import repair as repair_installations_contract
+from repair_r38_fabric_installations_validator import repair as repair_installations_validator
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
@@ -119,12 +122,15 @@ def main() -> int:
     insights_validator_changed = repair_insights_validator()
     install_contract_changed = repair_install_contract()
     install_validator_changed = repair_install_validator()
+    installations_contract_changed = repair_installations_contract()
+    installations_validator_changed = repair_installations_validator()
     route_inventory_changed = advance_route_inventory()
     cache_align_inventory_changed = advance_cache_align_inventory()
     compact_inventory_changed = advance_compact_inventory()
     doctor_inventory_changed = advance_doctor_inventory()
     insights_inventory_changed = advance_insights_inventory()
     install_inventory_changed = advance_install_inventory()
+    installations_inventory_changed = advance_installations_inventory()
     changed = any(
         (
             compact_contract_changed,
@@ -134,12 +140,15 @@ def main() -> int:
             insights_validator_changed,
             install_contract_changed,
             install_validator_changed,
+            installations_contract_changed,
+            installations_validator_changed,
             route_inventory_changed,
             cache_align_inventory_changed,
             compact_inventory_changed,
             doctor_inventory_changed,
             insights_inventory_changed,
             install_inventory_changed,
+            installations_inventory_changed,
         )
     )
     print(
@@ -157,6 +166,9 @@ def main() -> int:
                 "install_contract_changed": install_contract_changed,
                 "install_inventory_changed": install_inventory_changed,
                 "install_validator_changed": install_validator_changed,
+                "installations_contract_changed": installations_contract_changed,
+                "installations_inventory_changed": installations_inventory_changed,
+                "installations_validator_changed": installations_validator_changed,
                 "ok": True,
                 "route_inventory_changed": route_inventory_changed,
                 "surface": "native-fabric-control-plane",
@@ -165,6 +177,7 @@ def main() -> int:
                     or doctor_contract_changed
                     or insights_contract_changed
                     or install_contract_changed
+                    or installations_contract_changed
                 ),
             },
             sort_keys=True,
