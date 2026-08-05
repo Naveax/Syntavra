@@ -39,8 +39,8 @@ def run_checked(argv: list[str], label: str) -> None:
         payload = {
             "code": "R38_TARGETED_VALIDATION_FAILED",
             "returncode": completed.returncode,
-            "stdout_tail": completed.stdout[-3000:],
-            "stderr_tail": completed.stderr[-3000:],
+            "stdout_tail": completed.stdout[-5000:],
+            "stderr_tail": completed.stderr[-5000:],
             "failed_target": label,
         }
         raise RuntimeError(json.dumps(payload, sort_keys=True))
@@ -54,6 +54,10 @@ def main() -> int:
     run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair-idempotence")
     run_checked([sys.executable, str(INSTALL_REPAIR)], "install-repair-idempotence")
     run_checked([sys.executable, str(RUNTIME_REPAIR), "--check"], "repair-idempotence")
+    run_checked(
+        ["cargo", "check", "--locked", "-p", "syntavra-cli", "--bin", "syntavra"],
+        "cargo-check:syntavra",
+    )
     for target in TARGETS:
         run_checked(
             [sys.executable, "-m", "pytest", "-q", target],
