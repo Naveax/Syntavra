@@ -6,8 +6,10 @@ from pathlib import Path
 
 from advance_r38_fabric_cache_align_inventory import advance as advance_cache_align_inventory
 from advance_r38_fabric_compact_inventory import advance as advance_compact_inventory
+from advance_r38_fabric_doctor_inventory import advance as advance_doctor_inventory
 from advance_r38_fabric_route_inventory import advance as advance_route_inventory
 from repair_r38_fabric_compact_contract import repair as repair_compact_contract
+from repair_r38_fabric_doctor_contract import repair as repair_doctor_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
@@ -104,28 +106,37 @@ def repair() -> bool:
 
 
 def main() -> int:
-    contract_changed = repair_compact_contract()
-    wiring_changed = repair()
+    compact_contract_changed = repair_compact_contract()
+    base_wiring_changed = repair()
+    doctor_contract_changed = repair_doctor_contract()
     route_inventory_changed = advance_route_inventory()
     cache_align_inventory_changed = advance_cache_align_inventory()
     compact_inventory_changed = advance_compact_inventory()
+    doctor_inventory_changed = advance_doctor_inventory()
+    changed = any(
+        (
+            compact_contract_changed,
+            base_wiring_changed,
+            doctor_contract_changed,
+            route_inventory_changed,
+            cache_align_inventory_changed,
+            compact_inventory_changed,
+            doctor_inventory_changed,
+        )
+    )
     print(
         json.dumps(
             {
                 "cache_align_inventory_changed": cache_align_inventory_changed,
-                "changed": (
-                    contract_changed
-                    or wiring_changed
-                    or route_inventory_changed
-                    or cache_align_inventory_changed
-                    or compact_inventory_changed
-                ),
-                "compact_contract_changed": contract_changed,
+                "changed": changed,
+                "compact_contract_changed": compact_contract_changed,
                 "compact_inventory_changed": compact_inventory_changed,
+                "doctor_contract_changed": doctor_contract_changed,
+                "doctor_inventory_changed": doctor_inventory_changed,
                 "ok": True,
                 "route_inventory_changed": route_inventory_changed,
                 "surface": "native-fabric-control-plane",
-                "wiring_changed": wiring_changed,
+                "wiring_changed": base_wiring_changed or doctor_contract_changed,
             },
             sort_keys=True,
         )
