@@ -74,6 +74,79 @@ def repair_benchmark_parity() -> bool:
     return changed
 
 
+def repair_runtime_repair_contract() -> bool:
+    path = ROOT / "tools" / "repair_r38_runtime_regressions.py"
+    changed = False
+    changed |= replace_exact(
+        path,
+        '''STATS_FLOAT_REPAIRS = (
+    (
+        '''            "wall_time_ms": wall_time_ms,''',
+        '''            "wall_time_ms": python_json_float(wall_time_ms),''',
+        "stats wall-time numeric type parity",
+    ),
+    (
+        '''            "cost_usd": cost_usd,''',
+        '''            "cost_usd": python_json_float(cost_usd),''',
+        "stats cost numeric type parity",
+    ),
+    (
+        '''            "compaction_wall_time_ms": compaction_ms,''',
+        '''            "compaction_wall_time_ms": python_json_float(compaction_ms),''',
+        "stats compaction numeric type parity",
+    ),
+)''',
+        '''STATS_USAGE_FLOATS_LEGACY = '''            "output_tokens": output_tokens,
+            "wall_time_ms": wall_time_ms,
+            "cost_usd": cost_usd,'''
+STATS_USAGE_FLOATS_CANONICAL = '''            "output_tokens": output_tokens,
+            "wall_time_ms": python_json_float(wall_time_ms),
+            "cost_usd": python_json_float(cost_usd),'''
+STATS_COMPACTION_FLOAT_LEGACY = '''        "continuity": {
+            "restores": continuity,
+            "compaction_wall_time_ms": compaction_ms,
+        },'''
+STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
+            "restores": continuity,
+            "compaction_wall_time_ms": python_json_float(compaction_ms),
+        },'''
+''',
+        "stats numeric repair fragments",
+    )
+    changed |= replace_exact(
+        path,
+        '''    rendered, count = exact_repairs(rendered, STATS_FLOAT_REPAIRS)
+    return rendered, changed + count''',
+        '''    rendered, usage_count = exact_repair(
+        rendered,
+        STATS_USAGE_FLOATS_LEGACY,
+        STATS_USAGE_FLOATS_CANONICAL,
+        "stats usage numeric type parity",
+    )
+    rendered, compaction_count = exact_repair(
+        rendered,
+        STATS_COMPACTION_FLOAT_LEGACY,
+        STATS_COMPACTION_FLOAT_CANONICAL,
+        "stats compaction numeric type parity",
+    )
+    return rendered, changed + usage_count + compaction_count''',
+        "stats numeric repair implementation",
+    )
+    changed |= replace_exact(
+        path,
+        '''            and all(
+                canonical_stats.count(canonical) == 1 and legacy not in canonical_stats
+                for legacy, canonical, _ in STATS_FLOAT_REPAIRS
+            )''',
+        '''            and canonical_stats.count(STATS_USAGE_FLOATS_CANONICAL) == 1
+            and STATS_USAGE_FLOATS_LEGACY not in canonical_stats
+            and canonical_stats.count(STATS_COMPACTION_FLOAT_CANONICAL) == 1
+            and STATS_COMPACTION_FLOAT_LEGACY not in canonical_stats''',
+        "stats numeric repair invariant",
+    )
+    return changed
+
+
 def repair_runtime_matrix() -> bool:
     path = WORKFLOWS / "validate-fusion-runtime.yml"
     old = '''      - uses: actions/setup-python@v5\n        with:\n          python-version: ${{ matrix.python }}\n      - name: Install runtime and test dependencies\n'''
@@ -178,6 +251,7 @@ def main() -> int:
     operations = (
         ("selector-option-contract", repair_selector_option_contract),
         ("benchmark-parity", repair_benchmark_parity),
+        ("runtime-repair-contract", repair_runtime_repair_contract),
     )
     for label, operation in operations:
         if operation():
