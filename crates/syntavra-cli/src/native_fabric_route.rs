@@ -11,13 +11,42 @@ use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
 const LONG_RUNNING: &[&str] = &[
-    "cargo", "cmake", "ctest", "docker", "dotnet", "go", "gradle", "jest", "make",
-    "mvn", "ninja", "npm", "nox", "pnpm", "podman", "py.test", "pytest", "ruff",
-    "terraform", "tox", "vitest", "yarn",
+    "cargo",
+    "cmake",
+    "ctest",
+    "docker",
+    "dotnet",
+    "go",
+    "gradle",
+    "jest",
+    "make",
+    "mvn",
+    "ninja",
+    "npm",
+    "nox",
+    "pnpm",
+    "podman",
+    "py.test",
+    "pytest",
+    "ruff",
+    "terraform",
+    "tox",
+    "vitest",
+    "yarn",
 ];
 const NETWORK: &[&str] = &[
-    "cargo", "curl", "gh", "git", "invoke-webrequest", "iwr", "npm", "pip", "pnpm",
-    "uv", "wget", "yarn",
+    "cargo",
+    "curl",
+    "gh",
+    "git",
+    "invoke-webrequest",
+    "iwr",
+    "npm",
+    "pip",
+    "pnpm",
+    "uv",
+    "wget",
+    "yarn",
 ];
 
 pub fn supports(command: &[String]) -> bool {
@@ -52,7 +81,9 @@ fn option_value(arguments: &[String], name: &str) -> Result<Option<String>, Stri
     Ok(found)
 }
 
-fn route_arguments(arguments: &[String]) -> Result<(bool, bool, Option<PathBuf>, Vec<String>), String> {
+fn route_arguments(
+    arguments: &[String],
+) -> Result<(bool, bool, Option<PathBuf>, Vec<String>), String> {
     let start = arguments
         .windows(2)
         .position(|row| row[0] == "fabric" && row[1] == "route")
@@ -131,18 +162,26 @@ fn family(argv: &[String]) -> &'static str {
     if exe == "gh" {
         return "github";
     }
-    if matches!(exe.as_str(), "pytest" | "py.test" | "jest" | "vitest" | "ctest")
-        || format!(" {joined}").contains(" test")
+    if matches!(
+        exe.as_str(),
+        "pytest" | "py.test" | "jest" | "vitest" | "ctest"
+    ) || format!(" {joined}").contains(" test")
     {
         return "test";
     }
     if matches!(exe.as_str(), "grep" | "rg" | "find" | "fd" | "ls" | "tree") {
         return "search";
     }
-    if matches!(exe.as_str(), "cat" | "head" | "tail" | "sed" | "type" | "get-content") {
+    if matches!(
+        exe.as_str(),
+        "cat" | "head" | "tail" | "sed" | "type" | "get-content"
+    ) {
         return "read";
     }
-    if matches!(exe.as_str(), "npm" | "pnpm" | "yarn" | "pip" | "uv" | "cargo") {
+    if matches!(
+        exe.as_str(),
+        "npm" | "pnpm" | "yarn" | "pip" | "uv" | "cargo"
+    ) {
         return "package";
     }
     if matches!(exe.as_str(), "kubectl" | "aws" | "gcloud" | "az") {
@@ -154,7 +193,10 @@ fn family(argv: &[String]) -> &'static str {
     if matches!(exe.as_str(), "curl" | "wget" | "iwr" | "invoke-webrequest") {
         return "network";
     }
-    if matches!(exe.as_str(), "make" | "cmake" | "ninja" | "gradle" | "mvn" | "dotnet" | "go") {
+    if matches!(
+        exe.as_str(),
+        "make" | "cmake" | "ninja" | "gradle" | "mvn" | "dotnet" | "go"
+    ) {
         return "build";
     }
     "generic"
@@ -182,11 +224,7 @@ fn destructive(argv: &[String]) -> bool {
     }
     if exe == "git" && lower.get(1).is_some_and(|value| value == "clean") {
         if let Some(flag) = lower.get(2) {
-            if flag.starts_with('-')
-                && flag
-                    .chars()
-                    .any(|value| matches!(value, 'f' | 'x' | 'd'))
-            {
+            if flag.starts_with('-') && flag.chars().any(|value| matches!(value, 'f' | 'x' | 'd')) {
                 return true;
             }
         }
@@ -314,7 +352,8 @@ fn record_event(
     value: &Value,
     latency_ms: f64,
 ) -> Result<(), String> {
-    fs::create_dir_all(state_root).map_err(|error| format!("FABRIC_STATE_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(state_root)
+        .map_err(|error| format!("FABRIC_STATE_CREATE_FAILED:{error}"))?;
     let database = state_root.join("competitive-fabric.sqlite3");
     let connection = Connection::open(database)
         .map_err(|error| format!("FABRIC_DATABASE_OPEN_FAILED:{error}"))?;
