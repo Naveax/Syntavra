@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 111,
+  "missing_native_public_command_count": 110,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -110,10 +110,9 @@
     "run worker",
     "sandbox backends",
     "sandbox execute",
-    "sandbox plan",
-    "status"
+    "sandbox plan"
   ],
-  "native_public_command_count": 134,
+  "native_public_command_count": 135,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,

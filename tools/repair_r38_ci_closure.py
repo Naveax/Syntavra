@@ -5,6 +5,8 @@ import json
 import re
 from pathlib import Path
 
+from tools.repair_r38_runtime_selector_contract import repair as repair_runtime_selector_contract
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
@@ -70,29 +72,35 @@ def synchronize_generated_count_handoff() -> bool:
 
 
 def repair_init_selector_contract() -> bool:
-    changed = False
+    changed = repair_runtime_selector_contract()
     legacy_single = 'Some("rollout-tail" | "context-stress" | "claim" | "context")'
-    canonical_single = (
+    init_single = (
         'Some("rollout-tail" | "context-stress" | "claim" | "context" | "init")'
     )
-    changed |= replace_exact(
-        RUNTIME_REPAIR,
-        f"SINGLE_SEGMENT_PATH_CANONICAL = (\n    '{legacy_single}'\n)",
-        f"SINGLE_SEGMENT_PATH_CANONICAL = (\n    '{canonical_single}'\n)",
-        "init single-segment repair contract",
+    canonical_single = (
+        'Some("rollout-tail" | "context-stress" | "claim" | "context" | "init" | "hook" | "mcp")'
     )
 
     source = SELECTOR.read_text(encoding="utf-8")
-    legacy_count = source.count(legacy_single)
-    canonical_count = source.count(canonical_single)
-    if legacy_count == 1 and canonical_count == 0:
-        source = source.replace(legacy_single, canonical_single, 1)
-        SELECTOR.write_text(source, encoding="utf-8", newline="\n")
+    counts = {
+        "legacy": source.count(legacy_single),
+        "init": source.count(init_single),
+        "canonical": source.count(canonical_single),
+    }
+    if counts == {"legacy": 0, "init": 0, "canonical": 1}:
+        pass
+    elif counts["canonical"] == 0 and counts["legacy"] + counts["init"] == 1:
+        previous = legacy_single if counts["legacy"] == 1 else init_single
+        SELECTOR.write_text(
+            source.replace(previous, canonical_single, 1),
+            encoding="utf-8",
+        )
         changed = True
-    elif legacy_count != 0 or canonical_count != 1:
+    else:
         raise RuntimeError(
-            "init single-segment selector invariant failed: "
-            f"legacy={legacy_count}, canonical={canonical_count}"
+            "single-segment selector invariant failed: "
+            f"legacy={counts['legacy']}, init={counts['init']}, "
+            f"canonical={counts['canonical']}"
         )
 
     source = SELECTOR.read_text(encoding="utf-8")
