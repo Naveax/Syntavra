@@ -9,7 +9,7 @@ INSTALL = ROOT / "crates" / "syntavra-cli" / "src" / "native_install.rs"
 EXPANSION = ROOT / "crates" / "syntavra-cli" / "src" / "native_expansion.rs"
 
 MODULE_TOKEN = 'mod native_setup_repair;'
-SUPPORT_TOKEN = 'native_setup_repair::supports(command)'
+SUPPORT_TOKEN = '        || native_setup_repair::supports(command)\n'
 EXECUTE_TOKEN = 'if native_setup_repair::supports(command) {'
 SETUP_TEST_TOKEN = 'vec!["setup"]'
 REPAIR_TEST_TOKEN = 'vec!["repair"]'
