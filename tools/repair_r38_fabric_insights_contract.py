@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTOR = ROOT / "crates" / "syntavra-cli" / "src" / "native_fabric_doctor.rs"
+INSIGHTS = ROOT / "crates" / "syntavra-cli" / "src" / "native_fabric_insights.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 
 DOCTOR_REPLACEMENTS = (
@@ -34,6 +35,30 @@ DOCTOR_REPLACEMENTS = (
         "|path| write_json_output(&PathBuf::from(path), &value),",
     ),
 )
+
+OLD_COUNTER_SORT = '''    ordered.sort_by(|left, right| {
+        right
+            .1
+             .0
+            .cmp(&left.1 .0)
+            .then_with(|| left.1 .1.cmp(&right.1 .1))
+    });
+'''
+NEW_COUNTER_SORT = '''    ordered.sort_by(|left, right| {
+        right
+            .1
+            .0
+            .cmp(&left.1.0)
+            .then_with(|| left.1.1.cmp(&right.1.1))
+    });
+'''
+OLD_MAXIMUM = "    let maximum_latency = latencies.iter().copied().fold(0.0_f64, f64::max);\n"
+NEW_MAXIMUM = '''    let maximum_latency = latencies
+        .iter()
+        .copied()
+        .reduce(f64::max)
+        .unwrap_or(0.0);
+'''
 
 INSIGHTS_MODULE = '''#[path = "native_fabric_insights.rs"]
 mod native_fabric_insights;
@@ -64,19 +89,23 @@ def insert_once(source: str, token: str, anchor: str, label: str) -> tuple[str, 
     return source.replace(anchor, token + anchor, 1), True
 
 
+def replace_once(source: str, old: str, new: str, label: str) -> tuple[str, bool]:
+    if new in source:
+        if old in source:
+            raise RuntimeError(f"legacy {label} remains beside canonical form")
+        return source, False
+    if source.count(old) != 1:
+        raise RuntimeError(f"{label} token must be unique")
+    return source.replace(old, new, 1), True
+
+
 def repair_doctor_api() -> bool:
     source = DOCTOR.read_text(encoding="utf-8")
     rendered = source
     changed = False
     for old, new in DOCTOR_REPLACEMENTS:
-        if new in rendered:
-            if old in rendered:
-                raise RuntimeError(f"legacy doctor API token remains beside canonical token: {old}")
-            continue
-        if rendered.count(old) != 1:
-            raise RuntimeError(f"doctor API contract token must be unique: {old}")
-        rendered = rendered.replace(old, new, 1)
-        changed = True
+        rendered, applied = replace_once(rendered, old, new, "doctor API contract")
+        changed = changed or applied
     for token in (
         "pub(crate) fn open_database",
         "pub(crate) fn database_integrity",
@@ -86,6 +115,26 @@ def repair_doctor_api() -> bool:
             raise RuntimeError(f"doctor shared API invariant failed: {token}")
     if changed:
         DOCTOR.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
+
+
+def repair_insights_source() -> bool:
+    source = INSIGHTS.read_text(encoding="utf-8")
+    rendered, counter_changed = replace_once(
+        source,
+        OLD_COUNTER_SORT,
+        NEW_COUNTER_SORT,
+        "fabric insights counter ordering",
+    )
+    rendered, maximum_changed = replace_once(
+        rendered,
+        OLD_MAXIMUM,
+        NEW_MAXIMUM,
+        "fabric insights maximum latency",
+    )
+    changed = counter_changed or maximum_changed
+    if changed:
+        INSIGHTS.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
 
 
@@ -112,8 +161,9 @@ def repair_product() -> bool:
 
 def repair() -> bool:
     doctor_changed = repair_doctor_api()
+    insights_changed = repair_insights_source()
     product_changed = repair_product()
-    return doctor_changed or product_changed
+    return doctor_changed or insights_changed or product_changed
 
 
 def main() -> int:
