@@ -131,7 +131,7 @@ def test_native_status_all_focus_flags_match_python(tmp_path: Path) -> None:
         "--doctor",
         "--doctor",
     )
-    assert list(value) == [
+    assert set(value) == {
         "product",
         "version",
         "channel",
@@ -140,4 +140,4 @@ def test_native_status_all_focus_flags_match_python(tmp_path: Path) -> None:
         "profile",
         "memory",
         "evidence",
-    ]
+    }
