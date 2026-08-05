@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 108,
+  "missing_native_public_command_count": 107,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -11,7 +11,6 @@
     "compress get",
     "compress put",
     "compress verify",
-    "engine route",
     "evidence get",
     "evidence rotate-key",
     "fabric cache-align",
@@ -110,7 +109,7 @@
     "sandbox execute",
     "sandbox plan"
   ],
-  "native_public_command_count": 137,
+  "native_public_command_count": 138,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,

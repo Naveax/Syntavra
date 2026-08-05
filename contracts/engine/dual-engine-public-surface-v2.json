@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 108,
+    "missing_native_public_command_count": 107,
     "module_count": 98,
-    "native_coverage_ppm": 559183,
-    "native_public_command_count": 137,
+    "native_coverage_ppm": 563265,
+    "native_public_command_count": 138,
     "native_public_commands": [
       "benchmark generate-config",
       "benchmark generate-repo",
@@ -37,6 +37,7 @@
       "context-stress",
       "doctor",
       "engine list",
+      "engine route",
       "engine route config.explain",
       "engine route config.resolve",
       "engine route config.show",
