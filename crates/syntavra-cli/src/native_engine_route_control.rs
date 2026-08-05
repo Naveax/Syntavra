@@ -87,12 +87,7 @@ pub fn execute(
 
     let normalized = vec!["engine".to_owned(), "route".to_owned(), route];
     let value = if super::native_engine_routes::supports(&normalized) {
-        super::native_engine_routes::execute(
-            &normalized,
-            arguments,
-            project_root,
-            state_root,
-        )?
+        super::native_engine_routes::execute(&normalized, arguments, project_root, state_root)?
     } else if super::native_engine_state_routes::supports(&normalized) {
         super::native_engine_state_routes::execute(&normalized, arguments, project_root)?
     } else {
@@ -106,9 +101,7 @@ pub fn execute(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        normalize_route, supports, CERTIFIED_ROUTES, UNSUPPORTED_ERROR_ROUTES,
-    };
+    use super::{normalize_route, supports, CERTIFIED_ROUTES, UNSUPPORTED_ERROR_ROUTES};
 
     #[test]
     fn owns_generic_engine_route_surface() {

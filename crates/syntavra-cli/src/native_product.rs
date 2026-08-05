@@ -23,6 +23,8 @@ mod native_config_read_only;
 mod native_context_governor;
 #[path = "native_context_stress.rs"]
 mod native_context_stress;
+#[path = "native_engine_route_control.rs"]
+mod native_engine_route_control;
 #[path = "native_engine_routes.rs"]
 mod native_engine_routes;
 #[path = "native_engine_state_routes.rs"]
@@ -99,6 +101,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
+        || native_engine_route_control::supports(command)
         || native_engine_routes::supports(command)
         || native_engine_state_routes::supports(command)
         || native_expansion::supports(command)
@@ -273,6 +276,22 @@ pub fn execute(
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
             .map(Some);
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
     }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
