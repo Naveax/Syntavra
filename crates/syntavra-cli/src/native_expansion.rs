@@ -28,6 +28,8 @@ mod native_job_queries;
 mod native_memory;
 #[path = "native_migrations.rs"]
 mod native_migrations;
+#[path = "native_operator_lifecycle.rs"]
+mod native_operator_lifecycle;
 #[allow(clippy::pedantic)]
 #[path = "native_output_governor.rs"]
 mod native_output_governor;
@@ -74,6 +76,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_job_queries::supports(command)
         || native_memory::supports(command)
         || native_migrations::supports(command)
+        || native_operator_lifecycle::supports(command)
         || native_output_governor::supports(command)
         || native_rollout_tail::supports(command)
         || native_scheduler_reap::supports(command)
@@ -140,6 +143,13 @@ pub fn execute(
     if native_migrations::supports(command) {
         return native_migrations::execute(command, arguments);
     }
+    if native_operator_lifecycle::supports(command) {
+        let decision = native_operator_lifecycle::execute(command, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_value(&decision.value, decision.exit_code);
+        }
+        return Ok(decision.value);
+    }
     if native_output_governor::supports(command) {
         return native_output_governor::execute(command, arguments);
     }
@@ -196,6 +206,7 @@ mod tests {
     #[test]
     fn routes_recent_expansion_commands() {
         for command in [
+            vec!["doctor"],
             vec!["host"],
             vec!["host", "negotiate"],
             vec!["host", "detect"],
