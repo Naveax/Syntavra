@@ -141,7 +141,7 @@ fn initialize_state(path: &Path) -> Result<bool, String> {
                environment_hash TEXT NOT NULL,dependency_hash TEXT NOT NULL,toolchain_hash TEXT NOT NULL,\
                success INTEGER NOT NULL,exit_code INTEGER NOT NULL,evidence_handle TEXT NOT NULL,\
                affected_paths_json TEXT NOT NULL,created_at REAL NOT NULL);\
-             INSERT INTO metadata(key,value) VALUES('schema_version','2')\
+             INSERT INTO metadata(key,value) VALUES('schema_version','2') \
                ON CONFLICT(key) DO UPDATE SET value=excluded.value;",
         )
         .map_err(|error| format!("INIT_STATE_INITIALIZE_FAILED:{error}"))?;
@@ -181,8 +181,8 @@ fn initialize_evidence(root: &Path, project_id: &str) -> Result<bool, String> {
     let marker = health_root.join(format!("{project_id}-{digest}"));
     fs::write(&marker, HEALTH_MARKER)
         .map_err(|error| format!("INIT_EVIDENCE_HEALTH_WRITE_FAILED:{error}"))?;
-    let restored = fs::read(&marker)
-        .map_err(|error| format!("INIT_EVIDENCE_HEALTH_READ_FAILED:{error}"))?;
+    let restored =
+        fs::read(&marker).map_err(|error| format!("INIT_EVIDENCE_HEALTH_READ_FAILED:{error}"))?;
     fs::remove_file(marker)
         .map_err(|error| format!("INIT_EVIDENCE_HEALTH_REMOVE_FAILED:{error}"))?;
     Ok(restored == HEALTH_MARKER)
@@ -288,7 +288,10 @@ fn health(
         Value::Bool(package.join("__init__.py").is_file()),
     );
     for (name, filename) in REQUIRED_MODULES {
-        checks.insert((*name).to_owned(), Value::Bool(package.join(filename).is_file()));
+        checks.insert(
+            (*name).to_owned(),
+            Value::Bool(package.join(filename).is_file()),
+        );
     }
     checks.insert(
         "state_store".to_owned(),
@@ -297,7 +300,10 @@ fn health(
     let project_id = canonical_project_id(project_root)?;
     checks.insert(
         "evidence_store".to_owned(),
-        Value::Bool(initialize_evidence(&state_root.join("evidence"), &project_id)?),
+        Value::Bool(initialize_evidence(
+            &state_root.join("evidence"),
+            &project_id,
+        )?),
     );
     let negotiation = super::native_host::execute(
         &["host".to_owned(), "negotiate".to_owned()],
@@ -380,14 +386,16 @@ fn atomic_write_json(path: &Path, value: &Value) -> Result<(), String> {
         .ok_or_else(|| "INIT_SESSION_PARENT_MISSING".to_owned())?;
     fs::create_dir_all(parent)
         .map_err(|error| format!("INIT_SESSION_DIRECTORY_CREATE_FAILED:{error}"))?;
-    let temporary = parent.join(format!(".{}.{}", path.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
+    let temporary = parent.join(format!(
+        ".{}.{}",
+        path.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id()
+    ));
     let mut bytes = serde_json::to_vec(value)
         .map_err(|error| format!("INIT_SESSION_SERIALIZE_FAILED:{error}"))?;
     bytes.push(b'\n');
-    fs::write(&temporary, bytes)
-        .map_err(|error| format!("INIT_SESSION_WRITE_FAILED:{error}"))?;
-    fs::rename(&temporary, path)
-        .map_err(|error| format!("INIT_SESSION_RENAME_FAILED:{error}"))?;
+    fs::write(&temporary, bytes).map_err(|error| format!("INIT_SESSION_WRITE_FAILED:{error}"))?;
+    fs::rename(&temporary, path).map_err(|error| format!("INIT_SESSION_RENAME_FAILED:{error}"))?;
     Ok(())
 }
 

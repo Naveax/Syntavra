@@ -168,6 +168,8 @@ fn command_path(arguments: &[String]) -> Vec<String> {
             value.as_str(),
             "--project"
                 | "--state-root"
+                | "--skill-root"
+                | "--host"
                 | "--budget"
                 | "--max-tier"
                 | "--codex-home"
@@ -180,6 +182,12 @@ fn command_path(arguments: &[String]) -> Vec<String> {
         }
         if value.starts_with("--project=")
             || value.starts_with("--state-root=")
+            || value.starts_with("--skill-root=")
+            || value.starts_with("--host=")
+            || value.starts_with("--codex-home=")
+            || value.starts_with("--rollout=")
+            || value.starts_with("--state-file=")
+            || value.starts_with("--session-hint=")
             || value.starts_with("--budget=")
             || value.starts_with("--max-tier=")
         {
@@ -195,7 +203,7 @@ fn command_path(arguments: &[String]) -> Vec<String> {
     }
     if matches!(
         positional.first().map(String::as_str),
-        Some("rollout-tail" | "context-stress" | "claim" | "context")
+        Some("rollout-tail" | "context-stress" | "claim" | "context" | "init")
     ) {
         positional.truncate(1);
     } else if positional.first().map(String::as_str) == Some("engine")
