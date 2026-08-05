@@ -8,13 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RUST = ROOT / "crates" / "syntavra-cli" / "src" / "native_fabric_installations.rs"
 TEST = ROOT / "tests" / "runtime" / "test_native_fabric_installations_r38.py"
 
-HOST_SCHEMA_IN_BASE = '''             CREATE TABLE IF NOT EXISTS host_install_transactions(\
-                transaction_id TEXT PRIMARY KEY,host TEXT NOT NULL,scope TEXT NOT NULL,root TEXT NOT NULL,\
-                status TEXT NOT NULL,manifest_json TEXT NOT NULL,created_at REAL NOT NULL,updated_at REAL NOT NULL\
-             );\
-             CREATE INDEX IF NOT EXISTS host_install_host_idx \
-                ON host_install_transactions(host,scope,created_at);\
-'''
+HOST_SCHEMA_START = "CREATE TABLE IF NOT EXISTS host_install_transactions("
+HOST_SCHEMA_END = "ON host_install_transactions(host,scope,created_at);\\\n"
 HOST_SCHEMA_FUNCTION = '''
 fn initialize_host_schema(connection: &Connection) -> Result<(), String> {
     connection
@@ -42,6 +37,7 @@ NEW_EXECUTE = '''    let selected = configured.unwrap_or_else(|| bundled_skill_r
 
     let requested_limit = option_value(arguments, "--limit")?
 '''
+EXECUTE_SIGNATURE = "initialize_host_schema(&database)?;"
 OLD_TEST = '''        assert _snapshot(project)["count"] == 0
 '''
 NEW_TEST = '''        with sqlite3.connect(_database(project)) as connection:
@@ -58,16 +54,23 @@ NEW_TEST = '''        with sqlite3.connect(_database(project)) as connection:
 '''
 
 
+def remove_early_host_schema(source: str) -> tuple[str, bool]:
+    helper_index = source.find("fn initialize_host_schema(")
+    search_end = helper_index if helper_index >= 0 else len(source)
+    schema_index = source.find(HOST_SCHEMA_START, 0, search_end)
+    if schema_index < 0:
+        return source, False
+    line_start = source.rfind("\n", 0, schema_index) + 1
+    end_index = source.find(HOST_SCHEMA_END, schema_index, search_end)
+    if end_index < 0:
+        raise RuntimeError("fabric installations early host schema end marker missing")
+    end_index += len(HOST_SCHEMA_END)
+    return source[:line_start] + source[end_index:], True
+
+
 def repair_rust() -> bool:
     source = RUST.read_text(encoding="utf-8")
-    rendered = source
-    changed = False
-
-    if HOST_SCHEMA_IN_BASE in rendered:
-        rendered = rendered.replace(HOST_SCHEMA_IN_BASE, "", 1)
-        changed = True
-    elif "CREATE TABLE IF NOT EXISTS host_install_transactions" not in rendered:
-        raise RuntimeError("fabric installations host schema contract is missing")
+    rendered, changed = remove_early_host_schema(source)
 
     if "fn initialize_host_schema(" not in rendered:
         if rendered.count(ROWS_ANCHOR) != 1:
@@ -77,18 +80,20 @@ def repair_rust() -> bool:
     elif rendered.count("fn initialize_host_schema(") != 1:
         raise RuntimeError("fabric installations host schema helper count invalid")
 
-    if NEW_EXECUTE not in rendered:
+    if EXECUTE_SIGNATURE not in rendered:
         if rendered.count(OLD_EXECUTE) != 1:
             raise RuntimeError("fabric installations constructor ordering contract not found")
         rendered = rendered.replace(OLD_EXECUTE, NEW_EXECUTE, 1)
         changed = True
-    elif OLD_EXECUTE in rendered:
-        raise RuntimeError("legacy fabric installations constructor ordering remains")
+    elif rendered.count(EXECUTE_SIGNATURE) != 1:
+        raise RuntimeError("host transaction schema initialization count invalid")
 
     base_prefix = rendered.split("fn initialize_host_schema(", 1)[0]
-    if "CREATE TABLE IF NOT EXISTS host_install_transactions" in base_prefix:
+    if HOST_SCHEMA_START in base_prefix:
         raise RuntimeError("host transaction schema still initializes before skill validation")
-    if rendered.count("initialize_host_schema(&database)?;") != 1:
+    if rendered.count(HOST_SCHEMA_START) != 1:
+        raise RuntimeError("host transaction schema definition count invalid")
+    if rendered.count(EXECUTE_SIGNATURE) != 1:
         raise RuntimeError("host transaction schema initialization count invalid")
 
     if changed:
