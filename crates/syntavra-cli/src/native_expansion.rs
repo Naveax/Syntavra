@@ -15,6 +15,8 @@ mod native_evidence_describe;
 mod native_evidence_gc;
 #[path = "native_evidence_stats.rs"]
 mod native_evidence_stats;
+#[path = "native_hook.rs"]
+mod native_hook;
 #[allow(clippy::pedantic)]
 #[path = "native_host.rs"]
 mod native_host;
@@ -82,6 +84,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_evidence_gc::supports(command)
         || native_evidence_stats::supports(command)
         || native_host::supports(command)
+        || native_hook::supports(command)
         || native_init::supports(command)
         || native_install::supports(command)
         || native_setup_repair::supports(command)
@@ -145,6 +148,9 @@ pub fn execute(
     }
     if native_host::supports(command) {
         return native_host::execute(command, arguments, project_root);
+    }
+    if native_hook::supports(command) {
+        return native_hook::execute(arguments, project_root, state_root);
     }
     if native_init::supports(command) {
         return native_init::execute(arguments, project_root, state_root);
@@ -249,6 +255,7 @@ mod tests {
             vec!["host", "negotiate"],
             vec!["host", "detect"],
             vec!["host", "capabilities"],
+            vec!["hook"],
             vec!["init"],
             vec!["install"],
             vec!["setup"],

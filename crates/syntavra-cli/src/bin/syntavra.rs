@@ -205,7 +205,7 @@ fn command_path(arguments: &[String]) -> Vec<String> {
     }
     if matches!(
         positional.first().map(String::as_str),
-        Some("rollout-tail" | "context-stress" | "claim" | "context" | "init")
+        Some("rollout-tail" | "context-stress" | "claim" | "context" | "init" | "hook" | "mcp")
     ) {
         positional.truncate(1);
     } else if positional.first().map(String::as_str) == Some("engine")

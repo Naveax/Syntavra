@@ -8,6 +8,9 @@ use std::path::Path;
 use rusqlite::Connection;
 use serde_json::{json, Map, Value};
 
+#[path = "native_status_default.rs"]
+mod native_status_default;
+
 const VERSION: &str = "0.0.1";
 const CHANNEL: &str = "pre-release";
 
@@ -330,22 +333,14 @@ pub fn execute(
     }
 
     let value = if focused.is_empty() {
-        json!({
-            "product": "Syntavra",
-            "version": VERSION,
-            "channel": CHANNEL,
-            "role": "token-and-context-optimization-skill",
-            "doctor": doctor.value,
-            "stats": stats,
-            "savings": evidence["token_attribution"],
-            "profile": profile,
-            "readiness": {
-                "ok": false,
-                "claim": "DAILY_CODING_AGENT_READINESS_NOT_PROVEN",
-            },
-            "evidence": evidence,
-            "primary_workflow": ["setup", "status", "run", "prove"],
-        })
+        native_status_default::snapshot(
+            project_root,
+            state_root,
+            doctor.value.clone(),
+            stats.clone(),
+            profile.clone(),
+            evidence.clone(),
+        )
     } else {
         let mut output = Map::new();
         output.insert("product".to_owned(), Value::String("Syntavra".to_owned()));

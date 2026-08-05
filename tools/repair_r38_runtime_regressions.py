@@ -39,7 +39,7 @@ MALFORMED_RUNTIME_SQL = re.compile(
 
 SINGLE_SEGMENT_PATH_LEGACY = 'Some("rollout-tail" | "context-stress")'
 SINGLE_SEGMENT_PATH_CANONICAL = (
-    'Some("rollout-tail" | "context-stress" | "claim" | "context" | "init")'
+    'Some("rollout-tail" | "context-stress" | "claim" | "context" | "init" | "hook" | "mcp")'
 )
 
 JSON_ARGUMENT_LEGACY = '''def _load_json_argument(value: str) -> Any:
