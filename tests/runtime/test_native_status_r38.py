@@ -73,6 +73,27 @@ def _assert_pair(tmp_path: Path, *arguments: str) -> tuple[Any, Any]:
     return python_value, rust_value
 
 
+def test_native_status_default_empty_project_matches_python(tmp_path: Path) -> None:
+    _, value = _assert_pair(tmp_path)
+    assert set(value) == {
+        "product",
+        "version",
+        "channel",
+        "role",
+        "doctor",
+        "stats",
+        "savings",
+        "profile",
+        "readiness",
+        "evidence",
+        "session_memory",
+        "proxy_presets",
+        "platform",
+        "competitive",
+        "primary_workflow",
+    }
+
+
 def test_native_status_doctor_focus_matches_python(tmp_path: Path) -> None:
     _, value = _assert_pair(tmp_path, "--doctor")
     assert value["doctor"]["ok"] is True
