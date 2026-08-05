@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
 
 TARGETS = (
+    "tests/runtime/test_manifest_refresh_contract.py",
     "tests/runtime/test_native_context_governor_r38.py",
     "tests/runtime/test_native_host_r38.py",
     "tests/runtime/test_native_stats_r38.py",
