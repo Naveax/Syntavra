@@ -8,8 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
+SELECTOR_REPAIR = ROOT / "tools" / "repair_r38_selector_option_values.py"
 
 TARGETS = (
+    "tests/runtime/test_native_install_r38.py",
     "tests/runtime/test_native_init_r38.py",
     "tests/runtime/test_native_operator_lifecycle_r38.py",
     "tests/runtime/test_native_uninstall_r38.py",
@@ -36,16 +38,18 @@ def run_checked(argv: list[str], label: str) -> None:
         payload = {
             "code": "R38_TARGETED_VALIDATION_FAILED",
             "returncode": completed.returncode,
-            "stdout_tail": completed.stdout[-2500:],
-            "stderr_tail": completed.stderr[-2500:],
+            "stdout_tail": completed.stdout[-3000:],
+            "stderr_tail": completed.stderr[-3000:],
             "failed_target": label,
         }
         raise RuntimeError(json.dumps(payload, sort_keys=True))
 
 
 def main() -> int:
+    run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair")
     run_checked([sys.executable, str(RUNTIME_REPAIR)], "repair")
     run_checked(["cargo", "fmt", "--all"], "rustfmt")
+    run_checked([sys.executable, str(SELECTOR_REPAIR)], "selector-repair-idempotence")
     run_checked([sys.executable, str(RUNTIME_REPAIR), "--check"], "repair-idempotence")
     for target in TARGETS:
         run_checked(
