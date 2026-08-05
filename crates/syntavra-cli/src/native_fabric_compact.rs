@@ -189,7 +189,12 @@ fn normalize_text(text: &str) -> Result<String, String> {
     let stripped = ansi.replace_all(text, "");
     let normalized: String = stripped
         .nfkc()
-        .filter(|value| !matches!(*value, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'))
+        .filter(|value| {
+            !matches!(
+                *value,
+                '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'
+            )
+        })
         .collect();
     Ok(normalized.replace("\r\n", "\n").replace('\r', "\n"))
 }
@@ -260,10 +265,26 @@ fn redact_security_patterns(normalized: &str) -> Result<(String, Vec<String>), S
     }
 
     for (name, pattern, replacement) in [
-        ("aws-access-key", r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", "<redacted:aws-access-key>"),
-        ("github-token", r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", "<redacted:github-token>"),
-        ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b", "<redacted:jwt>"),
-        ("database-uri", r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s]+", "<redacted:database-uri>"),
+        (
+            "aws-access-key",
+            r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
+            "<redacted:aws-access-key>",
+        ),
+        (
+            "github-token",
+            r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b",
+            "<redacted:github-token>",
+        ),
+        (
+            "jwt",
+            r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b",
+            "<redacted:jwt>",
+        ),
+        (
+            "database-uri",
+            r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s]+",
+            "<redacted:database-uri>",
+        ),
     ] {
         let matcher = regex(pattern, "SECRET")?;
         if matcher.is_match(&redacted) {
@@ -302,7 +323,9 @@ fn redact_security_patterns(normalized: &str) -> Result<(String, Vec<String>), S
         r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
         "EMAIL",
     )?;
-    redacted = email.replace_all(&redacted, "<redacted:email>").into_owned();
+    redacted = email
+        .replace_all(&redacted, "<redacted:email>")
+        .into_owned();
     Ok((redacted, secret_types))
 }
 
@@ -381,10 +404,7 @@ fn percent_decode(token: &str) -> Option<Vec<u8>> {
 }
 
 fn decoded_candidates(text: &str) -> Result<Vec<String>, String> {
-    let base64_token = regex(
-        r"(?P<token>[A-Za-z0-9+/_-]{32,}={0,2})",
-        "BASE64_TOKEN",
-    )?;
+    let base64_token = regex(r"(?P<token>[A-Za-z0-9+/_-]{32,}={0,2})", "BASE64_TOKEN")?;
     let hex_token = regex(r"(?P<token>[0-9a-fA-F]{32,})", "HEX_TOKEN")?;
     let url_token = regex(r"(?P<token>(?:%[0-9A-Fa-f]{2}){8,})", "URL_TOKEN")?;
     let mut result = Vec::new();
@@ -440,10 +460,7 @@ fn scan_text(text: &str, inspect_encoded: bool) -> Result<SecurityScan, String> 
     let normalized = normalize_text(text)?;
     let (redacted, mut secret_types) = redact_security_patterns(&normalized)?;
     let mut reasons = injection_reasons(&normalized)?;
-    let entropy_token = regex(
-        r"(?P<token>[A-Za-z0-9_\-+/=]{24,})",
-        "ENTROPY_TOKEN",
-    )?;
+    let entropy_token = regex(r"(?P<token>[A-Za-z0-9_\-+/=]{24,})", "ENTROPY_TOKEN")?;
     for captures in entropy_token.captures_iter(&normalized) {
         let Some(token) = captures.name("token").map(|item| item.as_str()) else {
             continue;
@@ -495,15 +512,23 @@ fn family(command: &[String]) -> &'static str {
         "git"
     } else if exe == "gh" {
         "github"
-    } else if matches!(exe.as_str(), "pytest" | "py.test" | "jest" | "vitest" | "ctest")
-        || format!(" {joined}").contains(" test")
+    } else if matches!(
+        exe.as_str(),
+        "pytest" | "py.test" | "jest" | "vitest" | "ctest"
+    ) || format!(" {joined}").contains(" test")
     {
         "test"
     } else if matches!(exe.as_str(), "grep" | "rg" | "find" | "fd" | "ls" | "tree") {
         "search"
-    } else if matches!(exe.as_str(), "cat" | "head" | "tail" | "sed" | "type" | "get-content") {
+    } else if matches!(
+        exe.as_str(),
+        "cat" | "head" | "tail" | "sed" | "type" | "get-content"
+    ) {
         "read"
-    } else if matches!(exe.as_str(), "npm" | "pnpm" | "yarn" | "pip" | "uv" | "cargo") {
+    } else if matches!(
+        exe.as_str(),
+        "npm" | "pnpm" | "yarn" | "pip" | "uv" | "cargo"
+    ) {
         "package"
     } else if matches!(exe.as_str(), "kubectl" | "aws" | "gcloud" | "az") {
         "cloud"
@@ -511,7 +536,10 @@ fn family(command: &[String]) -> &'static str {
         "container"
     } else if matches!(exe.as_str(), "curl" | "wget" | "iwr" | "invoke-webrequest") {
         "network"
-    } else if matches!(exe.as_str(), "make" | "cmake" | "ninja" | "gradle" | "mvn" | "dotnet" | "go") {
+    } else if matches!(
+        exe.as_str(),
+        "make" | "cmake" | "ninja" | "gradle" | "mvn" | "dotnet" | "go"
+    ) {
         "build"
     } else {
         "generic"
@@ -522,13 +550,13 @@ fn command_parts(command: &[String]) -> (String, String) {
     let mut index = 0usize;
     while index < command.len() {
         let value = &command[index];
-        let assignment = value
-            .split_once('=')
-            .is_some_and(|(name, _)| {
-                let mut chars = name.chars();
-                chars.next().is_some_and(|item| item.is_ascii_alphabetic() || item == '_')
-                    && chars.all(|item| item.is_ascii_alphanumeric() || item == '_')
-            });
+        let assignment = value.split_once('=').is_some_and(|(name, _)| {
+            let mut chars = name.chars();
+            chars
+                .next()
+                .is_some_and(|item| item.is_ascii_alphabetic() || item == '_')
+                && chars.all(|item| item.is_ascii_alphanumeric() || item == '_')
+        });
         if !assignment {
             break;
         }
@@ -548,7 +576,10 @@ fn command_parts(command: &[String]) -> (String, String) {
             while index < command.len() && command[index].contains('=') {
                 index += 1;
             }
-        } else if command.get(index).is_some_and(|value| value.starts_with('-')) {
+        } else if command
+            .get(index)
+            .is_some_and(|value| value.starts_with('-'))
+        {
             return (String::new(), String::new());
         }
     }
@@ -575,42 +606,133 @@ fn starts(arguments: &str, prefixes: &[&str]) -> bool {
 
 fn plugin(command: &[String]) -> Option<(&'static str, Strategy)> {
     let (exe, arguments) = command_parts(command);
-    let value = match exe.as_str() {
-        "git" if starts(&arguments, &["status"]) => ("git-status", Strategy::GitStatus),
-        "git" if starts(&arguments, &["diff", "show"]) => ("git-diff", Strategy::GitDiff),
-        "git" if starts(&arguments, &["log", "reflog", "shortlog"]) => ("git-log", Strategy::GitLog),
-        "git" if starts(&arguments, &["grep", "ls-files"]) => ("git-grep", Strategy::Search),
-        "git" if starts(&arguments, &["branch", "stash", "worktree", "fetch", "pull", "push", "remote", "tag", "clean", "reset", "restore", "checkout", "switch", "blame", "submodule", "config", "rev-list", "bisect", "notes"]) => ("git-table", Strategy::Table),
-        "rg" => ("ripgrep", Strategy::Search),
-        "grep" => ("grep", Strategy::Search),
-        "find" | "fd" => ("find", Strategy::Search),
-        "tree" => ("tree", Strategy::Search),
-        "ls" | "dir" => ("ls", Strategy::Table),
-        "pytest" | "py.test" => ("pytest", Strategy::Test),
-        "cargo" if arguments.split_whitespace().any(|item| item == "test") => ("cargo-test", Strategy::Test),
-        "cargo" if starts(&arguments, &["check", "clippy", "build"]) => ("cargo-check", Strategy::Lint),
-        "cargo" if starts(&arguments, &["nextest"]) => ("cargo-nextest", Strategy::Test),
-        "cargo" if starts(&arguments, &["metadata", "audit", "deny"]) => ("cargo-json", Strategy::JsonOrTable),
-        "cargo" if starts(&arguments, &["tree"]) => ("cargo-tree", Strategy::Table),
-        "go" if starts(&arguments, &["test"]) => ("go-test", Strategy::Test),
-        "go" if starts(&arguments, &["build", "vet", "list"]) => ("go-build", Strategy::Lint),
-        "npm" | "pnpm" | "yarn" if starts(&arguments, &["test", "run test"]) => ("package-test", Strategy::Test),
-        "npm" | "pnpm" | "yarn" if starts(&arguments, &["list", "ls", "outdated", "audit", "info"]) => ("package-list", Strategy::JsonOrTable),
-        "jest" | "vitest" | "playwright" | "coverage" | "mocha" | "ava" | "tox" | "nox" | "phpunit" | "rspec" | "swift" | "xcodebuild" | "bats" | "bazel" | "buck2" | "pants" | "msbuild" => ("test", Strategy::Test),
-        "ruff" | "mypy" | "eslint" | "biome" | "pylint" | "flake8" | "gofmt" | "golangci-lint" | "staticcheck" | "sqlfluff" | "hadolint" | "shellcheck" | "rustc" => ("lint", Strategy::Lint),
-        "docker" | "podman" if starts(&arguments, &["build"]) => ("docker-build", Strategy::DockerBuild),
-        "docker" | "podman" if starts(&arguments, &["inspect", "stats", "info", "system", "volume", "network"]) => ("docker-json", Strategy::JsonOrTable),
-        "docker" | "podman" if starts(&arguments, &["ps", "images", "logs"]) => ("docker-table", Strategy::Table),
-        "docker-compose" | "podman-compose" => ("compose", Strategy::Table),
-        "kubectl" if starts(&arguments, &["get", "describe", "events", "top", "api-resources"]) => ("kubectl-json", Strategy::JsonOrTable),
-        "kubectl" if starts(&arguments, &["logs"]) => ("kubectl-logs", Strategy::Table),
-        "gh" if starts(&arguments, &["pr", "issue", "run", "repo", "api", "release", "workflow", "secret", "variable", "codespace"]) => ("gh-json", Strategy::JsonOrTable),
-        "curl" | "wget" => ("curl", Strategy::HeadTail),
-        "dotnet" | "mvn" | "mvnw" | "gradle" | "gradlew" | "cmake" | "ctest" | "ninja" | "make" => ("build-test", Strategy::Test),
-        "pip" | "pip3" | "uv" | "poetry" | "aws" | "gcloud" | "az" | "helm" | "terraform" | "tofu" | "semgrep" | "trivy" | "snyk" | "composer" | "bundle" | "jq" | "yq" | "sqlite3" | "kustomize" | "nuget" => ("json-or-table", Strategy::JsonOrTable),
-        "ansible" | "ansible-playbook" | "systemctl" | "journalctl" | "ps" | "tasklist" | "du" | "df" | "java" | "javac" | "pwsh" | "powershell" | "apt" | "apt-get" | "dnf" | "yum" | "brew" | "winget" | "choco" | "scoop" | "psql" | "mysql" | "redis-cli" => ("table", Strategy::Table),
-        _ => return None,
-    };
+    let value =
+        match exe.as_str() {
+            "git" if starts(&arguments, &["status"]) => ("git-status", Strategy::GitStatus),
+            "git" if starts(&arguments, &["diff", "show"]) => ("git-diff", Strategy::GitDiff),
+            "git" if starts(&arguments, &["log", "reflog", "shortlog"]) => {
+                ("git-log", Strategy::GitLog)
+            }
+            "git" if starts(&arguments, &["grep", "ls-files"]) => ("git-grep", Strategy::Search),
+            "git"
+                if starts(
+                    &arguments,
+                    &[
+                        "branch",
+                        "stash",
+                        "worktree",
+                        "fetch",
+                        "pull",
+                        "push",
+                        "remote",
+                        "tag",
+                        "clean",
+                        "reset",
+                        "restore",
+                        "checkout",
+                        "switch",
+                        "blame",
+                        "submodule",
+                        "config",
+                        "rev-list",
+                        "bisect",
+                        "notes",
+                    ],
+                ) =>
+            {
+                ("git-table", Strategy::Table)
+            }
+            "rg" => ("ripgrep", Strategy::Search),
+            "grep" => ("grep", Strategy::Search),
+            "find" | "fd" => ("find", Strategy::Search),
+            "tree" => ("tree", Strategy::Search),
+            "ls" | "dir" => ("ls", Strategy::Table),
+            "pytest" | "py.test" => ("pytest", Strategy::Test),
+            "cargo" if arguments.split_whitespace().any(|item| item == "test") => {
+                ("cargo-test", Strategy::Test)
+            }
+            "cargo" if starts(&arguments, &["check", "clippy", "build"]) => {
+                ("cargo-check", Strategy::Lint)
+            }
+            "cargo" if starts(&arguments, &["nextest"]) => ("cargo-nextest", Strategy::Test),
+            "cargo" if starts(&arguments, &["metadata", "audit", "deny"]) => {
+                ("cargo-json", Strategy::JsonOrTable)
+            }
+            "cargo" if starts(&arguments, &["tree"]) => ("cargo-tree", Strategy::Table),
+            "go" if starts(&arguments, &["test"]) => ("go-test", Strategy::Test),
+            "go" if starts(&arguments, &["build", "vet", "list"]) => ("go-build", Strategy::Lint),
+            "npm" if starts(&arguments, &["test", "run test"]) => ("npm-test", Strategy::Test),
+            "npm" if starts(&arguments, &["list", "ls", "outdated", "audit"]) => {
+                ("npm-list", Strategy::JsonOrTable)
+            }
+            "pnpm" if starts(&arguments, &["test", "run test"]) => ("pnpm-test", Strategy::Test),
+            "pnpm" if starts(&arguments, &["list", "ls", "outdated", "audit"]) => {
+                ("pnpm-list", Strategy::JsonOrTable)
+            }
+            "yarn" if starts(&arguments, &["test", "run test"]) => ("yarn-test", Strategy::Test),
+            "yarn" if starts(&arguments, &["list", "info", "audit"]) => {
+                ("yarn-list", Strategy::JsonOrTable)
+            }
+            "jest" | "vitest" | "playwright" | "coverage" | "mocha" | "ava" | "tox" | "nox"
+            | "phpunit" | "rspec" | "swift" | "xcodebuild" | "bats" | "bazel" | "buck2"
+            | "pants" | "msbuild" => ("test", Strategy::Test),
+            "ruff" | "mypy" | "eslint" | "biome" | "pylint" | "flake8" | "gofmt"
+            | "golangci-lint" | "staticcheck" | "sqlfluff" | "hadolint" | "shellcheck"
+            | "rustc" => ("lint", Strategy::Lint),
+            "docker" | "podman" if starts(&arguments, &["build"]) => {
+                ("docker-build", Strategy::DockerBuild)
+            }
+            "docker" | "podman"
+                if starts(
+                    &arguments,
+                    &["inspect", "stats", "info", "system", "volume", "network"],
+                ) =>
+            {
+                ("docker-json", Strategy::JsonOrTable)
+            }
+            "docker" | "podman" if starts(&arguments, &["ps", "images", "logs"]) => {
+                ("docker-table", Strategy::Table)
+            }
+            "docker-compose" | "podman-compose" => ("compose", Strategy::Table),
+            "kubectl"
+                if starts(
+                    &arguments,
+                    &["get", "describe", "events", "top", "api-resources"],
+                ) =>
+            {
+                ("kubectl-json", Strategy::JsonOrTable)
+            }
+            "kubectl" if starts(&arguments, &["logs"]) => ("kubectl-logs", Strategy::Table),
+            "gh" if starts(
+                &arguments,
+                &[
+                    "pr",
+                    "issue",
+                    "run",
+                    "repo",
+                    "api",
+                    "release",
+                    "workflow",
+                    "secret",
+                    "variable",
+                    "codespace",
+                ],
+            ) =>
+            {
+                ("gh-json", Strategy::JsonOrTable)
+            }
+            "curl" | "wget" => ("curl", Strategy::HeadTail),
+            "dotnet" | "mvn" | "mvnw" | "gradle" | "gradlew" | "cmake" | "ctest" | "ninja"
+            | "make" => ("build-test", Strategy::Test),
+            "pip" | "pip3" | "uv" | "poetry" | "aws" | "gcloud" | "az" | "helm" | "terraform"
+            | "tofu" | "semgrep" | "trivy" | "snyk" | "composer" | "bundle" | "jq" | "yq"
+            | "sqlite3" | "kustomize" | "nuget" => ("json-or-table", Strategy::JsonOrTable),
+            "ansible" | "ansible-playbook" | "systemctl" | "journalctl" | "ps" | "tasklist"
+            | "du" | "df" | "java" | "javac" | "pwsh" | "powershell" | "apt" | "apt-get"
+            | "dnf" | "yum" | "brew" | "winget" | "choco" | "scoop" | "psql" | "mysql"
+            | "redis-cli" => ("table", Strategy::Table),
+            _ => return None,
+        };
     Some(value)
 }
 
@@ -680,14 +802,22 @@ fn select_test(lines: &[String]) -> Result<(Vec<String>, usize), String> {
 
 fn select_git_status(lines: &[String]) -> Result<(Vec<String>, usize), String> {
     let found_errors = errors(lines)?;
-    let mut selected = dedup(lines.iter().filter(|line| {
-        line.starts_with("On branch ")
-            || line.starts_with("Your branch ")
-            || line.starts_with("Changes ")
-            || line.starts_with("Untracked ")
-            || line.starts_with("nothing to commit")
-            || matches!(line.get(..2), Some(" M" | "M " | "A " | " D" | "D " | "??" | "R " | "UU"))
-    }).cloned());
+    let mut selected = dedup(
+        lines
+            .iter()
+            .filter(|line| {
+                line.starts_with("On branch ")
+                    || line.starts_with("Your branch ")
+                    || line.starts_with("Changes ")
+                    || line.starts_with("Untracked ")
+                    || line.starts_with("nothing to commit")
+                    || matches!(
+                        line.get(..2),
+                        Some(" M" | "M " | "A " | " D" | "D " | "??" | "R " | "UU")
+                    )
+            })
+            .cloned(),
+    );
     selected.truncate(160);
     selected.extend(found_errors.iter().take(24).cloned());
     Ok((selected, found_errors.len()))
@@ -695,8 +825,26 @@ fn select_git_status(lines: &[String]) -> Result<(Vec<String>, usize), String> {
 
 fn select_git_diff(lines: &[String]) -> Result<(Vec<String>, usize), String> {
     let found_errors = errors(lines)?;
-    let headers = lines.iter().filter(|line| line.starts_with("diff --git") || line.starts_with("index ") || line.starts_with("--- ") || line.starts_with("+++ ") || line.starts_with("@@ ")).cloned().take(120);
-    let changes = lines.iter().filter(|line| (line.starts_with('+') || line.starts_with('-')) && !line.starts_with("+++") && !line.starts_with("---")).cloned().collect::<Vec<_>>();
+    let headers = lines
+        .iter()
+        .filter(|line| {
+            line.starts_with("diff --git")
+                || line.starts_with("index ")
+                || line.starts_with("--- ")
+                || line.starts_with("+++ ")
+                || line.starts_with("@@ ")
+        })
+        .cloned()
+        .take(120);
+    let changes = lines
+        .iter()
+        .filter(|line| {
+            (line.starts_with('+') || line.starts_with('-'))
+                && !line.starts_with("+++")
+                && !line.starts_with("---")
+        })
+        .cloned()
+        .collect::<Vec<_>>();
     let mut selected = headers.collect::<Vec<_>>();
     selected.extend(changes.iter().take(48).cloned());
     selected.extend(changes[changes.len().saturating_sub(24)..].iter().cloned());
@@ -706,7 +854,16 @@ fn select_git_diff(lines: &[String]) -> Result<(Vec<String>, usize), String> {
 
 fn select_git_log(lines: &[String]) -> Result<(Vec<String>, usize), String> {
     let found_errors = errors(lines)?;
-    let commits = lines.iter().filter(|line| line.starts_with("commit ") || line.starts_with("Author:") || line.starts_with("Date:") || line.starts_with("    ")).cloned().collect::<Vec<_>>();
+    let commits = lines
+        .iter()
+        .filter(|line| {
+            line.starts_with("commit ")
+                || line.starts_with("Author:")
+                || line.starts_with("Date:")
+                || line.starts_with("    ")
+        })
+        .cloned()
+        .collect::<Vec<_>>();
     let mut selected = head_tail(&commits, 40, 20);
     selected.extend(found_errors.iter().take(16).cloned());
     Ok((selected, found_errors.len()))
@@ -719,7 +876,10 @@ fn group_key(line: &str) -> String {
     Path::new(line)
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
-        .map_or_else(|| ".".to_owned(), |path| path.to_string_lossy().into_owned())
+        .map_or_else(
+            || ".".to_owned(),
+            |path| path.to_string_lossy().into_owned(),
+        )
 }
 
 fn select_search(lines: &[String]) -> Result<(Vec<String>, usize), String> {
@@ -733,7 +893,10 @@ fn select_search(lines: &[String]) -> Result<(Vec<String>, usize), String> {
             grouped.push((key, vec![line.clone()]));
         }
     }
-    let count = grouped.iter().map(|(_, values)| values.len()).sum::<usize>();
+    let count = grouped
+        .iter()
+        .map(|(_, values)| values.len())
+        .sum::<usize>();
     let mut selected = vec![format!("results={count} groups={}", grouped.len())];
     for (key, values) in grouped.into_iter().take(50) {
         selected.push(format!("[{key}] {}", values.len()));
@@ -748,18 +911,33 @@ fn select_lint(lines: &[String]) -> Result<(Vec<String>, usize), String> {
     let location = location_regex()?;
     let warning = regex(r"(?i)\b(warning|error|note):", "LINT_WARNING")?;
     let file = regex(r"^\S+\.(?:py|js|jsx|ts|tsx|rs|go):\d+", "LINT_FILE")?;
-    let summary = regex(r"(?i)\b(found|checked|fixed|violations?|problems?)\b", "LINT_SUMMARY")?;
-    let diagnostics = dedup(lines.iter().filter(|line| location.is_match(line) || warning.is_match(line) || file.is_match(line)).cloned());
+    let summary = regex(
+        r"(?i)\b(found|checked|fixed|violations?|problems?)\b",
+        "LINT_SUMMARY",
+    )?;
+    let diagnostics = dedup(
+        lines
+            .iter()
+            .filter(|line| location.is_match(line) || warning.is_match(line) || file.is_match(line))
+            .cloned(),
+    );
     let summaries = dedup(lines.iter().filter(|line| summary.is_match(line)).cloned());
     let mut selected = diagnostics.into_iter().take(120).collect::<Vec<_>>();
-    selected.extend(summaries[summaries.len().saturating_sub(20)..].iter().cloned());
+    selected.extend(
+        summaries[summaries.len().saturating_sub(20)..]
+            .iter()
+            .cloned(),
+    );
     selected.extend(found_errors.iter().take(24).cloned());
     Ok((selected, found_errors.len()))
 }
 
 fn select_docker_build(lines: &[String]) -> Result<(Vec<String>, usize), String> {
     let found_errors = errors(lines)?;
-    let matcher = regex(r"(?i)(^#\d+|exporting|writing image|naming to|cached|done|warning|error|failed)", "DOCKER_BUILD")?;
+    let matcher = regex(
+        r"(?i)(^#\d+|exporting|writing image|naming to|cached|done|warning|error|failed)",
+        "DOCKER_BUILD",
+    )?;
     let selected = dedup(lines.iter().filter(|line| matcher.is_match(line)).cloned());
     let mut output = head_tail(&selected, 80, 30);
     output.extend(found_errors.iter().take(32).cloned());
@@ -768,7 +946,11 @@ fn select_docker_build(lines: &[String]) -> Result<(Vec<String>, usize), String>
 
 fn select_table(lines: &[String]) -> Result<(Vec<String>, usize), String> {
     let found_errors = errors(lines)?;
-    let nonempty = lines.iter().filter(|line| !line.trim().is_empty()).cloned().collect::<Vec<_>>();
+    let nonempty = lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .cloned()
+        .collect::<Vec<_>>();
     let mut output = head_tail(&nonempty, 35, 15);
     output.extend(found_errors.iter().take(24).cloned());
     Ok((output, found_errors.len()))
@@ -813,12 +995,19 @@ fn select_json_or_table(lines: &[String]) -> Result<(Vec<String>, usize), String
     };
     let rendered = serde_json::to_string_pretty(&shrink_plugin(&value))
         .map_err(|error| format!("FABRIC_COMPACT_JSON_PREVIEW_FAILED:{error}"))?;
-    Ok((rendered.lines().map(str::to_owned).collect(), errors(lines)?.len()))
+    Ok((
+        rendered.lines().map(str::to_owned).collect(),
+        errors(lines)?.len(),
+    ))
 }
 
 fn select_head_tail(lines: &[String]) -> Result<(Vec<String>, usize), String> {
     let found_errors = errors(lines)?;
-    let nonempty = lines.iter().filter(|line| !line.trim().is_empty()).cloned().collect::<Vec<_>>();
+    let nonempty = lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .cloned()
+        .collect::<Vec<_>>();
     let mut output = head_tail(&nonempty, 30, 20);
     output.extend(found_errors.iter().take(32).cloned());
     Ok((output, found_errors.len()))
@@ -849,7 +1038,12 @@ fn generic_preview(value: &Value, depth: usize) -> Value {
             "<head>": values.iter().take(5).map(|value| generic_preview(value, depth + 1)).collect::<Vec<_>>(),
             "<tail>": values[values.len().saturating_sub(2)..].iter().map(|value| generic_preview(value, depth + 1)).collect::<Vec<_>>(),
         }),
-        Value::Array(values) => Value::Array(values.iter().map(|value| generic_preview(value, depth + 1)).collect()),
+        Value::Array(values) => Value::Array(
+            values
+                .iter()
+                .map(|value| generic_preview(value, depth + 1))
+                .collect(),
+        ),
         Value::String(value) if value.chars().count() > 300 => {
             let chars = value.chars().collect::<Vec<_>>();
             Value::String(format!(
@@ -872,7 +1066,11 @@ fn json_preview(text: &str) -> Result<Option<Vec<String>>, String> {
     Ok(Some(rendered.lines().map(str::to_owned).collect()))
 }
 
-fn select_generic(command: &[String], family: &str, text: &str) -> Result<(String, Vec<String>, usize), String> {
+fn select_generic(
+    command: &[String],
+    family: &str,
+    text: &str,
+) -> Result<(String, Vec<String>, usize), String> {
     let lines = text.lines().map(str::to_owned).collect::<Vec<_>>();
     if let Some((name, strategy)) = plugin(command) {
         let (selected, retained) = match strategy {
@@ -896,8 +1094,32 @@ fn select_generic(command: &[String], family: &str, text: &str) -> Result<(Strin
         return Ok((name, selected, retained));
     }
     if family == "git" {
-        let mut selected = lines.iter().filter(|line| line.starts_with("On branch ") || line.starts_with("Your branch ") || line.starts_with("Changes ") || line.starts_with("Untracked ") || line.starts_with("diff --git") || line.starts_with("@@ ") || matches!(line.get(..2), Some(" M" | "M " | "A " | " D" | "D " | "??")) || line.starts_with("index ") || line.starts_with("--- ") || line.starts_with("+++ ")).cloned().take(80).collect::<Vec<_>>();
-        let changes = lines.iter().filter(|line| (line.starts_with('+') || line.starts_with('-')) && !line.starts_with("+++") && !line.starts_with("---")).cloned().collect::<Vec<_>>();
+        let mut selected = lines
+            .iter()
+            .filter(|line| {
+                line.starts_with("On branch ")
+                    || line.starts_with("Your branch ")
+                    || line.starts_with("Changes ")
+                    || line.starts_with("Untracked ")
+                    || line.starts_with("diff --git")
+                    || line.starts_with("@@ ")
+                    || matches!(line.get(..2), Some(" M" | "M " | "A " | " D" | "D " | "??"))
+                    || line.starts_with("index ")
+                    || line.starts_with("--- ")
+                    || line.starts_with("+++ ")
+            })
+            .cloned()
+            .take(80)
+            .collect::<Vec<_>>();
+        let changes = lines
+            .iter()
+            .filter(|line| {
+                (line.starts_with('+') || line.starts_with('-'))
+                    && !line.starts_with("+++")
+                    && !line.starts_with("---")
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         selected.extend(changes.iter().take(24).cloned());
         selected.extend(changes[changes.len().saturating_sub(12)..].iter().cloned());
         selected.extend(found_errors.iter().take(24).cloned());
@@ -911,18 +1133,37 @@ fn select_generic(command: &[String], family: &str, text: &str) -> Result<(Strin
         if let Some(preview) = json_preview(text)? {
             return Ok((name, preview, found_errors.len()));
         }
-        let heading = regex(r"(?i)\b(name|version|status|state|image|id|resource|package|total|warning)\b", "HEADING")?;
+        let heading = regex(
+            r"(?i)\b(name|version|status|state|image|id|resource|package|total|warning)\b",
+            "HEADING",
+        )?;
         let mut selected = found_errors.iter().take(32).cloned().collect::<Vec<_>>();
-        selected.extend(lines.iter().filter(|line| heading.is_match(line)).take(48).cloned());
+        selected.extend(
+            lines
+                .iter()
+                .filter(|line| heading.is_match(line))
+                .take(48)
+                .cloned(),
+        );
         selected.extend(lines.iter().take(20).cloned());
         selected.extend(lines[lines.len().saturating_sub(10)..].iter().cloned());
         return Ok((name, selected, found_errors.len()));
     }
     if matches!(family, "build" | "github") {
-        let summary = regex(r"(?i)\b(success|succeeded|complete|completed|warning|changed files?|checks?)\b", "BUILD_SUMMARY")?;
+        let summary = regex(
+            r"(?i)\b(success|succeeded|complete|completed|warning|changed files?|checks?)\b",
+            "BUILD_SUMMARY",
+        )?;
         let error = error_regex()?;
         let location = location_regex()?;
-        let mut selected = dedup(lines.iter().filter(|line| error.is_match(line) || location.is_match(line) || summary.is_match(line)).cloned());
+        let mut selected = dedup(
+            lines
+                .iter()
+                .filter(|line| {
+                    error.is_match(line) || location.is_match(line) || summary.is_match(line)
+                })
+                .cloned(),
+        );
         selected.truncate(80);
         selected.extend(lines[lines.len().saturating_sub(20)..].iter().cloned());
         return Ok((name, selected, found_errors.len()));

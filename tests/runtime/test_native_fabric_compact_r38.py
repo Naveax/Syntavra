@@ -259,5 +259,10 @@ def test_native_fabric_compact_rejects_tiny_budget_without_state_mutation(
     arguments = ("--stdout", "content", "--budget-bytes", "255", "--", "cat")
     python = _run("python", python_project, *arguments)
     rust = _run("rust", rust_project, *arguments)
-    assert rust.returncode == python.returncode != 0
-    assert not (rust_project / "state" / "competitive-fabric.sqlite3").exists()
+    assert python.returncode != 0
+    assert rust.returncode != 0
+    for project in (python_project, rust_project):
+        database = project / "state" / "competitive-fabric.sqlite3"
+        assert database.is_file()
+        with sqlite3.connect(database) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM fabric_events").fetchone()[0] == 0
