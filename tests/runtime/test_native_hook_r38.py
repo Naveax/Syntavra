@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+from syntavra_runtime.evidence import EvidenceStore
+from syntavra_runtime.util import stable_project_id
 from tests.runtime.test_native_install_r38 import _assert_equal, _normalized, _selector_binary
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -159,3 +162,98 @@ def test_native_hook_session_end_without_summary_matches_python(tmp_path: Path) 
     value = _assert_pair(tmp_path, "session-end", {"session_id": "session-a"})
     assert value["memory_observations"] == []
     assert value["memory_extraction_error"] == ""
+
+
+def test_native_hook_post_scalar_pass_through_matches_python(tmp_path: Path) -> None:
+    value = _assert_pair(
+        tmp_path,
+        "post",
+        {"tool": "shell", "command": ["true"], "result": 7},
+    )
+    assert value == {
+        "mode": "pass-through",
+        "result": 7,
+        "captures": [],
+        "usage_receipt_hash": None,
+        "usage_chain_hash": None,
+    }
+
+
+def test_native_hook_post_small_exact_capture_matches_python(tmp_path: Path) -> None:
+    payload = {
+        "tool": "shell",
+        "command": ["printf", "hello-hook"],
+        "result": "hello-hook",
+    }
+    python_project = tmp_path / "python-project"
+    rust_project = tmp_path / "rust-project"
+    python_project.mkdir()
+    rust_project.mkdir()
+
+    python_code, python_value, python_stderr = _run("python", python_project, "post", payload)
+    rust_code, rust_value, rust_stderr = _run("rust", rust_project, "post", payload)
+    assert rust_code == python_code == 0
+    assert rust_stderr == python_stderr == ""
+    _assert_equal(rust_value, python_value, "hook-post-small-capture")
+
+    capture = rust_value["captures"][0]
+    assert capture["path"] == "result"
+    assert capture["family"] == "text"
+    assert capture["mode"] == "passthrough-captured"
+    assert capture["merkle_root"] == capture["exact_handle"].removeprefix("sc://sha256/")
+    assert rust_value["result"] == "hello-hook"
+
+    store = EvidenceStore(
+        rust_project / "state" / "evidence",
+        project_id=stable_project_id(rust_project),
+    )
+    assert store.get(capture["exact_handle"]) == b"hello-hook"
+
+    with sqlite3.connect(rust_project / "state" / "tool-externalization.sqlite3") as db:
+        row = db.execute(
+            "SELECT artifact_id,content_hash,segment_count,quality_gate_passed "
+            "FROM ext_artifacts WHERE artifact_id=?",
+            (capture["artifact_id"],),
+        ).fetchone()
+    assert row == (
+        capture["artifact_id"],
+        capture["merkle_root"],
+        1,
+        1,
+    )
+
+
+def test_native_hook_post_duplicate_reference_matches_python(tmp_path: Path) -> None:
+    payload = {
+        "tool": "shell",
+        "command": ["printf", "duplicate-hook"],
+        "result": "duplicate-hook",
+    }
+    python_project = tmp_path / "python-project"
+    rust_project = tmp_path / "rust-project"
+    python_project.mkdir()
+    rust_project.mkdir()
+
+    first_python = _run("python", python_project, "post", payload)
+    first_rust = _run("rust", rust_project, "post", payload)
+    second_python = _run("python", python_project, "post", payload)
+    second_rust = _run("rust", rust_project, "post", payload)
+
+    assert first_python[0] == first_rust[0] == second_python[0] == second_rust[0] == 0
+    _assert_equal(first_rust[1], first_python[1], "hook-post-first-capture")
+    _assert_equal(second_rust[1], second_python[1], "hook-post-duplicate")
+    assert second_rust[1]["captures"][0]["mode"] == "dedup-reference"
+    assert "seen=2" in second_rust[1]["result"]
+
+
+def test_native_hook_post_skip_tool_prefix_matches_python(tmp_path: Path) -> None:
+    value = _assert_pair(
+        tmp_path,
+        "post",
+        {
+            "tool": "syntavra.output.verify",
+            "result": "do-not-reexternalize",
+        },
+    )
+    assert value["mode"] == "pass-through"
+    assert value["captures"] == []
