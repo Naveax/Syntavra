@@ -115,3 +115,21 @@ def test_committed_runtime_sources_are_canonical() -> None:
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }
+
+
+def test_one_shot_runs_known_regression_differentials() -> None:
+    marker = ROOT / ".github" / "r38-runtime-repair"
+    if not marker.is_file():
+        pytest.skip("one-shot differential validation is not requested")
+    completed = subprocess.run(
+        [sys.executable, "tools/validate_r38_regression_closure.py"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+    assert completed.returncode == 0, {
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
