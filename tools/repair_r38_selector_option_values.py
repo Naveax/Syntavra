@@ -24,10 +24,25 @@ PRE_SESSION_OPTION_BLOCK = """        if matches!(
         ) {
 """
 
+PRE_INIT_OPTION_BLOCK = """        if matches!(
+            value.as_str(),
+            "--project"
+                | "--state-root"
+                | "--budget"
+                | "--max-tier"
+                | "--codex-home"
+                | "--rollout"
+                | "--state-file"
+                | "--session-hint"
+        ) {
+"""
+
 CANONICAL_OPTION_BLOCK = """        if matches!(
             value.as_str(),
             "--project"
                 | "--state-root"
+                | "--skill-root"
+                | "--host"
                 | "--budget"
                 | "--max-tier"
                 | "--codex-home"
@@ -54,9 +69,16 @@ UNNESTED_TRUNCATION = """    if matches!(
         positional.truncate(1);
 """
 
-CANONICAL_TRUNCATION = """    if matches!(
+PRE_INIT_TRUNCATION = """    if matches!(
         positional.first().map(String::as_str),
         Some("rollout-tail" | "context-stress" | "claim" | "context")
+    ) {
+        positional.truncate(1);
+"""
+
+CANONICAL_TRUNCATION = """    if matches!(
+        positional.first().map(String::as_str),
+        Some("rollout-tail" | "context-stress" | "claim" | "context" | "init")
     ) {
         positional.truncate(1);
 """
@@ -64,12 +86,35 @@ CANONICAL_TRUNCATION = """    if matches!(
 VALUE_OPTIONS = (
     "--project",
     "--state-root",
+    "--skill-root",
+    "--host",
     "--budget",
     "--max-tier",
     "--codex-home",
     "--rollout",
     "--state-file",
     "--session-hint",
+)
+
+EQUALS_VALUE_OPTIONS = (
+    "--project=",
+    "--state-root=",
+    "--skill-root=",
+    "--host=",
+    "--codex-home=",
+    "--rollout=",
+    "--state-file=",
+    "--session-hint=",
+    "--budget=",
+    "--max-tier=",
+)
+
+SINGLE_SEGMENT_ROUTES = (
+    "rollout-tail",
+    "context-stress",
+    "claim",
+    "context",
+    "init",
 )
 
 
@@ -97,12 +142,23 @@ def _validate_canonical(source: str, path: Path) -> None:
         raise RuntimeError(
             f"selector value options missing from command_path in {path}: {missing_options}"
         )
-    for route in ("rollout-tail", "context-stress", "claim", "context"):
+    missing_equals_options = [
+        option for option in EQUALS_VALUE_OPTIONS if option not in command_path
+    ]
+    if missing_equals_options:
+        raise RuntimeError(
+            "selector equals-form value options missing from command_path "
+            f"in {path}: {missing_equals_options}"
+        )
+    for route in SINGLE_SEGMENT_ROUTES:
         if command_path.count(f'"{route}"') != 1:
             raise RuntimeError(f"{route} truncation invariant failed in {path}")
     if command_path.count("positional.truncate(1);") != 1:
         raise RuntimeError(f"single-segment truncation must have one branch in {path}")
-    if 'Some("rollout-tail" | "context-stress" | "claim" | "context")' not in command_path:
+    if (
+        'Some("rollout-tail" | "context-stress" | "claim" | "context" | "init")'
+        not in command_path
+    ):
         raise RuntimeError(f"canonical selector truncation pattern missing in {path}")
 
 
@@ -115,6 +171,7 @@ def repair(path: Path | None = None) -> bool:
     for legacy, label in (
         (LEGACY_OPTION_BLOCK, "legacy selector option-value"),
         (PRE_SESSION_OPTION_BLOCK, "pre-session selector option-value"),
+        (PRE_INIT_OPTION_BLOCK, "pre-init selector option-value"),
     ):
         rendered, applied = _replace_optional_once(
             rendered,
@@ -128,6 +185,7 @@ def repair(path: Path | None = None) -> bool:
         (DUPLICATE_TRUNCATION, "duplicate selector truncation"),
         (UNNESTED_TRUNCATION, "unnested selector truncation"),
         (LEGACY_CONTEXT_TRUNCATION, "legacy selector truncation"),
+        (PRE_INIT_TRUNCATION, "pre-init selector truncation"),
     ):
         rendered, applied = _replace_optional_once(
             rendered,
