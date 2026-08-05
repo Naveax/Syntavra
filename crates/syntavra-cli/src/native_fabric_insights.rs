@@ -52,10 +52,7 @@ fn now() -> Result<f64, String> {
         .map_err(|error| format!("FABRIC_INSIGHTS_CLOCK_FAILED:{error}"))
 }
 
-fn read_events(
-    connection: &Connection,
-    since_seconds: Option<f64>,
-) -> Result<Vec<Event>, String> {
+fn read_events(connection: &Connection, since_seconds: Option<f64>) -> Result<Vec<Event>, String> {
     let mut events = Vec::new();
     if let Some(seconds) = since_seconds {
         let cutoff = now()? - seconds.max(0.0);
@@ -159,10 +156,7 @@ fn most_common<'a>(values: impl IntoIterator<Item = &'a str>) -> Value {
 fn metrics(connection: &Connection, since_seconds: Option<f64>) -> Result<Value, String> {
     let events = read_events(connection, since_seconds)?;
     let raw_bytes = events.iter().map(|event| event.raw_bytes).sum::<i64>();
-    let visible_bytes = events
-        .iter()
-        .map(|event| event.visible_bytes)
-        .sum::<i64>();
+    let visible_bytes = events.iter().map(|event| event.visible_bytes).sum::<i64>();
     let latencies = events
         .iter()
         .map(|event| event.latency_ms)
@@ -217,9 +211,8 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
                 .map_err(|error| format!("--since-seconds_INVALID:{error}"))
         })
         .transpose()?;
-    let connection = super::native_fabric_doctor::open_database(
-        &state_root.join("competitive-fabric.sqlite3"),
-    )?;
+    let connection =
+        super::native_fabric_doctor::open_database(&state_root.join("competitive-fabric.sqlite3"))?;
     let value = metrics(&connection, since_seconds)?;
     option_value(arguments, "--output")?.map_or_else(
         || Ok(value.clone()),

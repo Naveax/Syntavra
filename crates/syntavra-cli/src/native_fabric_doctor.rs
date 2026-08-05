@@ -83,7 +83,7 @@ fn which(name: &str) -> Option<String> {
     None
 }
 
-fn initialize_database(path: &Path) -> Result<Connection, String> {
+pub(crate) fn open_database(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("FABRIC_DOCTOR_STATE_CREATE_FAILED:{error}"))?;
@@ -174,14 +174,14 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn integrity(connection: &Connection) -> Result<bool, String> {
+pub(crate) fn database_integrity(connection: &Connection) -> Result<bool, String> {
     let value = connection
         .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
         .map_err(|error| format!("FABRIC_DOCTOR_INTEGRITY_FAILED:{error}"))?;
     Ok(value == "ok")
 }
 
-fn write_output(path: &Path, value: &Value) -> Result<Value, String> {
+pub(crate) fn write_json_output(path: &Path, value: &Value) -> Result<Value, String> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)
@@ -207,7 +207,7 @@ pub fn execute(
 ) -> Result<Value, String> {
     let host = option_value(arguments, "--host")?.unwrap_or_else(|| "codex".to_owned());
     let database_path = state_root.join("competitive-fabric.sqlite3");
-    let database = initialize_database(&database_path)?;
+    let database = open_database(&database_path)?;
     let host_contract = super::native_expansion::doctor_host_contract(&host);
 
     let docker = which("docker");
@@ -215,7 +215,7 @@ pub fn execute(
     let bwrap = if cfg!(windows) { None } else { which("bwrap") };
     let strict_sandbox_available = docker.is_some() || podman.is_some() || bwrap.is_some();
 
-    let analytics_database = integrity(&database)?;
+    let analytics_database = database_integrity(&database)?;
     let project_exists = project_root.exists();
     let known_host = host_contract["known_host"].as_bool().unwrap_or(false);
     let mcp_available = host_contract["mcp_available"].as_bool().unwrap_or(false);
@@ -269,7 +269,7 @@ pub fn execute(
 
     option_value(arguments, "--output")?.map_or_else(
         || Ok(value.clone()),
-        |path| write_output(&PathBuf::from(path), &value),
+        |path| write_json_output(&PathBuf::from(path), &value),
     )
 }
 

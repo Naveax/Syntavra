@@ -35,6 +35,7 @@ TARGETS = (
     "tests/runtime/test_native_fabric_route_r38.py",
     "tests/runtime/test_native_fabric_compact_r38.py",
     "tests/runtime/test_native_fabric_doctor_r38.py",
+    "tests/runtime/test_native_fabric_insights_r38.py",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_empty_dry_run_matches_python",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_codex_apply_matches_python",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_repair_plan_matches_python",
