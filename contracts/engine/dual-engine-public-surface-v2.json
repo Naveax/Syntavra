@@ -20,7 +20,7 @@
   "release_channel": "pre-release",
   "rust_surface": {
     "missing_native_public_command_count": 117,
-    "module_count": 86,
+    "module_count": 87,
     "native_coverage_ppm": 522448,
     "native_public_command_count": 128,
     "native_public_commands": [

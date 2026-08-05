@@ -102,7 +102,10 @@ fn project_markers() -> &'static [(&'static str, &'static [&'static str])] {
         ("omp", &[".omp"]),
         ("qwen-code", &[".qwen"]),
         ("roo-code", &[".roo", ".roomodes"]),
-        ("vscode-copilot", &[".vscode", ".github/copilot-instructions.md"]),
+        (
+            "vscode-copilot",
+            &[".vscode", ".github/copilot-instructions.md"],
+        ),
         ("windsurf", &[".windsurf"]),
         ("zed", &[".zed"]),
     ]
@@ -111,7 +114,11 @@ fn project_markers() -> &'static [(&'static str, &'static [&'static str])] {
 fn detected_hosts(project_root: &Path) -> Vec<String> {
     let mut values = project_markers()
         .iter()
-        .filter(|(_, markers)| markers.iter().any(|marker| project_root.join(marker).exists()))
+        .filter(|(_, markers)| {
+            markers
+                .iter()
+                .any(|marker| project_root.join(marker).exists())
+        })
         .map(|(host, _)| (*host).to_owned())
         .collect::<Vec<_>>();
     values.sort();
@@ -163,7 +170,8 @@ fn directory_writable(path: &Path) -> bool {
     let candidate = if path.exists() {
         path.to_path_buf()
     } else {
-        path.parent().map_or_else(|| PathBuf::from("."), Path::to_path_buf)
+        path.parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
     };
     fs::metadata(candidate)
         .map(|metadata| !metadata.permissions().readonly())
@@ -247,7 +255,11 @@ fn doctor(project_root: &Path, state_root: &Path) -> Result<Decision, String> {
     let repairable = warnings
         .iter()
         .chain(blocking.iter())
-        .filter(|item| item.get("repair").and_then(Value::as_str).is_some_and(|value| !value.is_empty()))
+        .filter(|item| {
+            item.get("repair")
+                .and_then(Value::as_str)
+                .is_some_and(|value| !value.is_empty())
+        })
         .count();
     let ratio = repairable as f64 / finding_count.max(1) as f64;
 
@@ -309,10 +321,8 @@ mod tests {
 
     #[test]
     fn empty_project_is_ready_but_not_installed() {
-        let root = std::env::temp_dir().join(format!(
-            "syntavra-operator-doctor-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("syntavra-operator-doctor-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("project");
         let decision = doctor(&root, &root.join("state")).expect("doctor");
