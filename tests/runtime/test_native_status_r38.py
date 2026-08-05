@@ -86,10 +86,9 @@ def test_native_status_default_empty_project_matches_python(tmp_path: Path) -> N
         "profile",
         "readiness",
         "evidence",
-        "session_memory",
         "proxy_presets",
         "platform",
-        "competitive",
+        "competitive_features",
         "primary_workflow",
     }
 
