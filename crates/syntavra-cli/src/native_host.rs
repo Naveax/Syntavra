@@ -769,6 +769,69 @@ fn environment_capabilities() -> Value {
     })
 }
 
+pub(crate) fn platform_plan_contract(
+    host: &str,
+    project: &Path,
+    scope: &str,
+) -> Result<Value, String> {
+    if !matches!(scope, "project" | "user") {
+        return Err("scope must be project or user".to_owned());
+    }
+    let active = host_specs()
+        .into_iter()
+        .find(|spec| spec.host == host)
+        .ok_or_else(|| format!("unknown host: {host}"))?;
+    if host != "generic-mcp" {
+        return fabric_install_contract(host, project, scope)
+            .map(|contract| contract["plan"].clone());
+    }
+    let negotiation = negotiate_value(host, true, None);
+    Ok(json!({
+        "host": active.host,
+        "display_name": active.display_name,
+        "scope": scope,
+        "project": project.to_string_lossy(),
+        "mode": negotiation["mode"],
+        "enforced": negotiation["enforced"],
+        "verified_adapter": active.verified,
+        "files": [],
+        "capabilities": capabilities(&active),
+        "validation": [
+            "syntavra doctor",
+            format!("syntavra host negotiate --host-name {}", active.host),
+            "syntavra status",
+        ],
+    }))
+}
+
+pub(crate) fn all_platform_plan_contracts(project: &Path, scope: &str) -> Result<Value, String> {
+    if !matches!(scope, "project" | "user") {
+        return Err("scope must be project or user".to_owned());
+    }
+    let mut hosts = host_specs()
+        .into_iter()
+        .map(|spec| spec.host)
+        .filter(|host| host != "generic-mcp")
+        .collect::<Vec<_>>();
+    hosts.sort();
+    let plans = hosts
+        .iter()
+        .map(|host| platform_plan_contract(host, project, scope))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(json!({
+        "host_count": plans.len(),
+        "enforced_count": plans
+            .iter()
+            .filter(|plan| plan["enforced"].as_bool() == Some(true))
+            .count(),
+        "verified_count": plans
+            .iter()
+            .filter(|plan| plan["verified_adapter"].as_bool() == Some(true))
+            .count(),
+        "hosts": plans,
+    }))
+}
+
 pub(crate) fn fabric_install_contract(
     host: &str,
     project: &Path,

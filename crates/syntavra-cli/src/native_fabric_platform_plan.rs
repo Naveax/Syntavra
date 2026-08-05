@@ -38,9 +38,8 @@ pub fn execute(
     project_root: &Path,
     state_root: &Path,
 ) -> Result<Value, String> {
-    let _database = super::native_fabric_doctor::open_database(
-        &state_root.join("competitive-fabric.sqlite3"),
-    )?;
+    let _database =
+        super::native_fabric_doctor::open_database(&state_root.join("competitive-fabric.sqlite3"))?;
     let scope = value(arguments, "--scope")?.unwrap_or_else(|| "project".to_owned());
     if scope != "project" && scope != "user" {
         return Err("scope must be project or user".to_owned());

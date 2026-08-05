@@ -79,6 +79,18 @@ mod native_uninstall;
 #[path = "native_verifier.rs"]
 mod native_verifier;
 
+pub(crate) fn platform_plan_contract(
+    host: &str,
+    project: &Path,
+    scope: &str,
+) -> Result<Value, String> {
+    native_host::platform_plan_contract(host, project, scope)
+}
+
+pub(crate) fn all_platform_plan_contracts(project: &Path, scope: &str) -> Result<Value, String> {
+    native_host::all_platform_plan_contracts(project, scope)
+}
+
 pub(crate) fn fabric_install_contract(
     host: &str,
     project: &Path,
