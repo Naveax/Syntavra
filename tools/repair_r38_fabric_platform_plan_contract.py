@@ -76,6 +76,8 @@ pub(crate) fn all_platform_plan_contracts(
 }
 
 '''
+HOST_PLAN_SIGNATURE = "pub(crate) fn platform_plan_contract("
+HOST_ALL_SIGNATURE = "pub(crate) fn all_platform_plan_contracts("
 HOST_ANCHOR = "pub(crate) fn fabric_install_contract(\n"
 
 EXPANSION_BRIDGE = '''pub(crate) fn platform_plan_contract(
@@ -94,6 +96,8 @@ pub(crate) fn all_platform_plan_contracts(
 }
 
 '''
+EXPANSION_PLAN_SIGNATURE = "pub(crate) fn platform_plan_contract("
+EXPANSION_ALL_SIGNATURE = "pub(crate) fn all_platform_plan_contracts("
 EXPANSION_ANCHOR = "pub(crate) fn fabric_install_contract(\n"
 
 MODULE = '''#[path = "native_fabric_platform_plan.rs"]
@@ -126,17 +130,41 @@ def insert_once(source: str, token: str, anchor: str, label: str) -> tuple[str, 
     return source.replace(anchor, token + anchor, 1), True
 
 
+def insert_semantic_pair(
+    source: str,
+    token: str,
+    first_signature: str,
+    second_signature: str,
+    anchor: str,
+    label: str,
+) -> tuple[str, bool]:
+    first_count = source.count(first_signature)
+    second_count = source.count(second_signature)
+    if first_count == 1 and second_count == 1:
+        return source, False
+    if first_count != 0 or second_count != 0:
+        raise RuntimeError(
+            f"{label} partial or duplicate contract: "
+            f"first={first_count}, second={second_count}"
+        )
+    if source.count(anchor) != 1:
+        raise RuntimeError(f"{label} anchor must be unique")
+    return source.replace(anchor, token + anchor, 1), True
+
+
 def repair_host() -> bool:
     source = HOST.read_text(encoding="utf-8")
-    rendered, changed = insert_once(
+    rendered, changed = insert_semantic_pair(
         source,
         HOST_CONTRACT,
+        HOST_PLAN_SIGNATURE,
+        HOST_ALL_SIGNATURE,
         HOST_ANCHOR,
         "native host platform plan contract",
     )
-    if rendered.count("pub(crate) fn platform_plan_contract") != 1:
+    if rendered.count(HOST_PLAN_SIGNATURE) != 1:
         raise RuntimeError("native host platform plan contract invariant failed")
-    if rendered.count("pub(crate) fn all_platform_plan_contracts") != 1:
+    if rendered.count(HOST_ALL_SIGNATURE) != 1:
         raise RuntimeError("native host all-platform contract invariant failed")
     if changed:
         HOST.write_text(rendered, encoding="utf-8", newline="\n")
@@ -145,15 +173,17 @@ def repair_host() -> bool:
 
 def repair_expansion() -> bool:
     source = EXPANSION.read_text(encoding="utf-8")
-    rendered, changed = insert_once(
+    rendered, changed = insert_semantic_pair(
         source,
         EXPANSION_BRIDGE,
+        EXPANSION_PLAN_SIGNATURE,
+        EXPANSION_ALL_SIGNATURE,
         EXPANSION_ANCHOR,
         "native expansion platform plan bridge",
     )
-    if rendered.count("pub(crate) fn platform_plan_contract") != 1:
+    if rendered.count(EXPANSION_PLAN_SIGNATURE) != 1:
         raise RuntimeError("native expansion platform plan bridge invariant failed")
-    if rendered.count("pub(crate) fn all_platform_plan_contracts") != 1:
+    if rendered.count(EXPANSION_ALL_SIGNATURE) != 1:
         raise RuntimeError("native expansion all-platform bridge invariant failed")
     if changed:
         EXPANSION.write_text(rendered, encoding="utf-8", newline="\n")
