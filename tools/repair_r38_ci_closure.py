@@ -217,6 +217,20 @@ def repair_structural_upsert_sql() -> bool:
     )
 
 
+def repair_pytest_status_handoff(path: Path) -> bool:
+    source = path.read_text(encoding="utf-8")
+    if "pytest-exit-code.txt" in source:
+        raise RuntimeError(f"legacy pytest status file remains in {path}")
+    stale = (
+        "$LASTEXITCODE" in source
+        or "$pytestStatus" in source
+        or re.search(r"(?<![A-Za-z0-9_])\$\?(?![A-Za-z0-9_])", source) is not None
+    )
+    if stale:
+        raise RuntimeError(f"legacy pytest status token remains in {path}")
+    return False
+
+
 def workflow_by_name(name: str) -> Path | None:
     matches = []
     for path in sorted(WORKFLOWS.glob("*.y*ml")):
@@ -231,16 +245,7 @@ def workflow_by_name(name: str) -> Path | None:
 
 
 def validate_status_handoff(path: Path) -> None:
-    source = path.read_text(encoding="utf-8")
-    if "pytest-exit-code.txt" in source:
-        raise RuntimeError(f"legacy pytest status file remains in {path}")
-    stale = (
-        "$LASTEXITCODE" in source
-        or "$pytestStatus" in source
-        or re.search(r"(?<![A-Za-z0-9_])\$\?(?![A-Za-z0-9_])", source) is not None
-    )
-    if stale:
-        raise RuntimeError(f"orphaned pytest exit token remains in {path}")
+    repair_pytest_status_handoff(path)
 
 
 def main() -> int:
