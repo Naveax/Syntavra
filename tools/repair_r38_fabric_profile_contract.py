@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from repair_r38_fabric_profile_event import repair as repair_profile_event
+
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = ROOT / "crates" / "syntavra-cli" / "src" / "native_fabric_profile.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
@@ -122,9 +124,10 @@ def repair_product() -> bool:
 
 
 def repair() -> bool:
+    event_changed = repair_profile_event()
     profile_changed = repair_profile_source()
     product_changed = repair_product()
-    return profile_changed or product_changed
+    return event_changed or profile_changed or product_changed
 
 
 def main() -> int:
