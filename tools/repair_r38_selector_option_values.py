@@ -37,12 +37,28 @@ PRE_INIT_OPTION_BLOCK = """        if matches!(
         ) {
 """
 
+PRE_INSTALL_OPTION_BLOCK = """        if matches!(
+            value.as_str(),
+            "--project"
+                | "--state-root"
+                | "--skill-root"
+                | "--host"
+                | "--budget"
+                | "--max-tier"
+                | "--codex-home"
+                | "--rollout"
+                | "--state-file"
+                | "--session-hint"
+        ) {
+"""
+
 CANONICAL_OPTION_BLOCK = """        if matches!(
             value.as_str(),
             "--project"
                 | "--state-root"
                 | "--skill-root"
                 | "--host"
+                | "--mcp-profile"
                 | "--budget"
                 | "--max-tier"
                 | "--codex-home"
@@ -88,6 +104,7 @@ VALUE_OPTIONS = (
     "--state-root",
     "--skill-root",
     "--host",
+    "--mcp-profile",
     "--budget",
     "--max-tier",
     "--codex-home",
@@ -101,6 +118,7 @@ EQUALS_VALUE_OPTIONS = (
     "--state-root=",
     "--skill-root=",
     "--host=",
+    "--mcp-profile=",
     "--codex-home=",
     "--rollout=",
     "--state-file=",
@@ -172,6 +190,7 @@ def repair(path: Path | None = None) -> bool:
         (LEGACY_OPTION_BLOCK, "legacy selector option-value"),
         (PRE_SESSION_OPTION_BLOCK, "pre-session selector option-value"),
         (PRE_INIT_OPTION_BLOCK, "pre-init selector option-value"),
+        (PRE_INSTALL_OPTION_BLOCK, "pre-install selector option-value"),
     ):
         rendered, applied = _replace_optional_once(
             rendered,
