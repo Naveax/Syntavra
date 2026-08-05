@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_install.rs"
+UNUSED_IMPORT = "use std::collections::{BTreeMap, BTreeSet};\n"
 
 CANONICAL_TOKENS = (
     '"mcp_capable": 14',
@@ -82,16 +83,24 @@ PATTERN = re.compile(
 
 def repair(path: Path = TARGET) -> bool:
     source = path.read_text(encoding="utf-8")
-    if all(token in source for token in CANONICAL_TOKENS):
-        return False
-    rendered, count = PATTERN.subn(RECORDS, source, count=1)
-    if count != 1:
-        raise RuntimeError(f"native install adapter contract boundary missing in {path}")
+    rendered = source
+    changed = False
+    if UNUSED_IMPORT in rendered:
+        rendered = rendered.replace(UNUSED_IMPORT, "", 1)
+        changed = True
+    if not all(token in rendered for token in CANONICAL_TOKENS):
+        rendered, count = PATTERN.subn(RECORDS, rendered, count=1)
+        if count != 1:
+            raise RuntimeError(f"native install adapter contract boundary missing in {path}")
+        changed = True
+    if UNUSED_IMPORT in rendered:
+        raise RuntimeError(f"unused native install imports remain in {path}")
     if not all(token in rendered for token in CANONICAL_TOKENS):
         missing = [token for token in CANONICAL_TOKENS if token not in rendered]
         raise RuntimeError(f"native install adapter contract incomplete: {missing}")
-    path.write_text(rendered, encoding="utf-8", newline="\n")
-    return True
+    if changed:
+        path.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
 
 
 def main() -> int:
