@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from advance_r38_fabric_cache_align_inventory import advance as advance_cache_align_inventory
+from advance_r38_fabric_compact_inventory import advance as advance_compact_inventory
 from advance_r38_fabric_route_inventory import advance as advance_route_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,9 @@ TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 CACHE_MODULE = '''#[path = "native_fabric_cache_align.rs"]
 mod native_fabric_cache_align;
 '''
+COMPACT_MODULE = '''#[path = "native_fabric_compact.rs"]
+mod native_fabric_compact;
+'''
 ROUTE_MODULE = '''#[path = "native_fabric_route.rs"]
 mod native_fabric_route;
 '''
@@ -20,10 +24,15 @@ MODULE_ANCHOR = '''#[path = "native_expansion.rs"]
 mod native_expansion;
 '''
 CACHE_SUPPORT = "        || native_fabric_cache_align::supports(command)\n"
+COMPACT_SUPPORT = "        || native_fabric_compact::supports(command)\n"
 ROUTE_SUPPORT = "        || native_fabric_route::supports(command)\n"
 SUPPORT_ANCHOR = "        || native_expansion::supports(command)\n"
 CACHE_EXECUTE = '''    if native_fabric_cache_align::supports(command) {
         return native_fabric_cache_align::execute(&arguments, state_root).map(Some);
+    }
+'''
+COMPACT_EXECUTE = '''    if native_fabric_compact::supports(command) {
+        return native_fabric_compact::execute(&arguments, state_root).map(Some);
     }
 '''
 ROUTE_EXECUTE = '''    if native_fabric_route::supports(command) {
@@ -54,10 +63,13 @@ def repair() -> bool:
     for token, anchor, label in (
         (ROUTE_MODULE, MODULE_ANCHOR, "fabric route module"),
         (CACHE_MODULE, ROUTE_MODULE, "fabric cache-align module"),
+        (COMPACT_MODULE, ROUTE_MODULE, "fabric compact module"),
         (ROUTE_SUPPORT, SUPPORT_ANCHOR, "fabric route support"),
         (CACHE_SUPPORT, ROUTE_SUPPORT, "fabric cache-align support"),
+        (COMPACT_SUPPORT, ROUTE_SUPPORT, "fabric compact support"),
         (ROUTE_EXECUTE, EXECUTE_ANCHOR, "fabric route execute"),
         (CACHE_EXECUTE, ROUTE_EXECUTE, "fabric cache-align execute"),
+        (COMPACT_EXECUTE, ROUTE_EXECUTE, "fabric compact execute"),
     ):
         rendered, applied = insert_before(rendered, token, anchor, label)
         changed = changed or applied
@@ -66,6 +78,9 @@ def repair() -> bool:
         "cache_module": rendered.count(CACHE_MODULE),
         "cache_support": rendered.count(CACHE_SUPPORT),
         "cache_execute": rendered.count(CACHE_EXECUTE),
+        "compact_module": rendered.count(COMPACT_MODULE),
+        "compact_support": rendered.count(COMPACT_SUPPORT),
+        "compact_execute": rendered.count(COMPACT_EXECUTE),
         "route_module": rendered.count(ROUTE_MODULE),
         "route_support": rendered.count(ROUTE_SUPPORT),
         "route_execute": rendered.count(ROUTE_EXECUTE),
@@ -74,6 +89,9 @@ def repair() -> bool:
         "cache_module": 1,
         "cache_support": 1,
         "cache_execute": 1,
+        "compact_module": 1,
+        "compact_support": 1,
+        "compact_execute": 1,
         "route_module": 1,
         "route_support": 1,
         "route_execute": 1,
@@ -88,6 +106,7 @@ def main() -> int:
     wiring_changed = repair()
     route_inventory_changed = advance_route_inventory()
     cache_align_inventory_changed = advance_cache_align_inventory()
+    compact_inventory_changed = advance_compact_inventory()
     print(
         json.dumps(
             {
@@ -96,7 +115,9 @@ def main() -> int:
                     wiring_changed
                     or route_inventory_changed
                     or cache_align_inventory_changed
+                    or compact_inventory_changed
                 ),
+                "compact_inventory_changed": compact_inventory_changed,
                 "ok": True,
                 "route_inventory_changed": route_inventory_changed,
                 "surface": "native-fabric-control-plane",
