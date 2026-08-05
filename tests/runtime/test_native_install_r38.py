@@ -36,8 +36,8 @@ def _selector_binary() -> Path:
     )
     assert completed.returncode == 0, {
         "returncode": completed.returncode,
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
+        "stdout": completed.stdout[-4000:],
+        "stderr": completed.stderr[-4000:],
     }
     suffix = ".exe" if sys.platform == "win32" else ""
     path = ROOT / "target" / "debug" / f"syntavra{suffix}"
@@ -81,7 +81,7 @@ def _run(engine: str, project: Path, *arguments: str) -> tuple[int, Any, str]:
     assert completed.stdout.strip(), {
         "engine": engine,
         "returncode": completed.returncode,
-        "stderr": completed.stderr,
+        "stderr": completed.stderr[-4000:],
     }
     return completed.returncode, json.loads(completed.stdout), completed.stderr
 
@@ -106,6 +106,63 @@ def _normalized(value: Any, project: Path) -> Any:
     return visit(value)
 
 
+def _first_difference(left: Any, right: Any, path: str = "$") -> dict[str, Any] | None:
+    if type(left) is not type(right):
+        return {
+            "path": path,
+            "reason": "type",
+            "rust_type": type(left).__name__,
+            "python_type": type(right).__name__,
+            "rust": left,
+            "python": right,
+        }
+    if isinstance(left, dict):
+        left_keys = set(left)
+        right_keys = set(right)
+        if left_keys != right_keys:
+            return {
+                "path": path,
+                "reason": "keys",
+                "rust_only": sorted(left_keys - right_keys),
+                "python_only": sorted(right_keys - left_keys),
+            }
+        for key in sorted(left):
+            difference = _first_difference(left[key], right[key], f"{path}.{key}")
+            if difference:
+                return difference
+        return None
+    if isinstance(left, list):
+        if len(left) != len(right):
+            return {
+                "path": path,
+                "reason": "length",
+                "rust": len(left),
+                "python": len(right),
+            }
+        for index, (left_item, right_item) in enumerate(zip(left, right, strict=True)):
+            difference = _first_difference(
+                left_item,
+                right_item,
+                f"{path}[{index}]",
+            )
+            if difference:
+                return difference
+        return None
+    if left != right:
+        return {
+            "path": path,
+            "reason": "value",
+            "rust": left,
+            "python": right,
+        }
+    return None
+
+
+def _assert_equal(rust_value: Any, python_value: Any, label: str) -> None:
+    difference = _first_difference(rust_value, python_value)
+    assert difference is None, {"label": label, "difference": difference}
+
+
 def _assert_pair(
     python_project: Path,
     rust_project: Path,
@@ -120,8 +177,10 @@ def _assert_pair(
         "rust": rust_result,
     }
     assert python_stderr == rust_stderr == ""
-    assert _normalized(rust_value, rust_project) == _normalized(
-        python_value, python_project
+    _assert_equal(
+        _normalized(rust_value, rust_project),
+        _normalized(python_value, python_project),
+        "command-output",
     )
     return python_value, rust_value
 
@@ -137,8 +196,10 @@ def _tree_digest(root: Path) -> dict[str, bytes]:
 def _assert_state_json_matches(python_project: Path, rust_project: Path, name: str) -> None:
     python_value = json.loads((python_project / "state" / name).read_text(encoding="utf-8"))
     rust_value = json.loads((rust_project / "state" / name).read_text(encoding="utf-8"))
-    assert _normalized(rust_value, rust_project) == _normalized(
-        python_value, python_project
+    _assert_equal(
+        _normalized(rust_value, rust_project),
+        _normalized(python_value, python_project),
+        f"state:{name}",
     )
 
 
@@ -224,13 +285,15 @@ def test_native_install_codex_apply_matches_host_transaction(tmp_path: Path) -> 
     rust_config = json.loads(
         (rust_project / ".codex" / "mcp.json").read_text(encoding="utf-8")
     )
-    assert rust_config == python_config
+    _assert_equal(rust_config, python_config, "codex-config")
     assert rust_config["mcpServers"]["syntavra"] == {
         "command": "syntavra",
         "args": ["mcp"],
     }
-    assert _tree_digest(rust_project / ".codex" / "skills" / "syntavra") == _tree_digest(
-        python_project / ".codex" / "skills" / "syntavra"
+    _assert_equal(
+        _tree_digest(rust_project / ".codex" / "skills" / "syntavra"),
+        _tree_digest(python_project / ".codex" / "skills" / "syntavra"),
+        "codex-skill-tree",
     )
 
     for name in (
