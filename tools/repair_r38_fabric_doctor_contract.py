@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = ROOT / "crates" / "syntavra-cli" / "src" / "native_host.rs"
+EXPANSION = ROOT / "crates" / "syntavra-cli" / "src" / "native_expansion.rs"
+DOCTOR = ROOT / "crates" / "syntavra-cli" / "src" / "native_fabric_doctor.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 
 DOCTOR_CONTRACT = '''
@@ -28,6 +30,15 @@ pub(crate) fn doctor_contract(host: &str) -> Value {
 
 '''
 HOST_ANCHOR = "fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {\n"
+
+EXPANSION_BRIDGE = '''pub(crate) fn doctor_host_contract(host: &str) -> Value {
+    native_host::doctor_contract(host)
+}
+
+'''
+EXPANSION_ANCHOR = "pub fn supports(command: &[String]) -> bool {\n"
+OLD_DOCTOR_CALL = "super::native_host::doctor_contract(&host)"
+NEW_DOCTOR_CALL = "super::native_expansion::doctor_host_contract(&host)"
 
 DOCTOR_MODULE = '''#[path = "native_fabric_doctor.rs"]
 mod native_fabric_doctor;
@@ -73,6 +84,37 @@ def repair_host() -> bool:
     return changed
 
 
+def repair_expansion() -> bool:
+    source = EXPANSION.read_text(encoding="utf-8")
+    rendered, changed = insert_once(
+        source,
+        EXPANSION_BRIDGE,
+        EXPANSION_ANCHOR,
+        "native expansion doctor host bridge",
+    )
+    if rendered.count("pub(crate) fn doctor_host_contract") != 1:
+        raise RuntimeError("native expansion doctor bridge invariant failed")
+    if changed:
+        EXPANSION.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
+
+
+def repair_doctor_call() -> bool:
+    source = DOCTOR.read_text(encoding="utf-8")
+    if NEW_DOCTOR_CALL in source:
+        if OLD_DOCTOR_CALL in source:
+            raise RuntimeError("legacy direct native_host doctor call remains")
+        return False
+    if source.count(OLD_DOCTOR_CALL) != 1:
+        raise RuntimeError("fabric doctor host call contract not found")
+    DOCTOR.write_text(
+        source.replace(OLD_DOCTOR_CALL, NEW_DOCTOR_CALL, 1),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return True
+
+
 def repair_product() -> bool:
     source = PRODUCT.read_text(encoding="utf-8")
     rendered = source
@@ -96,8 +138,10 @@ def repair_product() -> bool:
 
 def repair() -> bool:
     host_changed = repair_host()
+    expansion_changed = repair_expansion()
+    doctor_changed = repair_doctor_call()
     product_changed = repair_product()
-    return host_changed or product_changed
+    return host_changed or expansion_changed or doctor_changed or product_changed
 
 
 def main() -> int:
