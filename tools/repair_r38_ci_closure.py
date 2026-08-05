@@ -69,6 +69,53 @@ def synchronize_generated_count_handoff() -> bool:
     return changed
 
 
+def repair_init_selector_contract() -> bool:
+    changed = False
+    legacy_single = 'Some("rollout-tail" | "context-stress" | "claim" | "context")'
+    canonical_single = (
+        'Some("rollout-tail" | "context-stress" | "claim" | "context" | "init")'
+    )
+    changed |= replace_exact(
+        RUNTIME_REPAIR,
+        f"SINGLE_SEGMENT_PATH_CANONICAL = (\n    '{legacy_single}'\n)",
+        f"SINGLE_SEGMENT_PATH_CANONICAL = (\n    '{canonical_single}'\n)",
+        "init single-segment repair contract",
+    )
+    changed |= replace_exact(
+        SELECTOR,
+        legacy_single,
+        canonical_single,
+        "init single-segment selector route",
+    )
+    changed |= replace_exact(
+        SELECTOR,
+        '''                | "--state-root"
+                | "--budget"''',
+        '''                | "--state-root"
+                | "--skill-root"
+                | "--host"
+                | "--budget"''',
+        "selector value-taking global options",
+    )
+    changed |= replace_exact(
+        SELECTOR,
+        '''        if value.starts_with("--project=")
+            || value.starts_with("--state-root=")
+            || value.starts_with("--budget=")''',
+        '''        if value.starts_with("--project=")
+            || value.starts_with("--state-root=")
+            || value.starts_with("--skill-root=")
+            || value.starts_with("--host=")
+            || value.starts_with("--codex-home=")
+            || value.starts_with("--rollout=")
+            || value.starts_with("--state-file=")
+            || value.starts_with("--session-hint=")
+            || value.starts_with("--budget=")''',
+        "selector equals-form value options",
+    )
+    return changed
+
+
 def repair_context_contract() -> bool:
     changed = False
     changed |= replace_exact(
@@ -293,6 +340,8 @@ def main() -> int:
     changed = []
     if synchronize_generated_count_handoff():
         changed.append("generated-count-handoff")
+    if repair_init_selector_contract():
+        changed.append("init-selector-contract")
     if repair_context_contract():
         changed.append("runtime-context-contract")
     if repair_stats_contract():
