@@ -208,7 +208,7 @@ pub fn execute(
     let host = option_value(arguments, "--host")?.unwrap_or_else(|| "codex".to_owned());
     let database_path = state_root.join("competitive-fabric.sqlite3");
     let database = initialize_database(&database_path)?;
-    let host_contract = super::native_host::doctor_contract(&host);
+    let host_contract = super::native_expansion::doctor_host_contract(&host);
 
     let docker = which("docker");
     let podman = which("podman");

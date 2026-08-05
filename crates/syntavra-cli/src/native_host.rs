@@ -769,6 +769,23 @@ fn environment_capabilities() -> Value {
     })
 }
 
+pub(crate) fn doctor_contract(host: &str) -> Value {
+    let active = host_spec(host);
+    let specs = host_specs();
+    let negotiation = negotiate_value(host, true, None);
+    json!({
+        "known_host": specs.iter().any(|spec| spec.host == host),
+        "mcp_available": active.supports_mcp,
+        "result_replacement": active.supports_result_replacement,
+        "enforced_mode": negotiation
+            .get("enforced")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        "platform_registry_size": specs.len(),
+        "negotiation": negotiation,
+    })
+}
+
 fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
     let mut result = None;
     let prefix = format!("{flag}=");

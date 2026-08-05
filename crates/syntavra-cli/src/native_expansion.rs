@@ -79,6 +79,10 @@ mod native_uninstall;
 #[path = "native_verifier.rs"]
 mod native_verifier;
 
+pub(crate) fn doctor_host_contract(host: &str) -> Value {
+    native_host::doctor_contract(host)
+}
+
 pub fn supports(command: &[String]) -> bool {
     native_benchmark_tools::supports(command)
         || native_claim::supports(command)
