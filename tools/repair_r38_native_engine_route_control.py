@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from advance_r38_engine_route_inventory import advance as advance_inventory
+
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 
@@ -75,13 +77,16 @@ def repair() -> bool:
 
 
 def main() -> int:
-    changed = repair()
+    wiring_changed = repair()
+    inventory_changed = advance_inventory()
     print(
         json.dumps(
             {
-                "changed": changed,
+                "changed": wiring_changed or inventory_changed,
+                "inventory_changed": inventory_changed,
                 "ok": True,
                 "surface": "native-engine-route-control",
+                "wiring_changed": wiring_changed,
             },
             sort_keys=True,
         )
