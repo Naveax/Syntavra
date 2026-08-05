@@ -10,11 +10,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUST_ROOT = ROOT / "crates" / "syntavra-cli" / "src"
 SELECTOR = RUST_ROOT / "bin" / "syntavra.rs"
+NATIVE_CONTEXT_GOVERNOR = RUST_ROOT / "native_context_governor.rs"
 NATIVE_EVIDENCE_STATS = RUST_ROOT / "native_evidence_stats.rs"
+NATIVE_HOST = RUST_ROOT / "native_host.rs"
 NATIVE_STATIC_SURFACES = RUST_ROOT / "native_static_surfaces.rs"
 NATIVE_STATS = RUST_ROOT / "native_stats.rs"
 PRERELEASE_CLI = ROOT / "syntavra_runtime" / "prerelease_cli.py"
 EVIDENCE_STATS_TEST = ROOT / "tests" / "runtime" / "test_native_evidence_stats_r38.py"
+SESSION_PUBLIC_TEST = ROOT / "tests" / "runtime" / "test_native_session_public_r38.py"
+STRUCTURAL_TEST = ROOT / "tests" / "runtime" / "test_native_structural_r38.py"
 
 # Rust removes a backslash-newline pair and the indentation that follows it.
 # SQL assembled from source such as `scope_idx\` + `ON ...` therefore becomes
@@ -72,6 +76,117 @@ BENCHMARK_SCORE_30X_CANONICAL = '"30X" => Ok(63.345_278_851_520_46),'
 
 STATS_IMPORT_LEGACY = "use serde_json::{json, Map, Value};"
 STATS_IMPORT_CANONICAL = "use serde_json::{json, Value};"
+
+CONTEXT_DEFAULT_DISPATCH_LEGACY = '''        [group] if group == "context" => evaluate(arguments),'''
+CONTEXT_DEFAULT_DISPATCH_CANONICAL = '''        [group] if group == "context" => {
+            if arguments.windows(2).any(|window| {
+                window[0] == "context" && window[1] == "pack"
+            }) {
+                pack(arguments)
+            } else {
+                evaluate(arguments)
+            }
+        }'''
+
+HOST_REPAIRS = (
+    (
+        '''            &[".vscode", ".github/copilot-instructions.md"],
+            &[],
+            ".vscode/mcp.json",''',
+        '''            &[".vscode/mcp.json"],
+            &[],
+            ".vscode/mcp.json",''',
+        "VS Code project marker parity",
+    ),
+    (
+        '''            &[".pi"],
+            &[".pi/agent"],
+            ".pi/settings.json",''',
+        '''            &[".pi"],
+            &[".pi/agent"],
+            "",''',
+        "Pi config path parity",
+    ),
+    (
+        '''            &[".omp"],
+            &[".omp/agent"],
+            ".omp/agent/config.yml",''',
+        '''            &[".omp"],
+            &[".omp/agent"],
+            "",''',
+        "Oh My Pi config path parity",
+    ),
+    (
+        '''            &[".openclaw", "openclaw.json"],
+            &[".openclaw"],
+            "openclaw.json",
+            "skills/syntavra",''',
+        '''            &[".openclaw", "openclaw.json"],
+            &[".openclaw"],
+            "",
+            "skills/syntavra",''',
+        "OpenClaw config path parity",
+    ),
+    (
+        '''            &[".idea"],
+            &[".config/JetBrains"],
+            ".idea/mcp.json",''',
+        '''            &[".idea/mcp.json"],
+            &[],
+            ".idea/mcp.json",''',
+        "JetBrains marker parity",
+    ),
+)
+
+STATS_FLOAT_HELPER_LEGACY = '''
+fn identity_string(value: &Value) -> Option<String> {'''
+STATS_FLOAT_HELPER_CANONICAL = '''
+fn python_json_float(number: f64) -> Value {
+    if number == 0.0 {
+        Value::from(0)
+    } else {
+        Value::from(number)
+    }
+}
+
+fn identity_string(value: &Value) -> Option<String> {'''
+STATS_FLOAT_REPAIRS = (
+    (
+        '''            "wall_time_ms": wall_time_ms,''',
+        '''            "wall_time_ms": python_json_float(wall_time_ms),''',
+        "stats wall-time numeric type parity",
+    ),
+    (
+        '''            "cost_usd": cost_usd,''',
+        '''            "cost_usd": python_json_float(cost_usd),''',
+        "stats cost numeric type parity",
+    ),
+    (
+        '''            "compaction_wall_time_ms": compaction_ms,''',
+        '''            "compaction_wall_time_ms": python_json_float(compaction_ms),''',
+        "stats compaction numeric type parity",
+    ),
+)
+
+SESSION_DIAGNOSTIC_LEGACY = '''    assert rust_code == python_code == 0
+    assert _session_shape(rust_result) == _session_shape(python_result)'''
+SESSION_DIAGNOSTIC_CANONICAL = '''    assert rust_code == python_code == 0, {
+        "python": {"code": python_code, "result": python_result},
+        "rust": {"code": rust_code, "result": rust_result},
+    }
+    assert _session_shape(rust_result) == _session_shape(python_result)'''
+
+STRUCTURAL_DIAGNOSTIC_LEGACY = '''    assert rust_code == python_code == 0
+    assert rust_result == python_result
+    assert rust_result == {
+        "query": "helper",'''
+STRUCTURAL_DIAGNOSTIC_CANONICAL = '''    assert rust_code == python_code == 0, {
+        "python": {"code": python_code, "result": python_result},
+        "rust": {"code": rust_code, "result": rust_result},
+    }
+    assert rust_result == python_result
+    assert rust_result == {
+        "query": "helper",'''
 
 
 def rust_sources() -> list[Path]:
@@ -184,6 +299,48 @@ def repair_stats_imports(source: str) -> tuple[str, int]:
     )
 
 
+def repair_context_dispatch(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        CONTEXT_DEFAULT_DISPATCH_LEGACY,
+        CONTEXT_DEFAULT_DISPATCH_CANONICAL,
+        "context pack selector dispatch",
+    )
+
+
+def repair_host_registry(source: str) -> tuple[str, int]:
+    return exact_repairs(source, HOST_REPAIRS)
+
+
+def repair_stats_numeric_types(source: str) -> tuple[str, int]:
+    rendered, changed = exact_repair(
+        source,
+        STATS_FLOAT_HELPER_LEGACY,
+        STATS_FLOAT_HELPER_CANONICAL,
+        "stats Python-compatible float renderer",
+    )
+    rendered, count = exact_repairs(rendered, STATS_FLOAT_REPAIRS)
+    return rendered, changed + count
+
+
+def repair_session_diagnostic(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        SESSION_DIAGNOSTIC_LEGACY,
+        SESSION_DIAGNOSTIC_CANONICAL,
+        "session import differential diagnostic",
+    )
+
+
+def repair_structural_diagnostic(source: str) -> tuple[str, int]:
+    return exact_repair(
+        source,
+        STRUCTURAL_DIAGNOSTIC_LEGACY,
+        STRUCTURAL_DIAGNOSTIC_CANONICAL,
+        "structural fresh-index differential diagnostic",
+    )
+
+
 def inspect(path: Path) -> tuple[str, int]:
     source = path.read_text(encoding="utf-8")
     return repaired_source(source)
@@ -226,10 +383,15 @@ def main() -> int:
     for path, repair in (
         (SELECTOR, repair_single_segment_command_paths),
         (PRERELEASE_CLI, repair_inline_json_argument),
+        (NATIVE_CONTEXT_GOVERNOR, repair_context_dispatch),
         (NATIVE_EVIDENCE_STATS, repair_runtime_evidence_layout),
         (EVIDENCE_STATS_TEST, repair_evidence_test_layout),
+        (NATIVE_HOST, repair_host_registry),
         (NATIVE_STATIC_SURFACES, repair_benchmark_scores),
         (NATIVE_STATS, repair_stats_imports),
+        (NATIVE_STATS, repair_stats_numeric_types),
+        (SESSION_PUBLIC_TEST, repair_session_diagnostic),
+        (STRUCTURAL_TEST, repair_structural_diagnostic),
     ):
         repair_file(path, repair, check=arguments.check, changed=changed)
 
@@ -266,10 +428,14 @@ def main() -> int:
 
     canonical_selector = SELECTOR.read_text(encoding="utf-8")
     canonical_cli = PRERELEASE_CLI.read_text(encoding="utf-8")
+    canonical_context = NATIVE_CONTEXT_GOVERNOR.read_text(encoding="utf-8")
     canonical_evidence = NATIVE_EVIDENCE_STATS.read_text(encoding="utf-8")
     canonical_evidence_test = EVIDENCE_STATS_TEST.read_text(encoding="utf-8")
+    canonical_host = NATIVE_HOST.read_text(encoding="utf-8")
     canonical_static_surfaces = NATIVE_STATIC_SURFACES.read_text(encoding="utf-8")
     canonical_stats = NATIVE_STATS.read_text(encoding="utf-8")
+    canonical_session_test = SESSION_PUBLIC_TEST.read_text(encoding="utf-8")
+    canonical_structural_test = STRUCTURAL_TEST.read_text(encoding="utf-8")
     invariants = {
         "R38_SINGLE_SEGMENT_PATH_REPAIR_INCOMPLETE": (
             canonical_selector.count(SINGLE_SEGMENT_PATH_CANONICAL) == 1
@@ -279,6 +445,10 @@ def main() -> int:
             canonical_cli.count(JSON_ARGUMENT_CANONICAL) == 1
             and JSON_ARGUMENT_LEGACY not in canonical_cli
         ),
+        "R38_CONTEXT_DISPATCH_REPAIR_INCOMPLETE": (
+            canonical_context.count(CONTEXT_DEFAULT_DISPATCH_CANONICAL) == 1
+            and CONTEXT_DEFAULT_DISPATCH_LEGACY not in canonical_context
+        ),
         "R38_RUNTIME_EVIDENCE_LAYOUT_REPAIR_INCOMPLETE": (
             canonical_evidence.count(RUNTIME_EVIDENCE_STATS_CANONICAL) == 1
             and canonical_evidence.count(RUNTIME_EVIDENCE_NEIGHBORS_CANONICAL) == 1
@@ -286,6 +456,10 @@ def main() -> int:
             and RUNTIME_EVIDENCE_NEIGHBORS_LEGACY not in canonical_evidence
             and canonical_evidence_test.count(EVIDENCE_TEST_LAYOUT_CANONICAL) == 1
             and EVIDENCE_TEST_LAYOUT_LEGACY not in canonical_evidence_test
+        ),
+        "R38_HOST_REGISTRY_REPAIR_INCOMPLETE": all(
+            canonical_host.count(canonical) == 1 and legacy not in canonical_host
+            for legacy, canonical, _ in HOST_REPAIRS
         ),
         "R38_BENCHMARK_SCORE_REPAIR_INCOMPLETE": (
             canonical_static_surfaces.count(BENCHMARK_SCORE_20X_CANONICAL) == 1
@@ -296,6 +470,22 @@ def main() -> int:
         "R38_STATS_IMPORT_REPAIR_INCOMPLETE": (
             canonical_stats.count(STATS_IMPORT_CANONICAL) == 1
             and STATS_IMPORT_LEGACY not in canonical_stats
+        ),
+        "R38_STATS_NUMERIC_TYPE_REPAIR_INCOMPLETE": (
+            canonical_stats.count(STATS_FLOAT_HELPER_CANONICAL) == 1
+            and STATS_FLOAT_HELPER_LEGACY not in canonical_stats
+            and all(
+                canonical_stats.count(canonical) == 1 and legacy not in canonical_stats
+                for legacy, canonical, _ in STATS_FLOAT_REPAIRS
+            )
+        ),
+        "R38_SESSION_DIAGNOSTIC_REPAIR_INCOMPLETE": (
+            canonical_session_test.count(SESSION_DIAGNOSTIC_CANONICAL) == 1
+            and SESSION_DIAGNOSTIC_LEGACY not in canonical_session_test
+        ),
+        "R38_STRUCTURAL_DIAGNOSTIC_REPAIR_INCOMPLETE": (
+            canonical_structural_test.count(STRUCTURAL_DIAGNOSTIC_CANONICAL) == 1
+            and STRUCTURAL_DIAGNOSTIC_LEGACY not in canonical_structural_test
         ),
     }
     for code, valid in invariants.items():
