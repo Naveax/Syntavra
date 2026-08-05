@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "surface": "syntavra-native-mcp-catalog",
+  "server": {
+    "default_protocol_version": "2025-06-18",
+    "instructions": "Token/context optimization with exact recovery and fail-closed tool routing.",
+    "name": "syntavra",
+    "version": "0.0.1"
+  },
+  "catalog": {
+    "tool_count": 0,
+    "sha256": ""
+  },
+  "profile_aliases": {
+    "minimal": "minimal",
+    "tiny": "minimal",
+    "balanced": "balanced",
+    "optimized": "balanced",
+    "audit": "audit",
+    "full": "audit"
+  },
+  "profiles": {
+    "minimal": {"raw_tools": [], "compiled_tools": [], "compilation": null, "compact_manifest": {}, "raw_manifest": {}},
+    "balanced": {"raw_tools": [], "compiled_tools": [], "compilation": null, "compact_manifest": {}, "raw_manifest": {}},
+    "audit": {"raw_tools": [], "compiled_tools": [], "compilation": null, "compact_manifest": {}, "raw_manifest": {}}
+  }
+}
