@@ -11,6 +11,9 @@ RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
 BENCHMARK_HARNESS = ROOT / "syntavra_runtime" / "benchmark_harness.py"
 MEMORY_DIFFERENTIAL = ROOT / "tests" / "runtime" / "test_native_memory_r38.py"
 NATIVE_STRUCTURAL = ROOT / "crates" / "syntavra-cli" / "src" / "native_structural.rs"
+CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
+SELECTOR = ROOT / "crates" / "syntavra-cli" / "src" / "bin" / "syntavra.rs"
+INVENTORY_TEST = ROOT / "tests" / "runtime" / "test_dual_engine_public_surface_r38.py"
 
 
 def replace_exact(path: Path, old: str, new: str, label: str) -> bool:
@@ -26,6 +29,44 @@ def replace_exact(path: Path, old: str, new: str, label: str) -> bool:
         )
     path.write_text(source.replace(old, new, 1), encoding="utf-8", newline="\n")
     return True
+
+
+def replace_pattern(path: Path, pattern: str, replacement: str, label: str) -> bool:
+    source = path.read_text(encoding="utf-8")
+    rendered, count = re.subn(pattern, replacement, source, count=1)
+    if count != 1:
+        raise RuntimeError(f"{label}: expected exactly one pattern match in {path}, found {count}")
+    if rendered == source:
+        return False
+    path.write_text(rendered, encoding="utf-8", newline="\n")
+    return True
+
+
+def synchronize_generated_count_handoff() -> bool:
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    rust = contract["rust_surface"]
+    native_count = int(rust["native_public_command_count"])
+    missing_count = int(rust["missing_native_public_command_count"])
+    changed = False
+    changed |= replace_pattern(
+        SELECTOR,
+        r"const NATIVE_COMMAND_COUNT: u64 = [0-9]+;",
+        f"const NATIVE_COMMAND_COUNT: u64 = {native_count};",
+        "selector native command count",
+    )
+    changed |= replace_pattern(
+        INVENTORY_TEST,
+        r'assert result\["rust"\]\["native_public_command_count"\] == [0-9]+',
+        f'assert result["rust"]["native_public_command_count"] == {native_count}',
+        "inventory native command count",
+    )
+    changed |= replace_pattern(
+        INVENTORY_TEST,
+        r'assert result\["rust"\]\["missing_native_public_command_count"\] == [0-9]+',
+        f'assert result["rust"]["missing_native_public_command_count"] == {missing_count}',
+        "inventory missing command count",
+    )
+    return changed
 
 
 def repair_context_contract() -> bool:
@@ -250,6 +291,8 @@ def validate_status_handoff(path: Path) -> None:
 
 def main() -> int:
     changed = []
+    if synchronize_generated_count_handoff():
+        changed.append("generated-count-handoff")
     if repair_context_contract():
         changed.append("runtime-context-contract")
     if repair_stats_contract():
