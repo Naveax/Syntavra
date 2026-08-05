@@ -4,9 +4,9 @@ use std::path::Path;
 
 use serde_json::{json, Value};
 
-const PHASE: &str = "R14";
-const SCHEMA_VERSION: u64 = 3;
-const SUPPORTED_ROUTES: &[&str] = &[
+const PHASE: &str = "R24";
+const SCHEMA_VERSION: u64 = 12;
+const CERTIFIED_ROUTES: &[&str] = &[
     "config.explain",
     "config.resolve",
     "config.show",
@@ -23,6 +23,16 @@ const SUPPORTED_ROUTES: &[&str] = &[
     "state.layout",
     "status",
     "telemetry.metrics",
+    "version",
+];
+const UNSUPPORTED_ERROR_ROUTES: &[&str] = &[
+    "config.resolve",
+    "receipt.inspect",
+    "state.broker-live-snapshot",
+    "state.broker-snapshot",
+    "state.inspect",
+    "state.layout",
+    "status",
     "version",
 ];
 
@@ -50,7 +60,7 @@ fn unsupported(route: &str) -> Decision {
                     "phase": PHASE,
                     "schema_version": SCHEMA_VERSION,
                     "command": if route.is_empty() { "<missing>" } else { route },
-                    "supported": SUPPORTED_ROUTES,
+                    "supported": UNSUPPORTED_ERROR_ROUTES,
                     "fallback_policy": "none",
                     "fallback_attempted": false,
                 },
@@ -71,7 +81,7 @@ pub fn execute(
         .map(String::as_str)
         .ok_or_else(|| "ENGINE_ROUTE_COMMAND_MISSING".to_owned())?;
     let route = normalize_route(raw_route);
-    if !SUPPORTED_ROUTES.contains(&route.as_str()) {
+    if !CERTIFIED_ROUTES.contains(&route.as_str()) {
         return Ok(unsupported(&route));
     }
 
@@ -96,7 +106,9 @@ pub fn execute(
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_route, supports, SUPPORTED_ROUTES};
+    use super::{
+        normalize_route, supports, CERTIFIED_ROUTES, UNSUPPORTED_ERROR_ROUTES,
+    };
 
     #[test]
     fn owns_generic_engine_route_surface() {
@@ -115,10 +127,12 @@ mod tests {
     }
 
     #[test]
-    fn certified_route_catalog_is_sorted_and_unique() {
-        let mut expected = SUPPORTED_ROUTES.to_vec();
-        expected.sort_unstable();
-        expected.dedup();
-        assert_eq!(expected, SUPPORTED_ROUTES);
+    fn route_catalogs_are_sorted_and_unique() {
+        for routes in [CERTIFIED_ROUTES, UNSUPPORTED_ERROR_ROUTES] {
+            let mut expected = routes.to_vec();
+            expected.sort_unstable();
+            expected.dedup();
+            assert_eq!(expected, routes);
+        }
     }
 }
