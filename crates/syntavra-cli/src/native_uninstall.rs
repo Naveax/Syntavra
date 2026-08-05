@@ -150,10 +150,8 @@ mod tests {
 
     #[test]
     fn absent_manifest_is_idempotent() {
-        let root = std::env::temp_dir().join(format!(
-            "syntavra-native-uninstall-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("syntavra-native-uninstall-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("project");
         let value = execute(&[], &root).expect("uninstall");
