@@ -58,10 +58,7 @@ EXECUTE = '''    if native_fabric_profile::supports(command) {
     }
 '''
 EXECUTE_SIGNATURE = "native_fabric_profile::execute(&arguments"
-EXECUTE_ANCHOR = '''    if native_fabric_platform_plan::supports(command) {
-        return native_fabric_platform_plan::execute(&arguments, project_root, state_root).map(Some);
-    }
-'''
+EXECUTE_ANCHOR_SIGNATURE = "    if native_fabric_platform_plan::supports(command) {\n"
 
 
 def insert_once(source: str, token: str, anchor: str, label: str) -> tuple[str, bool]:
@@ -101,14 +98,20 @@ def repair_product() -> bool:
     ):
         rendered, applied = insert_once(rendered, token, anchor, label)
         changed = changed or applied
+
     execute_count = rendered.count(EXECUTE_SIGNATURE)
     if execute_count == 0:
-        if rendered.count(EXECUTE_ANCHOR) != 1:
-            raise RuntimeError("fabric profile execute anchor must be unique")
-        rendered = rendered.replace(EXECUTE_ANCHOR, EXECUTE + EXECUTE_ANCHOR, 1)
+        if rendered.count(EXECUTE_ANCHOR_SIGNATURE) != 1:
+            raise RuntimeError("fabric profile semantic execute anchor must be unique")
+        rendered = rendered.replace(
+            EXECUTE_ANCHOR_SIGNATURE,
+            EXECUTE + EXECUTE_ANCHOR_SIGNATURE,
+            1,
+        )
         changed = True
     elif execute_count != 1:
         raise RuntimeError(f"fabric profile execute count invalid: {execute_count}")
+
     if rendered.count(MODULE) != 1 or rendered.count(SUPPORT) != 1:
         raise RuntimeError("fabric profile wiring invariant failed")
     if rendered.count(EXECUTE_SIGNATURE) != 1:
