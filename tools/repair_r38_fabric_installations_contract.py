@@ -19,6 +19,7 @@ EXECUTE = '''    if native_fabric_installations::supports(command) {
         return native_fabric_installations::execute(&arguments, project_root, state_root).map(Some);
     }
 '''
+EXECUTE_SIGNATURE = "native_fabric_installations::execute(&arguments"
 EXECUTE_ANCHOR = '''    if native_fabric_install::supports(command) {
         return native_fabric_install::execute(&arguments, project_root, state_root).map(Some);
     }
@@ -43,12 +44,23 @@ def repair() -> bool:
     for token, anchor, label in (
         (MODULE, MODULE_ANCHOR, "fabric installations module"),
         (SUPPORT, SUPPORT_ANCHOR, "fabric installations support"),
-        (EXECUTE, EXECUTE_ANCHOR, "fabric installations execute"),
     ):
         rendered, applied = insert_once(rendered, token, anchor, label)
         changed = changed or applied
-    if any(rendered.count(token) != 1 for token in (MODULE, SUPPORT, EXECUTE)):
+
+    execute_count = rendered.count(EXECUTE_SIGNATURE)
+    if execute_count == 0:
+        if rendered.count(EXECUTE_ANCHOR) != 1:
+            raise RuntimeError("fabric installations execute anchor must be unique")
+        rendered = rendered.replace(EXECUTE_ANCHOR, EXECUTE + EXECUTE_ANCHOR, 1)
+        changed = True
+    elif execute_count != 1:
+        raise RuntimeError(f"fabric installations execute count invalid: {execute_count}")
+
+    if rendered.count(MODULE) != 1 or rendered.count(SUPPORT) != 1:
         raise RuntimeError("fabric installations wiring invariant failed")
+    if rendered.count(EXECUTE_SIGNATURE) != 1:
+        raise RuntimeError("fabric installations semantic execute invariant failed")
     if changed:
         PRODUCT.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
