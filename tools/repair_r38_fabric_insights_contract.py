@@ -52,13 +52,6 @@ NEW_COUNTER_SORT = '''    ordered.sort_by(|left, right| {
             .then_with(|| left.1.1.cmp(&right.1.1))
     });
 '''
-OLD_MAXIMUM = "    let maximum_latency = latencies.iter().copied().fold(0.0_f64, f64::max);\n"
-NEW_MAXIMUM = '''    let maximum_latency = latencies
-        .iter()
-        .copied()
-        .reduce(f64::max)
-        .unwrap_or(0.0);
-'''
 
 INSIGHTS_MODULE = '''#[path = "native_fabric_insights.rs"]
 mod native_fabric_insights;
@@ -120,19 +113,12 @@ def repair_doctor_api() -> bool:
 
 def repair_insights_source() -> bool:
     source = INSIGHTS.read_text(encoding="utf-8")
-    rendered, counter_changed = replace_once(
+    rendered, changed = replace_once(
         source,
         OLD_COUNTER_SORT,
         NEW_COUNTER_SORT,
         "fabric insights counter ordering",
     )
-    rendered, maximum_changed = replace_once(
-        rendered,
-        OLD_MAXIMUM,
-        NEW_MAXIMUM,
-        "fabric insights maximum latency",
-    )
-    changed = counter_changed or maximum_changed
     if changed:
         INSIGHTS.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
