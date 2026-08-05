@@ -127,8 +127,8 @@ STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
             )''',
         '''            and canonical_stats.count(STATS_USAGE_FLOATS_CANONICAL) == 1
             and STATS_USAGE_FLOATS_LEGACY not in canonical_stats
-            and canonical_stats.count(STATS_COMPACTION_FLOATS_CANONICAL) == 1
-            and STATS_COMPACTION_FLOATS_LEGACY not in canonical_stats''',
+            and canonical_stats.count(STATS_COMPACTION_FLOAT_CANONICAL) == 1
+            and STATS_COMPACTION_FLOAT_LEGACY not in canonical_stats''',
         "stats numeric repair invariant",
     )
     return changed
