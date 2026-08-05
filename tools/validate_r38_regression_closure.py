@@ -18,12 +18,15 @@ STATUS_INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_status_inventory.py"
 HOOK_REPAIR = ROOT / "tools" / "repair_r38_native_hook.py"
 HOOK_OUTPUT_REPAIR = ROOT / "tools" / "repair_r38_hook_output.py"
 HOOK_INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_hook_inventory.py"
+MCP_CATALOG_SYNC = ROOT / "tools" / "sync_r38_mcp_catalog.py"
+MCP_REPAIR = ROOT / "tools" / "repair_r38_native_mcp.py"
 SESSION_HASH_REPAIR = ROOT / "tools" / "repair_r38_session_export_hash.py"
 INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_setup_repair_inventory.py"
 
 TARGETS = (
     "tests/runtime/test_native_status_r38.py",
     "tests/runtime/test_native_hook_r38.py",
+    "tests/runtime/test_native_mcp_r38.py",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_empty_dry_run_matches_python",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_codex_apply_matches_python",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_repair_plan_matches_python",
@@ -90,6 +93,8 @@ def main() -> int:
     run_checked([sys.executable, str(HOOK_REPAIR)], "hook-repair")
     run_checked([sys.executable, str(HOOK_OUTPUT_REPAIR)], "hook-output-repair")
     run_checked([sys.executable, str(HOOK_INVENTORY_ADVANCE)], "hook-inventory-advance")
+    run_checked([sys.executable, str(MCP_CATALOG_SYNC)], "mcp-catalog-sync")
+    run_checked([sys.executable, str(MCP_REPAIR)], "mcp-repair")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-advance")
     run_checked([sys.executable, str(RUNTIME_SELECTOR_REPAIR)], "runtime-selector-contract-repair")
@@ -103,6 +108,8 @@ def main() -> int:
     run_checked([sys.executable, str(HOOK_REPAIR)], "hook-repair-idempotence")
     run_checked([sys.executable, str(HOOK_OUTPUT_REPAIR)], "hook-output-idempotence")
     run_checked([sys.executable, str(HOOK_INVENTORY_ADVANCE)], "hook-inventory-idempotence")
+    run_checked([sys.executable, str(MCP_CATALOG_SYNC)], "mcp-catalog-idempotence")
+    run_checked([sys.executable, str(MCP_REPAIR)], "mcp-repair-idempotence")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair-idempotence")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-idempotence")
     run_checked([sys.executable, str(RUNTIME_SELECTOR_REPAIR)], "runtime-selector-contract-idempotence")
