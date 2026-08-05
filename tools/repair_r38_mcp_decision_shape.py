@@ -27,25 +27,33 @@ CANONICAL = '''    let mut value = body
         Value::String(hash_json(&body)?),
     );
 '''
+VERSION_REMOVE = '    value.remove("version");\n'
+CHANNEL_REMOVE = '    value.remove("channel");\n'
 
 
 def repair() -> bool:
     source = TARGET.read_text(encoding="utf-8")
-    legacy_count = source.count(LEGACY)
-    canonical_count = source.count(CANONICAL)
-    if legacy_count == 1 and canonical_count == 0:
-        TARGET.write_text(
-            source.replace(LEGACY, CANONICAL, 1),
-            encoding="utf-8",
-            newline="\n",
-        )
-        return True
-    if legacy_count == 0 and canonical_count == 1:
+    version_count = source.count(VERSION_REMOVE)
+    channel_count = source.count(CHANNEL_REMOVE)
+    if version_count == 1 and channel_count == 1:
         return False
-    raise RuntimeError(
-        "native MCP decision shape is neither one legacy nor one canonical block: "
-        f"legacy={legacy_count}, canonical={canonical_count}"
-    )
+    if version_count != 0 or channel_count != 0:
+        raise RuntimeError(
+            "native MCP decision shape is partially canonical: "
+            f"version_remove={version_count}, channel_remove={channel_count}"
+        )
+
+    legacy_count = source.count(LEGACY)
+    if legacy_count != 1:
+        raise RuntimeError(
+            "native MCP decision legacy block must be unique before repair: "
+            f"legacy={legacy_count}"
+        )
+    rendered = source.replace(LEGACY, CANONICAL, 1)
+    if rendered.count(VERSION_REMOVE) != 1 or rendered.count(CHANNEL_REMOVE) != 1:
+        raise RuntimeError("native MCP decision semantic insertion invariant failed")
+    TARGET.write_text(rendered, encoding="utf-8", newline="\n")
+    return True
 
 
 def main() -> int:
