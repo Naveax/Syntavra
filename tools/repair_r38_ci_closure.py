@@ -105,7 +105,14 @@ def _pytest_command_end(lines: list[str], start: int, powershell: bool) -> int:
 def repair_pytest_status_handoff(path: Path) -> bool:
     source = path.read_text(encoding="utf-8")
     if "pytest-exit-code.txt" not in source:
-        raise RuntimeError(f"pytest status file missing in {path}")
+        stale_status_tokens = (
+            "$LASTEXITCODE" in source
+            or "$pytestStatus" in source
+            or re.search(r"(?<![A-Za-z0-9_])\$\?(?![A-Za-z0-9_])", source) is not None
+        )
+        if stale_status_tokens:
+            raise RuntimeError(f"legacy pytest status token remains without a status file in {path}")
+        return False
     lines = source.splitlines()
     changed = False
 
