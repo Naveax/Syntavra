@@ -4,20 +4,29 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from advance_r38_fabric_route_inventory import advance as advance_inventory
+from advance_r38_fabric_cache_align_inventory import advance as advance_cache_align_inventory
+from advance_r38_fabric_route_inventory import advance as advance_route_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 
-MODULE = '''#[path = "native_fabric_route.rs"]
+CACHE_MODULE = '''#[path = "native_fabric_cache_align.rs"]
+mod native_fabric_cache_align;
+'''
+ROUTE_MODULE = '''#[path = "native_fabric_route.rs"]
 mod native_fabric_route;
 '''
 MODULE_ANCHOR = '''#[path = "native_expansion.rs"]
 mod native_expansion;
 '''
-SUPPORT = "        || native_fabric_route::supports(command)\n"
+CACHE_SUPPORT = "        || native_fabric_cache_align::supports(command)\n"
+ROUTE_SUPPORT = "        || native_fabric_route::supports(command)\n"
 SUPPORT_ANCHOR = "        || native_expansion::supports(command)\n"
-EXECUTE = '''    if native_fabric_route::supports(command) {
+CACHE_EXECUTE = '''    if native_fabric_cache_align::supports(command) {
+        return native_fabric_cache_align::execute(&arguments, state_root).map(Some);
+    }
+'''
+ROUTE_EXECUTE = '''    if native_fabric_route::supports(command) {
         return native_fabric_route::execute(&arguments, state_root).map(Some);
     }
 '''
@@ -43,19 +52,32 @@ def repair() -> bool:
     rendered = source
     changed = False
     for token, anchor, label in (
-        (MODULE, MODULE_ANCHOR, "fabric route module"),
-        (SUPPORT, SUPPORT_ANCHOR, "fabric route support"),
-        (EXECUTE, EXECUTE_ANCHOR, "fabric route execute"),
+        (ROUTE_MODULE, MODULE_ANCHOR, "fabric route module"),
+        (CACHE_MODULE, ROUTE_MODULE, "fabric cache-align module"),
+        (ROUTE_SUPPORT, SUPPORT_ANCHOR, "fabric route support"),
+        (CACHE_SUPPORT, ROUTE_SUPPORT, "fabric cache-align support"),
+        (ROUTE_EXECUTE, EXECUTE_ANCHOR, "fabric route execute"),
+        (CACHE_EXECUTE, ROUTE_EXECUTE, "fabric cache-align execute"),
     ):
         rendered, applied = insert_before(rendered, token, anchor, label)
         changed = changed or applied
 
     invariants = {
-        "module": rendered.count(MODULE),
-        "support": rendered.count(SUPPORT),
-        "execute": rendered.count(EXECUTE),
+        "cache_module": rendered.count(CACHE_MODULE),
+        "cache_support": rendered.count(CACHE_SUPPORT),
+        "cache_execute": rendered.count(CACHE_EXECUTE),
+        "route_module": rendered.count(ROUTE_MODULE),
+        "route_support": rendered.count(ROUTE_SUPPORT),
+        "route_execute": rendered.count(ROUTE_EXECUTE),
     }
-    if invariants != {"module": 1, "support": 1, "execute": 1}:
+    if invariants != {
+        "cache_module": 1,
+        "cache_support": 1,
+        "cache_execute": 1,
+        "route_module": 1,
+        "route_support": 1,
+        "route_execute": 1,
+    }:
         raise RuntimeError(f"fabric route wiring invariant failed: {invariants}")
     if changed:
         TARGET.write_text(rendered, encoding="utf-8", newline="\n")
@@ -64,14 +86,20 @@ def repair() -> bool:
 
 def main() -> int:
     wiring_changed = repair()
-    inventory_changed = advance_inventory()
+    route_inventory_changed = advance_route_inventory()
+    cache_align_inventory_changed = advance_cache_align_inventory()
     print(
         json.dumps(
             {
-                "changed": wiring_changed or inventory_changed,
-                "inventory_changed": inventory_changed,
+                "cache_align_inventory_changed": cache_align_inventory_changed,
+                "changed": (
+                    wiring_changed
+                    or route_inventory_changed
+                    or cache_align_inventory_changed
+                ),
                 "ok": True,
-                "surface": "native-fabric-route",
+                "route_inventory_changed": route_inventory_changed,
+                "surface": "native-fabric-control-plane",
                 "wiring_changed": wiring_changed,
             },
             sort_keys=True,
