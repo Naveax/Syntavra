@@ -95,7 +95,9 @@ def repair_product() -> bool:
 
 
 def repair() -> bool:
-    return repair_host() or repair_product()
+    host_changed = repair_host()
+    product_changed = repair_product()
+    return host_changed or product_changed
 
 
 def main() -> int:
