@@ -37,8 +37,8 @@ def run_checked(argv: list[str], label: str) -> None:
                     "label": label,
                     "argv": argv,
                     "returncode": completed.returncode,
-                    "stdout": completed.stdout[-12000:],
-                    "stderr": completed.stderr[-12000:],
+                    "stdout": completed.stdout[-20000:],
+                    "stderr": completed.stderr[-20000:],
                 },
                 sort_keys=True,
             )
@@ -49,10 +49,11 @@ def main() -> int:
     run_checked([sys.executable, str(RUNTIME_REPAIR)], "repair")
     run_checked(["cargo", "fmt", "--all"], "rustfmt")
     run_checked([sys.executable, str(RUNTIME_REPAIR), "--check"], "repair-idempotence")
-    run_checked(
-        [sys.executable, "-m", "pytest", "-q", *TARGETS],
-        "known-regression-differentials",
-    )
+    for target in TARGETS:
+        run_checked(
+            [sys.executable, "-m", "pytest", "-q", target],
+            f"target:{target}",
+        )
     print(
         json.dumps(
             {
