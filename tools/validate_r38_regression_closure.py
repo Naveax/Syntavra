@@ -14,6 +14,7 @@ SELECTOR_REPAIR = ROOT / "tools" / "repair_r38_selector_option_values.py"
 INSTALL_REPAIR = ROOT / "tools" / "repair_r38_native_install.py"
 STATUS_REPAIR = ROOT / "tools" / "repair_r38_native_status.py"
 STATUS_DEFAULT_REPAIR = ROOT / "tools" / "repair_r38_status_default.py"
+STATUS_INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_status_inventory.py"
 HOOK_REPAIR = ROOT / "tools" / "repair_r38_native_hook.py"
 SESSION_HASH_REPAIR = ROOT / "tools" / "repair_r38_session_export_hash.py"
 INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_setup_repair_inventory.py"
@@ -83,6 +84,7 @@ def main() -> int:
     run_checked([sys.executable, str(INSTALL_REPAIR)], "install-repair")
     run_checked([sys.executable, str(STATUS_REPAIR)], "status-repair")
     run_checked([sys.executable, str(STATUS_DEFAULT_REPAIR)], "status-default-repair")
+    run_checked([sys.executable, str(STATUS_INVENTORY_ADVANCE)], "status-inventory-advance")
     run_checked([sys.executable, str(HOOK_REPAIR)], "hook-repair")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-advance")
@@ -93,6 +95,7 @@ def main() -> int:
     run_checked([sys.executable, str(INSTALL_REPAIR)], "install-repair-idempotence")
     run_checked([sys.executable, str(STATUS_REPAIR)], "status-repair-idempotence")
     run_checked([sys.executable, str(STATUS_DEFAULT_REPAIR)], "status-default-repair-idempotence")
+    run_checked([sys.executable, str(STATUS_INVENTORY_ADVANCE)], "status-inventory-idempotence")
     run_checked([sys.executable, str(HOOK_REPAIR)], "hook-repair-idempotence")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair-idempotence")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-idempotence")
