@@ -52,6 +52,9 @@ jobs:
         if: steps.marker.outputs.present == 'true'
         with:
           components: rustfmt
+      - name: Install runtime test dependencies
+        if: steps.marker.outputs.present == 'true'
+        run: python -m pip install --disable-pip-version-check -e . pytest
       - name: Repair CI closure and malformed native runtime state
         if: steps.marker.outputs.present == 'true'
         run: |
