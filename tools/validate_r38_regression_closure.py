@@ -20,6 +20,7 @@ HOOK_OUTPUT_REPAIR = ROOT / "tools" / "repair_r38_hook_output.py"
 HOOK_INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_hook_inventory.py"
 MCP_CATALOG_SYNC = ROOT / "tools" / "sync_r38_mcp_catalog.py"
 MCP_REPAIR = ROOT / "tools" / "repair_r38_native_mcp.py"
+MCP_INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_mcp_inventory.py"
 SESSION_HASH_REPAIR = ROOT / "tools" / "repair_r38_session_export_hash.py"
 INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_setup_repair_inventory.py"
 
@@ -95,6 +96,7 @@ def main() -> int:
     run_checked([sys.executable, str(HOOK_INVENTORY_ADVANCE)], "hook-inventory-advance")
     run_checked([sys.executable, str(MCP_CATALOG_SYNC)], "mcp-catalog-sync")
     run_checked([sys.executable, str(MCP_REPAIR)], "mcp-repair")
+    run_checked([sys.executable, str(MCP_INVENTORY_ADVANCE)], "mcp-inventory-advance")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-advance")
     run_checked([sys.executable, str(RUNTIME_SELECTOR_REPAIR)], "runtime-selector-contract-repair")
@@ -110,6 +112,7 @@ def main() -> int:
     run_checked([sys.executable, str(HOOK_INVENTORY_ADVANCE)], "hook-inventory-idempotence")
     run_checked([sys.executable, str(MCP_CATALOG_SYNC)], "mcp-catalog-idempotence")
     run_checked([sys.executable, str(MCP_REPAIR)], "mcp-repair-idempotence")
+    run_checked([sys.executable, str(MCP_INVENTORY_ADVANCE)], "mcp-inventory-idempotence")
     run_checked([sys.executable, str(SESSION_HASH_REPAIR)], "session-export-hash-repair-idempotence")
     run_checked([sys.executable, str(INVENTORY_ADVANCE)], "setup-repair-inventory-idempotence")
     run_checked([sys.executable, str(RUNTIME_SELECTOR_REPAIR)], "runtime-selector-contract-idempotence")
