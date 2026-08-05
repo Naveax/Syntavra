@@ -81,38 +81,36 @@ def repair_init_selector_contract() -> bool:
         f"SINGLE_SEGMENT_PATH_CANONICAL = (\n    '{canonical_single}'\n)",
         "init single-segment repair contract",
     )
-    changed |= replace_exact(
-        SELECTOR,
-        legacy_single,
-        canonical_single,
-        "init single-segment selector route",
+
+    source = SELECTOR.read_text(encoding="utf-8")
+    legacy_count = source.count(legacy_single)
+    canonical_count = source.count(canonical_single)
+    if legacy_count == 1 and canonical_count == 0:
+        source = source.replace(legacy_single, canonical_single, 1)
+        SELECTOR.write_text(source, encoding="utf-8", newline="\n")
+        changed = True
+    elif legacy_count != 0 or canonical_count != 1:
+        raise RuntimeError(
+            "init single-segment selector invariant failed: "
+            f"legacy={legacy_count}, canonical={canonical_count}"
+        )
+
+    source = SELECTOR.read_text(encoding="utf-8")
+    required_tokens = (
+        '"--skill-root"',
+        '"--host"',
+        '"--mcp-profile"',
+        'value.starts_with("--skill-root=")',
+        'value.starts_with("--host=")',
+        'value.starts_with("--mcp-profile=")',
+        'value.starts_with("--codex-home=")',
+        'value.starts_with("--rollout=")',
+        'value.starts_with("--state-file=")',
+        'value.starts_with("--session-hint=")',
     )
-    changed |= replace_exact(
-        SELECTOR,
-        '''                | "--state-root"
-                | "--budget"''',
-        '''                | "--state-root"
-                | "--skill-root"
-                | "--host"
-                | "--budget"''',
-        "selector value-taking global options",
-    )
-    changed |= replace_exact(
-        SELECTOR,
-        '''        if value.starts_with("--project=")
-            || value.starts_with("--state-root=")
-            || value.starts_with("--budget=")''',
-        '''        if value.starts_with("--project=")
-            || value.starts_with("--state-root=")
-            || value.starts_with("--skill-root=")
-            || value.starts_with("--host=")
-            || value.starts_with("--codex-home=")
-            || value.starts_with("--rollout=")
-            || value.starts_with("--state-file=")
-            || value.starts_with("--session-hint=")
-            || value.starts_with("--budget=")''',
-        "selector equals-form value options",
-    )
+    missing = [token for token in required_tokens if token not in source]
+    if missing:
+        raise RuntimeError(f"selector canonical option tokens missing: {missing}")
     return changed
 
 
@@ -245,7 +243,7 @@ STATS_COMPACTION_FLOAT_CANONICAL = '''        "continuity": {
     rendered, compaction_count = exact_repair(
         rendered,
         STATS_COMPACTION_FLOAT_LEGACY,
-        STATS_COMPACTION_FLOAT_CANONICAL,
+        STATS_COMPACTION_FLOATS_CANONICAL,
         "stats compaction numeric type parity",
     )
     return rendered, changed + usage_count + compaction_count''',
