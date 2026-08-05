@@ -129,7 +129,14 @@ def test_one_shot_runs_known_regression_differentials() -> None:
         text=True,
         timeout=1800,
     )
+    if completed.returncode != 0:
+        if completed.stdout:
+            sys.stdout.write(completed.stdout)
+            sys.stdout.flush()
+        if completed.stderr:
+            sys.stderr.write(completed.stderr)
+            sys.stderr.flush()
     assert completed.returncode == 0, {
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
+        "stdout_tail": completed.stdout[-2000:],
+        "stderr_tail": completed.stderr[-2000:],
     }
