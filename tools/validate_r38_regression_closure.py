@@ -16,6 +16,7 @@ SESSION_HASH_REPAIR = ROOT / "tools" / "repair_r38_session_export_hash.py"
 INVENTORY_ADVANCE = ROOT / "tools" / "advance_r38_setup_repair_inventory.py"
 
 TARGETS = (
+    "tests/runtime/test_native_status_default_diagnostic_r38.py",
     "tests/runtime/test_native_status_r38.py",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_empty_dry_run_matches_python",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_codex_apply_matches_python",
