@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_REPAIR = ROOT / "tools" / "repair_r38_runtime_regressions.py"
 
 TARGETS = (
+    "tests/runtime/test_native_operator_lifecycle_r38.py",
     "tests/runtime/test_manifest_refresh_contract.py",
     "tests/runtime/test_native_context_governor_r38.py",
     "tests/runtime/test_native_host_r38.py",
@@ -17,7 +18,6 @@ TARGETS = (
     "tests/runtime/test_native_session_public_r38.py::test_native_session_import_explicit_id_matches_python_without_quarantine",
     "tests/runtime/test_native_structural_r38.py::test_native_structural_fresh_python_symbol_index_matches_python",
     "tests/runtime/test_native_memory_r38.py",
-    "tests/runtime/test_native_operator_lifecycle_r38.py",
 )
 
 
@@ -33,10 +33,10 @@ def run_checked(argv: list[str], label: str) -> None:
     if completed.returncode != 0:
         payload = {
             "code": "R38_TARGETED_VALIDATION_FAILED",
-            "label": label,
             "returncode": completed.returncode,
-            "stdout_tail": completed.stdout[-4000:],
-            "stderr_tail": completed.stderr[-4000:],
+            "stdout_tail": completed.stdout[-2500:],
+            "stderr_tail": completed.stderr[-2500:],
+            "failed_target": label,
         }
         raise RuntimeError(json.dumps(payload, sort_keys=True))
 
