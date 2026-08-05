@@ -27,16 +27,22 @@ def advance() -> bool:
         native = sorted([*native, *ROUTES])
         changed = True
     elif present == (True, True):
-        if len(native) != TARGET_COUNT:
+        if len(native) < TARGET_COUNT:
             raise RuntimeError(
-                f"setup/repair inventory already present but native count is {len(native)}, expected {TARGET_COUNT}"
+                f"setup/repair inventory is present below its certified floor: "
+                f"native count is {len(native)}, minimum {TARGET_COUNT}"
             )
         changed = False
     else:
         raise RuntimeError(f"partial setup/repair inventory state is forbidden: {present}")
 
-    if len(native) != TARGET_COUNT or native != sorted(set(native)):
-        raise RuntimeError("setup/repair inventory target must be 134 sorted unique routes")
+    if len(native) < TARGET_COUNT or native != sorted(set(native)):
+        raise RuntimeError(
+            "setup/repair inventory must remain sorted, unique and at or above the 134-route certified floor"
+        )
+    if any(route not in native for route in ROUTES):
+        raise RuntimeError("setup/repair certified routes are missing after inventory advance")
+
     rust["native_public_commands"] = native
     if changed:
         CONTRACT.write_text(
@@ -49,11 +55,14 @@ def advance() -> bool:
 
 def main() -> int:
     changed = advance()
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    native_count = len(contract["rust_surface"]["native_public_commands"])
     print(
         json.dumps(
             {
                 "changed": changed,
-                "native_public_command_target": TARGET_COUNT,
+                "certified_floor": TARGET_COUNT,
+                "native_public_command_count": native_count,
                 "ok": True,
                 "routes": list(ROUTES),
             },
