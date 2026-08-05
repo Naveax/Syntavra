@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::pedantic)]
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -39,47 +38,427 @@ struct HostSpec {
 }
 
 const HOSTS: &[HostSpec] = &[
-    HostSpec { host: "claude-code", display_name: "Claude Code", pre_hook: true, post_hook: true, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: true, verified: true, project_markers: &[".claude"], user_markers: &[".claude"], config_path: ".claude/settings.json", skill_path: ".claude/skills/syntavra", stream_capture: true, notes: &["hook-enforced", "mcp", "stream-capture"] },
-    HostSpec { host: "codex", display_name: "OpenAI Codex", pre_hook: false, post_hook: false, result_replacement: false, mcp: true, proxy: false, session_events: true, usage_telemetry: true, background_jobs: true, native_skill: true, verified: true, project_markers: &[".codex"], user_markers: &[".codex"], config_path: ".codex/mcp.json", skill_path: ".codex/skills/syntavra", stream_capture: false, notes: &["mcp", "native-skill", "session-events"] },
-    HostSpec { host: "gemini-cli", display_name: "Gemini CLI", pre_hook: true, post_hook: true, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: true, background_jobs: true, native_skill: true, verified: true, project_markers: &[".gemini", "gemini-extension.json"], user_markers: &[".gemini"], config_path: ".gemini/settings.json", skill_path: ".gemini/skills/syntavra", stream_capture: true, notes: &["hook-enforced", "usage-telemetry", "stream-capture"] },
-    HostSpec { host: "vscode-copilot", display_name: "VS Code / GitHub Copilot", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: true, verified: true, project_markers: &[".vscode", ".github/copilot-instructions.md"], user_markers: &[], config_path: ".vscode/mcp.json", skill_path: ".github/skills/syntavra", stream_capture: false, notes: &["mcp", "repository-instructions"] },
-    HostSpec { host: "jetbrains-copilot", display_name: "JetBrains / GitHub Copilot", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: false, verified: false, project_markers: &[".idea"], user_markers: &[".config/JetBrains"], config_path: ".idea/mcp.json", skill_path: ".github/skills/syntavra", stream_capture: false, notes: &["mcp", "repository-instructions"] },
-    HostSpec { host: "cursor", display_name: "Cursor", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: false, verified: true, project_markers: &[".cursor"], user_markers: &[".cursor"], config_path: ".cursor/mcp.json", skill_path: ".cursor/rules/syntavra.mdc", stream_capture: false, notes: &["mcp", "rules"] },
-    HostSpec { host: "windsurf", display_name: "Windsurf", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: true, verified: true, project_markers: &[".windsurf"], user_markers: &[".codeium/windsurf"], config_path: ".windsurf/mcp.json", skill_path: ".windsurf/skills/syntavra", stream_capture: false, notes: &["mcp", "native-skill"] },
-    HostSpec { host: "opencode", display_name: "OpenCode", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: true, session_events: true, usage_telemetry: true, background_jobs: true, native_skill: true, verified: true, project_markers: &[".opencode", "opencode.json"], user_markers: &[".config/opencode"], config_path: ".opencode/opencode.json", skill_path: ".opencode/skills/syntavra", stream_capture: true, notes: &["mcp", "proxy", "stream-capture"] },
-    HostSpec { host: "cline", display_name: "Cline", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: false, verified: true, project_markers: &[".cline", ".clinerules"], user_markers: &[".cline"], config_path: ".cline/mcp_settings.json", skill_path: ".clinerules/00-syntavra.md", stream_capture: false, notes: &["mcp", "rules"] },
-    HostSpec { host: "roo-code", display_name: "Roo Code", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: false, verified: false, project_markers: &[".roo", ".roomodes"], user_markers: &[".roo"], config_path: ".roo/mcp.json", skill_path: "AGENTS.md", stream_capture: false, notes: &["mcp", "agents-instructions"] },
-    HostSpec { host: "qwen-code", display_name: "Qwen Code", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: true, background_jobs: true, native_skill: true, verified: false, project_markers: &[".qwen"], user_markers: &[".qwen"], config_path: ".qwen/mcp.json", skill_path: ".qwen/skills/syntavra", stream_capture: false, notes: &["mcp", "native-skill", "usage-telemetry"] },
-    HostSpec { host: "kiro", display_name: "Kiro CLI", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: true, verified: false, project_markers: &[".kiro"], user_markers: &[".kiro"], config_path: ".kiro/settings/mcp.json", skill_path: ".kiro/skills/syntavra", stream_capture: false, notes: &["mcp", "native-skill", "steering"] },
-    HostSpec { host: "zed", display_name: "Zed", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: false, verified: false, project_markers: &[".zed"], user_markers: &[".config/zed"], config_path: ".zed/settings.json", skill_path: "AGENTS.md", stream_capture: false, notes: &["mcp", "agents-instructions"] },
-    HostSpec { host: "pi", display_name: "Pi Coding Agent", pre_hook: false, post_hook: false, result_replacement: false, mcp: false, proxy: false, session_events: false, usage_telemetry: false, background_jobs: false, native_skill: true, verified: false, project_markers: &[".pi"], user_markers: &[".pi/agent"], config_path: ".pi/settings.json", skill_path: ".pi/skills/syntavra", stream_capture: false, notes: &["native-skill", "extension-capable", "instruction-only-adapter"] },
-    HostSpec { host: "omp", display_name: "Oh My Pi", pre_hook: false, post_hook: false, result_replacement: false, mcp: false, proxy: false, session_events: false, usage_telemetry: false, background_jobs: false, native_skill: true, verified: false, project_markers: &[".omp"], user_markers: &[".omp/agent"], config_path: ".omp/agent/config.yml", skill_path: ".omp/skills/syntavra", stream_capture: false, notes: &["native-skill", "mcp-capable-host", "instruction-only-adapter"] },
-    HostSpec { host: "openclaw", display_name: "OpenClaw", pre_hook: false, post_hook: false, result_replacement: false, mcp: false, proxy: false, session_events: false, usage_telemetry: false, background_jobs: false, native_skill: true, verified: false, project_markers: &[".openclaw", "openclaw.json"], user_markers: &[".openclaw"], config_path: "openclaw.json", skill_path: "skills/syntavra", stream_capture: false, notes: &["workspace-skill", "plugin-compatible", "instruction-only-adapter"] },
-    HostSpec { host: "aider", display_name: "Aider", pre_hook: false, post_hook: false, result_replacement: false, mcp: false, proxy: false, session_events: false, usage_telemetry: false, background_jobs: false, native_skill: false, verified: false, project_markers: &[".aider.conf.yml"], user_markers: &[], config_path: "", skill_path: "AGENTS.md", stream_capture: false, notes: &["instruction-only"] },
-    HostSpec { host: "continue", display_name: "Continue", pre_hook: false, post_hook: false, result_replacement: true, mcp: true, proxy: false, session_events: true, usage_telemetry: false, background_jobs: true, native_skill: false, verified: true, project_markers: &[".continue"], user_markers: &[".continue"], config_path: ".continue/mcp.json", skill_path: ".continue/rules/00-syntavra.md", stream_capture: false, notes: &["mcp", "rules"] },
+    HostSpec {
+        host: "claude-code",
+        display_name: "Claude Code",
+        pre_hook: true,
+        post_hook: true,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: true,
+        verified: true,
+        project_markers: &[".claude"],
+        user_markers: &[".claude"],
+        config_path: ".claude/settings.json",
+        skill_path: ".claude/skills/syntavra",
+        stream_capture: true,
+        notes: &["hook-enforced", "mcp", "stream-capture"],
+    },
+    HostSpec {
+        host: "codex",
+        display_name: "OpenAI Codex",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: false,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: true,
+        background_jobs: true,
+        native_skill: true,
+        verified: true,
+        project_markers: &[".codex"],
+        user_markers: &[".codex"],
+        config_path: ".codex/mcp.json",
+        skill_path: ".codex/skills/syntavra",
+        stream_capture: false,
+        notes: &["mcp", "native-skill", "session-events"],
+    },
+    HostSpec {
+        host: "gemini-cli",
+        display_name: "Gemini CLI",
+        pre_hook: true,
+        post_hook: true,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: true,
+        background_jobs: true,
+        native_skill: true,
+        verified: true,
+        project_markers: &[".gemini", "gemini-extension.json"],
+        user_markers: &[".gemini"],
+        config_path: ".gemini/settings.json",
+        skill_path: ".gemini/skills/syntavra",
+        stream_capture: true,
+        notes: &["hook-enforced", "usage-telemetry", "stream-capture"],
+    },
+    HostSpec {
+        host: "vscode-copilot",
+        display_name: "VS Code / GitHub Copilot",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: true,
+        verified: true,
+        project_markers: &[".vscode", ".github/copilot-instructions.md"],
+        user_markers: &[],
+        config_path: ".vscode/mcp.json",
+        skill_path: ".github/skills/syntavra",
+        stream_capture: false,
+        notes: &["mcp", "repository-instructions"],
+    },
+    HostSpec {
+        host: "jetbrains-copilot",
+        display_name: "JetBrains / GitHub Copilot",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: false,
+        verified: false,
+        project_markers: &[".idea"],
+        user_markers: &[".config/JetBrains"],
+        config_path: ".idea/mcp.json",
+        skill_path: ".github/skills/syntavra",
+        stream_capture: false,
+        notes: &["mcp", "repository-instructions"],
+    },
+    HostSpec {
+        host: "cursor",
+        display_name: "Cursor",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: false,
+        verified: true,
+        project_markers: &[".cursor"],
+        user_markers: &[".cursor"],
+        config_path: ".cursor/mcp.json",
+        skill_path: ".cursor/rules/syntavra.mdc",
+        stream_capture: false,
+        notes: &["mcp", "rules"],
+    },
+    HostSpec {
+        host: "windsurf",
+        display_name: "Windsurf",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: true,
+        verified: true,
+        project_markers: &[".windsurf"],
+        user_markers: &[".codeium/windsurf"],
+        config_path: ".windsurf/mcp.json",
+        skill_path: ".windsurf/skills/syntavra",
+        stream_capture: false,
+        notes: &["mcp", "native-skill"],
+    },
+    HostSpec {
+        host: "opencode",
+        display_name: "OpenCode",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: true,
+        session_events: true,
+        usage_telemetry: true,
+        background_jobs: true,
+        native_skill: true,
+        verified: true,
+        project_markers: &[".opencode", "opencode.json"],
+        user_markers: &[".config/opencode"],
+        config_path: ".opencode/opencode.json",
+        skill_path: ".opencode/skills/syntavra",
+        stream_capture: true,
+        notes: &["mcp", "proxy", "stream-capture"],
+    },
+    HostSpec {
+        host: "cline",
+        display_name: "Cline",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: false,
+        verified: true,
+        project_markers: &[".cline", ".clinerules"],
+        user_markers: &[".cline"],
+        config_path: ".cline/mcp_settings.json",
+        skill_path: ".clinerules/00-syntavra.md",
+        stream_capture: false,
+        notes: &["mcp", "rules"],
+    },
+    HostSpec {
+        host: "roo-code",
+        display_name: "Roo Code",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: false,
+        verified: false,
+        project_markers: &[".roo", ".roomodes"],
+        user_markers: &[".roo"],
+        config_path: ".roo/mcp.json",
+        skill_path: "AGENTS.md",
+        stream_capture: false,
+        notes: &["mcp", "agents-instructions"],
+    },
+    HostSpec {
+        host: "qwen-code",
+        display_name: "Qwen Code",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: true,
+        background_jobs: true,
+        native_skill: true,
+        verified: false,
+        project_markers: &[".qwen"],
+        user_markers: &[".qwen"],
+        config_path: ".qwen/mcp.json",
+        skill_path: ".qwen/skills/syntavra",
+        stream_capture: false,
+        notes: &["mcp", "native-skill", "usage-telemetry"],
+    },
+    HostSpec {
+        host: "kiro",
+        display_name: "Kiro CLI",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: true,
+        verified: false,
+        project_markers: &[".kiro"],
+        user_markers: &[".kiro"],
+        config_path: ".kiro/settings/mcp.json",
+        skill_path: ".kiro/skills/syntavra",
+        stream_capture: false,
+        notes: &["mcp", "native-skill", "steering"],
+    },
+    HostSpec {
+        host: "zed",
+        display_name: "Zed",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: false,
+        verified: false,
+        project_markers: &[".zed"],
+        user_markers: &[".config/zed"],
+        config_path: ".zed/settings.json",
+        skill_path: "AGENTS.md",
+        stream_capture: false,
+        notes: &["mcp", "agents-instructions"],
+    },
+    HostSpec {
+        host: "pi",
+        display_name: "Pi Coding Agent",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: false,
+        mcp: false,
+        proxy: false,
+        session_events: false,
+        usage_telemetry: false,
+        background_jobs: false,
+        native_skill: true,
+        verified: false,
+        project_markers: &[".pi"],
+        user_markers: &[".pi/agent"],
+        config_path: ".pi/settings.json",
+        skill_path: ".pi/skills/syntavra",
+        stream_capture: false,
+        notes: &[
+            "native-skill",
+            "extension-capable",
+            "instruction-only-adapter",
+        ],
+    },
+    HostSpec {
+        host: "omp",
+        display_name: "Oh My Pi",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: false,
+        mcp: false,
+        proxy: false,
+        session_events: false,
+        usage_telemetry: false,
+        background_jobs: false,
+        native_skill: true,
+        verified: false,
+        project_markers: &[".omp"],
+        user_markers: &[".omp/agent"],
+        config_path: ".omp/agent/config.yml",
+        skill_path: ".omp/skills/syntavra",
+        stream_capture: false,
+        notes: &[
+            "native-skill",
+            "mcp-capable-host",
+            "instruction-only-adapter",
+        ],
+    },
+    HostSpec {
+        host: "openclaw",
+        display_name: "OpenClaw",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: false,
+        mcp: false,
+        proxy: false,
+        session_events: false,
+        usage_telemetry: false,
+        background_jobs: false,
+        native_skill: true,
+        verified: false,
+        project_markers: &[".openclaw", "openclaw.json"],
+        user_markers: &[".openclaw"],
+        config_path: "openclaw.json",
+        skill_path: "skills/syntavra",
+        stream_capture: false,
+        notes: &[
+            "workspace-skill",
+            "plugin-compatible",
+            "instruction-only-adapter",
+        ],
+    },
+    HostSpec {
+        host: "aider",
+        display_name: "Aider",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: false,
+        mcp: false,
+        proxy: false,
+        session_events: false,
+        usage_telemetry: false,
+        background_jobs: false,
+        native_skill: false,
+        verified: false,
+        project_markers: &[".aider.conf.yml"],
+        user_markers: &[],
+        config_path: "",
+        skill_path: "AGENTS.md",
+        stream_capture: false,
+        notes: &["instruction-only"],
+    },
+    HostSpec {
+        host: "continue",
+        display_name: "Continue",
+        pre_hook: false,
+        post_hook: false,
+        result_replacement: true,
+        mcp: true,
+        proxy: false,
+        session_events: true,
+        usage_telemetry: false,
+        background_jobs: true,
+        native_skill: false,
+        verified: true,
+        project_markers: &[".continue"],
+        user_markers: &[".continue"],
+        config_path: ".continue/mcp.json",
+        skill_path: ".continue/rules/00-syntavra.md",
+        stream_capture: false,
+        notes: &["mcp", "rules"],
+    },
 ];
 
 const MINIMAL_TOOLS: &[&str] = &[
-    "syntavra.status", "syntavra.inspect.map", "syntavra.output.capture",
-    "syntavra.output.search", "syntavra.output.reveal",
-    "syntavra.session.semantic_context", "syntavra.fabric.route",
+    "syntavra.status",
+    "syntavra.inspect.map",
+    "syntavra.output.capture",
+    "syntavra.output.search",
+    "syntavra.output.reveal",
+    "syntavra.session.semantic_context",
+    "syntavra.fabric.route",
     "syntavra.fabric.doctor",
 ];
 
 const BALANCED_TOOLS: &[&str] = &[
-    "syntavra.status", "syntavra.inspect.map", "syntavra.output.capture",
-    "syntavra.output.search", "syntavra.output.reveal",
-    "syntavra.session.semantic_context", "syntavra.fabric.route",
-    "syntavra.fabric.doctor", "syntavra.host.detect", "syntavra.inspect.impact",
-    "syntavra.inspect.source", "syntavra.inspect.range", "syntavra.context.evaluate",
-    "syntavra.output.verify", "syntavra.output.stats", "syntavra.session.open",
-    "syntavra.session.append", "syntavra.session.search", "syntavra.session.context",
-    "syntavra.session.compact", "syntavra.session.verify", "syntavra.sandbox.plan",
-    "syntavra.sandbox.execute", "syntavra.process.submit", "syntavra.process.completions",
-    "syntavra.fabric.profile", "syntavra.fabric.insights",
-    "syntavra.provider.capabilities", "syntavra.provider.prepare",
-    "syntavra.provider.capture", "syntavra.provider.replay", "syntavra.provider.verify",
-    "syntavra.provider.stats", "syntavra.data.route", "syntavra.ecosystem.capabilities",
+    "syntavra.status",
+    "syntavra.inspect.map",
+    "syntavra.output.capture",
+    "syntavra.output.search",
+    "syntavra.output.reveal",
+    "syntavra.session.semantic_context",
+    "syntavra.fabric.route",
+    "syntavra.fabric.doctor",
+    "syntavra.host.detect",
+    "syntavra.inspect.impact",
+    "syntavra.inspect.source",
+    "syntavra.inspect.range",
+    "syntavra.context.evaluate",
+    "syntavra.output.verify",
+    "syntavra.output.stats",
+    "syntavra.session.open",
+    "syntavra.session.append",
+    "syntavra.session.search",
+    "syntavra.session.context",
+    "syntavra.session.compact",
+    "syntavra.session.verify",
+    "syntavra.sandbox.plan",
+    "syntavra.sandbox.execute",
+    "syntavra.process.submit",
+    "syntavra.process.completions",
+    "syntavra.fabric.profile",
+    "syntavra.fabric.insights",
+    "syntavra.provider.capabilities",
+    "syntavra.provider.prepare",
+    "syntavra.provider.capture",
+    "syntavra.provider.replay",
+    "syntavra.provider.verify",
+    "syntavra.provider.stats",
+    "syntavra.data.route",
+    "syntavra.ecosystem.capabilities",
     "syntavra.context.pack",
 ];
 
@@ -151,7 +530,11 @@ fn host_spec(host: &str) -> Option<&'static HostSpec> {
 fn detected_hosts(project: &Path) -> Vec<String> {
     let mut values = HOSTS
         .iter()
-        .filter(|spec| spec.project_markers.iter().any(|marker| project.join(marker).exists()))
+        .filter(|spec| {
+            spec.project_markers
+                .iter()
+                .any(|marker| project.join(marker).exists())
+        })
         .map(|spec| spec.host.to_owned())
         .collect::<Vec<_>>();
     values.sort();
@@ -176,7 +559,12 @@ fn skill_root(project: &Path) -> PathBuf {
 fn profile(profile: &str) -> Result<Value, String> {
     let (tools, max_active, budget, timeout) = match profile {
         "minimal" => (Value::from(MINIMAL_TOOLS), MINIMAL_TOOLS.len(), 800, 120),
-        "balanced" => (Value::from(BALANCED_TOOLS), BALANCED_TOOLS.len(), 2_000, 180),
+        "balanced" => (
+            Value::from(BALANCED_TOOLS),
+            BALANCED_TOOLS.len(),
+            2_000,
+            180,
+        ),
         "audit" => (json!(["*"]), 128, 16_000, 300),
         _ => return Err(format!("unknown MCP profile: {profile}")),
     };
@@ -217,7 +605,9 @@ fn capabilities(spec: &HostSpec) -> Value {
 
 fn negotiation(spec: &HostSpec, project: &Path, installed: bool) -> Result<Value, String> {
     let mut arguments = vec![
-        "host".to_owned(), "negotiate".to_owned(), "--host-name".to_owned(),
+        "host".to_owned(),
+        "negotiate".to_owned(),
+        "--host-name".to_owned(),
         spec.host.to_owned(),
     ];
     if installed {
@@ -264,9 +654,10 @@ fn recursive_merge(base: &Value, overlay: &Value) -> Value {
         (Value::Object(base), Value::Object(overlay)) => {
             let mut result = base.clone();
             for (key, value) in overlay {
-                let merged = result
-                    .get(key)
-                    .map_or_else(|| value.clone(), |existing| recursive_merge(existing, value));
+                let merged = result.get(key).map_or_else(
+                    || value.clone(),
+                    |existing| recursive_merge(existing, value),
+                );
                 result.insert(key.clone(), merged);
             }
             Value::Object(result)
@@ -326,25 +717,82 @@ fn install_plan(
     profile(profile_name)?;
     let detected = detected_hosts(project);
     let targets = if all_hosts {
-        let mut values = HOSTS.iter().map(|spec| spec.host.to_owned()).collect::<Vec<_>>();
+        let mut values = HOSTS
+            .iter()
+            .map(|spec| spec.host.to_owned())
+            .collect::<Vec<_>>();
         values.sort();
         values
     } else {
         detected.clone()
     };
     let mut actions = vec![
-        action("backup", "existing-config", state.join("host-installations"), true, "per-host backup-first transaction"),
-        action("write", "runtime-config", state.join("config.json"), true, "canonical pre-release config"),
-        action("write", "product-surface", state.join("product.json"), true, "four-command mental model"),
-        action("write", &format!("mcp-profile:{profile_name}"), state.join("mcp-profile.json"), true, "bounded tool visibility"),
-        action("write", "platform-adapters", state.join("platform-adapters.json"), true, "concrete host config candidates"),
-        action("install", "local-proxy", state.join("proxy"), true, "credential-isolated provider gateway"),
+        action(
+            "backup",
+            "existing-config",
+            state.join("host-installations"),
+            true,
+            "per-host backup-first transaction",
+        ),
+        action(
+            "write",
+            "runtime-config",
+            state.join("config.json"),
+            true,
+            "canonical pre-release config",
+        ),
+        action(
+            "write",
+            "product-surface",
+            state.join("product.json"),
+            true,
+            "four-command mental model",
+        ),
+        action(
+            "write",
+            &format!("mcp-profile:{profile_name}"),
+            state.join("mcp-profile.json"),
+            true,
+            "bounded tool visibility",
+        ),
+        action(
+            "write",
+            "platform-adapters",
+            state.join("platform-adapters.json"),
+            true,
+            "concrete host config candidates",
+        ),
+        action(
+            "install",
+            "local-proxy",
+            state.join("proxy"),
+            true,
+            "credential-isolated provider gateway",
+        ),
     ];
     for host in &targets {
-        actions.push(action("configure-and-verify", host, project.to_path_buf(), true, "atomic native hook/MCP/skill integration"));
+        actions.push(action(
+            "configure-and-verify",
+            host,
+            project.to_path_buf(),
+            true,
+            "atomic native hook/MCP/skill integration",
+        ));
     }
-    actions.push(action("verify", "doctor", project.to_path_buf(), false, "post-install verification"));
-    actions.push(action("record", "installation-receipt", state.join("install-receipt.json"), false, "measured onboarding and rollback evidence"));
+    actions.push(action(
+        "verify",
+        "doctor",
+        project.to_path_buf(),
+        false,
+        "post-install verification",
+    ));
+    actions.push(action(
+        "record",
+        "installation-receipt",
+        state.join("install-receipt.json"),
+        false,
+        "measured onboarding and rollback evidence",
+    ));
     let estimated = (5.0 + actions.len() as f64 * 1.5).min(59.0);
     Ok(json!({
         "version": VERSION,
@@ -439,8 +887,7 @@ fn copy_tree(source: &Path, target: &Path) -> Result<(), String> {
         fs::remove_dir_all(target)
             .map_err(|error| format!("INSTALL_TARGET_REMOVE_FAILED:{error}"))?;
     }
-    fs::create_dir_all(target)
-        .map_err(|error| format!("INSTALL_TARGET_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(target).map_err(|error| format!("INSTALL_TARGET_CREATE_FAILED:{error}"))?;
     let mut entries = fs::read_dir(source)
         .map_err(|error| format!("INSTALL_SOURCE_READ_FAILED:{error}"))?
         .filter_map(Result::ok)
@@ -482,8 +929,8 @@ fn initialize_database(path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("INSTALL_DATABASE_DIRECTORY_FAILED:{error}"))?;
     }
-    let connection = Connection::open(path)
-        .map_err(|error| format!("INSTALL_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("INSTALL_DATABASE_OPEN_FAILED:{error}"))?;
     connection
         .busy_timeout(Duration::from_secs(30))
         .map_err(|error| format!("INSTALL_DATABASE_TIMEOUT_FAILED:{error}"))?;
@@ -605,7 +1052,15 @@ fn apply_host(
     let id = transaction_id(spec.host)?;
     let created_at = now()?;
     let plan = platform_plan(spec, project)?;
-    let mut staged = Vec::<(PathBuf, String, Option<Vec<u8>>, Option<PathBuf>, bool, String, String)>::new();
+    let mut staged = Vec::<(
+        PathBuf,
+        String,
+        Option<Vec<u8>>,
+        Option<PathBuf>,
+        bool,
+        String,
+        String,
+    )>::new();
 
     if !spec.config_path.is_empty() {
         let target = project.join(spec.config_path);
@@ -613,31 +1068,77 @@ fn apply_host(
             return Err(format!("IsADirectoryError: {}", target.to_string_lossy()));
         }
         let existing = if target.is_file() {
-            let text = fs::read_to_string(&target)
-                .map_err(|error| format!("ValueError: host config is not valid JSON: {}: {error}", target.to_string_lossy()))?;
-            let value: Value = serde_json::from_str(&text)
-                .map_err(|error| format!("ValueError: host config is not valid JSON: {}: {error}", target.to_string_lossy()))?;
+            let text = fs::read_to_string(&target).map_err(|error| {
+                format!(
+                    "ValueError: host config is not valid JSON: {}: {error}",
+                    target.to_string_lossy()
+                )
+            })?;
+            let value: Value = serde_json::from_str(&text).map_err(|error| {
+                format!(
+                    "ValueError: host config is not valid JSON: {}: {error}",
+                    target.to_string_lossy()
+                )
+            })?;
             if !value.is_object() {
-                return Err(format!("TypeError: host config root must be an object: {}", target.to_string_lossy()));
+                return Err(format!(
+                    "TypeError: host config root must be an object: {}",
+                    target.to_string_lossy()
+                ));
             }
             value
         } else {
             json!({})
         };
         let payload = canonical_bytes(&recursive_merge(&existing, &overlay(spec)))?;
-        staged.push((target.clone(), "json-config".to_owned(), Some(payload), None, target.exists(), digest(&target)?, spec.config_path.to_owned()));
+        staged.push((
+            target.clone(),
+            "json-config".to_owned(),
+            Some(payload),
+            None,
+            target.exists(),
+            digest(&target)?,
+            spec.config_path.to_owned(),
+        ));
     }
 
     if !spec.skill_path.is_empty() {
         let target = project.join(spec.skill_path);
-        let text_target = target.extension().and_then(|value| value.to_str()).is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "md" | "mdc" | "txt")) || target.file_name().and_then(|value| value.to_str()) == Some("AGENTS.md");
+        let text_target = target
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| {
+                matches!(value.to_ascii_lowercase().as_str(), "md" | "mdc" | "txt")
+            })
+            || target.file_name().and_then(|value| value.to_str()) == Some("AGENTS.md");
         if text_target {
-            let existing = if target.is_file() { fs::read_to_string(&target).unwrap_or_default() } else { String::new() };
-            let source = fs::read_to_string(source_skill.join("SKILL.md"))
-                .map_err(|error| format!("FileNotFoundError: Syntavra bundled skill is unavailable: {error}"))?;
-            staged.push((target.clone(), "managed-text".to_owned(), Some(managed_text(&existing, &source).into_bytes()), None, target.exists(), digest(&target)?, spec.skill_path.to_owned()));
+            let existing = if target.is_file() {
+                fs::read_to_string(&target).unwrap_or_default()
+            } else {
+                String::new()
+            };
+            let source = fs::read_to_string(source_skill.join("SKILL.md")).map_err(|error| {
+                format!("FileNotFoundError: Syntavra bundled skill is unavailable: {error}")
+            })?;
+            staged.push((
+                target.clone(),
+                "managed-text".to_owned(),
+                Some(managed_text(&existing, &source).into_bytes()),
+                None,
+                target.exists(),
+                digest(&target)?,
+                spec.skill_path.to_owned(),
+            ));
         } else {
-            staged.push((target.clone(), "skill-directory".to_owned(), None, Some(source_skill.to_path_buf()), target.exists(), digest(&target)?, spec.skill_path.to_owned()));
+            staged.push((
+                target.clone(),
+                "skill-directory".to_owned(),
+                None,
+                Some(source_skill.to_path_buf()),
+                target.exists(),
+                digest(&target)?,
+                spec.skill_path.to_owned(),
+            ));
         }
     }
 
@@ -647,12 +1148,21 @@ fn apply_host(
             let after_hash = if let Some(bytes) = bytes {
                 sha256_hex(&bytes)
             } else {
-                digest(source.as_deref().ok_or_else(|| "INSTALL_SKILL_SOURCE_MISSING".to_owned())?)?
+                digest(
+                    source
+                        .as_deref()
+                        .ok_or_else(|| "INSTALL_SKILL_SOURCE_MISSING".to_owned())?,
+                )?
             };
             changes.push(Change {
                 path: relative,
                 kind,
-                action: if existed { "would-update" } else { "would-create" }.to_owned(),
+                action: if existed {
+                    "would-update"
+                } else {
+                    "would-create"
+                }
+                .to_owned(),
                 existed,
                 before_hash,
                 after_hash,
@@ -676,24 +1186,31 @@ fn apply_host(
         .map_err(|error| format!("INSTALL_TRANSACTION_CREATE_FAILED:{error}"))?;
     let mut applied = Vec::<(PathBuf, bool, String)>::new();
     for (target, kind, bytes, source, existed, before_hash, relative) in staged {
-        let backup_path = backup(
-            &target,
-            &transaction.join("backup").join(&relative),
-        )?;
+        let backup_path = backup(&target, &transaction.join("backup").join(&relative))?;
         let result = if let Some(bytes) = bytes {
             atomic_write(&target, &bytes)
         } else {
             copy_tree(
-                source.as_deref().ok_or_else(|| "INSTALL_SKILL_SOURCE_MISSING".to_owned())?,
+                source
+                    .as_deref()
+                    .ok_or_else(|| "INSTALL_SKILL_SOURCE_MISSING".to_owned())?,
                 &target,
             )
         };
         if let Err(error) = result {
             for (path, previously_existed, saved) in applied.into_iter().rev() {
-                if path.is_dir() { let _ = fs::remove_dir_all(&path); } else { let _ = fs::remove_file(&path); }
+                if path.is_dir() {
+                    let _ = fs::remove_dir_all(&path);
+                } else {
+                    let _ = fs::remove_file(&path);
+                }
                 if previously_existed && !saved.is_empty() {
                     let backup_path = Path::new(&saved);
-                    if backup_path.is_dir() { let _ = copy_tree(backup_path, &path); } else { let _ = fs::copy(backup_path, &path); }
+                    if backup_path.is_dir() {
+                        let _ = copy_tree(backup_path, &path);
+                    } else {
+                        let _ = fs::copy(backup_path, &path);
+                    }
                 }
             }
             let _ = fs::remove_dir_all(&transaction);
@@ -713,7 +1230,10 @@ fn apply_host(
     }
     let verification = verify_host(spec, project)?;
     if verification["ok"].as_bool() != Some(true) {
-        return Err(format!("RuntimeError: installation verification failed: {}", verification["reasons"]));
+        return Err(format!(
+            "RuntimeError: installation verification failed: {}",
+            verification["reasons"]
+        ));
     }
     let result = json!({
         "transaction_id": id,
@@ -725,7 +1245,10 @@ fn apply_host(
         "verification": verification,
         "created_at": created_at,
     });
-    atomic_write(&transaction.join("manifest.json"), &canonical_bytes(&result)?)?;
+    atomic_write(
+        &transaction.join("manifest.json"),
+        &canonical_bytes(&result)?,
+    )?;
     let connection = initialize_database(&state.join("host-installations.sqlite3"))?;
     connection.execute(
         "INSERT INTO host_install_transactions(transaction_id,host,scope,root,status,manifest_json,created_at,updated_at) VALUES(?1,?2,'project',?3,'applied',?4,?5,?6)",
@@ -736,22 +1259,34 @@ fn apply_host(
 
 fn rollback_transaction(state: &Path, transaction_id: &str) -> Result<(), String> {
     let connection = initialize_database(&state.join("host-installations.sqlite3"))?;
-    let manifest: String = connection.query_row(
-        "SELECT manifest_json FROM host_install_transactions WHERE transaction_id=?1",
-        [transaction_id],
-        |row| row.get(0),
-    ).map_err(|error| format!("INSTALL_ROLLBACK_LOOKUP_FAILED:{error}"))?;
+    let manifest: String = connection
+        .query_row(
+            "SELECT manifest_json FROM host_install_transactions WHERE transaction_id=?1",
+            [transaction_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| format!("INSTALL_ROLLBACK_LOOKUP_FAILED:{error}"))?;
     let value: Value = serde_json::from_str(&manifest)
         .map_err(|error| format!("INSTALL_ROLLBACK_MANIFEST_INVALID:{error}"))?;
     for change in value["changes"].as_array().into_iter().flatten().rev() {
         let target = Path::new(value["root"].as_str().unwrap_or_default())
             .join(change["path"].as_str().unwrap_or_default());
-        if target.is_dir() { let _ = fs::remove_dir_all(&target); } else { let _ = fs::remove_file(&target); }
+        if target.is_dir() {
+            let _ = fs::remove_dir_all(&target);
+        } else {
+            let _ = fs::remove_file(&target);
+        }
         if change["existed"].as_bool() == Some(true) {
             let saved = Path::new(change["backup_path"].as_str().unwrap_or_default());
-            if saved.is_dir() { copy_tree(saved, &target)?; } else if saved.is_file() {
-                if let Some(parent) = target.parent() { fs::create_dir_all(parent).map_err(|error| format!("INSTALL_ROLLBACK_DIRECTORY_FAILED:{error}"))?; }
-                fs::copy(saved, target).map_err(|error| format!("INSTALL_ROLLBACK_COPY_FAILED:{error}"))?;
+            if saved.is_dir() {
+                copy_tree(saved, &target)?;
+            } else if saved.is_file() {
+                if let Some(parent) = target.parent() {
+                    fs::create_dir_all(parent)
+                        .map_err(|error| format!("INSTALL_ROLLBACK_DIRECTORY_FAILED:{error}"))?;
+                }
+                fs::copy(saved, target)
+                    .map_err(|error| format!("INSTALL_ROLLBACK_COPY_FAILED:{error}"))?;
             }
         }
     }
@@ -764,35 +1299,206 @@ fn rollback_transaction(state: &Path, transaction_id: &str) -> Result<(), String
 
 fn platform_adapter_records() -> Vec<Value> {
     let rows = [
-        ("claude-code", vec!["claude"], vec!["~/.claude/settings.json", ".claude/settings.json"], "plugin+hooks", true, true, true, "primary-certification-target"),
-        ("codex", vec!["codex"], vec!["~/.codex/config.toml", "AGENTS.md"], "skill+mcp", true, false, true, "primary-certification-target"),
-        ("gemini-cli", vec!["gemini"], vec!["~/.gemini/settings.json", "GEMINI.md"], "extension+mcp", true, false, true, "contract-tested"),
-        ("vscode-copilot", vec!["code"], vec![".vscode/mcp.json", ".github/copilot-instructions.md"], "instructions+mcp", true, false, false, "contract-tested"),
-        ("jetbrains-copilot", vec![], vec![".idea/ai-assistant.xml", ".github/copilot-instructions.md"], "instructions+mcp", true, false, false, "contract-tested"),
-        ("cursor", vec!["cursor"], vec![".cursor/rules/syntavra.mdc", ".cursor/mcp.json"], "rules+mcp", true, false, true, "primary-certification-target"),
-        ("windsurf", vec!["windsurf"], vec![".windsurfrules", ".codeium/windsurf/mcp_config.json"], "rules+mcp", true, false, true, "contract-tested"),
-        ("opencode", vec!["opencode"], vec!["opencode.json", "~/.config/opencode/opencode.json"], "config+mcp", true, true, true, "contract-tested"),
-        ("cline", vec![], vec![".clinerules", ".vscode/mcp.json"], "rules+mcp", true, false, true, "contract-tested"),
-        ("roo-code", vec![], vec![".roo/rules/syntavra.md", ".vscode/mcp.json"], "rules+mcp", true, false, true, "contract-tested"),
-        ("qwen-code", vec!["qwen", "qwen-code"], vec!["QWEN.md", "~/.qwen/settings.json"], "agents+mcp", true, false, true, "contract-tested"),
-        ("kiro", vec![], vec![".kiro/steering/syntavra.md", ".kiro/settings/mcp.json"], "steering+mcp", true, false, true, "contract-tested"),
-        ("zed", vec!["zed"], vec![".zed/settings.json", "~/.config/zed/settings.json"], "rules+mcp", true, false, false, "contract-tested"),
-        ("pi", vec!["pi"], vec!["~/.pi/agent/settings.json"], "extension", false, true, true, "contract-tested"),
-        ("omp", vec!["omp"], vec!["~/.config/omp/config.json"], "plugin", false, true, true, "contract-tested"),
-        ("openclaw", vec!["openclaw"], vec!["~/.openclaw/config.json"], "plugin", true, true, true, "contract-tested"),
-        ("aider", vec!["aider"], vec![".aider.conf.yml", "~/.aider.conf.yml"], "env+wrapper", false, false, true, "contract-tested"),
-        ("continue", vec!["continue"], vec![".continue/config.yaml", "~/.continue/config.yaml"], "rules+mcp", true, false, true, "contract-tested"),
+        (
+            "claude-code",
+            vec!["claude"],
+            vec!["~/.claude/settings.json", ".claude/settings.json"],
+            "plugin+hooks",
+            true,
+            true,
+            true,
+            "primary-certification-target",
+        ),
+        (
+            "codex",
+            vec!["codex"],
+            vec!["~/.codex/config.toml", "AGENTS.md"],
+            "skill+mcp",
+            true,
+            false,
+            true,
+            "primary-certification-target",
+        ),
+        (
+            "gemini-cli",
+            vec!["gemini"],
+            vec!["~/.gemini/settings.json", "GEMINI.md"],
+            "extension+mcp",
+            true,
+            false,
+            true,
+            "contract-tested",
+        ),
+        (
+            "vscode-copilot",
+            vec![],
+            vec![".vscode/mcp.json"],
+            "instructions+mcp",
+            true,
+            false,
+            false,
+            "host-specific-marker-contract-tested",
+        ),
+        (
+            "jetbrains-copilot",
+            vec![],
+            vec![".idea/mcp.json"],
+            "instructions+mcp",
+            true,
+            false,
+            false,
+            "host-specific-marker-contract-tested",
+        ),
+        (
+            "cursor",
+            vec!["cursor"],
+            vec![".cursor/rules/syntavra.mdc", ".cursor/mcp.json"],
+            "rules+mcp",
+            true,
+            false,
+            true,
+            "primary-certification-target",
+        ),
+        (
+            "windsurf",
+            vec!["windsurf"],
+            vec![".windsurfrules", ".codeium/windsurf/mcp_config.json"],
+            "rules+mcp",
+            true,
+            false,
+            true,
+            "contract-tested",
+        ),
+        (
+            "opencode",
+            vec!["opencode"],
+            vec!["opencode.json", "~/.config/opencode/opencode.json"],
+            "config+mcp",
+            true,
+            true,
+            true,
+            "contract-tested",
+        ),
+        (
+            "cline",
+            vec![],
+            vec![".clinerules", ".vscode/mcp.json"],
+            "rules+mcp",
+            true,
+            false,
+            true,
+            "contract-tested",
+        ),
+        (
+            "roo-code",
+            vec![],
+            vec![".roo/rules/syntavra.md", ".vscode/mcp.json"],
+            "rules+mcp",
+            true,
+            false,
+            true,
+            "contract-tested",
+        ),
+        (
+            "qwen-code",
+            vec!["qwen", "qwen-code"],
+            vec!["QWEN.md", "~/.qwen/settings.json"],
+            "agents+mcp",
+            true,
+            false,
+            true,
+            "contract-tested",
+        ),
+        (
+            "kiro",
+            vec!["kiro", "kiro-cli", "q"],
+            vec![".kiro/settings/mcp.json", ".kiro/skills/syntavra/SKILL.md"],
+            "mcp+native-skill",
+            true,
+            true,
+            true,
+            "official-path-contract-tested",
+        ),
+        (
+            "zed",
+            vec!["zed"],
+            vec![".zed/settings.json", "~/.config/zed/settings.json"],
+            "rules+mcp",
+            true,
+            false,
+            false,
+            "contract-tested",
+        ),
+        (
+            "pi",
+            vec!["pi"],
+            vec![".pi/settings.json", ".pi/skills/syntavra/SKILL.md"],
+            "native-skill+extension-capable",
+            false,
+            true,
+            true,
+            "official-skill-path-contract-tested",
+        ),
+        (
+            "omp",
+            vec!["omp"],
+            vec![".omp/agent/config.yml", ".omp/skills/syntavra/SKILL.md"],
+            "native-skill+mcp-capable-host",
+            false,
+            true,
+            true,
+            "official-skill-path-contract-tested",
+        ),
+        (
+            "openclaw",
+            vec!["openclaw"],
+            vec![
+                "skills/syntavra/SKILL.md",
+                ".openclaw/skills/syntavra/SKILL.md",
+            ],
+            "workspace-skill+plugin-compatible",
+            false,
+            true,
+            true,
+            "official-skill-path-contract-tested",
+        ),
+        (
+            "aider",
+            vec!["aider"],
+            vec![".aider.conf.yml", "~/.aider.conf.yml"],
+            "env+wrapper",
+            false,
+            false,
+            true,
+            "contract-tested",
+        ),
+        (
+            "continue",
+            vec!["continue"],
+            vec![".continue/config.yaml", "~/.continue/config.yaml"],
+            "rules+mcp",
+            true,
+            false,
+            true,
+            "contract-tested",
+        ),
     ];
-    rows.into_iter().map(|(host, commands, configs, mode, mcp, hooks, continuity, maturity)| json!({
-        "host": host,
-        "detection_commands": commands,
-        "config_candidates": configs,
-        "integration_mode": mode,
-        "supports_mcp": mcp,
-        "supports_hooks": hooks,
-        "supports_session_continuity": continuity,
-        "maturity": maturity,
-    })).collect()
+    rows.into_iter()
+        .map(
+            |(host, commands, configs, mode, mcp, hooks, continuity, maturity)| {
+                json!({
+                    "host": host,
+                    "detection_commands": commands,
+                    "config_candidates": configs,
+                    "integration_mode": mode,
+                    "supports_mcp": mcp,
+                    "supports_hooks": hooks,
+                    "supports_session_continuity": continuity,
+                    "maturity": maturity,
+                })
+            },
+        )
+        .collect()
 }
 
 fn adapter_validation() -> Value {
@@ -804,7 +1510,13 @@ fn adapter_validation() -> Value {
         "mcp_capable": 14,
         "continuity_capable": 15,
         "primary_certification_targets": ["claude-code", "codex", "cursor"],
-        "evidence_levels": {"contract-tested": 15, "primary-certification-target": 3},
+        "evidence_levels": {
+            "contract-tested": 9,
+            "host-specific-marker-contract-tested": 2,
+            "official-path-contract-tested": 1,
+            "official-skill-path-contract-tested": 3,
+            "primary-certification-target": 3
+        },
         "live_boundary": "live adapter certification requires external execution receipts",
     })
 }
@@ -861,9 +1573,15 @@ fn write_bundle(project: &Path, state: &Path, profile_name: &str) -> Result<Valu
     let product = state.join("product.json");
     let mcp = state.join("mcp-profile.json");
     let adapters = state.join("platform-adapters.json");
-    atomic_write(&product, &canonical_bytes(&product_manifest(profile_name)?)?)?;
+    atomic_write(
+        &product,
+        &canonical_bytes(&product_manifest(profile_name)?)?,
+    )?;
     atomic_write(&mcp, &canonical_bytes(&profile(profile_name)?)?)?;
-    atomic_write(&adapters, &canonical_bytes(&json!({"adapters": platform_adapter_records()}))?)?;
+    atomic_write(
+        &adapters,
+        &canonical_bytes(&json!({"adapters": platform_adapter_records()}))?,
+    )?;
     Ok(json!({
         "ok": true,
         "project_root": project.to_string_lossy(),
@@ -872,7 +1590,11 @@ fn write_bundle(project: &Path, state: &Path, profile_name: &str) -> Result<Valu
     }))
 }
 
-pub fn execute(arguments: &[String], project_root: &Path, state_root: &Path) -> Result<Value, String> {
+pub fn execute(
+    arguments: &[String],
+    project_root: &Path,
+    state_root: &Path,
+) -> Result<Value, String> {
     fs::create_dir_all(project_root)
         .map_err(|error| format!("INSTALL_PROJECT_CREATE_FAILED:{error}"))?;
     fs::create_dir_all(state_root)
@@ -881,8 +1603,8 @@ pub fn execute(arguments: &[String], project_root: &Path, state_root: &Path) -> 
         .map_err(|error| format!("INSTALL_PROJECT_RESOLVE_FAILED:{error}"))?;
     let state = fs::canonicalize(state_root)
         .map_err(|error| format!("INSTALL_STATE_RESOLVE_FAILED:{error}"))?;
-    let profile_name = option_value(arguments, "--mcp-profile")?
-        .unwrap_or_else(|| "minimal".to_owned());
+    let profile_name =
+        option_value(arguments, "--mcp-profile")?.unwrap_or_else(|| "minimal".to_owned());
     profile(&profile_name)?;
     let all_hosts = has_flag(arguments, "--all");
     let dry_run = has_flag(arguments, "--dry-run") || !has_flag(arguments, "--apply");
@@ -915,7 +1637,12 @@ pub fn execute(arguments: &[String], project_root: &Path, state_root: &Path) -> 
         match apply_host(spec, &project, &state, &source_skill, dry_run) {
             Ok(value) => {
                 if !dry_run {
-                    transactions.push(value["transaction_id"].as_str().unwrap_or_default().to_owned());
+                    transactions.push(
+                        value["transaction_id"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .to_owned(),
+                    );
                 }
                 host_results.push(value);
             }
@@ -965,7 +1692,10 @@ pub fn execute(arguments: &[String], project_root: &Path, state_root: &Path) -> 
             "host_transactions": transactions,
             "onboarding_claim": "MEASURED_LOCAL_INSTALL_AND_HOST_VERIFICATION",
         });
-        atomic_write(&state.join("install-receipt.json"), &canonical_bytes(&receipt)?)?;
+        atomic_write(
+            &state.join("install-receipt.json"),
+            &canonical_bytes(&receipt)?,
+        )?;
         bundle
     };
 
@@ -995,7 +1725,8 @@ mod tests {
 
     #[test]
     fn detects_only_project_markers() {
-        let root = std::env::temp_dir().join(format!("syntavra-install-detect-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("syntavra-install-detect-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join(".codex")).expect("marker");
         assert_eq!(detected_hosts(&root), vec!["codex"]);

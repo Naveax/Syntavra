@@ -170,6 +170,7 @@ fn command_path(arguments: &[String]) -> Vec<String> {
                 | "--state-root"
                 | "--skill-root"
                 | "--host"
+                | "--mcp-profile"
                 | "--budget"
                 | "--max-tier"
                 | "--codex-home"
@@ -184,6 +185,7 @@ fn command_path(arguments: &[String]) -> Vec<String> {
             || value.starts_with("--state-root=")
             || value.starts_with("--skill-root=")
             || value.starts_with("--host=")
+            || value.starts_with("--mcp-profile=")
             || value.starts_with("--codex-home=")
             || value.starts_with("--rollout=")
             || value.starts_with("--state-file=")
