@@ -49,6 +49,12 @@ def validate_sources() -> None:
             "NativeArtifactStore::open",
         ),
     }
+    required[ROUTE] = (
+        'action if root == "run" && action == "artifact-put"',
+        "fn load_input",
+        "normalize_universal_newlines",
+        "NativeArtifactStore::open",
+    )
     for path, markers in required.items():
         if not path.is_file():
             raise RuntimeError(f"native artifact source is missing: {path}")
