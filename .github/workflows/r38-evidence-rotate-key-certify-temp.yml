@@ -1,9 +1,9 @@
 name: R38 Evidence Rotate-Key Temporary Certifier
 
 on:
-  pull_request:
-    branches: [main]
-    types: [edited]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,10 +14,6 @@ concurrency:
 
 jobs:
   certify:
-    if: >-
-      github.event.pull_request.number == 107 &&
-      github.event.pull_request.head.sha == '54e0e9daf95e1b163cb98bdf5c33195ef537d908' &&
-      contains(github.event.pull_request.body, '<!-- r38-evidence-rotate-key-certify -->')
     runs-on: ubuntu-24.04
     env:
       PYTHONPATH: ${{ github.workspace }}
@@ -187,6 +183,11 @@ jobs:
           COMMIT_OUTCOME: ${{ steps.atomic_commit.outcome }}
         run: |
           set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/$HEAD_BRANCH" | cut -f1)"
+          if [[ "$remote_head" != "$EXPECTED_SHA" ]]; then
+            echo "branch advanced to $remote_head; diagnostic commit suppressed"
+            exit 0
+          fi
           git reset --hard "$EXPECTED_SHA"
           git clean -fdx
           python - <<'PY'
