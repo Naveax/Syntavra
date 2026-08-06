@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIBE = ROOT / "crates" / "syntavra-cli" / "src" / "native_compress_describe.rs"
+EVIDENCE = ROOT / "crates" / "syntavra-cli" / "src" / "native_evidence_store.rs"
 PUT = ROOT / "crates" / "syntavra-cli" / "src" / "native_compress_put.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
@@ -84,6 +85,22 @@ def expose_describe_helpers() -> bool:
     return changed
 
 
+def suppress_evidence_dead_code() -> bool:
+    source = EVIDENCE.read_text(encoding="utf-8")
+    token = "#![allow(dead_code)]\n"
+    anchor = "#![forbid(unsafe_code)]\n"
+    if source.count(token) == 1:
+        return False
+    if source.count(token) != 0 or source.count(anchor) != 1:
+        raise RuntimeError("native evidence warning guard is ambiguous")
+    EVIDENCE.write_text(
+        source.replace(anchor, anchor + token, 1),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return True
+
+
 def normalize_put_source() -> bool:
     source = PUT.read_text(encoding="utf-8")
     rendered = source
@@ -154,6 +171,7 @@ def repair_validator() -> bool:
 
 def main() -> int:
     describe_changed = expose_describe_helpers()
+    evidence_changed = suppress_evidence_dead_code()
     source_changed = normalize_put_source()
     product_changed = repair_product()
     validator_changed = repair_validator()
@@ -162,11 +180,13 @@ def main() -> int:
             {
                 "changed": (
                     describe_changed
+                    or evidence_changed
                     or source_changed
                     or product_changed
                     or validator_changed
                 ),
                 "describe_changed": describe_changed,
+                "evidence_changed": evidence_changed,
                 "ok": True,
                 "product_changed": product_changed,
                 "source_changed": source_changed,
