@@ -41,13 +41,14 @@ def expose_install_helpers() -> bool:
     for name in PUBLIC_FUNCTIONS:
         public = f"pub(crate) fn {name}("
         private = f"fn {name}("
-        if public in rendered:
-            if private in rendered:
-                raise RuntimeError(f"duplicate visibility contract for {name}")
+        if rendered.count(public) == 1:
             continue
-        if rendered.count(private) != 1:
-            raise RuntimeError(f"install helper {name} must be unique")
-        rendered = rendered.replace(private, public, 1)
+        if rendered.count(public) != 0:
+            raise RuntimeError(f"public install helper {name} must be unique")
+        private_lines = [line for line in rendered.splitlines() if line.startswith(private)]
+        if len(private_lines) != 1:
+            raise RuntimeError(f"private install helper {name} must be unique")
+        rendered = rendered.replace(private_lines[0], private_lines[0].replace(private, public, 1), 1)
         changed = True
     if changed:
         INSTALL.write_text(rendered, encoding="utf-8", newline="\n")
@@ -82,7 +83,9 @@ def wire_product() -> bool:
 
 
 def repair() -> bool:
-    return expose_install_helpers() or wire_product()
+    helpers_changed = expose_install_helpers()
+    wiring_changed = wire_product()
+    return helpers_changed or wiring_changed
 
 
 def main() -> int:
