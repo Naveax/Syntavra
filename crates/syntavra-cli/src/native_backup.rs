@@ -81,10 +81,6 @@ fn hex(bytes: &[u8]) -> String {
     rendered
 }
 
-fn sha256_bytes(bytes: &[u8]) -> String {
-    hex(&Sha256::digest(bytes))
-}
-
 fn sha256_file(path: &Path) -> Result<String, String> {
     let mut file = File::open(path).map_err(|error| format!("BACKUP_HASH_OPEN_FAILED:{error}"))?;
     let mut digest = Sha256::new();
@@ -220,9 +216,9 @@ fn backup_sqlite(source: &Path, target: &Path) -> Result<(), String> {
         let mut target_connection = Connection::open(target)?;
         let backup = Backup::new(&source_connection, &mut target_connection)?;
         backup.run_to_completion(5, Duration::from_millis(0), None)?;
-        let integrity = target_connection.query_row("PRAGMA integrity_check", [], |row| {
-            row.get::<_, String>(0)
-        })?;
+        drop(backup);
+        let integrity = target_connection
+            .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))?;
         if integrity != "ok" {
             return Err(rusqlite::Error::InvalidQuery);
         }
@@ -244,8 +240,7 @@ fn copy_state_file(source: &Path, target: &Path) -> Result<(), String> {
     if is_sqlite(source) {
         backup_sqlite(source, target)
     } else {
-        fs::copy(source, target)
-            .map_err(|error| format!("BACKUP_STATE_COPY_FAILED:{error}"))?;
+        fs::copy(source, target).map_err(|error| format!("BACKUP_STATE_COPY_FAILED:{error}"))?;
         copy_permissions(source, target);
         Ok(())
     }
@@ -319,8 +314,8 @@ fn collect_archive_entries(staging: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 fn create_tar(staging: &Path, archive: &Path) -> Result<(), String> {
-    let file = File::create(archive)
-        .map_err(|error| format!("BACKUP_ARCHIVE_CREATE_FAILED:{error}"))?;
+    let file =
+        File::create(archive).map_err(|error| format!("BACKUP_ARCHIVE_CREATE_FAILED:{error}"))?;
     let mut builder = tar::Builder::new(file);
     for path in collect_archive_entries(staging)? {
         let relative = path
@@ -366,8 +361,7 @@ fn active_key(state_root: &Path) -> Result<ActiveKey, String> {
         }
     }
     let keys = state_root.join("backup-keys/keys");
-    fs::create_dir_all(&keys)
-        .map_err(|error| format!("BACKUP_KEY_DIRECTORY_FAILED:{error}"))?;
+    fs::create_dir_all(&keys).map_err(|error| format!("BACKUP_KEY_DIRECTORY_FAILED:{error}"))?;
     let registry_path = keys.join("registry.json");
     let key_id = if registry_path.is_file() {
         let value = serde_json::from_slice::<Value>(
@@ -378,10 +372,7 @@ fn active_key(state_root: &Path) -> Result<ActiveKey, String> {
         if value["schema_version"].as_u64() != Some(1) {
             return Err("BACKUP_KEY_REGISTRY_VERSION_INVALID".to_owned());
         }
-        value["active"]
-            .as_str()
-            .unwrap_or("local-v1")
-            .to_owned()
+        value["active"].as_str().unwrap_or("local-v1").to_owned()
     } else {
         "local-v1".to_owned()
     };
@@ -392,15 +383,14 @@ fn active_key(state_root: &Path) -> Result<ActiveKey, String> {
         atomic_write(&key_path, &key, true)?;
         let registry = json!({
             "schema_version": 1,
-            "active": key_id,
-            "keys": [key_id],
+            "active": key_id.clone(),
+            "keys": [key_id.clone()],
         });
         let payload = serde_json::to_vec(&registry)
             .map_err(|error| format!("BACKUP_KEY_REGISTRY_SERIALIZE_FAILED:{error}"))?;
         atomic_write(&registry_path, &payload, true)?;
     }
-    let raw = fs::read(&key_path)
-        .map_err(|error| format!("BACKUP_KEY_READ_FAILED:{error}"))?;
+    let raw = fs::read(&key_path).map_err(|error| format!("BACKUP_KEY_READ_FAILED:{error}"))?;
     let key = raw
         .try_into()
         .map_err(|_| "BACKUP_KEY_FILE_LENGTH_INVALID".to_owned())?;
@@ -452,25 +442,19 @@ fn seal_file(
         size.div_ceil(DEFAULT_CHUNK_BYTES as u64)
     };
     let encoded_key = active.key_id.as_bytes();
-    let key_size = u8::try_from(encoded_key.len())
-        .map_err(|_| "BACKUP_SEAL_KEY_ID_TOO_LONG".to_owned())?;
+    let key_size =
+        u8::try_from(encoded_key.len()).map_err(|_| "BACKUP_SEAL_KEY_ID_TOO_LONG".to_owned())?;
     if key_size == 0 {
         return Err("BACKUP_SEAL_KEY_ID_EMPTY".to_owned());
     }
-    let header = chunk_header(
-        key_size,
-        DEFAULT_CHUNK_BYTES as u32,
-        size,
-        count,
-    );
+    let header = chunk_header(key_size, DEFAULT_CHUNK_BYTES as u32, size, count);
     let derived = derive_key(&active.key, project_id, &active.key_id)?;
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&derived));
     if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("BACKUP_SEAL_PARENT_FAILED:{error}"))?;
+        fs::create_dir_all(parent).map_err(|error| format!("BACKUP_SEAL_PARENT_FAILED:{error}"))?;
     }
-    let mut input = File::open(source)
-        .map_err(|error| format!("BACKUP_SEAL_SOURCE_OPEN_FAILED:{error}"))?;
+    let mut input =
+        File::open(source).map_err(|error| format!("BACKUP_SEAL_SOURCE_OPEN_FAILED:{error}"))?;
     let mut output = OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -481,11 +465,13 @@ fn seal_file(
         .and_then(|_| output.write_all(encoded_key))
         .map_err(|error| format!("BACKUP_SEAL_HEADER_WRITE_FAILED:{error}"))?;
     for index in 0..count {
-        let mut plaintext = vec![0_u8; DEFAULT_CHUNK_BYTES];
-        let read = input
-            .read(&mut plaintext)
+        let offset = index * DEFAULT_CHUNK_BYTES as u64;
+        let read = usize::try_from((size - offset).min(DEFAULT_CHUNK_BYTES as u64))
+            .map_err(|_| "BACKUP_SEAL_CHUNK_LENGTH_INVALID".to_owned())?;
+        let mut plaintext = vec![0_u8; read];
+        input
+            .read_exact(&mut plaintext)
             .map_err(|error| format!("BACKUP_SEAL_READ_FAILED:{error}"))?;
-        plaintext.truncate(read);
         let mut nonce = [0_u8; 24];
         OsRng.fill_bytes(&mut nonce);
         let record = chunk_record(index, &nonce, read as u32);
@@ -499,7 +485,7 @@ fn seal_file(
         output
             .write_all(&record)
             .and_then(|_| output.write_all(&plaintext))
-            .and_then(|_| output.write_all(tag.as_slice()))
+            .and_then(|_| output.write_all(tag.as_ref()))
             .map_err(|error| format!("BACKUP_SEAL_CHUNK_WRITE_FAILED:{error}"))?;
     }
     output
@@ -507,6 +493,128 @@ fn seal_file(
         .and_then(|_| output.sync_all())
         .map_err(|error| format!("BACKUP_SEAL_SYNC_FAILED:{error}"))?;
     set_private(destination);
+    Ok(())
+}
+
+fn decode_evidence_environment_key(value: &str) -> Result<[u8; 32], String> {
+    let bytes = if value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        let mut decoded = [0_u8; 32];
+        for (index, slot) in decoded.iter_mut().enumerate() {
+            let start = index * 2;
+            *slot = u8::from_str_radix(&value[start..start + 2], 16)
+                .map_err(|error| format!("EVIDENCE_KEY_HEX_INVALID:{error}"))?;
+        }
+        decoded.to_vec()
+    } else {
+        let mut padded = value.to_owned();
+        while padded.len() % 4 != 0 {
+            padded.push('=');
+        }
+        base64::engine::general_purpose::URL_SAFE
+            .decode(padded)
+            .map_err(|error| format!("EVIDENCE_KEY_BASE64_INVALID:{error}"))?
+    };
+    bytes
+        .try_into()
+        .map_err(|_| "EVIDENCE_KEY_LENGTH_INVALID".to_owned())
+}
+
+fn initialize_evidence_state(state_root: &Path) -> Result<(), String> {
+    let root = state_root.join("evidence");
+    let keys = root.join("keys");
+    fs::create_dir_all(root.join("objects"))
+        .map_err(|error| format!("EVIDENCE_OBJECT_ROOT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(root.join("metadata"))
+        .map_err(|error| format!("EVIDENCE_METADATA_ROOT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(&keys)
+        .map_err(|error| format!("EVIDENCE_KEY_ROOT_CREATE_FAILED:{error}"))?;
+
+    let managed = match env::var("SYNTAVRA_EVIDENCE_KEY") {
+        Ok(value) if !value.trim().is_empty() => {
+            decode_evidence_environment_key(value.trim())?;
+            true
+        }
+        _ => false,
+    };
+    let active_path = keys.join("active.json");
+    let active_version = if active_path.is_file() {
+        let value = serde_json::from_slice::<Value>(
+            &fs::read(&active_path)
+                .map_err(|error| format!("EVIDENCE_ACTIVE_READ_FAILED:{error}"))?,
+        )
+        .map_err(|error| format!("EVIDENCE_ACTIVE_INVALID:{error}"))?;
+        let version = value["active_version"]
+            .as_u64()
+            .ok_or_else(|| "EVIDENCE_ACTIVE_VERSION_INVALID".to_owned())?;
+        if version == 0 {
+            return Err("EVIDENCE_ACTIVE_VERSION_INVALID".to_owned());
+        }
+        version
+    } else {
+        let mut payload = serde_json::to_vec(&json!({
+            "schema_version": 1,
+            "active_version": 1,
+        }))
+        .map_err(|error| format!("EVIDENCE_ACTIVE_SERIALIZE_FAILED:{error}"))?;
+        payload.push(b'\n');
+        atomic_write(&active_path, &payload, true)?;
+        1
+    };
+    if !managed {
+        let key_path = keys.join(format!("master-v{active_version}.key"));
+        if key_path.is_file() {
+            if fs::metadata(&key_path)
+                .map_err(|error| format!("EVIDENCE_KEY_METADATA_FAILED:{error}"))?
+                .len()
+                != 32
+            {
+                return Err("EVIDENCE_KEY_FILE_LENGTH_INVALID".to_owned());
+            }
+        } else {
+            let mut key = [0_u8; 32];
+            OsRng.fill_bytes(&mut key);
+            atomic_write(&key_path, &key, true)?;
+        }
+    }
+
+    let index_path = root.join("evidence.sqlite3");
+    let connection = Connection::open(&index_path)
+        .map_err(|error| format!("EVIDENCE_INDEX_OPEN_FAILED:{error}"))?;
+    connection
+        .query_row("PRAGMA journal_mode=WAL", [], |row| row.get::<_, String>(0))
+        .map_err(|error| format!("EVIDENCE_INDEX_WAL_FAILED:{error}"))?;
+    connection
+        .execute_batch(
+            r#"
+            PRAGMA foreign_keys=ON;
+            PRAGMA busy_timeout=30000;
+            PRAGMA synchronous=FULL;
+            BEGIN IMMEDIATE;
+            CREATE TABLE IF NOT EXISTS evidence_objects(
+                digest TEXT PRIMARY KEY,
+                plaintext_bytes INTEGER NOT NULL,
+                stored_bytes INTEGER NOT NULL,
+                key_version INTEGER NOT NULL,
+                created_at REAL NOT NULL,
+                last_accessed_at REAL NOT NULL,
+                expires_at REAL,
+                ref_count INTEGER NOT NULL DEFAULT 0,
+                legal_hold INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS evidence_references(
+                digest TEXT NOT NULL,
+                reference TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                PRIMARY KEY(digest, reference),
+                FOREIGN KEY(digest) REFERENCES evidence_objects(digest) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS evidence_expiry_idx ON evidence_objects(expires_at);
+            COMMIT;
+            "#,
+        )
+        .map_err(|error| format!("EVIDENCE_INDEX_SCHEMA_FAILED:{error}"))?;
+    drop(connection);
+    set_private(&index_path);
     Ok(())
 }
 
@@ -523,15 +631,15 @@ pub fn execute(
     project_root: &Path,
     state_root: &Path,
 ) -> Result<Value, String> {
+    initialize_evidence_state(state_root)?;
     initialize_roots(state_root)?;
     let (destination, encrypt) = parse_arguments(arguments)?;
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("BACKUP_DESTINATION_PARENT_FAILED:{error}"))?;
     }
-    let project_id = super::state_snapshot_contract::project_id_for_root(
-        &project_root.to_string_lossy(),
-    )?;
+    let project_id =
+        super::state_snapshot_contract::project_id_for_root(&project_root.to_string_lossy())?;
     let created_at = now_seconds()?;
     let temporary = unique_temp_root()?;
     let result = (|| -> Result<Value, String> {
@@ -553,6 +661,10 @@ pub fn execute(
             ));
             let _ = fs::remove_file(&temporary_destination);
             seal_file(&archive, &temporary_destination, &project_id, &active)?;
+            if destination.is_file() {
+                fs::remove_file(&destination)
+                    .map_err(|error| format!("BACKUP_DESTINATION_REMOVE_FAILED:{error}"))?;
+            }
             fs::rename(&temporary_destination, &destination)
                 .map_err(|error| format!("BACKUP_DESTINATION_REPLACE_FAILED:{error}"))?;
         } else {

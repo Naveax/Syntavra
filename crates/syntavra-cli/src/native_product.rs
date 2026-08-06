@@ -17,6 +17,8 @@ mod native_adapter_configure;
 mod native_analytics;
 #[path = "native_audit_config.rs"]
 mod native_audit_config;
+#[path = "native_backup.rs"]
+mod native_backup;
 #[path = "native_cache_amortize.rs"]
 mod native_cache_amortize;
 #[path = "native_config_read_only.rs"]
@@ -132,6 +134,7 @@ mod telemetry_metrics_contract;
 
 pub fn supports(command: &[String]) -> bool {
     native_analytics::supports(command)
+        || native_backup::supports(command)
         || native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
@@ -631,6 +634,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -680,6 +699,9 @@ pub fn execute(
             emit_failed_decision(&decision.value, decision.exit_code);
         }
         return Ok(Some(decision.value));
+    }
+    if native_backup::supports(command) {
+        return native_backup::execute(&arguments, project_root, state_root).map(Some);
     }
     if native_platform_health::supports(command) {
         let value = native_platform_health::execute(command, project_root, state_root)?;

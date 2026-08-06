@@ -18,6 +18,11 @@ from tests.runtime.test_native_install_r38 import _selector_binary
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXED_MASTER_KEY = base64.b64encode(bytes(range(32))).decode("ascii")
+EVIDENCE_FILES = {
+    "evidence/evidence.sqlite3",
+    "evidence/keys/active.json",
+    "evidence/keys/master-v1.key",
+}
 
 
 def _environment(home: Path, master_key: str | None) -> dict[str, str]:
@@ -27,6 +32,7 @@ def _environment(home: Path, master_key: str | None) -> dict[str, str]:
     environment["PATH"] = ""
     environment["PYTHONIOENCODING"] = "utf-8"
     environment["PYTHONUTF8"] = "1"
+    environment.pop("SYNTAVRA_EVIDENCE_KEY", None)
     if master_key is None:
         environment.pop("SYNTAVRA_EVIDENCE_MASTER_KEY_B64", None)
     else:
@@ -175,10 +181,74 @@ def _assert_manifest_contract(
     assert hashlib.sha256(payload).hexdigest() == value["manifest_hash"]
 
 
+def _extract_archive(archive: Path, destination: Path) -> Path:
+    with tarfile.open(archive, "r") as handle:
+        handle.extractall(destination, filter="data")
+    return destination
+
+
 def _comparable_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
-    rendered = json.loads(json.dumps(manifest, sort_keys=True))
-    rendered.pop("created_at", None)
-    return rendered
+    files: dict[str, Any] = {}
+    for relative, metadata in sorted(manifest["files"].items()):
+        suffix = Path(relative).suffix
+        if suffix in {".sqlite", ".sqlite3", ".db"}:
+            files[relative] = {"logical_sqlite": True}
+        elif relative.startswith("evidence/keys/master-v") and relative.endswith(".key"):
+            files[relative] = {"secret_key": True, "bytes": metadata["bytes"]}
+        else:
+            files[relative] = metadata
+    return {
+        "schema_version": manifest["schema_version"],
+        "project_id": manifest["project_id"],
+        "files": files,
+    }
+
+
+def _assert_evidence_foundation(extracted: Path) -> None:
+    active = extracted / "evidence" / "keys" / "active.json"
+    key = extracted / "evidence" / "keys" / "master-v1.key"
+    database = extracted / "evidence" / "evidence.sqlite3"
+    assert json.loads(active.read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "active_version": 1,
+    }
+    assert key.stat().st_size == 32
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+        indexes = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+        assert tables == {"evidence_objects", "evidence_references"}
+        assert indexes == {"evidence_expiry_idx"}
+        assert [
+            row[1] for row in connection.execute("PRAGMA table_info(evidence_objects)")
+        ] == [
+            "digest",
+            "plaintext_bytes",
+            "stored_bytes",
+            "key_version",
+            "created_at",
+            "last_accessed_at",
+            "expires_at",
+            "ref_count",
+            "legal_hold",
+        ]
+        assert [
+            row[1] for row in connection.execute("PRAGMA table_info(evidence_references)")
+        ] == ["digest", "reference", "created_at"]
+        foreign_keys = list(connection.execute("PRAGMA foreign_key_list(evidence_references)"))
+        assert len(foreign_keys) == 1
+        assert foreign_keys[0][2:5] == ("evidence_objects", "digest", "digest")
+        assert foreign_keys[0][6].upper() == "CASCADE"
 
 
 def test_native_backup_create_plaintext_empty_state_matches_contract(tmp_path: Path) -> None:
@@ -201,11 +271,14 @@ def test_native_backup_create_plaintext_empty_state_matches_contract(tmp_path: P
         _assert_result(value, destination, encrypted=False)
         manifest, payload, names = _read_manifest(destination)
         _assert_manifest_contract(manifest, payload, names, value, project)
+        assert set(manifest["files"]) == EVIDENCE_FILES
+        extracted = _extract_archive(destination, tmp_path / f"{engine}-empty-extract")
+        _assert_evidence_foundation(extracted)
         assert (state / "backups").is_dir()
         assert (state / "backup-keys" / "keys").is_dir()
         values[engine] = value
         manifests[engine] = _comparable_manifest(manifest)
-    assert values["rust"]["files"] == values["python"]["files"]
+    assert values["rust"]["files"] == values["python"]["files"] == 3
     assert values["rust"]["encrypted"] == values["python"]["encrypted"]
     assert manifests["rust"] == manifests["python"]
 
@@ -263,7 +336,7 @@ def test_native_backup_create_encrypted_is_python_verifiable(tmp_path: Path) -> 
         assert completed.stderr == ""
         value = json.loads(completed.stdout)
         _assert_result(value, destination, encrypted=True)
-        assert value["files"] >= 3
+        assert value["files"] == 6
         assert destination.read_bytes()[:8] == b"SCCHNK2\x00"
         verification = _run_python_verify(
             project,
