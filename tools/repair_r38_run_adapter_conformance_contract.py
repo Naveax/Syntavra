@@ -132,13 +132,19 @@ def repair_adapter_api() -> bool:
         changed = True
     elif rendered.count(API_SIGNATURE) != 1:
         raise RuntimeError("adapter shared API signature count invalid")
-    if OLD_CATALOG_PARSE in rendered:
-        if rendered.count(OLD_CATALOG_PARSE) != 1:
-            raise RuntimeError("legacy adapter catalog parse must be unique")
-        rendered = rendered.replace(OLD_CATALOG_PARSE, NEW_CATALOG_PARSE, 1)
+
+    if rendered.count(API_ANCHOR) != 1:
+        raise RuntimeError("adapter execute anchor must be unique")
+    execute_source = rendered[rendered.index(API_ANCHOR) :]
+    if OLD_CATALOG_PARSE in execute_source:
+        if execute_source.count(OLD_CATALOG_PARSE) != 1:
+            raise RuntimeError("legacy adapter catalog parse must be unique in execute")
+        execute_source = execute_source.replace(OLD_CATALOG_PARSE, NEW_CATALOG_PARSE, 1)
+        rendered = rendered[: rendered.index(API_ANCHOR)] + execute_source
         changed = True
-    elif rendered.count(NEW_CATALOG_PARSE) != 1:
-        raise RuntimeError("canonical adapter catalog parse missing")
+    elif NEW_CATALOG_PARSE not in execute_source:
+        raise RuntimeError("canonical adapter catalog parse missing from execute")
+
     if changed:
         ADAPTERS.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
