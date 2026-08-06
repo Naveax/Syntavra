@@ -2,8 +2,10 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use regex::Regex;
+use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
@@ -110,6 +112,39 @@ const INTENTS: &[(&str, &[&str])] = &[
     ),
 ];
 
+fn record_profile_event(
+    connection: &Connection,
+    profile: &str,
+    host: &str,
+    selected: usize,
+    available: usize,
+    latency_ms: f64,
+) -> Result<(), String> {
+    let created_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("FABRIC_PROFILE_CLOCK_FAILED:{error}"))?
+        .as_secs_f64();
+    let metadata = format!(r#"{{"available": {available}, "selected": {selected}}}"#);
+    connection
+        .execute(
+            "INSERT INTO fabric_events(                event_type,family,host,raw_bytes,visible_bytes,latency_ms,                success,cache_hit,metadata_json,created_at             ) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            params![
+                "profile",
+                profile,
+                host,
+                0_i64,
+                0_i64,
+                latency_ms.max(0.0),
+                1_i64,
+                0_i64,
+                metadata,
+                created_at,
+            ],
+        )
+        .map_err(|error| format!("FABRIC_PROFILE_EVENT_INSERT_FAILED:{error}"))?;
+    Ok(())
+}
+
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [fabric, action] if fabric == "fabric" && action == "profile")
 }
@@ -187,11 +222,7 @@ fn normalized_profile(requested: &str, task: &str) -> Result<String, String> {
     }
 }
 
-fn selected_tools(
-    profile: &str,
-    task: &str,
-    available: &[String],
-) -> Result<Vec<String>, String> {
+fn selected_tools(profile: &str, task: &str, available: &[String]) -> Result<Vec<String>, String> {
     if profile == "audit" {
         return Ok(available.to_vec());
     }
@@ -236,17 +267,14 @@ fn profile_hash(profile: &str, tools: &[String]) -> Result<String, String> {
     ))
 }
 
-pub fn execute(
-    arguments: &[String],
-    state_root: &Path,
-) -> Result<Value, String> {
+pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String> {
     let task = option_value(arguments, "--task")?
         .ok_or_else(|| "the following arguments are required: --task".to_owned())?;
     let requested = option_value(arguments, "--profile")?.unwrap_or_else(|| "auto".to_owned());
     let profile = normalized_profile(&requested, &task)?;
-    let _database = super::native_fabric_doctor::open_database(
-        &state_root.join("competitive-fabric.sqlite3"),
-    )?;
+    let database =
+        super::native_fabric_doctor::open_database(&state_root.join("competitive-fabric.sqlite3"))?;
+    let started = Instant::now();
     let available = catalog_names()?;
     let selected = selected_tools(&profile, &task, &available)?;
     let estimated = estimated_tokens(&selected);
@@ -261,19 +289,32 @@ pub fn execute(
     };
     let host = option_value(arguments, "--host")?.unwrap_or_else(|| "codex".to_owned());
     let host_contract = super::native_expansion::doctor_host_contract(&host);
+    record_profile_event(
+        &database,
+        &profile,
+        &host,
+        selected.len(),
+        available.len(),
+        started.elapsed().as_secs_f64() * 1000.0,
+    )?;
+    let selected_count = selected.len();
+    let available_count = available.len();
+    let omitted_count = available_count.saturating_sub(selected_count);
+    let within_budget = estimated <= budget || profile == "audit";
+    let hash = profile_hash(&profile, &selected)?;
     let result = json!({
         "profile": profile,
         "purpose": purpose,
         "selected_tools": selected,
-        "selected_count": selected.len(),
-        "available_count": available.len(),
-        "omitted_count": available.len().saturating_sub(selected.len()),
+        "selected_count": selected_count,
+        "available_count": available_count,
+        "omitted_count": omitted_count,
         "estimated_manifest_tokens": estimated,
         "manifest_budget": budget,
-        "within_budget": estimated <= budget || profile == "audit",
+        "within_budget": within_budget,
         "host": host,
         "host_mode": host_contract["negotiation"]["mode"],
-        "profile_hash": profile_hash(&profile, &selected)?,
+        "profile_hash": hash,
     });
     option_value(arguments, "--output")?.map_or_else(
         || Ok(result.clone()),

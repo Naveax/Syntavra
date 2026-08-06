@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 99,
+  "missing_native_public_command_count": 98,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -13,7 +13,6 @@
     "compress verify",
     "evidence get",
     "evidence rotate-key",
-    "fabric profile",
     "fabric rollback-install",
     "fabric verify-install",
     "prove integrations",
@@ -101,7 +100,7 @@
     "sandbox execute",
     "sandbox plan"
   ],
-  "native_public_command_count": 146,
+  "native_public_command_count": 147,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,

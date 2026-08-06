@@ -49,6 +49,8 @@ mod native_fabric_install;
 mod native_fabric_installations;
 #[path = "native_fabric_platform_plan.rs"]
 mod native_fabric_platform_plan;
+#[path = "native_fabric_profile.rs"]
+mod native_fabric_profile;
 #[path = "native_fabric_route.rs"]
 mod native_fabric_route;
 #[path = "native_integrations.rs"]
@@ -126,6 +128,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_installations::supports(command)
         || native_fabric_install::supports(command)
         || native_fabric_insights::supports(command)
+        || native_fabric_profile::supports(command)
         || native_fabric_platform_plan::supports(command)
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
@@ -477,6 +480,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -502,6 +521,9 @@ pub fn execute(
     }
     if native_fabric_insights::supports(command) {
         return native_fabric_insights::execute(&arguments, state_root).map(Some);
+    }
+    if native_fabric_profile::supports(command) {
+        return native_fabric_profile::execute(&arguments, state_root).map(Some);
     }
     if native_fabric_platform_plan::supports(command) {
         return native_fabric_platform_plan::execute(&arguments, project_root, state_root)

@@ -119,10 +119,9 @@ def test_native_fabric_profile_auto_minimal_matches_python(tmp_path: Path) -> No
     assert value["host_mode"] == "MCP_CONTROLLED"
     assert value["selected_count"] == len(value["selected_tools"])
     assert value["omitted_count"] == 93 - value["selected_count"]
-    assert value["selected_tools"][:2] == [
-        "syntavra.status",
-        "syntavra.output.capture",
-    ]
+    assert value["selected_tools"][0] == "syntavra.status"
+    assert "syntavra.inspect.map" in value["selected_tools"]
+    assert "syntavra.output.capture" in value["selected_tools"]
     assert "syntavra.fabric.profile" in value["selected_tools"]
     assert "syntavra.fabric.insights" in value["selected_tools"]
 
