@@ -14,6 +14,8 @@ CHACHA_DEPENDENCY = 'chacha20poly1305 = "0.10.1"\n'
 CHACHA_ANCHOR = 'base64 = "0.22.1"\n'
 TAR_DEPENDENCY = 'tar = "0.4.44"\n'
 TAR_ANCHOR = 'syntavra-core = { path = "../syntavra-core" }\n'
+ZEROIZE_DEPENDENCY = 'zeroize = "=1.8.1"\n'
+ZEROIZE_ANCHOR = 'unicode-normalization = "0.1.24"\n'
 
 UNUSED_HASH = '''fn sha256_bytes(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
@@ -139,6 +141,7 @@ def repair_dependencies() -> bool:
     for token, anchor, label in (
         (CHACHA_DEPENDENCY, CHACHA_ANCHOR, "XChaCha dependency"),
         (TAR_DEPENDENCY, TAR_ANCHOR, "tar dependency"),
+        (ZEROIZE_DEPENDENCY, ZEROIZE_ANCHOR, "Rust 1.82 zeroize pin"),
     ):
         rendered, applied = insert_after(rendered, token, anchor, label)
         changed = changed or applied
