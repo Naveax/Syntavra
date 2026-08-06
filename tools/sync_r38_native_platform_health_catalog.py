@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -30,29 +32,92 @@ def normalize(value: Any, *, project: Path, state: Path) -> Any:
     return value
 
 
-def build() -> dict[str, Any]:
-    from syntavra_runtime.platform import SyntavraPlatform
+def run_public(
+    action: str,
+    *,
+    project: Path,
+    state: Path,
+    home: Path,
+) -> dict[str, Any]:
+    environment = os.environ.copy()
+    environment["HOME"] = str(home)
+    environment["USERPROFILE"] = str(home)
+    environment["PATH"] = ""
+    environment["PYTHONIOENCODING"] = "utf-8"
+    environment["PYTHONUTF8"] = "1"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "syntavra_runtime.engine_entry",
+            "--engine",
+            "python",
+            "--project",
+            str(project),
+            "--state-root",
+            str(state),
+            "run",
+            action,
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        encoding="utf-8",
+        errors="strict",
+        timeout=600,
+        env=environment,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            json.dumps(
+                {
+                    "action": action,
+                    "code": "PLATFORM_HEALTH_PUBLIC_EXPORT_FAILED",
+                    "returncode": completed.returncode,
+                    "stderr": completed.stderr[-4000:],
+                    "stdout": completed.stdout[-4000:],
+                },
+                sort_keys=True,
+            )
+        )
+    value = json.loads(completed.stdout)
+    if not isinstance(value, dict):
+        raise RuntimeError(f"platform health public route must return an object: {action}")
+    return value
 
-    previous_path = os.environ.get("PATH")
-    os.environ["PATH"] = ""
-    try:
-        with tempfile.TemporaryDirectory(prefix="syntavra-platform-health-") as temporary:
-            root = Path(temporary)
-            project = root / "project"
-            project.mkdir()
-            state = root / "state"
-            platform = SyntavraPlatform(project, state / "unified")
-            status = normalize(platform.status(), project=project, state=state)
-            doctor = normalize(platform.doctor(), project=project, state=state)
-    finally:
-        if previous_path is None:
-            os.environ.pop("PATH", None)
-        else:
-            os.environ["PATH"] = previous_path
+
+def build() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="syntavra-platform-health-") as temporary:
+        root = Path(temporary)
+        project = root / "project"
+        project.mkdir()
+        state = root / "state"
+        home = root / "home"
+        home.mkdir()
+        status = normalize(
+            run_public(
+                "platform-status",
+                project=project,
+                state=state,
+                home=home,
+            ),
+            project=project,
+            state=state,
+        )
+        doctor = normalize(
+            run_public(
+                "platform-doctor",
+                project=project,
+                state=state,
+                home=home,
+            ),
+            project=project,
+            state=state,
+        )
     return {
         "schema_version": 1,
         "product": "Syntavra",
-        "source": "syntavra_runtime.platform.SyntavraPlatform",
+        "source": "syntavra_runtime.engine_entry:python",
         "environment_contract": {
             "path": "empty",
             "project": PROJECT_PLACEHOLDER,
