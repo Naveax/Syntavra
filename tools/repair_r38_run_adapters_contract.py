@@ -9,6 +9,9 @@ PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
 TEST = ROOT / "tests" / "runtime" / "test_native_run_adapters_r38.py"
 
+PLATFORM_MODULE = '''#[path = "native_platform_state.rs"]
+mod native_platform_state;
+'''
 MODULE = '''#[path = "native_run_adapters.rs"]
 mod native_run_adapters;
 '''
@@ -51,6 +54,7 @@ def wire_product() -> bool:
     rendered = source
     changed = False
     for token, anchor, label in (
+        (PLATFORM_MODULE, MODULE_ANCHOR, "platform state module"),
         (MODULE, MODULE_ANCHOR, "run adapters module"),
         (SUPPORT, SUPPORT_ANCHOR, "run adapters support"),
         (EXECUTE, EXECUTE_ANCHOR, "run adapters execute"),
