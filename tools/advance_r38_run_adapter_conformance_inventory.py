@@ -7,8 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
 ROUTE = "run adapter-conformance"
-BASE_COUNT = 150
-TARGET_COUNT = 151
+BASE_COUNT = 151
+TARGET_COUNT = 152
 
 
 def advance() -> bool:
