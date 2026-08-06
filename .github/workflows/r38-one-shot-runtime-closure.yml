@@ -4,6 +4,11 @@ on:
   pull_request:
     branches: [main]
     types: [synchronize]
+  push:
+    branches: [agent/full-dual-engine-runtime]
+    paths:
+      - tools/r38-evidence-rotate-key-repair.marker
+      - .github/workflows/r38-one-shot-runtime-closure.yml
 
 permissions:
   contents: write
@@ -18,7 +23,7 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       RUSTUP_TOOLCHAIN: 1.82.0
-      VALIDATION_SHA: ${{ github.event.pull_request.head.sha }}
+      VALIDATION_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Check out exact triggering head
         uses: actions/checkout@v4
