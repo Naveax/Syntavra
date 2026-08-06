@@ -383,9 +383,7 @@ impl RotationStore {
         let connection = Connection::open(self.root.join("evidence.sqlite3"))
             .map_err(|error| format!("EVIDENCE_INDEX_OPEN_FAILED:{error}"))?;
         let mut statement = connection
-            .prepare(
-                "SELECT digest,key_version,stored_bytes FROM evidence_objects ORDER BY digest",
-            )
+            .prepare("SELECT digest,key_version,stored_bytes FROM evidence_objects ORDER BY digest")
             .map_err(|error| format!("EVIDENCE_ROTATION_QUERY_PREPARE_FAILED:{error}"))?;
         let mut query = statement
             .query([])
@@ -468,19 +466,10 @@ impl RotationStore {
         fs::rename(backup_path, object_path)
             .map_err(|error| format!("EVIDENCE_ROTATION_ROLLBACK_RESTORE_FAILED:{error}"))?;
         atomic_write_json(metadata_path, original_metadata)?;
-        self.update_rotation_index(
-            digest,
-            original_stored_size,
-            source_version,
-            false,
-        )
+        self.update_rotation_index(digest, original_stored_size, source_version, false)
     }
 
-    fn reencrypt_object(
-        &self,
-        digest: &str,
-        target_version: u32,
-    ) -> Result<(bool, u64), String> {
+    fn reencrypt_object(&self, digest: &str, target_version: u32) -> Result<(bool, u64), String> {
         let object_path = self.object_path(digest);
         let metadata_path = self.metadata_path(digest);
         if !object_path.is_file() || !metadata_path.is_file() {
@@ -637,10 +626,7 @@ mod tests {
     #[test]
     fn routes_evidence_get_and_rotate_key_only() {
         assert!(supports(&["evidence".to_owned(), "get".to_owned()]));
-        assert!(supports(&[
-            "evidence".to_owned(),
-            "rotate-key".to_owned()
-        ]));
+        assert!(supports(&["evidence".to_owned(), "rotate-key".to_owned()]));
         assert!(!supports(&["evidence".to_owned(), "describe".to_owned()]));
     }
 
