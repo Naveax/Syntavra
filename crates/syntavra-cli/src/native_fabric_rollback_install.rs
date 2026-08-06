@@ -119,6 +119,11 @@ fn rollback_value(
 pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String> {
     let id = transaction_id(arguments)?;
     let database_path = state_root.join("host-installations.sqlite3");
+    if !database_path.is_file() {
+        return Err(format!(
+            "FABRIC_ROLLBACK_INSTALL_TRANSACTION_NOT_FOUND:{id}"
+        ));
+    }
     let connection = super::native_fabric_install::initialize_database(&database_path)?;
     let row = connection
         .query_row(
