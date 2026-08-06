@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,26 +10,14 @@ BACKUP = ROOT / "crates" / "syntavra-cli" / "src" / "native_backup.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
 
-EXPOSE = (
-    ("fn unique_temp_root()", "pub(crate) fn unique_temp_root()"),
-    ("fn sha256_file(path: &Path)", "pub(crate) fn sha256_file(path: &Path)"),
-    ("fn set_private(path: &Path)", "pub(crate) fn set_private(path: &Path)"),
-    (
-        "fn decode_environment_key(value: &str)",
-        "pub(crate) fn decode_environment_key(value: &str)",
-    ),
-    (
-        "fn derive_key(master_key: &[u8; 32]",
-        "pub(crate) fn derive_key(master_key: &[u8; 32]",
-    ),
-    (
-        "fn initialize_evidence_state(state_root: &Path)",
-        "pub(crate) fn initialize_evidence_state(state_root: &Path)",
-    ),
-    (
-        "fn initialize_roots(state_root: &Path)",
-        "pub(crate) fn initialize_roots(state_root: &Path)",
-    ),
+EXPOSE_NAMES = (
+    "unique_temp_root",
+    "sha256_file",
+    "set_private",
+    "decode_environment_key",
+    "derive_key",
+    "initialize_evidence_state",
+    "initialize_roots",
 )
 
 MODULE = '''#[path = "native_backup_verify.rs"]
@@ -67,12 +56,24 @@ def expose_backup_helpers() -> bool:
     source = BACKUP.read_text(encoding="utf-8")
     rendered = source
     changed = False
-    for private, public in EXPOSE:
-        if public in rendered:
+    for name in EXPOSE_NAMES:
+        public_pattern = re.compile(
+            rf"(?m)^pub\(crate\)\s+fn\s+{re.escape(name)}\s*\("
+        )
+        private_pattern = re.compile(rf"(?m)^fn\s+{re.escape(name)}\s*\(")
+        public_matches = public_pattern.findall(rendered)
+        private_matches = private_pattern.findall(rendered)
+        if len(public_matches) == 1 and not private_matches:
             continue
-        if rendered.count(private) != 1:
-            raise RuntimeError(f"backup helper exposure is ambiguous: {private}")
-        rendered = rendered.replace(private, public, 1)
+        if public_matches or len(private_matches) != 1:
+            raise RuntimeError(f"backup helper exposure is ambiguous: {name}")
+        rendered, replacements = private_pattern.subn(
+            f"pub(crate) fn {name}(",
+            rendered,
+            count=1,
+        )
+        if replacements != 1:
+            raise RuntimeError(f"backup helper exposure failed: {name}")
         changed = True
     if changed:
         BACKUP.write_text(rendered, encoding="utf-8", newline="\n")
