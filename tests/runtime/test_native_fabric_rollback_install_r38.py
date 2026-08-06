@@ -206,8 +206,4 @@ def test_native_fabric_rollback_unknown_transaction_fails_without_rows(tmp_path:
         )
         assert completed.returncode != 0
         database = project / "state" / "host-installations.sqlite3"
-        assert database.is_file()
-        with sqlite3.connect(database) as connection:
-            assert connection.execute(
-                "SELECT COUNT(*) FROM host_install_transactions"
-            ).fetchone()[0] == 0
+        assert not database.exists()

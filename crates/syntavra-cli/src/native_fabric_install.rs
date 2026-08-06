@@ -102,7 +102,7 @@ fn option_value(arguments: &[String], name: &str) -> Result<Option<String>, Stri
     Ok(found)
 }
 
-fn now() -> Result<f64, String> {
+pub(crate) fn now() -> Result<f64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs_f64())
@@ -191,7 +191,7 @@ fn managed_text(existing: &str, block: &str) -> String {
     }
 }
 
-fn safe_target(root: &Path, relative: &str) -> Result<PathBuf, String> {
+pub(crate) fn safe_target(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let relative_path = Path::new(relative);
     if relative_path.is_absolute() {
         return Err(format!("host path escapes installation root: {relative}"));
@@ -222,7 +222,7 @@ fn safe_target(root: &Path, relative: &str) -> Result<PathBuf, String> {
     Ok(cursor)
 }
 
-fn digest(path: &Path) -> Result<String, String> {
+pub(crate) fn digest(path: &Path) -> Result<String, String> {
     let Ok(metadata) = fs::symlink_metadata(path) else {
         return Ok(String::new());
     };
@@ -316,7 +316,7 @@ fn atomic_file(path: &Path, data: &[u8]) -> Result<(), String> {
     result
 }
 
-fn remove_target(path: &Path) -> Result<(), String> {
+pub(crate) fn remove_target(path: &Path) -> Result<(), String> {
     let Ok(metadata) = fs::symlink_metadata(path) else {
         return Ok(());
     };
@@ -328,7 +328,7 @@ fn remove_target(path: &Path) -> Result<(), String> {
     }
 }
 
-fn copy_tree(source: &Path, target: &Path) -> Result<(), String> {
+pub(crate) fn copy_tree(source: &Path, target: &Path) -> Result<(), String> {
     if target.exists() || fs::symlink_metadata(target).is_ok() {
         remove_target(target)?;
     }
@@ -422,7 +422,7 @@ fn backup(transaction: &Path, root: &Path, target: &Path) -> Result<String, Stri
     Ok(destination.to_string_lossy().into_owned())
 }
 
-fn initialize_database(path: &Path) -> Result<Connection, String> {
+pub(crate) fn initialize_database(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("FABRIC_INSTALL_DATABASE_PARENT_FAILED:{error}"))?;

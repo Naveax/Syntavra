@@ -38,6 +38,7 @@ TARGETS = (
     "tests/runtime/test_native_fabric_insights_r38.py",
     "tests/runtime/test_native_fabric_install_r38.py",
     "tests/runtime/test_native_fabric_installations_r38.py",
+    "tests/runtime/test_native_fabric_rollback_install_r38.py",
     "tests/runtime/test_native_fabric_platform_plan_r38.py",
     "tests/runtime/test_native_fabric_profile_r38.py",
     "tests/runtime/test_native_setup_repair_r38.py::test_native_setup_empty_dry_run_matches_python",
