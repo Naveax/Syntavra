@@ -80,7 +80,7 @@ fn key_for_id(state_root: &Path, key_id: &str) -> Result<[u8; 32], String> {
         .map_err(|_| "BACKUP_KEY_FILE_LENGTH_INVALID".to_owned())
 }
 
-fn open_sealed_file(
+pub(crate) fn open_sealed_file(
     source: &Path,
     destination: &Path,
     state_root: &Path,
@@ -182,7 +182,7 @@ fn open_sealed_file(
     Ok(())
 }
 
-fn safe_path(path: &Path) -> bool {
+pub(crate) fn safe_path(path: &Path) -> bool {
     !path.as_os_str().is_empty()
         && !path.is_absolute()
         && path
@@ -190,7 +190,7 @@ fn safe_path(path: &Path) -> bool {
             .all(|part| matches!(part, Component::Normal(_) | Component::CurDir))
 }
 
-fn safe_extract(archive_path: &Path, destination: &Path) -> Result<(), String> {
+pub(crate) fn safe_extract(archive_path: &Path, destination: &Path) -> Result<(), String> {
     fs::create_dir_all(destination)
         .map_err(|error| format!("BACKUP_EXTRACT_ROOT_FAILED:{error}"))?;
     let file =
@@ -237,7 +237,7 @@ fn safe_extract(archive_path: &Path, destination: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn verify_extracted(extracted: &Path, project_id: &str) -> Result<Value, String> {
+pub(crate) fn verify_extracted(extracted: &Path, project_id: &str) -> Result<Value, String> {
     let manifest_path = extracted.join("BACKUP_MANIFEST.json");
     if !manifest_path.is_file() {
         return Err("BACKUP_MANIFEST_MISSING".to_owned());

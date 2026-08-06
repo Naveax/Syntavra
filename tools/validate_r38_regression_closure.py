@@ -46,6 +46,7 @@ TARGETS = (
     "tests/runtime/test_native_platform_health_r38.py",
     "tests/runtime/test_native_backup_create_r38.py",
     "tests/runtime/test_native_backup_verify_r38.py",
+    "tests/runtime/test_native_backup_restore_r38.py",
     "tests/runtime/test_native_adapter_configure_r38.py",
     "tests/runtime/test_native_fabric_platform_plan_r38.py",
     "tests/runtime/test_native_fabric_profile_r38.py",

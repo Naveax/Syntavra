@@ -9,9 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 
 use super::native_backup::{initialize_evidence_state, initialize_roots, unique_temp_root};
-use super::native_backup_verify::{
-    open_sealed_file, safe_extract, safe_path, verify_extracted,
-};
+use super::native_backup_verify::{open_sealed_file, safe_extract, safe_path, verify_extracted};
 
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [root, action] if root == "backup" && action == "restore")
@@ -169,6 +167,11 @@ fn atomic_restore_file(source: &Path, target: &Path) -> Result<(), String> {
         if target.is_dir() {
             return Err("BACKUP_RESTORE_TARGET_IS_DIRECTORY".to_owned());
         }
+        #[cfg(windows)]
+        if fs::symlink_metadata(target).is_ok() {
+            fs::remove_file(target)
+                .map_err(|error| format!("BACKUP_RESTORE_TARGET_REMOVE_FAILED:{error}"))?;
+        }
         fs::rename(&temporary, target)
             .map_err(|error| format!("BACKUP_RESTORE_REPLACE_FAILED:{error}"))?;
         Ok(())
@@ -179,10 +182,7 @@ fn atomic_restore_file(source: &Path, target: &Path) -> Result<(), String> {
     result
 }
 
-fn create_rollback(
-    project_root: &Path,
-    state_root: &Path,
-) -> Result<PathBuf, String> {
+fn create_rollback(project_root: &Path, state_root: &Path) -> Result<PathBuf, String> {
     let rollback = state_root
         .join("backups")
         .join(format!("pre-restore-{}.scbackup", unix_seconds()?));

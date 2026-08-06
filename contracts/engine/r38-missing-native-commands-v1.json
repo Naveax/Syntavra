@@ -1,9 +1,8 @@
 {
-  "missing_native_public_command_count": 86,
+  "missing_native_public_command_count": 85,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
-    "backup restore",
     "benchmark compare",
     "compress describe",
     "compress get",
@@ -88,7 +87,7 @@
     "sandbox execute",
     "sandbox plan"
   ],
-  "native_public_command_count": 159,
+  "native_public_command_count": 160,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
