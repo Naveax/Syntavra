@@ -118,8 +118,9 @@ fn detected_record(record: &Value, project_root: &Path) -> Value {
 pub fn execute(
     arguments: &[String],
     project_root: &Path,
-    _state_root: &Path,
+    state_root: &Path,
 ) -> Result<Value, String> {
+    super::native_platform_state::initialize(state_root)?;
     let catalog = serde_json::from_str::<Value>(CATALOG)
         .map_err(|error| format!("ADAPTER_CATALOG_INVALID:{error}"))?;
     let records = catalog["records"]
