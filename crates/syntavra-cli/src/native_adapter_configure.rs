@@ -9,8 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
-const CLAIM_BOUNDARY: &str =
-    "Certified requires a live-host external execution receipt";
+const CLAIM_BOUNDARY: &str = "Certified requires a live-host external execution receipt";
 
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [root, action] if root == "run" && action == "adapter-configure")
@@ -68,8 +67,7 @@ fn expanded_path(candidate: &str, project_root: &Path, home_root: &Path) -> Path
 fn load_json_object(argument: &str) -> Result<Map<String, Value>, String> {
     let path = Path::new(argument);
     let source = if path.is_file() {
-        fs::read_to_string(path)
-            .map_err(|error| format!("ADAPTER_DESIRED_READ_FAILED:{error}"))?
+        fs::read_to_string(path).map_err(|error| format!("ADAPTER_DESIRED_READ_FAILED:{error}"))?
     } else {
         argument.to_owned()
     };
@@ -213,8 +211,7 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     } / 146_097;
     let day_of_era = shifted - era * 146_097;
     let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096)
-            / 365;
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let mut year = year_of_era + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
@@ -239,9 +236,7 @@ fn utc_now_iso() -> String {
     if micros == 0 {
         format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}+00:00")
     } else {
-        format!(
-            "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{micros:06}+00:00"
-        )
+        format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{micros:06}+00:00")
     }
 }
 

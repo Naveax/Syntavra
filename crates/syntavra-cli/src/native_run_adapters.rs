@@ -119,6 +119,7 @@ pub(crate) fn catalog_value() -> Result<Value, String> {
         .map_err(|error| format!("ADAPTER_CATALOG_INVALID:{error}"))
 }
 
+#[allow(dead_code)]
 pub(crate) fn contract(adapter_id: &str) -> Result<Value, String> {
     let catalog = catalog_value()?;
     catalog["records"]
@@ -132,6 +133,7 @@ pub(crate) fn contract(adapter_id: &str) -> Result<Value, String> {
         .ok_or_else(|| format!("ADAPTER_CONTRACT_NOT_FOUND:{adapter_id}"))
 }
 
+#[allow(dead_code)]
 pub(crate) fn detection(adapter_id: &str, project_root: &Path) -> Result<Value, String> {
     let record = contract(adapter_id)?;
     let commands = record["detection_commands"]
