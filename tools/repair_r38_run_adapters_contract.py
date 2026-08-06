@@ -15,12 +15,14 @@ MODULE_ANCHOR = '''#[path = "native_route.rs"]
 mod native_route;
 '''
 SUPPORT = "        || native_run_adapters::supports(command)\n"
-SUPPORT_ANCHOR = "        || native_route::supports(command)\n"
+SUPPORT_ANCHOR = "        || native_fabric_verify_install::supports(command)\n"
 EXECUTE = '''    if native_run_adapters::supports(command) {
         return native_run_adapters::execute(&arguments, project_root, state_root).map(Some);
     }
 '''
-EXECUTE_ANCHOR = '''    if command.len() == 2 && command[0] == "run" && command[1] == "route" {
+EXECUTE_ANCHOR = '''    if native_fabric_route::supports(command) {
+        return native_fabric_route::execute(&arguments, state_root).map(Some);
+    }
 '''
 TARGET = '    "tests/runtime/test_native_run_adapters_r38.py",\n'
 TARGET_ANCHOR = '    "tests/runtime/test_native_fabric_verify_install_r38.py",\n'
