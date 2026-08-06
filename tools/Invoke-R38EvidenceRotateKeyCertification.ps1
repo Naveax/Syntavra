@@ -1,7 +1,7 @@
 #requires -Version 7.2
 [CmdletBinding()]
 param(
-    [string]$ExpectedHead = "54e0e9daf95e1b163cb98bdf5c33195ef537d908",
+    [string]$ExpectedHead = "",
     [string]$Branch = "agent/full-dual-engine-runtime",
     [string]$Repository = "https://github.com/Naveax/Syntavra.git",
     [string]$WorkingRoot = (Join-Path $HOME "Downloads"),
@@ -24,15 +24,15 @@ function Invoke-Checked {
     )
 
     Write-Host ("> {0} {1}" -f $FilePath, ($ArgumentList -join " ")) -ForegroundColor DarkGray
-    $process = Start-Process `
-        -FilePath $FilePath `
-        -ArgumentList $ArgumentList `
-        -WorkingDirectory $WorkingDirectory `
-        -NoNewWindow `
-        -Wait `
-        -PassThru
-    if ($process.ExitCode -ne 0) {
-        throw "Komut başarısız oldu (exit=$($process.ExitCode)): $FilePath $($ArgumentList -join ' ')"
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        & $FilePath @ArgumentList
+        if ($LASTEXITCODE -ne 0) {
+            throw "Komut başarısız oldu (exit=$LASTEXITCODE): $FilePath $($ArgumentList -join ' ')"
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -61,6 +61,23 @@ function Get-GitOutput {
     return (($output | Out-String).Trim())
 }
 
+function Get-RemoteBranchHead {
+    param(
+        [Parameter(Mandatory)][string]$Remote,
+        [Parameter(Mandatory)][string]$RemoteBranch
+    )
+
+    $line = (& git ls-remote $Remote "refs/heads/$RemoteBranch" 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($line)) {
+        throw "Remote branch head okunamadı: $RemoteBranch`n$line"
+    }
+    $head = ($line -split "\s+")[0]
+    if ($head -notmatch '^[0-9a-f]{40}$') {
+        throw "Remote branch head geçersiz: $head"
+    }
+    return $head
+}
+
 $null = Get-CommandPath -Name "git"
 $null = Get-CommandPath -Name "docker"
 
@@ -68,6 +85,16 @@ $dockerInfo = & docker info --format "{{json .ServerVersion}}" 2>&1
 if ($LASTEXITCODE -ne 0) {
     throw "Docker Desktop hazır değil. Docker Desktop'ı açıp yeniden çalıştırın.`n$dockerInfo"
 }
+
+$initialRemoteHead = Get-RemoteBranchHead -Remote $Repository -RemoteBranch $Branch
+if ([string]::IsNullOrWhiteSpace($ExpectedHead)) {
+    $ExpectedHead = $initialRemoteHead
+}
+elseif ($ExpectedHead -ne $initialRemoteHead) {
+    throw "Verilen exact head remote branch ile uyuşmuyor. Beklenen=$ExpectedHead Remote=$initialRemoteHead"
+}
+
+Write-Host "Pinned exact head: $ExpectedHead" -ForegroundColor Green
 
 New-Item -ItemType Directory -Path $WorkingRoot -Force | Out-Null
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -88,11 +115,7 @@ if ($head -ne $ExpectedHead) {
     throw "Exact head uyuşmuyor. Beklenen=$ExpectedHead Gerçek=$head"
 }
 
-$remoteLine = (& git ls-remote $Repository "refs/heads/$Branch" 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remoteLine)) {
-    throw "Remote branch head okunamadı: $Branch`n$remoteLine"
-}
-$remoteHead = ($remoteLine -split "\s+")[0]
+$remoteHead = Get-RemoteBranchHead -Remote $Repository -RemoteBranch $Branch
 if ($remoteHead -ne $ExpectedHead) {
     throw "Remote branch işlem başlamadan değişti. Beklenen=$ExpectedHead Remote=$remoteHead"
 }
@@ -111,11 +134,13 @@ apt-get install -y --no-install-recommends \
   ca-certificates curl build-essential pkg-config libssl-dev git
 rm -rf /var/lib/apt/lists/*
 
+git config --global --add safe.directory /workspace
+
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
   | sh -s -- -y --profile minimal --default-toolchain 1.82.0 --component rustfmt
 . "$HOME/.cargo/env"
 
-python -m pip install --disable-pip-version-check -e . pytest
+uv pip install --system -e . pytest
 
 python tools/repair_r38_evidence_rotate_key_contract.py
 python tools/advance_r38_evidence_rotate_key_inventory.py
@@ -229,7 +254,6 @@ printf '\nR38_EVIDENCE_ROTATE_KEY_CERTIFICATION_OK\n'
 )
 
 Write-Host "`n=== DOCKER CERTIFICATION ===" -ForegroundColor Cyan
-$dockerVolume = "${repoRoot}:/workspace"
 try {
     Invoke-Checked -FilePath "docker" -ArgumentList @(
         "run",
@@ -278,11 +302,7 @@ if ($LASTEXITCODE -ne 0) {
 
 if ($Push) {
     Write-Host "`n=== ATOMIC COMMIT + PUSH ===" -ForegroundColor Cyan
-    $remoteLine = (& git ls-remote $Repository "refs/heads/$Branch" 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remoteLine)) {
-        throw "Push öncesi remote branch okunamadı.`n$remoteLine"
-    }
-    $remoteHead = ($remoteLine -split "\s+")[0]
+    $remoteHead = Get-RemoteBranchHead -Remote $Repository -RemoteBranch $Branch
     if ($remoteHead -ne $ExpectedHead) {
         throw "Remote branch validation sırasında değişti. Beklenen=$ExpectedHead Remote=$remoteHead"
     }
@@ -291,6 +311,8 @@ if ($Push) {
     Invoke-Checked -FilePath "git" -ArgumentList @("-C", $repoRoot, "diff", "--cached", "--check")
     Invoke-Checked -FilePath "git" -ArgumentList @(
         "-C", $repoRoot,
+        "-c", "user.name=github-actions[bot]",
+        "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com",
         "commit", "-m", "R38: certify native evidence key rotation inventory"
     )
     Invoke-Checked -FilePath "git" -ArgumentList @(
