@@ -5,8 +5,27 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+PLATFORM_CLI = ROOT / "syntavra_runtime" / "platform_cli.py"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
+
+OLD_LOAD = '''def _load(value: str) -> Any:
+    path = Path(value)
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(value)
+'''
+NEW_LOAD = '''def _load(value: str) -> Any:
+    path = Path(value)
+    try:
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        # Long inline JSON is data, not a filesystem path. Path.is_file() may
+        # raise ENAMETOOLONG before the JSON parser gets a chance to consume it.
+        pass
+    return json.loads(value)
+'''
 
 MODULE = '''#[path = "native_run_adapter_certify.rs"]
 mod native_run_adapter_certify;
@@ -17,7 +36,11 @@ mod native_run_adapter_conformance;
 SUPPORT = "        || native_run_adapter_certify::supports(command)\n"
 SUPPORT_ANCHOR = "        || native_run_adapter_conformance::supports(command)\n"
 EXECUTE = '''    if native_run_adapter_certify::supports(command) {
-        return native_run_adapter_certify::execute(&arguments, state_root).map(Some);
+        let value = native_run_adapter_certify::execute(&arguments, state_root)?;
+        if value["ok"].as_bool() == Some(false) {
+            emit_failed_decision(&value, 3);
+        }
+        return Ok(Some(value));
     }
 '''
 EXECUTE_ANCHOR = '''    if native_run_adapter_conformance::supports(command) {
@@ -38,6 +61,22 @@ def insert_before(source: str, token: str, anchor: str, label: str) -> tuple[str
     if source.count(anchor) != 1:
         raise RuntimeError(f"{label} anchor must be unique")
     return source.replace(anchor, token + anchor, 1), True
+
+
+def repair_platform_cli() -> bool:
+    source = PLATFORM_CLI.read_text(encoding="utf-8")
+    if source.count(NEW_LOAD) == 1:
+        return False
+    if source.count(NEW_LOAD) != 0:
+        raise RuntimeError("safe platform JSON loader count invalid")
+    if source.count(OLD_LOAD) != 1:
+        raise RuntimeError("legacy platform JSON loader must be unique")
+    PLATFORM_CLI.write_text(
+        source.replace(OLD_LOAD, NEW_LOAD, 1),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return True
 
 
 def repair_product() -> bool:
@@ -73,15 +112,18 @@ def repair_validator() -> bool:
 
 
 def repair() -> bool:
-    return repair_product() or repair_validator()
+    values = (repair_platform_cli(), repair_product(), repair_validator())
+    return any(values)
 
 
 def main() -> int:
+    platform_cli_changed = repair_platform_cli()
     product_changed = repair_product()
     validator_changed = repair_validator()
     print(json.dumps({
-        "changed": product_changed or validator_changed,
+        "changed": platform_cli_changed or product_changed or validator_changed,
         "ok": True,
+        "platform_cli_changed": platform_cli_changed,
         "product_changed": product_changed,
         "surface": "native-run-adapter-certify",
         "validator_changed": validator_changed,
