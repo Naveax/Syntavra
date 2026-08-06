@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERIFY = ROOT / "crates" / "syntavra-cli" / "src" / "native_backup_verify.rs"
+RESTORE = ROOT / "crates" / "syntavra-cli" / "src" / "native_backup_restore.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
 
@@ -37,6 +38,16 @@ EXECUTE_ANCHOR = '''    if native_backup_verify::supports(command) {
         return Ok(Some(value));
     }
 '''
+WINDOWS_REPLACE = '''        #[cfg(windows)]
+        if fs::symlink_metadata(target).is_ok() {
+            fs::remove_file(target)
+                .map_err(|error| format!("BACKUP_RESTORE_TARGET_REMOVE_FAILED:{error}"))?;
+        }
+'''
+WINDOWS_REPLACE_ANCHOR = '''        if target.is_dir() {
+            return Err("BACKUP_RESTORE_TARGET_IS_DIRECTORY".to_owned());
+        }
+'''
 TARGET = '    "tests/runtime/test_native_backup_restore_r38.py",\n'
 TARGET_ANCHOR = '    "tests/runtime/test_native_backup_verify_r38.py",\n'
 
@@ -65,6 +76,19 @@ def expose_verify_helpers() -> bool:
         changed = True
     if changed:
         VERIFY.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
+
+
+def repair_restore_source() -> bool:
+    source = RESTORE.read_text(encoding="utf-8")
+    rendered, changed = insert_after(
+        source,
+        WINDOWS_REPLACE,
+        WINDOWS_REPLACE_ANCHOR,
+        "backup restore Windows replacement",
+    )
+    if changed:
+        RESTORE.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
 
 
@@ -100,14 +124,16 @@ def repair_validator() -> bool:
 
 def main() -> int:
     verify_changed = expose_verify_helpers()
+    restore_changed = repair_restore_source()
     product_changed = repair_product()
     validator_changed = repair_validator()
     print(
         json.dumps(
             {
-                "changed": verify_changed or product_changed or validator_changed,
+                "changed": verify_changed or restore_changed or product_changed or validator_changed,
                 "ok": True,
                 "product_changed": product_changed,
+                "restore_changed": restore_changed,
                 "surface": "native-backup-restore",
                 "validator_changed": validator_changed,
                 "verify_changed": verify_changed,
