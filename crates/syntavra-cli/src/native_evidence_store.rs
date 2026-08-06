@@ -423,7 +423,11 @@ impl NativeEvidenceStore {
         Ok(format!("sc://sha256/{digest}"))
     }
 
-    pub(crate) fn get(&self, handle: &str) -> Result<Vec<u8>, String> {
+    pub(crate) fn get_with_max_bytes(
+        &self,
+        handle: &str,
+        max_bytes: Option<i128>,
+    ) -> Result<Vec<u8>, String> {
         let digest = parse_handle(handle)?;
         let metadata = serde_json::from_slice::<Value>(
             &fs::read(self.metadata_path(&digest))
@@ -433,7 +437,48 @@ impl NativeEvidenceStore {
         if metadata["project_id"].as_str() != Some(self.project_id.as_str()) {
             return Err("EVIDENCE_SCOPE_MISMATCH".to_owned());
         }
-        let output = self.decrypt_digest(&digest)?;
+        let integer = |value: &Value, field: &str| -> Result<i128, String> {
+            match value {
+                Value::Bool(flag) => Ok(i128::from(*flag)),
+                Value::Number(number) => number
+                    .as_i64()
+                    .map(i128::from)
+                    .or_else(|| number.as_u64().map(i128::from))
+                    .or_else(|| {
+                        number
+                            .as_f64()
+                            .filter(|item| item.is_finite())
+                            .map(|item| item.trunc() as i128)
+                    })
+                    .ok_or_else(|| format!("EVIDENCE_METADATA_INTEGER_INVALID:{field}")),
+                Value::String(text) => text
+                    .trim()
+                    .parse::<i128>()
+                    .map_err(|_| format!("EVIDENCE_METADATA_INTEGER_INVALID:{field}")),
+                _ => Err(format!("EVIDENCE_METADATA_INTEGER_INVALID:{field}")),
+            }
+        };
+        let schema_version = integer(&metadata["schema_version"], "schema_version")?;
+        if schema_version != i128::from(SCHEMA_VERSION) {
+            return Err("EVIDENCE_METADATA_SCHEMA_INVALID".to_owned());
+        }
+        let described_size = integer(&metadata["bytes"], "bytes")?;
+        if let Some(limit) = max_bytes {
+            if described_size > limit {
+                return Err(format!(
+                    "EVIDENCE_EXCEEDS_MAX_BYTES:{described_size}>{limit}"
+                ));
+            }
+        }
+        let mut output = self.decrypt_digest(&digest)?;
+        let actual_size = i128::try_from(output.len())
+            .map_err(|_| "EVIDENCE_PLAINTEXT_SIZE_INVALID".to_owned())?;
+        if let Some(limit) = max_bytes {
+            if actual_size > limit {
+                output.zeroize();
+                return Err(format!("EVIDENCE_EXCEEDS_MAX_BYTES:{actual_size}>{limit}"));
+            }
+        }
         let connection = Connection::open(self.root.join("evidence.sqlite3"))
             .map_err(|error| format!("EVIDENCE_INDEX_OPEN_FAILED:{error}"))?;
         connection
@@ -443,6 +488,10 @@ impl NativeEvidenceStore {
             )
             .map_err(|error| format!("EVIDENCE_ACCESS_UPDATE_FAILED:{error}"))?;
         Ok(output)
+    }
+
+    pub(crate) fn get(&self, handle: &str) -> Result<Vec<u8>, String> {
+        self.get_with_max_bytes(handle, None)
     }
 }
 

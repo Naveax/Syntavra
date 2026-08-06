@@ -1,10 +1,9 @@
 {
-  "missing_native_public_command_count": 81,
+  "missing_native_public_command_count": 80,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
     "benchmark compare",
-    "evidence get",
     "evidence rotate-key",
     "prove integrations",
     "provider capture",
@@ -83,7 +82,7 @@
     "sandbox execute",
     "sandbox plan"
   ],
-  "native_public_command_count": 164,
+  "native_public_command_count": 165,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,

@@ -106,10 +106,7 @@ mod tests {
     #[test]
     fn routes_evidence_get_only() {
         assert!(supports(&["evidence".to_owned(), "get".to_owned()]));
-        assert!(!supports(&[
-            "evidence".to_owned(),
-            "describe".to_owned()
-        ]));
+        assert!(!supports(&["evidence".to_owned(), "describe".to_owned()]));
     }
 
     #[test]

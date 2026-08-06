@@ -45,6 +45,8 @@ mod native_engine_route_control;
 mod native_engine_routes;
 #[path = "native_engine_state_routes.rs"]
 mod native_engine_state_routes;
+#[path = "native_evidence_get.rs"]
+mod native_evidence_get;
 #[path = "native_evidence_store.rs"]
 mod native_evidence_store;
 #[path = "native_expansion.rs"]
@@ -155,6 +157,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_compress_get::supports(command)
         || native_compress_put::supports(command)
         || native_compress_verify::supports(command)
+        || native_evidence_get::supports(command)
         || native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
@@ -766,6 +769,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -844,6 +863,9 @@ pub fn execute(
             emit_failed_decision(&value, 3);
         }
         return Ok(Some(value));
+    }
+    if native_evidence_get::supports(command) {
+        return native_evidence_get::execute(&arguments, project_root, state_root).map(Some);
     }
     if native_platform_health::supports(command) {
         let value = native_platform_health::execute(command, project_root, state_root)?;
