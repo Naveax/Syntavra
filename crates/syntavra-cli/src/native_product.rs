@@ -55,6 +55,8 @@ mod native_fabric_profile;
 mod native_fabric_rollback_install;
 #[path = "native_fabric_route.rs"]
 mod native_fabric_route;
+#[path = "native_fabric_verify_install.rs"]
+mod native_fabric_verify_install;
 #[path = "native_integrations.rs"]
 mod native_integrations;
 #[path = "native_live_config.rs"]
@@ -133,6 +135,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_profile::supports(command)
         || native_fabric_platform_plan::supports(command)
         || native_fabric_rollback_install::supports(command)
+        || native_fabric_verify_install::supports(command)
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
         || native_session_continuity::supports(command)
@@ -515,6 +518,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -550,6 +569,20 @@ pub fn execute(
     }
     if native_fabric_rollback_install::supports(command) {
         return native_fabric_rollback_install::execute(&arguments, state_root).map(Some);
+    }
+    if native_fabric_verify_install::supports(command) {
+        let decision = native_fabric_verify_install::execute(&arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_fabric_verify_install::supports(command) {
+        let decision = native_fabric_verify_install::execute(&arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
     }
     if native_fabric_route::supports(command) {
         return native_fabric_route::execute(&arguments, state_root).map(Some);

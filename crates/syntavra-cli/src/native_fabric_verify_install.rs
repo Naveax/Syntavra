@@ -112,9 +112,7 @@ pub fn execute(
         &state_root.join("host-installations.sqlite3"),
     )?;
     let verification = public_verification_shape(super::native_fabric_install::verify(
-        &contract,
-        &root,
-        &scope,
+        &contract, &root, &scope,
     )?);
     let ok = verification["ok"].as_bool() == Some(true);
     let value = option_value(arguments, "--output")?.map_or_else(

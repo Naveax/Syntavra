@@ -562,7 +562,7 @@ fn stage(contract: &Value, root: &Path, source_skill: &Path) -> Result<Vec<Stage
     Ok(staged)
 }
 
-fn verify(contract: &Value, root: &Path, scope: &str) -> Result<Value, String> {
+pub(crate) fn verify(contract: &Value, root: &Path, scope: &str) -> Result<Value, String> {
     let mut reasons = Vec::<Value>::new();
     let mut details = Map::new();
     let config_path = contract["config_path"].as_str().unwrap_or_default();
