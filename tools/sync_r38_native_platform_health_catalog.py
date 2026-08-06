@@ -32,6 +32,28 @@ def normalize(value: Any, *, project: Path, state: Path) -> Any:
     return value
 
 
+def canonicalize_language_aliases(value: Any) -> Any:
+    if isinstance(value, dict):
+        rendered = {
+            str(key): canonicalize_language_aliases(item)
+            for key, item in value.items()
+        }
+        tree_sitter = rendered.get("tree_sitter")
+        if isinstance(tree_sitter, dict):
+            available = tree_sitter.get("available_languages")
+            if isinstance(available, list):
+                tree_sitter["available_languages"] = sorted(
+                    {
+                        "csharp" if str(item) == "c_sharp" else str(item)
+                        for item in available
+                    }
+                )
+        return rendered
+    if isinstance(value, list):
+        return [canonicalize_language_aliases(item) for item in value]
+    return value
+
+
 def run_public(
     action: str,
     *,
@@ -94,25 +116,29 @@ def build() -> dict[str, Any]:
         state = root / "state"
         home = root / "home"
         home.mkdir()
-        status = normalize(
-            run_public(
-                "platform-status",
+        status = canonicalize_language_aliases(
+            normalize(
+                run_public(
+                    "platform-status",
+                    project=project,
+                    state=state,
+                    home=home,
+                ),
                 project=project,
                 state=state,
-                home=home,
-            ),
-            project=project,
-            state=state,
+            )
         )
-        doctor = normalize(
-            run_public(
-                "platform-doctor",
+        doctor = canonicalize_language_aliases(
+            normalize(
+                run_public(
+                    "platform-doctor",
+                    project=project,
+                    state=state,
+                    home=home,
+                ),
                 project=project,
                 state=state,
-                home=home,
-            ),
-            project=project,
-            state=state,
+            )
         )
     return {
         "schema_version": 1,
