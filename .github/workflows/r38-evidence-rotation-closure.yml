@@ -3,7 +3,7 @@ name: R38 Evidence Rotation Closure
 on:
   pull_request:
     branches: [main]
-    types: [synchronize]
+    types: [synchronize, labeled]
 
 permissions:
   contents: write
