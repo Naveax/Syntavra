@@ -160,6 +160,10 @@ pub fn initialize(state_root: &Path) -> Result<(), String> {
     let root = state_root.join("unified");
     fs::create_dir_all(&root)
         .map_err(|error| format!("PLATFORM_STATE_ROOT_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(root.join("adapter-receipts"))
+        .map_err(|error| format!("PLATFORM_STATE_ADAPTER_RECEIPTS_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(root.join("adapter-backups"))
+        .map_err(|error| format!("PLATFORM_STATE_ADAPTER_BACKUPS_CREATE_FAILED:{error}"))?;
     artifacts(&root)?;
     headless(&root)?;
     evidence(&root)?;

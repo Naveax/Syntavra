@@ -41,6 +41,7 @@ TARGETS = (
     "tests/runtime/test_native_fabric_rollback_install_r38.py",
     "tests/runtime/test_native_fabric_verify_install_r38.py",
     "tests/runtime/test_native_run_adapters_r38.py",
+    "tests/runtime/test_native_run_adapter_conformance_r38.py",
     "tests/runtime/test_native_adapter_configure_r38.py",
     "tests/runtime/test_native_fabric_platform_plan_r38.py",
     "tests/runtime/test_native_fabric_profile_r38.py",

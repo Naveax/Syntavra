@@ -89,6 +89,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_route.rs"]
 mod native_route;
+#[path = "native_run_adapter_conformance.rs"]
+mod native_run_adapter_conformance;
 #[path = "native_run_adapters.rs"]
 mod native_run_adapters;
 #[path = "native_rust_subprocess.rs"]
@@ -142,6 +144,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_platform_plan::supports(command)
         || native_fabric_rollback_install::supports(command)
         || native_adapter_configure::supports(command)
+        || native_run_adapter_conformance::supports(command)
         || native_run_adapters::supports(command)
         || native_fabric_verify_install::supports(command)
         || native_fabric_route::supports(command)
@@ -574,6 +577,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -626,6 +645,10 @@ pub fn execute(
     }
     if native_adapter_configure::supports(command) {
         return native_adapter_configure::execute(&arguments, project_root, state_root).map(Some);
+    }
+    if native_run_adapter_conformance::supports(command) {
+        return native_run_adapter_conformance::execute(&arguments, project_root, state_root)
+            .map(Some);
     }
     if native_run_adapters::supports(command) {
         return native_run_adapters::execute(&arguments, project_root, state_root).map(Some);
