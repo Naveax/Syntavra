@@ -50,17 +50,21 @@ def expose_install_helpers() -> bool:
     rendered = source
     changed = False
     for name in PUBLIC_FUNCTIONS:
-        public = f"pub(crate) fn {name}(
-"
-        private = f"fn {name}(
-"
-        if rendered.count(public) == 1:
+        public = f"pub(crate) fn {name}("
+        private = f"fn {name}("
+        public_lines = [line for line in rendered.splitlines() if line.startswith(public)]
+        if len(public_lines) == 1:
             continue
-        if rendered.count(public) != 0:
+        if public_lines:
             raise RuntimeError(f"public install helper {name} must be unique")
-        if rendered.count(private) != 1:
+        private_lines = [line for line in rendered.splitlines() if line.startswith(private)]
+        if len(private_lines) != 1:
             raise RuntimeError(f"private install helper {name} must be unique")
-        rendered = rendered.replace(private, public, 1)
+        rendered = rendered.replace(
+            private_lines[0],
+            private_lines[0].replace(private, public, 1),
+            1,
+        )
         changed = True
     if changed:
         INSTALL.write_text(rendered, encoding="utf-8", newline="\n")
