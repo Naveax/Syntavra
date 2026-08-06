@@ -5,9 +5,24 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+PLATFORM = ROOT / "syntavra_runtime" / "platform.py"
 HEALTH = ROOT / "crates" / "syntavra-cli" / "src" / "native_platform_health.rs"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
+
+LANGUAGE_STATUS_ANCHOR = '''        value = _core(self, repository_root)
+'''
+LANGUAGE_STATUS_CANONICALIZATION = '''        value = _core(self, repository_root)
+        tree_sitter = value.get("tree_sitter", {})
+        available_languages = tree_sitter.get("available_languages", [])
+        if isinstance(available_languages, list):
+            tree_sitter["available_languages"] = sorted(
+                {
+                    "csharp" if str(item) == "c_sharp" else str(item)
+                    for item in available_languages
+                }
+            )
+'''
 
 OLD_GROUP_ROW = '''            Ok(json!({key: value, count_key: amount}))
 '''
@@ -50,6 +65,26 @@ def insert_before(source: str, token: str, anchor: str, label: str) -> tuple[str
     if source.count(anchor) != 1:
         raise RuntimeError(f"{label} anchor must be unique")
     return source.replace(anchor, token + anchor, 1), True
+
+
+def repair_python_language_ids() -> bool:
+    source = PLATFORM.read_text(encoding="utf-8")
+    if source.count(LANGUAGE_STATUS_CANONICALIZATION) == 1:
+        return False
+    if source.count(LANGUAGE_STATUS_CANONICALIZATION) != 0:
+        raise RuntimeError("canonical language status block count invalid")
+    if source.count(LANGUAGE_STATUS_ANCHOR) != 1:
+        raise RuntimeError("language status core anchor must be unique")
+    PLATFORM.write_text(
+        source.replace(
+            LANGUAGE_STATUS_ANCHOR,
+            LANGUAGE_STATUS_CANONICALIZATION,
+            1,
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return True
 
 
 def repair_health_source() -> bool:
@@ -101,21 +136,31 @@ def repair_validator() -> bool:
 
 
 def repair() -> bool:
-    values = (repair_health_source(), repair_product(), repair_validator())
+    values = (
+        repair_python_language_ids(),
+        repair_health_source(),
+        repair_product(),
+        repair_validator(),
+    )
     return any(values)
 
 
 def main() -> int:
+    python_changed = repair_python_language_ids()
     health_changed = repair_health_source()
     product_changed = repair_product()
     validator_changed = repair_validator()
     print(
         json.dumps(
             {
-                "changed": health_changed or product_changed or validator_changed,
+                "changed": python_changed
+                or health_changed
+                or product_changed
+                or validator_changed,
                 "health_changed": health_changed,
                 "ok": True,
                 "product_changed": product_changed,
+                "python_changed": python_changed,
                 "surface": "native-platform-health",
                 "validator_changed": validator_changed,
             },
