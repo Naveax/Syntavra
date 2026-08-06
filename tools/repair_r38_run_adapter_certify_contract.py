@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_CLI = ROOT / "syntavra_runtime" / "platform_cli.py"
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
+TEST = ROOT / "tests" / "runtime" / "test_native_run_adapter_certify_r38.py"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
 
 OLD_LOAD = '''def _load(value: str) -> Any:
@@ -51,6 +52,31 @@ EXECUTE_ANCHOR = '''    if native_run_adapter_conformance::supports(command) {
 TARGET = '    "tests/runtime/test_native_run_adapter_certify_r38.py",\n'
 TARGET_ANCHOR = '    "tests/runtime/test_native_run_adapter_conformance_r38.py",\n'
 
+PAIR_ARGUMENT = "    expected_code: int = 0,\n"
+PAIR_ARGUMENT_ANCHOR = "    from_file: bool = False,\n"
+OLD_EXIT_ASSERT = "    assert rust.returncode == python.returncode == 0, {\n"
+NEW_EXIT_ASSERT = "    assert rust.returncode == python.returncode == expected_code, {\n"
+OLD_FALSE_CALL = '''    rust, python, rust_project, python_project, *_ = _pair(tmp_path, receipt)
+    assert rust["ok"] is python["ok"] is False
+'''
+NEW_FALSE_CALL = '''    rust, python, rust_project, python_project, *_ = _pair(
+        tmp_path,
+        receipt,
+        expected_code=3,
+    )
+    assert rust["ok"] is python["ok"] is False
+'''
+OLD_MISSING_CALL = '''    rust, python, rust_project, python_project, *_ = _pair(tmp_path, receipt)
+    expected = [
+'''
+NEW_MISSING_CALL = '''    rust, python, rust_project, python_project, *_ = _pair(
+        tmp_path,
+        receipt,
+        expected_code=3,
+    )
+    expected = [
+'''
+
 
 def insert_before(source: str, token: str, anchor: str, label: str) -> tuple[str, bool]:
     count = source.count(token)
@@ -63,20 +89,22 @@ def insert_before(source: str, token: str, anchor: str, label: str) -> tuple[str
     return source.replace(anchor, token + anchor, 1), True
 
 
+def replace_once(source: str, old: str, new: str, label: str) -> tuple[str, bool]:
+    if source.count(new) == 1:
+        return source, False
+    if source.count(new) != 0:
+        raise RuntimeError(f"{label} repaired count invalid")
+    if source.count(old) != 1:
+        raise RuntimeError(f"{label} legacy contract must be unique")
+    return source.replace(old, new, 1), True
+
+
 def repair_platform_cli() -> bool:
     source = PLATFORM_CLI.read_text(encoding="utf-8")
-    if source.count(NEW_LOAD) == 1:
-        return False
-    if source.count(NEW_LOAD) != 0:
-        raise RuntimeError("safe platform JSON loader count invalid")
-    if source.count(OLD_LOAD) != 1:
-        raise RuntimeError("legacy platform JSON loader must be unique")
-    PLATFORM_CLI.write_text(
-        source.replace(OLD_LOAD, NEW_LOAD, 1),
-        encoding="utf-8",
-        newline="\n",
-    )
-    return True
+    rendered, changed = replace_once(source, OLD_LOAD, NEW_LOAD, "platform JSON loader")
+    if changed:
+        PLATFORM_CLI.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
 
 
 def repair_product() -> bool:
@@ -92,6 +120,33 @@ def repair_product() -> bool:
         changed = changed or applied
     if changed:
         PRODUCT.write_text(rendered, encoding="utf-8", newline="\n")
+    return changed
+
+
+def repair_test() -> bool:
+    source = TEST.read_text(encoding="utf-8")
+    rendered = source
+    changed = False
+    if rendered.count(PAIR_ARGUMENT) == 0:
+        if rendered.count(PAIR_ARGUMENT_ANCHOR) != 1:
+            raise RuntimeError("adapter certify pair argument anchor must be unique")
+        rendered = rendered.replace(
+            PAIR_ARGUMENT_ANCHOR,
+            PAIR_ARGUMENT_ANCHOR + PAIR_ARGUMENT,
+            1,
+        )
+        changed = True
+    elif rendered.count(PAIR_ARGUMENT) != 1:
+        raise RuntimeError("adapter certify expected-code argument count invalid")
+    for old, new, label in (
+        (OLD_EXIT_ASSERT, NEW_EXIT_ASSERT, "adapter certify exit assertion"),
+        (OLD_FALSE_CALL, NEW_FALSE_CALL, "adapter certify false receipt call"),
+        (OLD_MISSING_CALL, NEW_MISSING_CALL, "adapter certify missing receipt call"),
+    ):
+        rendered, applied = replace_once(rendered, old, new, label)
+        changed = changed or applied
+    if changed:
+        TEST.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
 
 
@@ -112,20 +167,27 @@ def repair_validator() -> bool:
 
 
 def repair() -> bool:
-    values = (repair_platform_cli(), repair_product(), repair_validator())
+    values = (
+        repair_platform_cli(),
+        repair_product(),
+        repair_test(),
+        repair_validator(),
+    )
     return any(values)
 
 
 def main() -> int:
     platform_cli_changed = repair_platform_cli()
     product_changed = repair_product()
+    test_changed = repair_test()
     validator_changed = repair_validator()
     print(json.dumps({
-        "changed": platform_cli_changed or product_changed or validator_changed,
+        "changed": platform_cli_changed or product_changed or test_changed or validator_changed,
         "ok": True,
         "platform_cli_changed": platform_cli_changed,
         "product_changed": product_changed,
         "surface": "native-run-adapter-certify",
+        "test_changed": test_changed,
         "validator_changed": validator_changed,
     }, sort_keys=True))
     return 0
