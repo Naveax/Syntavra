@@ -8,8 +8,7 @@ use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
 use sha2::{Digest as _, Sha256};
 
-const CATALOG: &str =
-    include_str!("../../../contracts/engine/r38-native-platform-health-v1.json");
+const CATALOG: &str = include_str!("../../../contracts/engine/r38-native-platform-health-v1.json");
 const VIEWS: [&str; 10] = [
     "task",
     "decision",
@@ -110,7 +109,10 @@ fn grouped_rows(
         .query_map([], |row| {
             let value = row.get::<_, String>(0)?;
             let amount = row.get::<_, i64>(1)?;
-            Ok(json!({key: value, count_key: amount}))
+            let mut object = serde_json::Map::new();
+            object.insert(key.to_owned(), Value::String(value));
+            object.insert(count_key.to_owned(), json!(amount));
+            Ok(Value::Object(object))
         })
         .map_err(|error| format!("PLATFORM_HEALTH_GROUP_QUERY_FAILED:{table}:{error}"))?;
     rows.collect::<Result<Vec<_>, _>>()
@@ -188,8 +190,8 @@ fn artifact_verify(state_root: &Path) -> Result<Value, String> {
             })
             .map_err(|error| format!("PLATFORM_HEALTH_ARTIFACT_VERIFY_QUERY_FAILED:{error}"))?;
         for row in rows {
-            let (artifact_id, expected, object_path) = row
-                .map_err(|error| format!("PLATFORM_HEALTH_ARTIFACT_VERIFY_ROW_FAILED:{error}"))?;
+            let (artifact_id, expected, object_path) =
+                row.map_err(|error| format!("PLATFORM_HEALTH_ARTIFACT_VERIFY_ROW_FAILED:{error}"))?;
             let path = Path::new(&object_path);
             if !path.is_file() {
                 failures.push(format!("missing:{artifact_id}"));
@@ -218,8 +220,8 @@ fn artifact_verify(state_root: &Path) -> Result<Value, String> {
             })
             .map_err(|error| format!("PLATFORM_HEALTH_NATIVE_ARTIFACT_QUERY_FAILED:{error}"))?;
         for row in rows {
-            let (artifact_id, expected, payload) = row
-                .map_err(|error| format!("PLATFORM_HEALTH_NATIVE_ARTIFACT_ROW_FAILED:{error}"))?;
+            let (artifact_id, expected, payload) =
+                row.map_err(|error| format!("PLATFORM_HEALTH_NATIVE_ARTIFACT_ROW_FAILED:{error}"))?;
             let actual = format!("{:x}", Sha256::digest(payload));
             if actual != expected.trim_start_matches("sha256:") {
                 failures.push(format!("hash:{artifact_id}"));
@@ -330,8 +332,7 @@ fn language_platform(state_root: &Path, baseline: &Value) -> Result<Value, Strin
     )?;
     let mut value = baseline.clone();
     value["semantic_indexes"] = semantic_index_stats(&connection)?;
-    value["repository_query"] =
-        repository_query_stats(&connection, &baseline["repository_query"])?;
+    value["repository_query"] = repository_query_stats(&connection, &baseline["repository_query"])?;
     Ok(value)
 }
 
@@ -349,10 +350,7 @@ fn runtime_evidence_stats(state_root: &Path) -> Result<Value, String> {
 }
 
 fn memory_stats(state_root: &Path) -> Result<Value, String> {
-    let connection = open(
-        &state_root.join("unified/session-memory.sqlite3"),
-        "MEMORY",
-    )?;
+    let connection = open(&state_root.join("unified/session-memory.sqlite3"), "MEMORY")?;
     Ok(json!({
         "sessions": count(&connection, "sessions")?,
         "events": count(&connection, "events")?,
@@ -375,8 +373,8 @@ fn headless_stats(state_root: &Path) -> Result<Value, String> {
             })
             .map_err(|error| format!("PLATFORM_HEALTH_HEADLESS_STATES_QUERY_FAILED:{error}"))?;
         for row in rows {
-            let (state, amount) = row
-                .map_err(|error| format!("PLATFORM_HEALTH_HEADLESS_STATES_ROW_FAILED:{error}"))?;
+            let (state, amount) =
+                row.map_err(|error| format!("PLATFORM_HEALTH_HEADLESS_STATES_ROW_FAILED:{error}"))?;
             states.insert(state, amount);
         }
     }
@@ -387,11 +385,7 @@ fn headless_stats(state_root: &Path) -> Result<Value, String> {
     }))
 }
 
-fn patch_status(
-    value: &mut Value,
-    project_root: &Path,
-    state_root: &Path,
-) -> Result<(), String> {
+fn patch_status(value: &mut Value, project_root: &Path, state_root: &Path) -> Result<(), String> {
     value["project"] = json!(project_root.to_string_lossy());
     value["artifacts"] = artifact_stats(state_root)?;
     value["semantic_graph"] = semantic_stats(state_root, &value["semantic_graph"])?;

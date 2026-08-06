@@ -69,6 +69,8 @@ mod native_long_context;
 mod native_manifest;
 #[path = "native_mode.rs"]
 mod native_mode;
+#[path = "native_platform_health.rs"]
+mod native_platform_health;
 #[path = "native_platform_state.rs"]
 mod native_platform_state;
 #[path = "native_proof_evidence.rs"]
@@ -145,6 +147,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_profile::supports(command)
         || native_fabric_platform_plan::supports(command)
         || native_fabric_rollback_install::supports(command)
+        || native_platform_health::supports(command)
         || native_adapter_configure::supports(command)
         || native_run_adapter_certify::supports(command)
         || native_run_adapter_conformance::supports(command)
@@ -612,6 +615,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -661,6 +680,13 @@ pub fn execute(
             emit_failed_decision(&decision.value, decision.exit_code);
         }
         return Ok(Some(decision.value));
+    }
+    if native_platform_health::supports(command) {
+        let value = native_platform_health::execute(command, project_root, state_root)?;
+        if value["ok"].as_bool() == Some(false) {
+            emit_failed_decision(&value, 3);
+        }
+        return Ok(Some(value));
     }
     if native_adapter_configure::supports(command) {
         return native_adapter_configure::execute(&arguments, project_root, state_root).map(Some);

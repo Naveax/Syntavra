@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 92,
+  "missing_native_public_command_count": 88,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -31,8 +31,6 @@
     "run capability-issue",
     "run capability-verify",
     "run code-intel",
-    "run competitive-doctor",
-    "run competitive-status",
     "run console",
     "run context-compile",
     "run dashboard",
@@ -72,8 +70,6 @@
     "run memory-verify",
     "run notify",
     "run output-capture",
-    "run platform-doctor",
-    "run platform-status",
     "run provider-pool",
     "run proxy-service install",
     "run proxy-service plan",
@@ -94,7 +90,7 @@
     "sandbox execute",
     "sandbox plan"
   ],
-  "native_public_command_count": 153,
+  "native_public_command_count": 157,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
