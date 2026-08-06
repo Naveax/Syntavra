@@ -76,6 +76,21 @@ fn verify_skill_source(arguments: &[String], project_root: &Path) -> Result<(), 
     Ok(())
 }
 
+fn public_verification_shape(mut verification: Value) -> Value {
+    let missing_config = verification["reasons"]
+        .as_array()
+        .is_some_and(|reasons| reasons.iter().any(|reason| reason == "missing-config"));
+    if missing_config {
+        if let Some(details) = verification
+            .get_mut("details")
+            .and_then(Value::as_object_mut)
+        {
+            details.remove("config");
+        }
+    }
+    verification
+}
+
 pub fn execute(
     arguments: &[String],
     project_root: &Path,
@@ -96,7 +111,11 @@ pub fn execute(
     let _connection = super::native_fabric_install::initialize_database(
         &state_root.join("host-installations.sqlite3"),
     )?;
-    let verification = super::native_fabric_install::verify(&contract, &root, &scope)?;
+    let verification = public_verification_shape(super::native_fabric_install::verify(
+        &contract,
+        &root,
+        &scope,
+    )?);
     let ok = verification["ok"].as_bool() == Some(true);
     let value = option_value(arguments, "--output")?.map_or_else(
         || Ok(verification.clone()),
