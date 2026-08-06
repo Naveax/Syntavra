@@ -113,7 +113,6 @@ def test_native_fabric_verify_missing_install_matches_python_and_exit_code(tmp_p
         "mode": "RUNTIME_PARTIAL",
         "reasons": ["missing-config", "missing-skill"],
         "details": {
-            "config": {"path": ".codex/mcp.json", "hash": ""},
             "skill": {"path": ".codex/skills/syntavra", "hash": ""},
         },
     }
