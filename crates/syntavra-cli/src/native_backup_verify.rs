@@ -111,8 +111,8 @@ fn open_sealed_file(
         return Err("BACKUP_OPEN_HEADER_INVALID".to_owned());
     }
     let encoded_key = read_exact_bytes(&mut input, key_size, "BACKUP_OPEN_KEY_ID_TRUNCATED")?;
-    let key_id = std::str::from_utf8(&encoded_key)
-        .map_err(|_| "BACKUP_OPEN_KEY_ID_INVALID".to_owned())?;
+    let key_id =
+        std::str::from_utf8(&encoded_key).map_err(|_| "BACKUP_OPEN_KEY_ID_INVALID".to_owned())?;
     let master_key = key_for_id(state_root, key_id)?;
     let derived = derive_key(&master_key, project_id, key_id)?;
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&derived));
@@ -193,8 +193,8 @@ fn safe_path(path: &Path) -> bool {
 fn safe_extract(archive_path: &Path, destination: &Path) -> Result<(), String> {
     fs::create_dir_all(destination)
         .map_err(|error| format!("BACKUP_EXTRACT_ROOT_FAILED:{error}"))?;
-    let file = File::open(archive_path)
-        .map_err(|error| format!("BACKUP_ARCHIVE_OPEN_FAILED:{error}"))?;
+    let file =
+        File::open(archive_path).map_err(|error| format!("BACKUP_ARCHIVE_OPEN_FAILED:{error}"))?;
     let mut archive = tar::Archive::new(file);
     for entry in archive
         .entries()
@@ -243,8 +243,7 @@ fn verify_extracted(extracted: &Path, project_id: &str) -> Result<Value, String>
         return Err("BACKUP_MANIFEST_MISSING".to_owned());
     }
     let manifest = serde_json::from_slice::<Value>(
-        &fs::read(manifest_path)
-            .map_err(|error| format!("BACKUP_MANIFEST_READ_FAILED:{error}"))?,
+        &fs::read(manifest_path).map_err(|error| format!("BACKUP_MANIFEST_READ_FAILED:{error}"))?,
     )
     .map_err(|error| format!("BACKUP_MANIFEST_INVALID:{error}"))?;
     if manifest["project_id"].as_str() != Some(project_id) {

@@ -60,7 +60,7 @@ fn now_seconds() -> Result<f64, String> {
         .map_err(|error| format!("BACKUP_CLOCK_FAILED:{error}"))
 }
 
-fn unique_temp_root() -> Result<PathBuf, String> {
+pub(crate) fn unique_temp_root() -> Result<PathBuf, String> {
     let mut random = [0_u8; 12];
     OsRng.fill_bytes(&mut random);
     let root = env::temp_dir().join(format!(
@@ -81,7 +81,7 @@ fn hex(bytes: &[u8]) -> String {
     rendered
 }
 
-fn sha256_file(path: &Path) -> Result<String, String> {
+pub(crate) fn sha256_file(path: &Path) -> Result<String, String> {
     let mut file = File::open(path).map_err(|error| format!("BACKUP_HASH_OPEN_FAILED:{error}"))?;
     let mut digest = Sha256::new();
     let mut buffer = vec![0_u8; 1024 * 1024];
@@ -97,7 +97,7 @@ fn sha256_file(path: &Path) -> Result<String, String> {
     Ok(hex(&digest.finalize()))
 }
 
-fn set_private(path: &Path) {
+pub(crate) fn set_private(path: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt as _;
@@ -342,7 +342,7 @@ struct ActiveKey {
     key: [u8; 32],
 }
 
-fn decode_environment_key(value: &str) -> Result<[u8; 32], String> {
+pub(crate) fn decode_environment_key(value: &str) -> Result<[u8; 32], String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(value)
         .map_err(|error| format!("BACKUP_KEY_BASE64_INVALID:{error}"))?;
@@ -397,7 +397,11 @@ fn active_key(state_root: &Path) -> Result<ActiveKey, String> {
     Ok(ActiveKey { key_id, key })
 }
 
-fn derive_key(master_key: &[u8; 32], project_id: &str, key_id: &str) -> Result<[u8; 32], String> {
+pub(crate) fn derive_key(
+    master_key: &[u8; 32],
+    project_id: &str,
+    key_id: &str,
+) -> Result<[u8; 32], String> {
     let salt = Sha256::digest(format!("syntavra:{project_id}").as_bytes());
     let hkdf = Hkdf::<Sha256>::new(Some(&salt), master_key);
     let mut output = [0_u8; 32];
@@ -519,7 +523,7 @@ fn decode_evidence_environment_key(value: &str) -> Result<[u8; 32], String> {
         .map_err(|_| "EVIDENCE_KEY_LENGTH_INVALID".to_owned())
 }
 
-fn initialize_evidence_state(state_root: &Path) -> Result<(), String> {
+pub(crate) fn initialize_evidence_state(state_root: &Path) -> Result<(), String> {
     let root = state_root.join("evidence");
     let keys = root.join("keys");
     fs::create_dir_all(root.join("objects"))
@@ -618,7 +622,7 @@ fn initialize_evidence_state(state_root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn initialize_roots(state_root: &Path) -> Result<(), String> {
+pub(crate) fn initialize_roots(state_root: &Path) -> Result<(), String> {
     fs::create_dir_all(state_root.join("backups"))
         .map_err(|error| format!("BACKUP_ROOT_CREATE_FAILED:{error}"))?;
     fs::create_dir_all(state_root.join("backup-keys/keys"))
