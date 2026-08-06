@@ -124,11 +124,18 @@ def insert_before(source: str, token: str, anchor: str, label: str) -> tuple[str
     return source.replace(anchor, token + anchor, 1), True
 
 
-def replace_once(source: str, old: str, new: str, label: str) -> tuple[str, bool]:
-    if source.count(new) == 1:
+def repair_semantic(
+    source: str,
+    old: str,
+    new: str,
+    marker: str,
+    label: str,
+) -> tuple[str, bool]:
+    marker_count = source.count(marker)
+    if marker_count == 1:
         return source, False
-    if source.count(new) != 0:
-        raise RuntimeError(f"{label} repaired count invalid")
+    if marker_count != 0:
+        raise RuntimeError(f"{label} semantic marker count invalid: {marker_count}")
     if source.count(old) != 1:
         raise RuntimeError(f"{label} legacy contract must be unique")
     return source.replace(old, new, 1), True
@@ -159,14 +166,14 @@ def repair_backup_source() -> bool:
             raise RuntimeError("unused backup hash helper must be unique")
         rendered = rendered.replace(UNUSED_HASH, "", 1)
         changed = True
-    for old, new, label in (
-        (OLD_SQLITE_BACKUP, NEW_SQLITE_BACKUP, "SQLite backup lifetime"),
-        (OLD_REGISTRY, NEW_REGISTRY, "backup key registry ownership"),
-        (OLD_CHUNK_READ, NEW_CHUNK_READ, "sealed backup chunk read"),
-        (OLD_TAG_WRITE, NEW_TAG_WRITE, "sealed backup tag write"),
-        (OLD_REPLACE, NEW_REPLACE, "backup destination replacement"),
+    for old, new, marker, label in (
+        (OLD_SQLITE_BACKUP, NEW_SQLITE_BACKUP, "drop(backup);", "SQLite backup lifetime"),
+        (OLD_REGISTRY, NEW_REGISTRY, '"active": key_id.clone()', "backup key registry ownership"),
+        (OLD_CHUNK_READ, NEW_CHUNK_READ, "read_exact(&mut plaintext)", "sealed backup chunk read"),
+        (OLD_TAG_WRITE, NEW_TAG_WRITE, "tag.as_ref()", "sealed backup tag write"),
+        (OLD_REPLACE, NEW_REPLACE, "BACKUP_DESTINATION_REMOVE_FAILED", "backup destination replacement"),
     ):
-        rendered, applied = replace_once(rendered, old, new, label)
+        rendered, applied = repair_semantic(rendered, old, new, marker, label)
         changed = changed or applied
     if changed:
         BACKUP.write_text(rendered, encoding="utf-8", newline="\n")
