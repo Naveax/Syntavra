@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;
@@ -25,14 +26,14 @@ pub(crate) struct ArtifactRecord {
 impl ArtifactRecord {
     pub(crate) fn value(&self) -> Value {
         json!({
-            "artifact_id": self.artifact_id,
-            "sha256": self.sha256,
-            "media_type": self.media_type,
-            "kind": self.kind,
+            "artifact_id": self.artifact_id.clone(),
+            "sha256": self.sha256.clone(),
+            "media_type": self.media_type.clone(),
+            "kind": self.kind.clone(),
             "byte_count": self.byte_count,
-            "created_at": self.created_at,
-            "object_path": self.object_path,
-            "metadata": self.metadata,
+            "created_at": self.created_at.clone(),
+            "object_path": self.object_path.clone(),
+            "metadata": self.metadata.clone(),
         })
     }
 }
@@ -97,6 +98,7 @@ impl NativeArtifactStore {
             .map_err(|_| "ARTIFACT_BYTE_COUNT_INVALID".to_owned())?;
         let created_at = utc_now()?;
         let metadata_json = canonical_json(metadata)?;
+        let object_path = target.to_string_lossy().into_owned();
         let connection = open_database(&self.db_path)?;
         connection
             .execute(
@@ -114,7 +116,7 @@ impl NativeArtifactStore {
                     i64::try_from(byte_count)
                         .map_err(|_| "ARTIFACT_BYTE_COUNT_SQL_INVALID".to_owned())?,
                     created_at,
-                    target.to_string_lossy(),
+                    object_path,
                     metadata_json,
                 ],
             )
@@ -175,7 +177,7 @@ fn record_from_row(row: &Row<'_>) -> rusqlite::Result<ArtifactRecord> {
     let metadata_json = row.get::<_, String>("metadata_json")?;
     let metadata = serde_json::from_str::<Value>(&metadata_json).map_err(|error| {
         rusqlite::Error::FromSqlConversionFailure(
-            metadata_json.len(),
+            7,
             rusqlite::types::Type::Text,
             Box::new(error),
         )
