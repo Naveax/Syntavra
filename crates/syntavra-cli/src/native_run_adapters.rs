@@ -114,14 +114,60 @@ fn detected_record(record: &Value, project_root: &Path) -> Value {
     value
 }
 
+pub(crate) fn catalog_value() -> Result<Value, String> {
+    serde_json::from_str::<Value>(CATALOG)
+        .map_err(|error| format!("ADAPTER_CATALOG_INVALID:{error}"))
+}
+
+pub(crate) fn contract(adapter_id: &str) -> Result<Value, String> {
+    let catalog = catalog_value()?;
+    catalog["records"]
+        .as_array()
+        .and_then(|records| {
+            records
+                .iter()
+                .find(|record| record["adapter_id"].as_str() == Some(adapter_id))
+        })
+        .cloned()
+        .ok_or_else(|| format!("ADAPTER_CONTRACT_NOT_FOUND:{adapter_id}"))
+}
+
+pub(crate) fn detection(adapter_id: &str, project_root: &Path) -> Result<Value, String> {
+    let record = contract(adapter_id)?;
+    let commands = record["detection_commands"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|command| find_command(command).is_some())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let paths = record["config_paths"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|candidate| config_path(candidate, project_root))
+        .filter(|path| path.exists())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "adapter_id": adapter_id,
+        "detected": !commands.is_empty() || !paths.is_empty(),
+        "commands": commands,
+        "paths": paths,
+        "surface": record["surface"],
+        "integration_modes": record["integration_modes"],
+    }))
+}
+
 pub fn execute(
     arguments: &[String],
     project_root: &Path,
     state_root: &Path,
 ) -> Result<Value, String> {
     super::native_platform_state::initialize(state_root)?;
-    let catalog = serde_json::from_str::<Value>(CATALOG)
-        .map_err(|error| format!("ADAPTER_CATALOG_INVALID:{error}"))?;
+    let catalog = catalog_value()?;
     let records = catalog["records"]
         .as_array()
         .ok_or_else(|| "ADAPTER_CATALOG_RECORDS_INVALID".to_owned())?;
