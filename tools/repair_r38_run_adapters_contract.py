@@ -17,7 +17,7 @@ mod native_route;
 SUPPORT = "        || native_run_adapters::supports(command)\n"
 SUPPORT_ANCHOR = "        || native_route::supports(command)\n"
 EXECUTE = '''    if native_run_adapters::supports(command) {
-        return native_run_adapters::execute(&arguments, project_root).map(Some);
+        return native_run_adapters::execute(&arguments, project_root, state_root).map(Some);
     }
 '''
 EXECUTE_ANCHOR = '''    if command.len() == 2 && command[0] == "run" && command[1] == "route" {
