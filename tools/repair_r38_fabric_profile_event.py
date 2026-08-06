@@ -24,7 +24,7 @@ EVENT_FUNCTION = '''fn record_profile_event(
         .map_err(|error| format!("FABRIC_PROFILE_CLOCK_FAILED:{error}"))?
         .as_secs_f64();
     let metadata = format!(
-        "{{\"available\": {available}, \"selected\": {selected}}}"
+        r#"{{"available": {available}, "selected": {selected}}}"#
     );
     connection
         .execute(
@@ -51,6 +51,7 @@ EVENT_FUNCTION = '''fn record_profile_event(
 
 '''
 FUNCTION_SIGNATURE = "fn record_profile_event(\n"
+METADATA_SIGNATURE = 'r#"{{"available": {available}, "selected": {selected}}}"#'
 FUNCTION_ANCHOR = "pub fn supports(command: &[String]) -> bool {\n"
 OLD_DATABASE = '''    let _database = super::native_fabric_doctor::open_database(
         &state_root.join("competitive-fabric.sqlite3"),
@@ -143,6 +144,7 @@ def repair() -> bool:
         "time_import": rendered.count(TIME_IMPORT),
         "sqlite_import": rendered.count(SQLITE_IMPORT),
         "event_function": rendered.count(FUNCTION_SIGNATURE),
+        "metadata_literal": rendered.count(METADATA_SIGNATURE),
         "timing": rendered.count(DATABASE_SIGNATURE),
         "event_call": rendered.count(EVENT_CALL_SIGNATURE),
     }
@@ -150,6 +152,7 @@ def repair() -> bool:
         "time_import": 1,
         "sqlite_import": 1,
         "event_function": 1,
+        "metadata_literal": 1,
         "timing": 1,
         "event_call": 1,
     }:
