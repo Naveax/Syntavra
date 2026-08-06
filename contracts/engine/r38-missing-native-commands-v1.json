@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 96,
+  "missing_native_public_command_count": 95,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -23,7 +23,6 @@
     "run adapter-certify",
     "run adapter-configure",
     "run adapter-conformance",
-    "run adapters",
     "run agent-execute",
     "run agent-plan",
     "run artifact-put",
@@ -98,7 +97,7 @@
     "sandbox execute",
     "sandbox plan"
   ],
-  "native_public_command_count": 149,
+  "native_public_command_count": 150,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,

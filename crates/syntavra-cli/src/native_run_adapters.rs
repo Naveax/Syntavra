@@ -9,8 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use serde_json::{json, Value};
 
-const CATALOG: &str =
-    include_str!("../../../contracts/engine/r38-native-adapter-catalog-v1.json");
+const CATALOG: &str = include_str!("../../../contracts/engine/r38-native-adapter-catalog-v1.json");
 
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [root, action] if root == "run" && action == "adapters")

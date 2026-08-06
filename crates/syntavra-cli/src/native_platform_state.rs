@@ -176,10 +176,8 @@ mod tests {
 
     #[test]
     fn creates_shared_state_tree() {
-        let root = std::env::temp_dir().join(format!(
-            "syntavra-platform-state-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("syntavra-platform-state-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         initialize(&root).unwrap();
         assert!(root.join("unified/headless.sqlite3").is_file());

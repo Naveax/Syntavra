@@ -44,8 +44,6 @@ def _run(
         str(project),
         "--state-root",
         str(project / "state"),
-        "--host",
-        "codex",
         "run",
         "adapters",
     ]
