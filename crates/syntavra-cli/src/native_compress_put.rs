@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
-use std::io::{Read as _, Write as _};
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,8 +17,7 @@ use super::native_evidence_store::NativeEvidenceStore;
 
 const CHUNK_SIZE: usize = 64 * 1024;
 const LOSS_POLICY: &str = "exact-externalized";
-const TRUNCATION_SUFFIX: &str =
-    "\n[visible view truncated; use CCR handle for exact restoration]";
+const TRUNCATION_SUFFIX: &str = "\n[visible view truncated; use CCR handle for exact restoration]";
 
 pub fn supports(command: &[String]) -> bool {
     matches!(command, [root, action] if root == "compress" && action == "put")
@@ -95,8 +94,8 @@ fn parse_arguments(arguments: &[String]) -> Result<PutArguments, String> {
 
 fn read_input(arguments: &PutArguments) -> Result<(Vec<u8>, String), String> {
     if let Some(input) = &arguments.input {
-        let data = fs::read(input)
-            .map_err(|error| format!("COMPRESSION_INPUT_READ_FAILED:{error}"))?;
+        let data =
+            fs::read(input).map_err(|error| format!("COMPRESSION_INPUT_READ_FAILED:{error}"))?;
         let path = if arguments.path.is_empty() {
             input.to_string_lossy().into_owned()
         } else {
@@ -139,8 +138,7 @@ fn random_compression_id() -> String {
 }
 
 fn canonical_json(value: &Value) -> Result<Vec<u8>, String> {
-    serde_json::to_vec(value)
-        .map_err(|error| format!("COMPRESSION_JSON_SERIALIZE_FAILED:{error}"))
+    serde_json::to_vec(value).map_err(|error| format!("COMPRESSION_JSON_SERIALIZE_FAILED:{error}"))
 }
 
 fn receipt_hash(
@@ -155,13 +153,7 @@ fn receipt_hash(
     let mut payload = BTreeMap::<String, Value>::new();
     payload.insert(
         "chunk_handles".to_owned(),
-        Value::Array(
-            chunk_handles
-                .iter()
-                .cloned()
-                .map(Value::String)
-                .collect(),
-        ),
+        Value::Array(chunk_handles.iter().cloned().map(Value::String).collect()),
     );
     payload.insert("chunk_size".to_owned(), Value::from(CHUNK_SIZE));
     payload.insert(
@@ -182,10 +174,7 @@ fn receipt_hash(
     );
     payload.insert("metadata".to_owned(), metadata.clone());
     payload.insert("original_bytes".to_owned(), Value::from(original_bytes));
-    payload.insert(
-        "visible_bytes".to_owned(),
-        Value::from(visible_text.len()),
-    );
+    payload.insert("visible_bytes".to_owned(), Value::from(visible_text.len()));
     let value = serde_json::to_value(payload)
         .map_err(|error| format!("COMPRESSION_RECEIPT_VALUE_FAILED:{error}"))?;
     Ok(hex(&Sha256::digest(canonical_json(&value)?)))
@@ -208,7 +197,9 @@ fn bounded(text: &str, budget: i64) -> String {
     while keep > 0 && std::str::from_utf8(&encoded[..keep]).is_err() {
         keep -= 1;
     }
-    let prefix = std::str::from_utf8(&encoded[..keep]).unwrap_or("").trim_end();
+    let prefix = std::str::from_utf8(&encoded[..keep])
+        .unwrap_or("")
+        .trim_end();
     format!("{prefix}{TRUNCATION_SUFFIX}")
 }
 
@@ -234,7 +225,10 @@ fn stack_regex() -> Regex {
 fn redact(text: &str) -> String {
     secret_regex()
         .replace_all(text, |captures: &Captures<'_>| {
-            format!("{}=<redacted>", captures.get(1).map_or("", |value| value.as_str()))
+            format!(
+                "{}=<redacted>",
+                captures.get(1).map_or("", |value| value.as_str())
+            )
         })
         .into_owned()
 }
@@ -309,11 +303,13 @@ fn detect(data: &[u8], hint: &str, path: &str) -> String {
         return "code".to_owned();
     }
     let sample_lines = lines(&sample);
-    if sample_lines
-        .iter()
-        .take(20)
-        .any(|line| line.starts_with("diff --git") || line.starts_with("index ") || line.starts_with("--- ") || line.starts_with("+++ ") || line.starts_with("@@ "))
-    {
+    if sample_lines.iter().take(20).any(|line| {
+        line.starts_with("diff --git")
+            || line.starts_with("index ")
+            || line.starts_with("--- ")
+            || line.starts_with("+++ ")
+            || line.starts_with("@@ ")
+    }) {
         return "diff".to_owned();
     }
     let stack = stack_regex();
@@ -404,7 +400,10 @@ fn compress_json(text: &str, budget: i64) -> Result<(String, Value), String> {
     };
     let visible = serde_json::to_string_pretty(&summarize_json(&value, 0))
         .map_err(|error| format!("COMPRESSION_JSON_RENDER_FAILED:{error}"))?;
-    Ok((bounded(&redact(&visible), budget), json!({"records": records})))
+    Ok((
+        bounded(&redact(&visible), budget),
+        json!({"records": records}),
+    ))
 }
 
 fn compress_jsonl(text: &str, budget: i64) -> Result<(String, Value), String> {
@@ -462,7 +461,7 @@ fn parse_delimited(text: &str, delimiter: char) -> Vec<Vec<String>> {
             field.push(value);
         }
     }
-    if !field.is_empty() || !row.is_empty() || !text.ends_with(['\n', '\r']) {
+    if !field.is_empty() || !row.is_empty() || !(text.ends_with('\n') || text.ends_with('\r')) {
         row.push(field);
         rows.push(row);
     }
@@ -577,7 +576,10 @@ fn compress_log(text: &str, budget: i64) -> (String, Value) {
         visible.push(format!("[{}x] {shape}", counts[shape]));
     }
     if order.len() > 50 {
-        visible.push(format!("… {} event shapes externalized …", order.len() - 50));
+        visible.push(format!(
+            "… {} event shapes externalized …",
+            order.len() - 50
+        ));
     }
     (
         bounded(&visible.join("\n"), budget),
@@ -653,7 +655,10 @@ fn compress_diff(text: &str, budget: i64) -> (String, Value) {
     visible.extend(headers.iter().take(80).map(ToString::to_string));
     visible.extend(changes.iter().take(120).map(ToString::to_string));
     if changes.len() > 120 {
-        visible.push(format!("… {} changed lines externalized …", changes.len() - 120));
+        visible.push(format!(
+            "… {} changed lines externalized …",
+            changes.len() - 120
+        ));
     }
     (
         bounded(&redact(&visible.join("\n")), budget),
@@ -692,7 +697,10 @@ fn code_profile(suffix: &str) -> Option<CodeProfile> {
         ".rs" => Some(CodeProfile {
             language: "rust",
             definitions: vec![
-                ("function", r"\b(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+([A-Za-z_][\w]*)\s*(?:<[^>]+>)?\s*\("),
+                (
+                    "function",
+                    r"\b(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+([A-Za-z_][\w]*)\s*(?:<[^>]+>)?\s*\(",
+                ),
                 ("struct", r"\b(?:pub\s+)?struct\s+([A-Za-z_][\w]*)"),
                 ("enum", r"\b(?:pub\s+)?enum\s+([A-Za-z_][\w]*)"),
                 ("trait", r"\b(?:pub\s+)?trait\s+([A-Za-z_][\w]*)"),
@@ -702,44 +710,77 @@ fn code_profile(suffix: &str) -> Option<CodeProfile> {
             imports: vec![r"\buse\s+([^;]+);", r"\bextern\s+crate\s+([A-Za-z_][\w]*)"],
             inheritance: vec![r"\bimpl(?:<[^>]+>)?\s+([^\s{]+)\s+for\s+([^\s{]+)"],
             calls: vec![r"\b([A-Za-z_][\w:]*)\s*!?\s*\("],
-            keywords: &["if", "for", "while", "match", "loop", "return", "Some", "Ok", "Err"],
+            keywords: &[
+                "if", "for", "while", "match", "loop", "return", "Some", "Ok", "Err",
+            ],
         }),
         ".js" | ".jsx" | ".mjs" | ".cjs" | ".ts" | ".tsx" => Some(CodeProfile {
             language: "javascript",
             definitions: vec![
-                ("class", r"\b(?:export\s+)?(?:default\s+)?class\s+([A-Za-z_$][\w$]*)"),
-                ("interface", r"\b(?:export\s+)?interface\s+([A-Za-z_$][\w$]*)"),
+                (
+                    "class",
+                    r"\b(?:export\s+)?(?:default\s+)?class\s+([A-Za-z_$][\w$]*)",
+                ),
+                (
+                    "interface",
+                    r"\b(?:export\s+)?interface\s+([A-Za-z_$][\w$]*)",
+                ),
                 ("type", r"\b(?:export\s+)?type\s+([A-Za-z_$][\w$]*)\s*="),
                 ("enum", r"\b(?:export\s+)?enum\s+([A-Za-z_$][\w$]*)"),
-                ("function", r"\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\("),
+                (
+                    "function",
+                    r"\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(",
+                ),
             ],
-            imports: vec![r#"\bimport(?:[^'"]*?from\s*)?['"]([^'"]+)['"]"#, r#"\brequire\(\s*['"]([^'"]+)['"]\s*\)"#],
+            imports: vec![
+                r#"\bimport(?:[^'"]*?from\s*)?['"]([^'"]+)['"]"#,
+                r#"\brequire\(\s*['"]([^'"]+)['"]\s*\)"#,
+            ],
             inheritance: vec![r"\bclass\s+\w+\s+extends\s+([A-Za-z_$][\w$.]*)"],
             calls: vec![r"\b([A-Za-z_$][\w$.:]*)\s*\("],
-            keywords: &["if", "for", "while", "switch", "catch", "return", "typeof", "new", "function"],
+            keywords: &[
+                "if", "for", "while", "switch", "catch", "return", "typeof", "new", "function",
+            ],
         }),
         ".go" => Some(CodeProfile {
             language: "go",
             definitions: vec![
-                ("function", r"\bfunc\s+(?:\([^)]*\)\s*)?([A-Za-z_][\w]*)\s*\("),
-                ("type", r"\btype\s+([A-Za-z_][\w]*)\s+(?:struct|interface|=)"),
+                (
+                    "function",
+                    r"\bfunc\s+(?:\([^)]*\)\s*)?([A-Za-z_][\w]*)\s*\(",
+                ),
+                (
+                    "type",
+                    r"\btype\s+([A-Za-z_][\w]*)\s+(?:struct|interface|=)",
+                ),
                 ("variable", r"\bvar\s+([A-Za-z_][\w]*)\s+"),
             ],
             imports: vec![r#"(?m)^\s*import\s+(?:[A-Za-z_.]+\s+)?"([^"]+)""#],
             inheritance: vec![],
             calls: vec![r"\b([A-Za-z_$][\w$.:]*)\s*\("],
-            keywords: &["if", "for", "switch", "select", "return", "go", "defer", "make", "new", "append", "len", "cap"],
+            keywords: &[
+                "if", "for", "switch", "select", "return", "go", "defer", "make", "new", "append",
+                "len", "cap",
+            ],
         }),
         ".py" => Some(CodeProfile {
             language: "python",
             definitions: vec![
                 ("class", r"(?m)^\s*class\s+([A-Za-z_][\w]*)"),
-                ("function", r"(?m)^\s*(?:async\s+)?def\s+([A-Za-z_][\w]*)\s*\("),
+                (
+                    "function",
+                    r"(?m)^\s*(?:async\s+)?def\s+([A-Za-z_][\w]*)\s*\(",
+                ),
             ],
-            imports: vec![r"(?m)^\s*import\s+([^\n]+)", r"(?m)^\s*from\s+([^\s]+)\s+import\s+"],
+            imports: vec![
+                r"(?m)^\s*import\s+([^\n]+)",
+                r"(?m)^\s*from\s+([^\s]+)\s+import\s+",
+            ],
             inheritance: vec![r"(?m)^\s*class\s+\w+\s*\(([^)]*)\)"],
             calls: vec![r"\b([A-Za-z_][\w.]*)\s*\("],
-            keywords: &["if", "for", "while", "return", "class", "def", "print", "len", "range"],
+            keywords: &[
+                "if", "for", "while", "return", "class", "def", "print", "len", "range",
+            ],
         }),
         _ => None,
     }
@@ -828,7 +869,8 @@ fn parse_code_lexical(path: &str, text: &str) -> CodeParse {
         for found in regex.captures_iter(text) {
             for group in found.iter().skip(1).flatten() {
                 for target in splitter.split(group.as_str().trim()) {
-                    let target = target.trim_matches(['{', '}', ':', '(', ')']);
+                    let target = target
+                        .trim_matches(|value: char| matches!(value, '{' | '}' | ':' | '(' | ')'));
                     if !target.is_empty()
                         && !matches!(
                             target,
@@ -884,7 +926,7 @@ fn parse_code_lexical(path: &str, text: &str) -> CodeParse {
 }
 
 fn semantic_snapshot(project_root: &Path, path: &str) -> Option<CodeParse> {
-    let safe = path.replace(['\\', '/'], "__");
+    let safe = path.replace('\\', "__").replace('/', "__");
     let snapshot = project_root
         .join(".syntavra/semantic")
         .join(format!("{safe}.json"));
@@ -896,8 +938,14 @@ fn semantic_snapshot(project_root: &Path, path: &str) -> Option<CodeParse> {
     let symbols = rows
         .iter()
         .map(|row| CodeSymbol {
-            line: row["line"].as_u64().and_then(|value| usize::try_from(value).ok()).unwrap_or(1),
-            end_line: row["end_line"].as_u64().and_then(|value| usize::try_from(value).ok()).unwrap_or(1),
+            line: row["line"]
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .unwrap_or(1),
+            end_line: row["end_line"]
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .unwrap_or(1),
             kind: row["kind"].as_str().unwrap_or("").to_owned(),
             qualified_name: row["qualified_name"].as_str().unwrap_or("").to_owned(),
             signature: row["signature"].as_str().unwrap_or("").to_owned(),
@@ -912,17 +960,12 @@ fn semantic_snapshot(project_root: &Path, path: &str) -> Option<CodeParse> {
     })
 }
 
-fn compress_code(
-    text: &str,
-    path: &str,
-    budget: i64,
-    project_root: &Path,
-) -> (String, Value) {
+fn compress_code(text: &str, path: &str, budget: i64, project_root: &Path) -> (String, Value) {
     if path.is_empty() {
         return compress_text(text, budget);
     }
-    let parsed = semantic_snapshot(project_root, path)
-        .unwrap_or_else(|| parse_code_lexical(path, text));
+    let parsed =
+        semantic_snapshot(project_root, path).unwrap_or_else(|| parse_code_lexical(path, text));
     let mut rendered = vec![format!(
         "Language: {} | Parser: {} | Symbols: {} | Edges: {}",
         parsed.language,
@@ -933,11 +976,7 @@ fn compress_code(
     for symbol in parsed.symbols.iter().take(100) {
         let row = format!(
             "{}:{} {} {} {}",
-            symbol.line,
-            symbol.end_line,
-            symbol.kind,
-            symbol.qualified_name,
-            symbol.signature
+            symbol.line, symbol.end_line, symbol.kind, symbol.qualified_name, symbol.signature
         );
         rendered.push(row.trim_end().to_owned());
     }
@@ -974,7 +1013,10 @@ fn compress_xml(text: &str, budget: i64) -> (String, Value) {
         .join(", ");
     let excerpt = plain.chars().take(4000).collect::<String>();
     (
-        bounded(&redact(&format!("Tags: {tag_summary}\nText: {excerpt}")), budget),
+        bounded(
+            &redact(&format!("Tags: {tag_summary}\nText: {excerpt}")),
+            budget,
+        ),
         json!({"tags": tags.len()}),
     )
 }
@@ -1019,11 +1061,12 @@ fn sentence_segments(text: &str) -> Vec<String> {
     let mut start = 0_usize;
     for found in separator.find_iter(text) {
         let matched = found.as_str();
-        let end = if matched.starts_with(['.', '!', '?']) {
-            found.start() + 1
-        } else {
-            found.start()
-        };
+        let end =
+            if matched.starts_with('.') || matched.starts_with('!') || matched.starts_with('?') {
+                found.start() + 1
+            } else {
+                found.start()
+            };
         output.push(text[start..end].to_owned());
         start = found.end();
     }
@@ -1112,11 +1155,7 @@ fn put_record(
     budget: i64,
 ) -> Result<Value, String> {
     let compression_id = random_compression_id();
-    let exact_handle = evidence.put(
-        raw,
-        &format!("compressed-source:{content_type}"),
-        metadata,
-    )?;
+    let exact_handle = evidence.put(raw, &format!("compressed-source:{content_type}"), metadata)?;
     let chunks = if raw.is_empty() {
         vec![&raw[..]]
     } else {

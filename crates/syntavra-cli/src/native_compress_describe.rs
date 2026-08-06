@@ -32,7 +32,7 @@ fn database_path(state_root: &Path) -> PathBuf {
     state_root.join("compression.sqlite3")
 }
 
-fn initialize_database(state_root: &Path) -> Result<PathBuf, String> {
+pub(crate) fn initialize_database(state_root: &Path) -> Result<PathBuf, String> {
     fs::create_dir_all(state_root)
         .map_err(|error| format!("COMPRESSION_STATE_ROOT_CREATE_FAILED:{error}"))?;
     let path = database_path(state_root);
@@ -77,7 +77,7 @@ fn initialize_database(state_root: &Path) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn describe(path: &Path, compression_id: &str) -> Result<Value, String> {
+pub(crate) fn describe(path: &Path, compression_id: &str) -> Result<Value, String> {
     let connection = Connection::open(path)
         .map_err(|error| format!("COMPRESSION_DATABASE_OPEN_FAILED:{error}"))?;
     connection

@@ -27,6 +27,8 @@ mod native_backup_verify;
 mod native_cache_amortize;
 #[path = "native_compress_describe.rs"]
 mod native_compress_describe;
+#[path = "native_compress_put.rs"]
+mod native_compress_put;
 #[path = "native_config_read_only.rs"]
 mod native_config_read_only;
 #[path = "native_context_governor.rs"]
@@ -39,6 +41,8 @@ mod native_engine_route_control;
 mod native_engine_routes;
 #[path = "native_engine_state_routes.rs"]
 mod native_engine_state_routes;
+#[path = "native_evidence_store.rs"]
+mod native_evidence_store;
 #[path = "native_expansion.rs"]
 mod native_expansion;
 #[path = "native_external_suite_gate.rs"]
@@ -144,6 +148,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_backup_verify::supports(command)
         || native_backup_restore::supports(command)
         || native_compress_describe::supports(command)
+        || native_compress_put::supports(command)
         || native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
@@ -707,6 +712,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -772,6 +793,9 @@ pub fn execute(
     }
     if native_compress_describe::supports(command) {
         return native_compress_describe::execute(&arguments, state_root).map(Some);
+    }
+    if native_compress_put::supports(command) {
+        return native_compress_put::execute(&arguments, project_root, state_root).map(Some);
     }
     if native_platform_health::supports(command) {
         let value = native_platform_health::execute(command, project_root, state_root)?;

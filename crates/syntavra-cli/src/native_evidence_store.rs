@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
 use std::collections::BTreeMap;
 use std::env;
@@ -163,7 +164,10 @@ impl NativeEvidenceStore {
     }
 
     fn object_path(&self, digest: &str) -> PathBuf {
-        self.root.join("objects").join(&digest[..2]).join(&digest[2..])
+        self.root
+            .join("objects")
+            .join(&digest[..2])
+            .join(&digest[2..])
     }
 
     fn metadata_path(&self, digest: &str) -> PathBuf {
@@ -180,7 +184,10 @@ impl NativeEvidenceStore {
             }
             return Ok(key);
         }
-        let path = self.root.join("keys").join(format!("master-v{version}.key"));
+        let path = self
+            .root
+            .join("keys")
+            .join(format!("master-v{version}.key"));
         let raw = fs::read(path).map_err(|error| format!("EVIDENCE_KEY_READ_FAILED:{error}"))?;
         raw.try_into()
             .map_err(|_| "EVIDENCE_KEY_FILE_LENGTH_INVALID".to_owned())
@@ -209,9 +216,10 @@ impl NativeEvidenceStore {
             Value::String(self.project_id.clone()),
         );
         value.insert("schema".to_owned(), Value::from(SCHEMA_VERSION));
-        canonical_json(&serde_json::to_value(value).map_err(|error| {
-            format!("EVIDENCE_AAD_VALUE_FAILED:{error}")
-        })?)
+        canonical_json(
+            &serde_json::to_value(value)
+                .map_err(|error| format!("EVIDENCE_AAD_VALUE_FAILED:{error}"))?,
+        )
     }
 
     fn encrypt_object(
@@ -233,9 +241,8 @@ impl NativeEvidenceStore {
             .map_err(|_| "EVIDENCE_ENCRYPT_FAILED".to_owned())?;
         key.zeroize();
 
-        let mut payload = Vec::with_capacity(
-            MAGIC.len() + 4 + NONCE_BYTES + ciphertext.len() + TAG_BYTES,
-        );
+        let mut payload =
+            Vec::with_capacity(MAGIC.len() + 4 + NONCE_BYTES + ciphertext.len() + TAG_BYTES);
         payload.extend_from_slice(MAGIC);
         payload.extend_from_slice(&version.to_be_bytes());
         payload.extend_from_slice(&nonce_bytes);
@@ -390,12 +397,7 @@ impl NativeEvidenceStore {
         Ok(())
     }
 
-    pub(crate) fn put(
-        &self,
-        data: &[u8],
-        kind: &str,
-        metadata: &Value,
-    ) -> Result<String, String> {
+    pub(crate) fn put(&self, data: &[u8], kind: &str, metadata: &Value) -> Result<String, String> {
         let digest = hex(&Sha256::digest(data));
         let path = self.object_path(&digest);
         let stored_bytes = if path.is_file() {
@@ -417,12 +419,7 @@ impl NativeEvidenceStore {
             metadata,
             self.active_version,
         )?;
-        self.update_index(
-            &digest,
-            plaintext_bytes,
-            stored_bytes,
-            self.active_version,
-        )?;
+        self.update_index(&digest, plaintext_bytes, stored_bytes, self.active_version)?;
         Ok(format!("sc://sha256/{digest}"))
     }
 
