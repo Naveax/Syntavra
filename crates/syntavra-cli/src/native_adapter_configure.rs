@@ -6,14 +6,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
-const CATALOG: &str =
-    include_str!("../../../contracts/engine/r38-native-adapter-catalog-v1.json");
 const CLAIM_BOUNDARY: &str =
     "Certified requires a live-host external execution receipt";
 
@@ -68,27 +63,6 @@ fn expanded_path(candidate: &str, project_root: &Path, home_root: &Path) -> Path
     } else {
         project_root.join(expanded)
     }
-}
-
-fn catalog() -> Result<Value, String> {
-    serde_json::from_str(CATALOG)
-        .map_err(|error| format!("ADAPTER_CATALOG_INVALID:{error}"))
-}
-
-fn adapter_record<'a>(catalog: &'a Value, adapter_id: &str) -> Result<&'a Value, String> {
-    let records = catalog["records"]
-        .as_array()
-        .ok_or_else(|| "ADAPTER_CATALOG_RECORDS_INVALID".to_owned())?;
-    let mut matches = records
-        .iter()
-        .filter(|record| record["adapter_id"].as_str() == Some(adapter_id));
-    let record = matches
-        .next()
-        .ok_or_else(|| format!("ADAPTER_NOT_FOUND:{adapter_id}"))?;
-    if matches.next().is_some() {
-        return Err(format!("ADAPTER_DUPLICATE:{adapter_id}"));
-    }
-    Ok(record)
 }
 
 fn load_json_object(argument: &str) -> Result<Map<String, Value>, String> {
@@ -312,66 +286,6 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
-fn is_executable(path: &Path) -> bool {
-    let Ok(metadata) = fs::metadata(path) else {
-        return false;
-    };
-    if !metadata.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(windows)]
-    {
-        true
-    }
-}
-
-#[cfg(windows)]
-fn candidate_names(name: &str) -> Vec<String> {
-    if Path::new(name).extension().is_some() {
-        return vec![name.to_owned()];
-    }
-    env::var("PATHEXT")
-        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned())
-        .split(';')
-        .filter(|value| !value.is_empty())
-        .map(|value| format!("{name}{value}"))
-        .collect()
-}
-
-#[cfg(not(windows))]
-fn candidate_names(name: &str) -> Vec<String> {
-    vec![name.to_owned()]
-}
-
-fn command_exists(name: &str) -> bool {
-    env::split_paths(&env::var_os("PATH").unwrap_or_default()).any(|directory| {
-        candidate_names(name)
-            .into_iter()
-            .any(|candidate| is_executable(&directory.join(candidate)))
-    })
-}
-
-fn detected(record: &Value, project_root: &Path, home_root: &Path) -> bool {
-    let command = record["detection_commands"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .any(command_exists);
-    let path = record["config_paths"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(|candidate| expanded_path(candidate, project_root, home_root))
-        .any(|candidate| candidate.exists());
-    command || path
-}
-
 pub fn execute(
     arguments: &[String],
     project_root: &Path,
@@ -387,8 +301,7 @@ pub fn execute(
         .map_err(|error| format!("ADAPTER_BACKUPS_CREATE_FAILED:{error}"))?;
 
     let (adapter_id, path_argument, desired_argument, apply) = parse_arguments(arguments)?;
-    let catalog = catalog()?;
-    let record = adapter_record(&catalog, &adapter_id)?;
+    let record = super::native_run_adapters::contract(&adapter_id)?;
     let home_root = home();
     let target = expanded_path(&path_argument, project_root, &home_root);
     let allowed = record["config_paths"]
@@ -462,7 +375,10 @@ pub fn execute(
     };
     let capabilities = record["capabilities"].clone();
     let maturity = if apply { "Configured" } else { "Contract" };
-    let detection = detected(record, project_root, &home_root) || (apply && target.exists());
+    let detection = super::native_run_adapters::detection(&adapter_id, project_root)?["detected"]
+        .as_bool()
+        .unwrap_or(false)
+        || (apply && target.exists());
     let body = json!({
         "adapter_id": adapter_id.clone(),
         "maturity": maturity,
