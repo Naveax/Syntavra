@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCT = ROOT / "crates" / "syntavra-cli" / "src" / "native_product.rs"
 VALIDATOR = ROOT / "tools" / "validate_r38_regression_closure.py"
+TEST = ROOT / "tests" / "runtime" / "test_native_run_adapters_r38.py"
 
 MODULE = '''#[path = "native_run_adapters.rs"]
 mod native_run_adapters;
@@ -26,6 +27,12 @@ EXECUTE_ANCHOR = '''    if native_fabric_route::supports(command) {
 '''
 TARGET = '    "tests/runtime/test_native_run_adapters_r38.py",\n'
 TARGET_ANCHOR = '    "tests/runtime/test_native_fabric_verify_install_r38.py",\n'
+OLD_HOST = '''        "--host",
+        "codex",
+        "run",
+'''
+NEW_HOST = '''        "run",
+'''
 
 
 def insert_before(source: str, token: str, anchor: str, label: str) -> tuple[str, bool]:
@@ -71,20 +78,39 @@ def wire_validator() -> bool:
     return True
 
 
+def repair_test() -> bool:
+    source = TEST.read_text(encoding="utf-8")
+    if source.count(OLD_HOST) == 0:
+        if source.count(NEW_HOST) < 1:
+            raise RuntimeError("run adapters public argv contract missing")
+        return False
+    if source.count(OLD_HOST) != 1:
+        raise RuntimeError("run adapters legacy host block must be unique")
+    TEST.write_text(
+        source.replace(OLD_HOST, NEW_HOST, 1),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return True
+
+
 def repair() -> bool:
     product_changed = wire_product()
     validator_changed = wire_validator()
-    return product_changed or validator_changed
+    test_changed = repair_test()
+    return product_changed or validator_changed or test_changed
 
 
 def main() -> int:
     product_changed = wire_product()
     validator_changed = wire_validator()
+    test_changed = repair_test()
     print(json.dumps({
-        "changed": product_changed or validator_changed,
+        "changed": product_changed or validator_changed or test_changed,
         "ok": True,
         "product_changed": product_changed,
         "surface": "native-run-adapters",
+        "test_changed": test_changed,
         "validator_changed": validator_changed,
     }, sort_keys=True))
     return 0
