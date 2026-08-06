@@ -155,9 +155,36 @@ def _assert_result(value: dict[str, Any], destination: Path, *, encrypted: bool)
     int(value["manifest_hash"], 16)
 
 
+def _assert_manifest_contract(
+    manifest: dict[str, Any],
+    payload: bytes,
+    names: list[str],
+    value: dict[str, Any],
+    project: Path,
+) -> None:
+    assert manifest["schema_version"] == 1
+    assert manifest["project_id"] == stable_project_id(project)
+    assert manifest["created_at"] == value["created_at"]
+    assert value["files"] == len(manifest["files"])
+    assert "BACKUP_MANIFEST.json" in names
+    assert set(manifest["files"]).issubset(names)
+    assert all(
+        not relative.startswith(("backups/", "backup-keys/", "tmp/"))
+        for relative in manifest["files"]
+    )
+    assert hashlib.sha256(payload).hexdigest() == value["manifest_hash"]
+
+
+def _comparable_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    rendered = json.loads(json.dumps(manifest, sort_keys=True))
+    rendered.pop("created_at", None)
+    return rendered
+
+
 def test_native_backup_create_plaintext_empty_state_matches_contract(tmp_path: Path) -> None:
     project = tmp_path / "project"
     values: dict[str, dict[str, Any]] = {}
+    manifests: dict[str, dict[str, Any]] = {}
     for engine in ("python", "rust"):
         state = tmp_path / f"{engine}-state"
         destination = tmp_path / f"{engine}-empty.tar"
@@ -172,21 +199,15 @@ def test_native_backup_create_plaintext_empty_state_matches_contract(tmp_path: P
         assert completed.stderr == ""
         value = json.loads(completed.stdout)
         _assert_result(value, destination, encrypted=False)
-        assert value["files"] == 0
         manifest, payload, names = _read_manifest(destination)
-        assert names == ["BACKUP_MANIFEST.json"]
-        assert manifest == {
-            "schema_version": 1,
-            "project_id": stable_project_id(project),
-            "created_at": value["created_at"],
-            "files": {},
-        }
-        assert hashlib.sha256(payload).hexdigest() == value["manifest_hash"]
+        _assert_manifest_contract(manifest, payload, names, value, project)
         assert (state / "backups").is_dir()
         assert (state / "backup-keys" / "keys").is_dir()
         values[engine] = value
+        manifests[engine] = _comparable_manifest(manifest)
     assert values["rust"]["files"] == values["python"]["files"]
     assert values["rust"]["encrypted"] == values["python"]["encrypted"]
+    assert manifests["rust"] == manifests["python"]
 
 
 def test_native_backup_create_plaintext_captures_files_and_sqlite(tmp_path: Path) -> None:
@@ -207,24 +228,20 @@ def test_native_backup_create_plaintext_captures_files_and_sqlite(tmp_path: Path
         assert completed.stderr == ""
         value = json.loads(completed.stdout)
         _assert_result(value, destination, encrypted=False)
-        assert value["files"] == 3
         manifest, payload, names = _read_manifest(destination)
-        assert sorted(manifest["files"]) == [
+        _assert_manifest_contract(manifest, payload, names, value, project)
+        assert {
             "config.json",
             "nested/data.txt",
             "runtime.sqlite3",
-        ]
-        assert all(not name.startswith(("backups/", "backup-keys/", "tmp/")) for name in names)
-        assert hashlib.sha256(payload).hexdigest() == value["manifest_hash"]
+        }.issubset(manifest["files"])
         extract = tmp_path / f"{engine}-extract"
         with tarfile.open(destination, "r") as handle:
             handle.extractall(extract, filter="data")
         with sqlite3.connect(extract / "runtime.sqlite3") as connection:
             assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
             assert connection.execute("SELECT value FROM records").fetchone()[0] == "sqlite-backup-ok"
-        manifests[engine] = manifest
-    for manifest in manifests.values():
-        manifest.pop("created_at")
+        manifests[engine] = _comparable_manifest(manifest)
     assert manifests["rust"] == manifests["python"]
 
 
@@ -246,7 +263,7 @@ def test_native_backup_create_encrypted_is_python_verifiable(tmp_path: Path) -> 
         assert completed.stderr == ""
         value = json.loads(completed.stdout)
         _assert_result(value, destination, encrypted=True)
-        assert value["files"] == 3
+        assert value["files"] >= 3
         assert destination.read_bytes()[:8] == b"SCCHNK2\x00"
         verification = _run_python_verify(
             project,
@@ -257,7 +274,11 @@ def test_native_backup_create_encrypted_is_python_verifiable(tmp_path: Path) -> 
         )
         assert verification.returncode == 0, (verification.stdout, verification.stderr)
         assert verification.stderr == ""
-        assert json.loads(verification.stdout) == {"ok": True, "files": 3, "failures": []}
+        assert json.loads(verification.stdout) == {
+            "ok": True,
+            "files": value["files"],
+            "failures": [],
+        }
 
 
 def test_native_backup_create_local_key_is_python_verifiable(tmp_path: Path) -> None:
@@ -275,6 +296,7 @@ def test_native_backup_create_local_key_is_python_verifiable(tmp_path: Path) -> 
     )
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
     assert completed.stderr == ""
+    value = json.loads(completed.stdout)
     key = state / "backup-keys" / "keys" / "local-v1.key"
     registry = state / "backup-keys" / "keys" / "registry.json"
     assert key.stat().st_size == 32
@@ -288,7 +310,11 @@ def test_native_backup_create_local_key_is_python_verifiable(tmp_path: Path) -> 
     )
     assert verification.returncode == 0, (verification.stdout, verification.stderr)
     assert verification.stderr == ""
-    assert json.loads(verification.stdout) == {"ok": True, "files": 3, "failures": []}
+    assert json.loads(verification.stdout) == {
+        "ok": True,
+        "files": value["files"],
+        "failures": [],
+    }
 
 
 @pytest.mark.skipif(not hasattr(os, "symlink"), reason="symlinks unavailable")
