@@ -36,18 +36,31 @@ SOURCE_REPAIRS = (
     (
         "|| !text.ends_with(['\\n', '\\r'])",
         "|| !(text.ends_with('\\n') || text.ends_with('\\r'))",
+        ("text.ends_with('\\n')", "text.ends_with('\\r')"),
     ),
     (
         "let safe = path.replace(['\\\\', '/'], \"__\");",
         "let safe = path.replace('\\\\', \"__\").replace('/', \"__\");",
+        ("path.replace('\\\\', \"__\")", ".replace('/', \"__\")"),
     ),
     (
         "let end = if matched.starts_with(['.', '!', '?']) {",
         "let end = if matched.starts_with('.') || matched.starts_with('!') || matched.starts_with('?') {",
+        (
+            "matched.starts_with('.')",
+            "matched.starts_with('!')",
+            "matched.starts_with('?')",
+        ),
     ),
     (
         "let target = target.trim_matches(['{', '}', ':', '(', ')']);",
         "let target = target.trim_matches(|value: char| matches!(value, '{' | '}' | ':' | '(' | ')'));",
+        ("trim_matches(|value: char|", "matches!(value"),
+    ),
+    (
+        "use std::io::{Read as _, Write as _};",
+        "use std::io::Read as _;",
+        ("use std::io::Read as _;",),
     ),
 )
 
@@ -83,11 +96,11 @@ def normalize_put_source() -> bool:
     source = PUT.read_text(encoding="utf-8")
     rendered = source
     changed = False
-    for old, new in SOURCE_REPAIRS:
+    for old, new, markers in SOURCE_REPAIRS:
         if old in rendered:
             rendered = rendered.replace(old, new, 1)
             changed = True
-        elif new not in rendered:
+        elif not all(marker in rendered for marker in markers):
             raise RuntimeError(f"compress put source normalization anchor missing: {old}")
     if changed:
         PUT.write_text(rendered, encoding="utf-8", newline="\n")
