@@ -1,0 +1,153 @@
+name: R38 One-Shot Runtime Closure
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r38-one-shot-runtime-closure
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      RUSTUP_TOOLCHAIN: 1.82.0
+      VALIDATION_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out exact triggering head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.VALIDATION_SHA }}
+          fetch-depth: 0
+
+      - name: Detect one-shot repair marker
+        id: marker
+        shell: bash
+        run: |
+          if [[ -f tools/r38-compress-verify-repair.marker ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python 3.13
+        if: steps.marker.outputs.present == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up pinned Rust 1.82
+        if: steps.marker.outputs.present == 'true'
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt
+
+      - name: Install runtime test dependencies
+        if: steps.marker.outputs.present == 'true'
+        run: python -m pip install --disable-pip-version-check -e . pytest
+
+      - name: Apply native compress verify repair
+        if: steps.marker.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/repair_r38_compress_verify_contract.py
+          python tools/advance_r38_compress_verify_inventory.py
+          cargo fmt --all
+          cargo check --locked -p syntavra-cli --bin syntavra
+          git diff --binary > /tmp/compress-verify-first.diff
+          python tools/repair_r38_compress_verify_contract.py
+          python tools/advance_r38_compress_verify_inventory.py
+          cargo fmt --all
+          git diff --binary > /tmp/compress-verify-second.diff
+          cmp /tmp/compress-verify-first.diff /tmp/compress-verify-second.diff
+
+      - name: Build repaired selector
+        if: steps.marker.outputs.present == 'true'
+        run: cargo build --locked -p syntavra-cli --bin syntavra
+
+      - name: Validate native compression routes
+        if: steps.marker.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SYNTAVRA_R38_SELECTOR="$PWD/target/debug/syntavra" \
+            python -m pytest -q \
+              tests/runtime/test_native_compress_describe_r38.py \
+              tests/runtime/test_native_compress_put_r38.py \
+              tests/runtime/test_native_compress_get_r38.py \
+              tests/runtime/test_native_compress_verify_r38.py
+
+      - name: Validate exact-head runtime closure
+        if: steps.marker.outputs.present == 'true'
+        run: python tools/validate_r38_regression_closure.py
+
+      - name: Reproduce generated metadata
+        if: steps.marker.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/repair_r38_selector_option_values.py
+          python tools/repair_r38_windows_rollout_identity.py
+          python tools/repair_r38_native_expansion_sync.py
+          python tools/repair_r38_backup_create_contract.py
+          python tools/repair_r38_backup_evidence_parity.py
+          python tools/advance_r38_backup_create_inventory.py
+          python tools/repair_r38_backup_verify_contract.py
+          python tools/advance_r38_backup_verify_inventory.py
+          python tools/repair_r38_backup_restore_contract.py
+          python tools/advance_r38_backup_restore_inventory.py
+          python tools/repair_r38_compress_describe_contract.py
+          python tools/advance_r38_compress_describe_inventory.py
+          python tools/repair_r38_compress_put_contract.py
+          python tools/advance_r38_compress_put_inventory.py
+          python tools/repair_r38_compress_get_contract.py
+          python tools/advance_r38_compress_get_inventory.py
+          python tools/repair_r38_compress_verify_contract.py
+          python tools/advance_r38_compress_verify_inventory.py
+          python tools/sync_r38_generated_metadata.py
+          cargo fmt --all
+          python tools/repair_r38_backup_create_contract.py
+          python tools/repair_r38_backup_evidence_parity.py
+          python tools/advance_r38_backup_create_inventory.py
+          python tools/repair_r38_backup_verify_contract.py
+          python tools/advance_r38_backup_verify_inventory.py
+          python tools/repair_r38_backup_restore_contract.py
+          python tools/advance_r38_backup_restore_inventory.py
+          python tools/repair_r38_compress_describe_contract.py
+          python tools/advance_r38_compress_describe_inventory.py
+          python tools/repair_r38_compress_put_contract.py
+          python tools/advance_r38_compress_put_inventory.py
+          python tools/repair_r38_compress_get_contract.py
+          python tools/advance_r38_compress_get_inventory.py
+          python tools/repair_r38_compress_verify_contract.py
+          python tools/advance_r38_compress_verify_inventory.py
+          python tools/repair_r38_native_expansion_sync.py
+          python tools/sync_r38_generated_metadata.py
+          rm tools/r38-compress-verify-repair.marker
+          rm .github/workflows/r38-one-shot-runtime-closure.yml
+          python tools/refresh_manifest.py
+
+      - name: Final locked selector compile
+        if: steps.marker.outputs.present == 'true'
+        run: cargo check --locked -p syntavra-cli --bin syntavra
+
+      - name: Commit atomic closure and remove one-shot workflow
+        if: steps.marker.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${VALIDATION_SHA}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && { echo "expected an atomic closure diff" >&2; exit 1; }
+          git commit -m "R38: certify native compress verify inventory"
+          git push origin HEAD:agent/full-dual-engine-runtime
