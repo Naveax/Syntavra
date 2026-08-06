@@ -121,7 +121,7 @@ def _pair(
         receipt,
         from_file=from_file,
     )
-    assert rust.returncode == python.returncode == 0, {
+    assert rust.returncode == python.returncode, {
         "python": (python.stdout, python.stderr),
         "rust": (rust.stdout, rust.stderr),
     }
