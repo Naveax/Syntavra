@@ -58,10 +58,7 @@ fn number_field(value: &Value, name: &str) -> Result<Value, String> {
     if value[name].is_number() {
         Ok(value[name].clone())
     } else {
-        Err(format!(
-            "COMPRESSION_{}_INVALID",
-            name.to_ascii_uppercase()
-        ))
+        Err(format!("COMPRESSION_{}_INVALID", name.to_ascii_uppercase()))
     }
 }
 
@@ -111,19 +108,13 @@ fn receipt_hash(description: &Value, handles: &[String]) -> Result<String, Strin
         "original_bytes".to_owned(),
         number_field(description, "original_bytes")?,
     );
-    payload.insert(
-        "visible_bytes".to_owned(),
-        Value::from(visible_text.len()),
-    );
+    payload.insert("visible_bytes".to_owned(), Value::from(visible_text.len()));
     let value = serde_json::to_value(payload)
         .map_err(|error| format!("COMPRESSION_RECEIPT_VALUE_FAILED:{error}"))?;
     Ok(hex(&Sha256::digest(canonical_json(&value)?)))
 }
 
-fn verify_roundtrip(
-    description: &Value,
-    evidence: &NativeEvidenceStore,
-) -> Result<bool, String> {
+fn verify_roundtrip(description: &Value, evidence: &NativeEvidenceStore) -> Result<bool, String> {
     let exact_handle = string_field(description, "exact_handle")?;
     let handles = chunk_handles(description)?;
     let full = evidence.get(&exact_handle)?;
@@ -147,8 +138,7 @@ pub fn execute(
 ) -> Result<Value, String> {
     let compression_id = parse_arguments(arguments)?;
     let database_path = super::native_compress_describe::initialize_database(state_root)?;
-    let description =
-        super::native_compress_describe::describe(&database_path, &compression_id)?;
+    let description = super::native_compress_describe::describe(&database_path, &compression_id)?;
     let project_id =
         super::state_snapshot_contract::project_id_for_root(&project_root.to_string_lossy())?;
     let evidence = NativeEvidenceStore::open(state_root, &project_id)?;
@@ -202,12 +192,10 @@ mod tests {
             "metadata": {"path": ""},
             "receipt_hash": "unused",
         });
-        let first = receipt_hash(&description, &["sc://sha256/chunk".to_owned()])
-            .expect("receipt");
+        let first = receipt_hash(&description, &["sc://sha256/chunk".to_owned()]).expect("receipt");
         let mut changed = description.clone();
         changed["chunk_size"] = json!(2048);
-        let second = receipt_hash(&changed, &["sc://sha256/chunk".to_owned()])
-            .expect("receipt");
+        let second = receipt_hash(&changed, &["sc://sha256/chunk".to_owned()]).expect("receipt");
         assert_ne!(first, second);
     }
 }

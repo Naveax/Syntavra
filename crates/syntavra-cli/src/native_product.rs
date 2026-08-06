@@ -31,6 +31,8 @@ mod native_compress_describe;
 mod native_compress_get;
 #[path = "native_compress_put.rs"]
 mod native_compress_put;
+#[path = "native_compress_verify.rs"]
+mod native_compress_verify;
 #[path = "native_config_read_only.rs"]
 mod native_config_read_only;
 #[path = "native_context_governor.rs"]
@@ -152,6 +154,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_compress_describe::supports(command)
         || native_compress_get::supports(command)
         || native_compress_put::supports(command)
+        || native_compress_verify::supports(command)
         || native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
@@ -747,6 +750,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -818,6 +837,13 @@ pub fn execute(
     }
     if native_compress_put::supports(command) {
         return native_compress_put::execute(&arguments, project_root, state_root).map(Some);
+    }
+    if native_compress_verify::supports(command) {
+        let value = native_compress_verify::execute(&arguments, project_root, state_root)?;
+        if value["ok"].as_bool() == Some(false) {
+            emit_failed_decision(&value, 3);
+        }
+        return Ok(Some(value));
     }
     if native_platform_health::supports(command) {
         let value = native_platform_health::execute(command, project_root, state_root)?;

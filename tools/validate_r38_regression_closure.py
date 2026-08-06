@@ -50,6 +50,7 @@ TARGETS = (
     "tests/runtime/test_native_compress_describe_r38.py",
     "tests/runtime/test_native_compress_put_r38.py",
     "tests/runtime/test_native_compress_get_r38.py",
+    "tests/runtime/test_native_compress_verify_r38.py",
     "tests/runtime/test_native_adapter_configure_r38.py",
     "tests/runtime/test_native_fabric_platform_plan_r38.py",
     "tests/runtime/test_native_fabric_profile_r38.py",
