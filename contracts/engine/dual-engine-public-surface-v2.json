@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 93,
-    "module_count": 113,
-    "native_coverage_ppm": 620408,
-    "native_public_command_count": 152,
+    "missing_native_public_command_count": 92,
+    "module_count": 114,
+    "native_coverage_ppm": 624489,
+    "native_public_command_count": 153,
     "native_public_commands": [
       "benchmark generate-config",
       "benchmark generate-repo",
@@ -118,6 +118,7 @@
       "provider capabilities",
       "repair",
       "rollout-tail",
+      "run adapter-certify",
       "run adapter-configure",
       "run adapter-conformance",
       "run adapters",

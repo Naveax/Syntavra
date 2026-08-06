@@ -89,6 +89,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_route.rs"]
 mod native_route;
+#[path = "native_run_adapter_certify.rs"]
+mod native_run_adapter_certify;
 #[path = "native_run_adapter_conformance.rs"]
 mod native_run_adapter_conformance;
 #[path = "native_run_adapters.rs"]
@@ -144,6 +146,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_platform_plan::supports(command)
         || native_fabric_rollback_install::supports(command)
         || native_adapter_configure::supports(command)
+        || native_run_adapter_certify::supports(command)
         || native_run_adapter_conformance::supports(command)
         || native_run_adapters::supports(command)
         || native_fabric_verify_install::supports(command)
@@ -593,6 +596,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -645,6 +664,13 @@ pub fn execute(
     }
     if native_adapter_configure::supports(command) {
         return native_adapter_configure::execute(&arguments, project_root, state_root).map(Some);
+    }
+    if native_run_adapter_certify::supports(command) {
+        let value = native_run_adapter_certify::execute(&arguments, state_root)?;
+        if value["ok"].as_bool() == Some(false) {
+            emit_failed_decision(&value, 3);
+        }
+        return Ok(Some(value));
     }
     if native_run_adapter_conformance::supports(command) {
         return native_run_adapter_conformance::execute(&arguments, project_root, state_root)

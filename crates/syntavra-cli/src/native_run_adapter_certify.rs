@@ -75,12 +75,15 @@ fn python_truthy(value: &Value) -> bool {
     match value {
         Value::Null => false,
         Value::Bool(value) => *value,
-        Value::Number(value) => value
-            .as_i64()
-            .map_or_else(
-                || value.as_u64().map_or_else(|| value.as_f64().is_some_and(|item| item != 0.0), |item| item != 0),
-                |item| item != 0,
-            ),
+        Value::Number(value) => value.as_i64().map_or_else(
+            || {
+                value.as_u64().map_or_else(
+                    || value.as_f64().is_some_and(|item| item != 0.0),
+                    |item| item != 0,
+                )
+            },
+            |item| item != 0,
+        ),
         Value::String(value) => !value.is_empty(),
         Value::Array(value) => !value.is_empty(),
         Value::Object(value) => !value.is_empty(),
@@ -107,8 +110,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     } / 146_097;
     let day_of_era = shifted - era * 146_097;
     let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096)
-            / 365;
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let year = year_of_era + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
@@ -182,17 +184,18 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
     let external_receipt = load_object(&receipt_argument)?;
     let contract = super::native_run_adapters::contract(&adapter_id)?;
 
-    let present = external_receipt.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    let present = external_receipt
+        .keys()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
     let missing = REQUIRED
         .iter()
         .filter(|key| !present.contains(**key))
         .copied()
         .collect::<Vec<_>>();
-    let booleans_valid = BOOLEAN_CHECKS.iter().all(|key| {
-        external_receipt
-            .get(*key)
-            .is_some_and(python_truthy)
-    });
+    let booleans_valid = BOOLEAN_CHECKS
+        .iter()
+        .all(|key| external_receipt.get(*key).is_some_and(python_truthy));
     let artifact_hash = python_string(external_receipt.get("artifact_hash"));
     let hash_valid = artifact_hash.starts_with("sha256:") && artifact_hash.chars().count() == 71;
     let valid = missing.is_empty() && booleans_valid && hash_valid;
@@ -250,10 +253,7 @@ mod tests {
 
     #[test]
     fn routes_adapter_certify_only() {
-        assert!(supports(&[
-            "run".to_owned(),
-            "adapter-certify".to_owned()
-        ]));
+        assert!(supports(&["run".to_owned(), "adapter-certify".to_owned()]));
         assert!(!supports(&[
             "run".to_owned(),
             "adapter-conformance".to_owned()
