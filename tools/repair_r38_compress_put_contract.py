@@ -65,14 +65,6 @@ SOURCE_REPAIRS = (
 )
 
 
-def insert_after(source: str, token: str, anchor: str, label: str) -> tuple[str, bool]:
-    if source.count(token) == 1:
-        return source, False
-    if source.count(token) != 0 or source.count(anchor) != 1:
-        raise RuntimeError(f"{label} contract is ambiguous")
-    return source.replace(anchor, anchor + token, 1), True
-
-
 def expose_describe_helpers() -> bool:
     source = DESCRIBE.read_text(encoding="utf-8")
     rendered = source
@@ -111,13 +103,36 @@ def repair_product() -> bool:
     source = PRODUCT.read_text(encoding="utf-8")
     rendered = source
     changed = False
-    for token, anchor, label in (
-        (MODULE, MODULE_ANCHOR, "compress put modules"),
-        (SUPPORT, SUPPORT_ANCHOR, "compress put support"),
-        (EXECUTE, EXECUTE_ANCHOR, "compress put execute"),
-    ):
-        rendered, applied = insert_after(rendered, token, anchor, label)
-        changed = changed or applied
+
+    evidence_module = "mod native_evidence_store;"
+    put_module = "mod native_compress_put;"
+    module_presence = (evidence_module in rendered, put_module in rendered)
+    if module_presence == (False, False):
+        if rendered.count(MODULE_ANCHOR) != 1:
+            raise RuntimeError("compress put module anchor is ambiguous")
+        rendered = rendered.replace(MODULE_ANCHOR, MODULE_ANCHOR + MODULE, 1)
+        changed = True
+    elif module_presence != (True, True):
+        raise RuntimeError("compress put module wiring is partial")
+
+    support_marker = "|| native_compress_put::supports(command)"
+    if support_marker not in rendered:
+        if rendered.count(SUPPORT_ANCHOR) != 1:
+            raise RuntimeError("compress put support anchor is ambiguous")
+        rendered = rendered.replace(SUPPORT_ANCHOR, SUPPORT_ANCHOR + SUPPORT, 1)
+        changed = True
+
+    execute_support = "if native_compress_put::supports(command) {"
+    execute_call = "native_compress_put::execute("
+    execute_presence = (execute_support in rendered, execute_call in rendered)
+    if execute_presence == (False, False):
+        if rendered.count(EXECUTE_ANCHOR) != 1:
+            raise RuntimeError("compress put execute anchor is ambiguous")
+        rendered = rendered.replace(EXECUTE_ANCHOR, EXECUTE_ANCHOR + EXECUTE, 1)
+        changed = True
+    elif execute_presence != (True, True):
+        raise RuntimeError("compress put execute wiring is partial")
+
     if changed:
         PRODUCT.write_text(rendered, encoding="utf-8", newline="\n")
     return changed
