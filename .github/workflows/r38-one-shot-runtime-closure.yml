@@ -58,6 +58,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check -e . pytest
 
       - name: Apply native evidence rotation repair
+        id: repair_contract
         if: steps.marker.outputs.present == 'true'
         shell: bash
         run: |
@@ -74,10 +75,12 @@ jobs:
           cmp /tmp/evidence-rotate-first.diff /tmp/evidence-rotate-second.diff
 
       - name: Build repaired selector
+        id: build_selector
         if: steps.marker.outputs.present == 'true'
         run: cargo build --locked -p syntavra-cli --bin syntavra
 
       - name: Validate native evidence and compression routes
+        id: targeted_tests
         if: steps.marker.outputs.present == 'true'
         shell: bash
         run: |
@@ -92,10 +95,12 @@ jobs:
               tests/runtime/test_native_evidence_rotate_key_r38.py
 
       - name: Validate exact-head runtime closure
+        id: full_validator
         if: steps.marker.outputs.present == 'true'
         run: python tools/validate_r38_regression_closure.py
 
       - name: Reproduce generated metadata
+        id: metadata_reproduction
         if: steps.marker.outputs.present == 'true'
         shell: bash
         run: |
@@ -150,10 +155,12 @@ jobs:
           python tools/refresh_manifest.py
 
       - name: Final locked selector compile
+        id: final_compile
         if: steps.marker.outputs.present == 'true'
         run: cargo check --locked -p syntavra-cli --bin syntavra
 
       - name: Commit atomic closure and remove one-shot workflow
+        id: atomic_commit
         if: steps.marker.outputs.present == 'true'
         shell: bash
         run: |
@@ -165,4 +172,48 @@ jobs:
           git diff --cached --check
           git diff --cached --quiet && { echo "expected an atomic closure diff" >&2; exit 1; }
           git commit -m "R38: certify native evidence key rotation inventory"
+          git push origin HEAD:agent/full-dual-engine-runtime
+
+      - name: Persist closure failure diagnostics
+        if: failure() && steps.marker.outputs.present == 'true'
+        shell: bash
+        env:
+          REPAIR_OUTCOME: ${{ steps.repair_contract.outcome }}
+          BUILD_OUTCOME: ${{ steps.build_selector.outcome }}
+          TARGETED_OUTCOME: ${{ steps.targeted_tests.outcome }}
+          VALIDATOR_OUTCOME: ${{ steps.full_validator.outcome }}
+          METADATA_OUTCOME: ${{ steps.metadata_reproduction.outcome }}
+          COMPILE_OUTCOME: ${{ steps.final_compile.outcome }}
+          COMMIT_OUTCOME: ${{ steps.atomic_commit.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "validation_sha": os.environ["VALIDATION_SHA"],
+              "outcomes": {
+                  "repair_contract": os.environ.get("REPAIR_OUTCOME", ""),
+                  "build_selector": os.environ.get("BUILD_OUTCOME", ""),
+                  "targeted_tests": os.environ.get("TARGETED_OUTCOME", ""),
+                  "full_validator": os.environ.get("VALIDATOR_OUTCOME", ""),
+                  "metadata_reproduction": os.environ.get("METADATA_OUTCOME", ""),
+                  "final_compile": os.environ.get("COMPILE_OUTCOME", ""),
+                  "atomic_commit": os.environ.get("COMMIT_OUTCOME", ""),
+              },
+          }
+          Path("tools/r38-evidence-rotate-key-failure.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+              newline="\n",
+          )
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/r38-evidence-rotate-key-failure.json
+          git commit -m "R38: record evidence rotation closure failure"
           git push origin HEAD:agent/full-dual-engine-runtime
