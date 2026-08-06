@@ -25,11 +25,13 @@ def _run(
     home = state.parent / f"{state.name}-{engine}-artifact-home"
     home.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
-    environment["HOME"] = str(home)
-    environment["USERPROFILE"] = str(home)
-    environment["PATH"] = ""
-    environment["PYTHONIOENCODING"] = "utf-8"
-    environment["PYTHONUTF8"] = "1"
+    environment.update(
+        HOME=str(home),
+        USERPROFILE=str(home),
+        PATH="",
+        PYTHONIOENCODING="utf-8",
+        PYTHONUTF8="1",
+    )
     prefix = (
         [sys.executable, "-m", "syntavra_runtime.engine_entry"]
         if engine == "python"
@@ -68,9 +70,7 @@ def _value(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
 def _normalize(value: dict[str, Any], state: Path) -> dict[str, Any]:
     output = dict(value)
     output["created_at"] = "<created-at>"
-    output["object_path"] = str(output["object_path"]).replace(
-        str(state), "<state>"
-    )
+    output["object_path"] = str(output["object_path"]).replace(str(state), "<state>")
     return output
 
 
@@ -88,7 +88,7 @@ def _database_rows(state: Path) -> list[tuple[Any, ...]]:
 
 def _object_files(state: Path) -> list[Path]:
     root = state / "unified" / "artifacts" / "objects"
-    return sorted(path for path in root.rglob("*") if path.is_file())
+    return sorted(path for path in root.rglob("*") if path.is_file()) if root.exists() else []
 
 
 def _assert_record(value: dict[str, Any], payload: bytes) -> None:
@@ -98,7 +98,6 @@ def _assert_record(value: dict[str, Any], payload: bytes) -> None:
     assert value["byte_count"] == len(payload)
     assert value["metadata"] == {}
     path = Path(value["object_path"])
-    assert path.is_file()
     assert path.read_bytes() == payload
     assert path.parts[-3:] == (digest[:2], digest[2:4], digest)
 
@@ -126,8 +125,7 @@ def test_native_artifact_put_inline_text_matches_python(tmp_path: Path) -> None:
         _assert_record(values[engine], payload.encode())
         assert values[engine]["kind"] == "report"
         assert values[engine]["media_type"] == "text/markdown"
-        assert len(_database_rows(state)) == 1
-        assert len(_object_files(state)) == 1
+        assert len(_database_rows(state)) == len(_object_files(state)) == 1
     assert _normalize(values["rust"], states["rust"]) == _normalize(
         values["python"], states["python"]
     )
@@ -183,8 +181,7 @@ def test_native_artifact_put_python_first_dedup_preserves_first_metadata(
     assert second == first
     assert first["kind"] == "first-kind"
     assert first["media_type"] == "application/first"
-    assert len(_database_rows(state)) == 1
-    assert len(_object_files(state)) == 1
+    assert len(_database_rows(state)) == len(_object_files(state)) == 1
 
 
 def test_native_artifact_put_rust_first_dedup_is_python_readable(
@@ -262,5 +259,4 @@ def test_native_artifact_put_database_corruption_fails_closed(tmp_path: Path) ->
         (root / "artifacts.sqlite3").write_bytes(b"not-a-sqlite-database")
         result = _run(engine, project, state, "payload")
         assert result.returncode != 0
-        assert _database_rows if True else None
         assert not _object_files(state)
