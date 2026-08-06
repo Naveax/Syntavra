@@ -3,7 +3,7 @@ name: R38 One-Shot Runtime Closure
 on:
   pull_request:
     branches: [main]
-    types: [synchronize]
+    types: [synchronize, edited]
   push:
     branches: [agent/full-dual-engine-runtime]
     paths:
