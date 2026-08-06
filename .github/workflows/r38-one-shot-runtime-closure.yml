@@ -1,8 +1,9 @@
 name: R38 One-Shot Runtime Closure
 
 on:
-  push:
-    branches: [agent/full-dual-engine-runtime]
+  pull_request:
+    branches: [main]
+    types: [synchronize]
 
 permissions:
   contents: write
@@ -17,7 +18,7 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       RUSTUP_TOOLCHAIN: 1.82.0
-      VALIDATION_SHA: ${{ github.sha }}
+      VALIDATION_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Check out exact triggering head
         uses: actions/checkout@v4
