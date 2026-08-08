@@ -56,6 +56,7 @@ TARGETS = (
     "tests/runtime/test_native_run_artifact_put_r38.py",
     "tests/runtime/test_native_run_artifact_query_r38.py",
     "tests/runtime/test_native_run_artifact_stats_r38.py",
+    "tests/runtime/test_native_run_artifact_verify_r38.py",
     "tests/runtime/test_native_adapter_configure_r38.py",
     "tests/runtime/test_native_fabric_platform_plan_r38.py",
     "tests/runtime/test_native_fabric_profile_r38.py",
