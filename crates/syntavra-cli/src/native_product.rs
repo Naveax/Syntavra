@@ -121,6 +121,8 @@ mod native_run_adapters;
 mod native_run_artifact_put;
 #[path = "native_run_artifact_query.rs"]
 mod native_run_artifact_query;
+#[path = "native_run_artifact_stats.rs"]
+mod native_run_artifact_stats;
 #[path = "native_rust_subprocess.rs"]
 mod native_rust_subprocess;
 #[path = "native_semantic_demo.rs"]
@@ -166,6 +168,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_evidence_get::supports(command)
         || native_run_artifact_put::supports(command)
         || native_run_artifact_query::supports(command)
+        || native_run_artifact_stats::supports(command)
         || native_config_read_only::supports(command)
         || native_context_governor::supports(command)
         || native_read_only_product::supports(command)
@@ -841,6 +844,22 @@ pub fn execute(
         }
         return Ok(Some(decision.value));
     }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
+    if native_engine_route_control::supports(command) {
+        let decision =
+            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        if decision.exit_code != 0 {
+            emit_failed_decision(&decision.value, decision.exit_code);
+        }
+        return Ok(Some(decision.value));
+    }
     if native_engine_routes::supports(command) {
         return native_engine_routes::execute(command, &arguments, project_root, state_root)
             .map(Some);
@@ -928,6 +947,9 @@ pub fn execute(
     }
     if native_run_artifact_query::supports(command) {
         return native_run_artifact_query::execute(&arguments, state_root).map(Some);
+    }
+    if native_run_artifact_stats::supports(command) {
+        return native_run_artifact_stats::execute(&arguments, state_root).map(Some);
     }
     if native_platform_health::supports(command) {
         let value = native_platform_health::execute(command, project_root, state_root)?;

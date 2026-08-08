@@ -1,5 +1,5 @@
 {
-  "missing_native_public_command_count": 77,
+  "missing_native_public_command_count": 76,
   "missing_native_public_commands": [
     "agent replay",
     "agent run",
@@ -13,7 +13,6 @@
     "provider verify",
     "run agent-execute",
     "run agent-plan",
-    "run artifact-stats",
     "run artifact-verify",
     "run cache-plan",
     "run capability-decide",
@@ -79,7 +78,7 @@
     "sandbox execute",
     "sandbox plan"
   ],
-  "native_public_command_count": 168,
+  "native_public_command_count": 169,
   "policy": {
     "hidden_fallback_forbidden": true,
     "native_only_certification": true,
