@@ -94,7 +94,15 @@ fn parse_arguments(arguments: &[String]) -> Result<QueryArguments, String> {
 fn is_python_line_break(character: char) -> bool {
     matches!(
         character,
-        '\n' | '\r' | '\u{000b}' | '\u{000c}' | '\u{001c}' | '\u{001d}' | '\u{001e}' | '\u{0085}' | '\u{2028}' | '\u{2029}'
+        '\n' | '\r'
+            | '\u{000b}'
+            | '\u{000c}'
+            | '\u{001c}'
+            | '\u{001d}'
+            | '\u{001e}'
+            | '\u{0085}'
+            | '\u{2028}'
+            | '\u{2029}'
     )
 }
 
@@ -159,14 +167,17 @@ fn select_json(text: &str, expression: &str, limit: usize) -> Result<Vec<String>
                 }
                 values[usize::try_from(normalized)
                     .map_err(|_| "ARTIFACT_QUERY_JSON_INDEX_RANGE".to_owned())?]
-                    .clone()
+                .clone()
             }
             _ => return Err(format!("ARTIFACT_QUERY_JSON_PATH_INVALID:{expression}")),
         };
     }
     let rendered = serde_json::to_string_pretty(&current)
         .map_err(|error| format!("ARTIFACT_QUERY_JSON_RENDER_FAILED:{error}"))?;
-    Ok(splitlines_python(&rendered).into_iter().take(limit).collect())
+    Ok(splitlines_python(&rendered)
+        .into_iter()
+        .take(limit)
+        .collect())
 }
 
 fn select_lines(
@@ -243,7 +254,9 @@ pub fn execute(arguments: &[String], state_root: &Path) -> Result<Value, String>
 
 #[cfg(test)]
 mod tests {
-    use super::{estimate_tokens, parse_arguments, redact, splitlines_python, supports, QueryArguments};
+    use super::{
+        estimate_tokens, parse_arguments, redact, splitlines_python, supports, QueryArguments,
+    };
 
     #[test]
     fn routes_artifact_query_only() {
