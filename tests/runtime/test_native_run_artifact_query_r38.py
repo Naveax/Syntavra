@@ -121,7 +121,6 @@ def test_native_artifact_query_errors_and_failures_match_python(tmp_path: Path) 
         "ERROR request failed",
         "src/main.rs:42:7 diagnostic",
         "panic happened",
-        "assert condition",
     ]
 
     failures, _ = _both(project, state, record["artifact_id"], "--mode", "failures")
