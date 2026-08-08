@@ -59,18 +59,66 @@ function Get-GitOutput {
 function Get-RemoteBranchHead {
     param(
         [Parameter(Mandatory)][string]$Remote,
-        [Parameter(Mandatory)][string]$RemoteBranch
+        [Parameter(Mandatory)][string]$RemoteBranch,
+        [int]$MaxAttempts = 4
     )
 
-    $line = (& git ls-remote $Remote "refs/heads/$RemoteBranch" 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($line)) {
-        throw "Remote branch head okunamadı: $RemoteBranch`n$line"
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $line = (& git ls-remote $Remote "refs/heads/$RemoteBranch" 2>&1 | Out-String).Trim()
+        $code = $LASTEXITCODE
+        if ($code -eq 0 -and -not [string]::IsNullOrWhiteSpace($line)) {
+            $head = ($line -split "\s+")[0]
+            if ($head -match '^[0-9a-f]{40}$') {
+                return $head
+            }
+        }
+
+        if ($attempt -eq $MaxAttempts) {
+            throw "Remote branch head okunamadı: $RemoteBranch (attempt=$attempt/$MaxAttempts, exit=$code)`n$line"
+        }
+
+        Write-Warning "Remote head sorgusu başarısız oldu (attempt=$attempt/$MaxAttempts, exit=$code). Yeniden deneniyor."
+        Start-Sleep -Seconds (3 * $attempt)
     }
-    $head = ($line -split "\s+")[0]
-    if ($head -notmatch '^[0-9a-f]{40}$') {
-        throw "Remote branch head geçersiz: $head"
+}
+
+function Invoke-GitCloneWithRetry {
+    param(
+        [Parameter(Mandatory)][string]$Remote,
+        [Parameter(Mandatory)][string]$RemoteBranch,
+        [Parameter(Mandatory)][string]$Destination,
+        [int]$MaxAttempts = 4
+    )
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        if (Test-Path -LiteralPath $Destination) {
+            Remove-Item -LiteralPath $Destination -Recurse -Force
+        }
+
+        Write-Host "Clone attempt $attempt/$MaxAttempts" -ForegroundColor DarkGray
+        & git clone `
+            --no-tags `
+            --single-branch `
+            --branch $RemoteBranch `
+            $Remote `
+            $Destination
+
+        $code = $LASTEXITCODE
+        if ($code -eq 0) {
+            return
+        }
+
+        if (Test-Path -LiteralPath $Destination) {
+            Remove-Item -LiteralPath $Destination -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        if ($attempt -eq $MaxAttempts) {
+            throw "Git clone başarısız oldu (attempt=$attempt/$MaxAttempts, exit=$code)."
+        }
+
+        Write-Warning "Git clone başarısız oldu (attempt=$attempt/$MaxAttempts, exit=$code). Temiz clone yeniden deneniyor."
+        Start-Sleep -Seconds (5 * $attempt)
     }
-    return $head
 }
 
 $null = Get-RequiredCommand -Name "git"
@@ -97,14 +145,10 @@ $repoRoot = Join-Path $WorkingRoot "Syntavra-r38-artifact-stats-cert-$timestamp"
 $validationScript = Join-Path $env:TEMP "r38-artifact-stats-cert-$timestamp.sh"
 
 Write-Host "`n=== TEMİZ EXACT-HEAD CLONE ===" -ForegroundColor Cyan
-Invoke-Checked -FilePath "git" -ArgumentList @(
-    "clone",
-    "--no-tags",
-    "--filter=blob:none",
-    "--branch", $Branch,
-    $Repository,
-    $repoRoot
-)
+Invoke-GitCloneWithRetry `
+    -Remote $Repository `
+    -RemoteBranch $Branch `
+    -Destination $repoRoot
 
 $head = Get-GitOutput -Arguments @("rev-parse", "HEAD") -WorkingDirectory $repoRoot
 if ($head -ne $ExpectedHead) {
