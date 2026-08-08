@@ -83,17 +83,8 @@ def repair_product() -> bool:
     elif presence != (True, True):
         raise RuntimeError("artifact verify execute wiring is partial")
 
-    if support_marker in rendered:
-        verify_block_start = rendered.index(support_marker)
-        verify_block_end = rendered.find("    if ", verify_block_start + len(support_marker))
-        verify_block = rendered[verify_block_start:] if verify_block_end == -1 else rendered[verify_block_start:verify_block_end]
-        required_wiring = (
-            'value["ok"].as_bool() == Some(false)',
-            "emit_failed_decision(&value, 3);",
-        )
-        for marker in required_wiring:
-            if marker not in verify_block:
-                raise RuntimeError(f"artifact verify failure-exit wiring is missing: {marker}")
+    if support_marker in rendered and EXECUTE not in rendered:
+        raise RuntimeError("artifact verify failure-exit wiring is not canonical")
 
     if changed:
         PRODUCT.write_text(rendered, encoding="utf-8", newline="\n")
