@@ -111,10 +111,7 @@ mod tests {
     #[test]
     fn routes_artifact_put_only() {
         assert!(supports(&["run".to_owned(), "artifact-put".to_owned()]));
-        assert!(!supports(&[
-            "run".to_owned(),
-            "artifact-query".to_owned()
-        ]));
+        assert!(!supports(&["run".to_owned(), "artifact-query".to_owned()]));
     }
 
     #[test]

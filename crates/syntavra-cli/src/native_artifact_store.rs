@@ -94,8 +94,8 @@ impl NativeArtifactStore {
         if !target.exists() {
             write_object_once(&target, data)?;
         }
-        let byte_count = u64::try_from(data.len())
-            .map_err(|_| "ARTIFACT_BYTE_COUNT_INVALID".to_owned())?;
+        let byte_count =
+            u64::try_from(data.len()).map_err(|_| "ARTIFACT_BYTE_COUNT_INVALID".to_owned())?;
         let created_at = utc_now()?;
         let metadata_json = canonical_json(metadata)?;
         let object_path = target.to_string_lossy().into_owned();
@@ -163,8 +163,8 @@ impl NativeArtifactStore {
 }
 
 fn open_database(path: &Path) -> Result<Connection, String> {
-    let connection = Connection::open(path)
-        .map_err(|error| format!("ARTIFACT_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("ARTIFACT_DATABASE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
             "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; PRAGMA busy_timeout=30000;",
@@ -176,11 +176,7 @@ fn open_database(path: &Path) -> Result<Connection, String> {
 fn record_from_row(row: &Row<'_>) -> rusqlite::Result<ArtifactRecord> {
     let metadata_json = row.get::<_, String>("metadata_json")?;
     let metadata = serde_json::from_str::<Value>(&metadata_json).map_err(|error| {
-        rusqlite::Error::FromSqlConversionFailure(
-            7,
-            rusqlite::types::Type::Text,
-            Box::new(error),
-        )
+        rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let byte_count = row.get::<_, i64>("byte_count")?;
     let byte_count = u64::try_from(byte_count).map_err(|error| {
@@ -283,8 +279,8 @@ fn utc_now() -> Result<String, String> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("ARTIFACT_CLOCK_FAILED:{error}"))?;
-    let seconds = i64::try_from(duration.as_secs())
-        .map_err(|_| "ARTIFACT_CLOCK_RANGE_INVALID".to_owned())?;
+    let seconds =
+        i64::try_from(duration.as_secs()).map_err(|_| "ARTIFACT_CLOCK_RANGE_INVALID".to_owned())?;
     let days = seconds / 86_400;
     let seconds_of_day = seconds % 86_400;
     let hour = seconds_of_day / 3_600;
