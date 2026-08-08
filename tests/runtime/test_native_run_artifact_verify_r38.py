@@ -60,8 +60,7 @@ def _run_verify(
 
 
 def _value(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
-    assert result.returncode == 0, (result.stdout, result.stderr)
-    assert result.stderr == ""
+    assert result.stderr == "", (result.stdout, result.stderr)
     return json.loads(result.stdout)
 
 
@@ -90,8 +89,22 @@ def _both(
     state: Path,
     *extra: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    python = _value(_run_verify("python", project, state, *extra))
-    rust = _value(_run_verify("rust", project, state, *extra))
+    python_result = _run_verify("python", project, state, *extra)
+    rust_result = _run_verify("rust", project, state, *extra)
+    python = _value(python_result)
+    rust = _value(rust_result)
+    expected_exit = 0 if python.get("ok") is not False else 3
+    assert python_result.returncode == expected_exit, (
+        python_result.returncode,
+        python_result.stdout,
+        python_result.stderr,
+    )
+    assert rust_result.returncode == python_result.returncode, (
+        rust_result.returncode,
+        python_result.returncode,
+        rust_result.stdout,
+        rust_result.stderr,
+    )
     assert rust == python
     return python, rust
 
