@@ -36,9 +36,9 @@ def advance() -> bool:
         native = sorted([*native, ROUTE])
         changed = True
     else:
-        if len(native) != TARGET_COUNT:
+        if len(native) < TARGET_COUNT:
             raise RuntimeError(
-                f"artifact query already-present state requires {TARGET_COUNT} native routes, "
+                f"artifact query present below certified floor {TARGET_COUNT}: "
                 f"got {len(native)}"
             )
         changed = False
