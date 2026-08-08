@@ -43,7 +43,7 @@ def validate_sources() -> None:
             "fn write_object_once",
         ),
         ROUTE: (
-            'action if root == "run" && action == "artifact-put"',
+            'matches!(command, [root, action] if root == "run" && action == "artifact-put")',
             "fn load_input",
             "normalize_universal_newlines",
             "NativeArtifactStore::open",
