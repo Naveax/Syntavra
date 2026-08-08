@@ -51,6 +51,15 @@ if not getattr(IncrementalCodeIntelligenceGraph, "_syntavra_language_status_comp
         _core: Any = _language_status_core,
     ) -> dict[str, Any]:
         value = _core(self, repository_root)
+        tree_sitter = value.get("tree_sitter", {})
+        available_languages = tree_sitter.get("available_languages", [])
+        if isinstance(available_languages, list):
+            tree_sitter["available_languages"] = sorted(
+                {
+                    "csharp" if str(item) == "c_sharp" else str(item)
+                    for item in available_languages
+                }
+            )
         registry = value.get("language_registry", {})
         analyzers = value.get("sandboxed_analyzers", {})
         lsp = value.get("lsp_services", {})

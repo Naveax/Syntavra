@@ -4,11 +4,15 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "syntavra_runtime"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 _ADD_PARSER_ASSIGN = re.compile(
     r"(?P<target>[A-Za-z_]\w*)\s*=\s*(?P<owner>[A-Za-z_]\w*)\.add_parser\(\s*[\"'](?P<name>[^\"']+)[\"']"
@@ -24,6 +28,15 @@ _ENV = re.compile(r"\bSYNTAVRA_[A-Z0-9_]+\b")
 _MCP_NAME = re.compile(r"[\"']name[\"']\s*:\s*[\"']([A-Za-z0-9_.:-]+)[\"']")
 _ROUTE_INVENTORY_NAME = "INSTALLED_READ_ONLY_ROUTE_COMMANDS"
 
+# Public command certification follows the parsers and explicit dispatch branches
+# reachable from the installed ``syntavra`` entry point. Source scanning remains a
+# diagnostic only; it is not allowed to create contractual command paths.
+_MANUAL_DISPATCH_CLI_COMMANDS: tuple[str, ...] = (
+    "evidence gc",
+    "evidence rotate-key",
+    "evidence stats",
+)
+
 
 def _python_files() -> list[Path]:
     return sorted(path for path in RUNTIME.rglob("*.py") if path.is_file())
@@ -32,6 +45,74 @@ def _python_files() -> list[Path]:
 def _module_name(path: Path) -> str:
     relative = path.relative_to(ROOT).with_suffix("")
     return ".".join(relative.parts)
+
+
+def _subparser_actions(parser: argparse.ArgumentParser) -> tuple[argparse._SubParsersAction, ...]:
+    return tuple(
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+
+
+def _walk_parser(
+    parser: argparse.ArgumentParser,
+    prefix: tuple[str, ...] = (),
+) -> set[str]:
+    commands: set[str] = set()
+    for action in _subparser_actions(parser):
+        for name, child in action.choices.items():
+            path = (*prefix, str(name))
+            child_subparsers = _subparser_actions(child)
+            if not child_subparsers or not any(
+                bool(getattr(child_action, "required", False))
+                for child_action in child_subparsers
+            ):
+                commands.add(" ".join(path))
+            commands.update(_walk_parser(child, path))
+    return commands
+
+
+def _installed_cli_commands() -> set[str]:
+    previous_bootstrap = os.environ.get("SYNTAVRA_PORTABLE_BOOTSTRAP")
+    os.environ["SYNTAVRA_PORTABLE_BOOTSTRAP"] = "1"
+    try:
+        from syntavra_runtime import (
+            cli,
+            engine_cli,
+            external_benchmark_cli,
+            prerelease_cli,
+            unified_cli,
+        )
+
+        engine_commands = _walk_parser(engine_cli.build_parser())
+        core_commands = _walk_parser(unified_cli._core_parser())
+        prerelease_commands = _walk_parser(prerelease_cli._parser())
+        external_commands = _walk_parser(external_benchmark_cli.parser())
+        legacy_commands = _walk_parser(cli.build_parser())
+        shadowed_roots = {
+            "engine",
+            *unified_cli.CORE_COMMANDS,
+            *prerelease_cli.PRE_RELEASE_COMMANDS,
+        }
+        reachable_legacy_commands = {
+            command
+            for command in legacy_commands
+            if command.split(maxsplit=1)[0] not in shadowed_roots
+        }
+        return {
+            *engine_commands,
+            *core_commands,
+            *prerelease_commands,
+            *external_commands,
+            *reachable_legacy_commands,
+            *_MANUAL_DISPATCH_CLI_COMMANDS,
+        }
+    finally:
+        if previous_bootstrap is None:
+            os.environ.pop("SYNTAVRA_PORTABLE_BOOTSTRAP", None)
+        else:
+            os.environ["SYNTAVRA_PORTABLE_BOOTSTRAP"] = previous_bootstrap
 
 
 def _literal_strings(tree: ast.AST) -> set[str]:
@@ -98,7 +179,8 @@ def _extract_cli_paths(source: str) -> set[str]:
 
 def export_surface() -> dict[str, object]:
     modules: list[str] = []
-    cli_commands: set[str] = set()
+    cli_commands: set[str] = _installed_cli_commands()
+    source_cli_commands: set[str] = set()
     cli_arguments: set[str] = set()
     environment_variables: set[str] = set()
     mcp_name_literals: set[str] = set()
@@ -108,7 +190,7 @@ def export_surface() -> dict[str, object]:
     for path in _python_files():
         modules.append(_module_name(path))
         source = path.read_text(encoding="utf-8")
-        cli_commands.update(_extract_cli_paths(source))
+        source_cli_commands.update(_extract_cli_paths(source))
         cli_arguments.update(match.group("name") for match in _ARGUMENT.finditer(source))
         environment_variables.update(_ENV.findall(source))
         if "mcp" in path.as_posix().lower():
@@ -139,6 +221,7 @@ def export_surface() -> dict[str, object]:
         "module_count": len(modules),
         "modules": modules,
         "cli_commands": sorted(cli_commands),
+        "source_cli_commands": sorted(source_cli_commands),
         "cli_arguments": sorted(cli_arguments),
         "environment_variables": sorted(environment_variables),
         "mcp_name_literals": sorted(mcp_name_literals),
@@ -146,7 +229,8 @@ def export_surface() -> dict[str, object]:
         "route_inventory_definitions": route_inventory_definitions,
         "authoritative": {
             "modules": True,
-            "cli_commands": False,
+            "cli_commands": True,
+            "source_cli_commands": False,
             "cli_arguments": False,
             "environment_variables": False,
             "mcp_name_literals": False,

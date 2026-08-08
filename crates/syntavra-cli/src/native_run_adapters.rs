@@ -1,0 +1,203 @@
+#![forbid(unsafe_code)]
+
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+use serde_json::{json, Value};
+
+const CATALOG: &str = include_str!("../../../contracts/engine/r38-native-adapter-catalog-v1.json");
+
+pub fn supports(command: &[String]) -> bool {
+    matches!(command, [root, action] if root == "run" && action == "adapters")
+}
+
+fn flag(arguments: &[String], name: &str) -> bool {
+    arguments.iter().any(|value| value == name)
+}
+
+fn home() -> PathBuf {
+    env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map(PathBuf::from)
+        .unwrap_or_default()
+}
+
+fn is_executable(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(windows)]
+    {
+        true
+    }
+}
+
+#[cfg(windows)]
+fn candidate_names(name: &str) -> Vec<String> {
+    if Path::new(name).extension().is_some() {
+        return vec![name.to_owned()];
+    }
+    env::var("PATHEXT")
+        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned())
+        .split(';')
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("{name}{value}"))
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn candidate_names(name: &str) -> Vec<String> {
+    vec![name.to_owned()]
+}
+
+fn find_command(name: &str) -> Option<String> {
+    for directory in env::split_paths(&env::var_os("PATH").unwrap_or_default()) {
+        for candidate in candidate_names(name) {
+            let path = directory.join(candidate);
+            if is_executable(&path) {
+                return Some(path.to_string_lossy().into_owned());
+            }
+        }
+    }
+    None
+}
+
+fn config_path(candidate: &str, project_root: &Path) -> PathBuf {
+    if let Some(relative) = candidate.strip_prefix("~/") {
+        return home().join(relative);
+    }
+    let path = PathBuf::from(candidate);
+    if path.is_absolute() {
+        path
+    } else {
+        project_root.join(path)
+    }
+}
+
+fn detected_record(record: &Value, project_root: &Path) -> Value {
+    let commands = record["detection_commands"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|command| find_command(command).is_some())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let configs = record["config_paths"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|candidate| config_path(candidate, project_root))
+        .filter(|path| path.exists())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let mut value = record.clone();
+    if let Some(object) = value.as_object_mut() {
+        object.insert(
+            "detected".to_owned(),
+            Value::Bool(!commands.is_empty() || !configs.is_empty()),
+        );
+        object.insert("detected_commands".to_owned(), json!(commands));
+        object.insert("existing_configs".to_owned(), json!(configs));
+    }
+    value
+}
+
+pub(crate) fn catalog_value() -> Result<Value, String> {
+    serde_json::from_str::<Value>(CATALOG)
+        .map_err(|error| format!("ADAPTER_CATALOG_INVALID:{error}"))
+}
+
+#[allow(dead_code)]
+pub(crate) fn contract(adapter_id: &str) -> Result<Value, String> {
+    let catalog = catalog_value()?;
+    catalog["records"]
+        .as_array()
+        .and_then(|records| {
+            records
+                .iter()
+                .find(|record| record["adapter_id"].as_str() == Some(adapter_id))
+        })
+        .cloned()
+        .ok_or_else(|| format!("ADAPTER_CONTRACT_NOT_FOUND:{adapter_id}"))
+}
+
+#[allow(dead_code)]
+pub(crate) fn detection(adapter_id: &str, project_root: &Path) -> Result<Value, String> {
+    let record = contract(adapter_id)?;
+    let commands = record["detection_commands"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|command| find_command(command).is_some())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let paths = record["config_paths"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|candidate| config_path(candidate, project_root))
+        .filter(|path| path.exists())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "adapter_id": adapter_id,
+        "detected": !commands.is_empty() || !paths.is_empty(),
+        "commands": commands,
+        "paths": paths,
+        "surface": record["surface"],
+        "integration_modes": record["integration_modes"],
+    }))
+}
+
+pub fn execute(
+    arguments: &[String],
+    project_root: &Path,
+    state_root: &Path,
+) -> Result<Value, String> {
+    super::native_platform_state::initialize(state_root)?;
+    let catalog = catalog_value()?;
+    let records = catalog["records"]
+        .as_array()
+        .ok_or_else(|| "ADAPTER_CATALOG_RECORDS_INVALID".to_owned())?;
+    let adapters = if flag(arguments, "--detect") {
+        records
+            .iter()
+            .map(|record| detected_record(record, project_root))
+            .collect::<Vec<_>>()
+    } else {
+        records.clone()
+    };
+    Ok(json!({
+        "ok": true,
+        "validation": catalog["validation"],
+        "adapters": adapters,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::supports;
+
+    #[test]
+    fn routes_run_adapters_only() {
+        assert!(supports(&["run".to_owned(), "adapters".to_owned()]));
+        assert!(!supports(&[
+            "run".to_owned(),
+            "adapter-configure".to_owned()
+        ]));
+    }
+}

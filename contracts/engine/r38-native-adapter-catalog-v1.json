@@ -1,0 +1,552 @@
+{
+  "product": "Syntavra",
+  "records": [
+    {
+      "adapter_id": "codex-cli",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "~/.codex/config.toml",
+        "AGENTS.md"
+      ],
+      "detection_commands": [
+        "codex"
+      ],
+      "integration_modes": [
+        "mcp",
+        "skill",
+        "provider-proxy",
+        "session"
+      ],
+      "level": "A",
+      "maturity": "contract-tested",
+      "product": "Codex CLI",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "claude-code",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "~/.claude/settings.json",
+        ".claude/settings.json"
+      ],
+      "detection_commands": [
+        "claude"
+      ],
+      "integration_modes": [
+        "plugin",
+        "hooks",
+        "mcp",
+        "provider-proxy"
+      ],
+      "level": "A",
+      "maturity": "contract-tested",
+      "product": "Claude Code",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "gemini-cli",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": false,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "~/.gemini/settings.json",
+        "GEMINI.md"
+      ],
+      "detection_commands": [
+        "gemini"
+      ],
+      "integration_modes": [
+        "extension",
+        "mcp",
+        "provider-proxy"
+      ],
+      "level": "A",
+      "maturity": "contract-tested",
+      "product": "Gemini CLI",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "github-copilot-vscode",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": false,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        ".vscode/mcp.json",
+        ".github/copilot-instructions.md"
+      ],
+      "detection_commands": [
+        "code"
+      ],
+      "integration_modes": [
+        "mcp",
+        "instructions",
+        "extension"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "GitHub Copilot for VS Code",
+      "surface": "ide"
+    },
+    {
+      "adapter_id": "github-copilot-jetbrains",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": false,
+        "session_events": false,
+        "stream_interception": false,
+        "tool_interception": false
+      },
+      "config_paths": [
+        ".idea",
+        ".github/copilot-instructions.md"
+      ],
+      "detection_commands": [],
+      "integration_modes": [
+        "mcp",
+        "instructions",
+        "plugin"
+      ],
+      "level": "C",
+      "maturity": "contract-tested",
+      "product": "GitHub Copilot for JetBrains",
+      "surface": "ide"
+    },
+    {
+      "adapter_id": "cursor",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        ".cursor/mcp.json",
+        ".cursor/rules"
+      ],
+      "detection_commands": [
+        "cursor"
+      ],
+      "integration_modes": [
+        "mcp",
+        "rules",
+        "provider-proxy"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "Cursor",
+      "surface": "ide"
+    },
+    {
+      "adapter_id": "windsurf",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        ".codeium/windsurf/mcp_config.json",
+        ".windsurfrules"
+      ],
+      "detection_commands": [
+        "windsurf"
+      ],
+      "integration_modes": [
+        "mcp",
+        "rules",
+        "provider-proxy"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "Windsurf",
+      "surface": "ide"
+    },
+    {
+      "adapter_id": "kiro",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": false,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        ".kiro/settings/mcp.json",
+        ".kiro/steering"
+      ],
+      "detection_commands": [],
+      "integration_modes": [
+        "mcp",
+        "steering",
+        "hooks"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "Kiro",
+      "surface": "ide"
+    },
+    {
+      "adapter_id": "zed",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": false,
+        "provider_proxy": false,
+        "session_events": false,
+        "stream_interception": false,
+        "tool_interception": false
+      },
+      "config_paths": [
+        ".zed/settings.json",
+        "~/.config/zed/settings.json"
+      ],
+      "detection_commands": [
+        "zed"
+      ],
+      "integration_modes": [
+        "mcp",
+        "settings"
+      ],
+      "level": "C",
+      "maturity": "contract-tested",
+      "product": "Zed",
+      "surface": "ide"
+    },
+    {
+      "adapter_id": "cline",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": false,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        ".clinerules",
+        ".vscode/mcp.json"
+      ],
+      "detection_commands": [],
+      "integration_modes": [
+        "mcp",
+        "rules",
+        "hooks"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "Cline",
+      "surface": "ide-extension"
+    },
+    {
+      "adapter_id": "roo-code",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": false,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        ".roo/rules",
+        ".vscode/mcp.json"
+      ],
+      "detection_commands": [],
+      "integration_modes": [
+        "mcp",
+        "rules",
+        "hooks"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "Roo Code",
+      "surface": "ide-extension"
+    },
+    {
+      "adapter_id": "continue",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": false,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": false,
+        "tool_interception": false
+      },
+      "config_paths": [
+        ".continue/config.yaml",
+        "~/.continue/config.yaml"
+      ],
+      "detection_commands": [],
+      "integration_modes": [
+        "mcp",
+        "config"
+      ],
+      "level": "C",
+      "maturity": "contract-tested",
+      "product": "Continue",
+      "surface": "ide-extension"
+    },
+    {
+      "adapter_id": "opencode",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "opencode.json",
+        "~/.config/opencode/opencode.json"
+      ],
+      "detection_commands": [
+        "opencode"
+      ],
+      "integration_modes": [
+        "mcp",
+        "hooks",
+        "provider-proxy",
+        "session"
+      ],
+      "level": "A",
+      "maturity": "contract-tested",
+      "product": "OpenCode",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "aider",
+      "capabilities": {
+        "mcp": false,
+        "native_approval": false,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": false,
+        "tool_interception": false
+      },
+      "config_paths": [
+        ".aider.conf.yml",
+        "~/.aider.conf.yml"
+      ],
+      "detection_commands": [
+        "aider"
+      ],
+      "integration_modes": [
+        "wrapper",
+        "provider-proxy",
+        "session"
+      ],
+      "level": "D",
+      "maturity": "contract-tested",
+      "product": "Aider",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "openhands",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "openhands.toml",
+        ".openhands"
+      ],
+      "detection_commands": [],
+      "integration_modes": [
+        "sdk",
+        "mcp",
+        "provider-proxy",
+        "sandbox"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "OpenHands",
+      "surface": "platform"
+    },
+    {
+      "adapter_id": "openclaw",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "~/.openclaw/config.json"
+      ],
+      "detection_commands": [
+        "openclaw"
+      ],
+      "integration_modes": [
+        "plugin",
+        "mcp",
+        "session"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "OpenClaw",
+      "surface": "platform"
+    },
+    {
+      "adapter_id": "pi",
+      "capabilities": {
+        "mcp": false,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "~/.pi/agent/settings.json"
+      ],
+      "detection_commands": [
+        "pi"
+      ],
+      "integration_modes": [
+        "extension",
+        "hooks",
+        "session"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "Pi",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "oh-my-pi",
+      "capabilities": {
+        "mcp": false,
+        "native_approval": true,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": true,
+        "tool_interception": true
+      },
+      "config_paths": [
+        "~/.config/omp/config.json"
+      ],
+      "detection_commands": [
+        "omp"
+      ],
+      "integration_modes": [
+        "plugin",
+        "hooks",
+        "session"
+      ],
+      "level": "B",
+      "maturity": "contract-tested",
+      "product": "Oh My Pi",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "qwen-code",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": false,
+        "provider_proxy": true,
+        "session_events": true,
+        "stream_interception": false,
+        "tool_interception": false
+      },
+      "config_paths": [
+        "QWEN.md",
+        "~/.qwen/settings.json"
+      ],
+      "detection_commands": [
+        "qwen",
+        "qwen-code"
+      ],
+      "integration_modes": [
+        "mcp",
+        "instructions",
+        "provider-proxy"
+      ],
+      "level": "C",
+      "maturity": "contract-tested",
+      "product": "Qwen Code",
+      "surface": "cli"
+    },
+    {
+      "adapter_id": "antigravity",
+      "capabilities": {
+        "mcp": true,
+        "native_approval": false,
+        "provider_proxy": false,
+        "session_events": false,
+        "stream_interception": false,
+        "tool_interception": false
+      },
+      "config_paths": [
+        ".antigravity"
+      ],
+      "detection_commands": [],
+      "integration_modes": [
+        "mcp",
+        "rules"
+      ],
+      "level": "C",
+      "maturity": "contract-tested",
+      "product": "Antigravity",
+      "surface": "ide"
+    }
+  ],
+  "schema_version": 1,
+  "source": "syntavra_runtime.adapter_platform.AdapterRegistry",
+  "validation": {
+    "adapters": 20,
+    "invalid": [],
+    "inventory_gate": true,
+    "levels": {
+      "A": 4,
+      "B": 10,
+      "C": 5,
+      "D": 1
+    },
+    "live_boundary": "live certification requires external execution receipts",
+    "live_certified": 0,
+    "non_cli_adapters": 12,
+    "ok": true,
+    "surfaces": {
+      "cli": 8,
+      "ide": 7,
+      "ide-extension": 3,
+      "platform": 2
+    }
+  }
+}

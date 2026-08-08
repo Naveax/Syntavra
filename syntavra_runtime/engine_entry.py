@@ -19,6 +19,13 @@ READ_ONLY_COMMANDS = {
 }
 
 
+def _configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
+
+
 def _emit(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=str))
 
@@ -144,6 +151,7 @@ def _read_only_request(rest: list[str]) -> tuple[str, dict[str, Any]] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _configure_utf8_stdio()
     raw = list(sys.argv[1:] if argv is None else argv)
     try:
         override, values = _extract_engine_override(raw)

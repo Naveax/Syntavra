@@ -9,6 +9,10 @@ authors.workspace = true
 repository.workspace = true
 
 [[bin]]
+name = "syntavra"
+path = "src/bin/syntavra.rs"
+
+[[bin]]
 name = "syntavra-rs"
 path = "src/main.rs"
 
@@ -25,10 +29,20 @@ name = "syntavra-full-parity"
 path = "src/bin/syntavra-full-parity.rs"
 
 [dependencies]
+aes-gcm = "0.10.3"
+base64 = "0.22.1"
+chacha20poly1305 = "0.10.1"
+hkdf = "0.12.4"
+rand = "0.8.5"
+regex = "1.11.1"
 rusqlite = { version = "0.32.1", features = ["backup", "bundled"] }
 serde_json = "1.0"
+sha2 = "0.10.8"
 syntavra-contracts = { path = "../syntavra-contracts" }
 syntavra-core = { path = "../syntavra-core" }
+tar = "0.4.44"
+unicode-normalization = "0.1.24"
+zeroize = "=1.8.1"
 
 [lints]
 workspace = true
