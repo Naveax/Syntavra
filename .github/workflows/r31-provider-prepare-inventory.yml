@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - agent/r31-provider-prepare-native
+  pull_request:
+    branches:
+      - agent/r31-provider-replay-native
+    paths:
+      - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "tools/report_missing_native_public_routes.py"
+      - ".github/workflows/r31-provider-prepare-inventory.yml"
 
 permissions:
   contents: read
@@ -13,10 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout exact branch head
+      - name: Checkout exact candidate head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
