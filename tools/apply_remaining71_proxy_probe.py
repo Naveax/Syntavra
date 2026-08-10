@@ -26,7 +26,7 @@ def main() -> int:
         '        || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))\n        || (bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command))\n',
         "supports",
     )
-    anchor = '''    if bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command) {\n        if let Some(decision) = native_remaining71_sandbox::execute(command, &arguments, project_root, state_root)? {\n            if decision.exit_code != 0 {\n                emit_failed_decision(&decision.value, decision.exit_code);\n            }\n            return Ok(Some(decision.value));\n        }\n    }\n'''
+    anchor = '''    if bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command) {\n        if let Some(decision) =\n            native_remaining71_sandbox::execute(command, &arguments, project_root, state_root)?\n        {\n            if decision.exit_code != 0 {\n                emit_failed_decision(&decision.value, decision.exit_code);\n            }\n            return Ok(Some(decision.value));\n        }\n    }\n'''
     addition = '''    if bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command) {\n        return native_remaining71_proxy::execute(command, &arguments, project_root, state_root);\n    }\n'''
     text = one(text, anchor, anchor + addition, "execute")
     PRODUCT.write_text(text, encoding="utf-8")
