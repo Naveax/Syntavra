@@ -9,6 +9,7 @@ from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
+CRATES = ROOT / "crates"
 
 
 def _subparsers(parser: argparse.ArgumentParser) -> list[argparse._SubParsersAction]:
@@ -101,11 +102,23 @@ def report() -> dict[str, object]:
 
     expected_count = int(expected["public_command_count"])
     expected_digest = str(expected["command_paths_sha256"])
+    expected_native = int(rust["native_public_command_count"])
     expected_missing = int(rust["missing_native_public_command_count"])
+    expected_modules = int(rust["module_count"])
+    expected_coverage = int(rust["native_coverage_ppm"])
+    derived_modules = sum(1 for path in CRATES.rglob("*.rs") if path.is_file())
+    derived_coverage = (
+        len(native) * 1_000_000 // len(python_routes)
+        if python_routes
+        else 0
+    )
     inventory_matches = (
         len(python_routes) == expected_count
         and digest == expected_digest
+        and len(native) == expected_native
         and len(missing) == expected_missing
+        and derived_modules == expected_modules
+        and derived_coverage == expected_coverage
         and not extra_native
     )
 
@@ -124,9 +137,13 @@ def report() -> dict[str, object]:
         },
         "rust": {
             "native_count": len(native),
-            "expected_native_count": int(rust["native_public_command_count"]),
+            "expected_native_count": expected_native,
             "missing_count": len(missing),
             "expected_missing_count": expected_missing,
+            "module_count": derived_modules,
+            "expected_module_count": expected_modules,
+            "native_coverage_ppm": derived_coverage,
+            "expected_native_coverage_ppm": expected_coverage,
             "extra_native_routes": extra_native,
         },
         "missing_routes": missing,
