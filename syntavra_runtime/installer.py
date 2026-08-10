@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from .codex_integration import mcp_entry as codex_mcp_entry
 from .host_adapters import KNOWN_HOSTS, detect_hosts, host_spec, negotiate
 from .release_identity import CHANNEL, VERSION
 from .runtime_paths import default_state_root
@@ -146,7 +147,7 @@ class HostInstaller:
             except tomllib.TOMLDecodeError as exc:
                 raise InstallerError(f"refusing to modify invalid Codex TOML: {exc}") from exc
 
-        entry = self._mcp_entry(scope=scope)
+        entry = codex_mcp_entry(self.executable, project=self.project, scope=scope)
         base = self._strip_codex_mcp_tables(existing)
         args = json.dumps(entry["args"], ensure_ascii=False)
         block = [
