@@ -31,7 +31,12 @@ pub(crate) fn execute(
     if !supports(command) {
         return Ok(None);
     }
-    let source = positional_after(arguments, "context-compile", 0, &["--provider", "--model", "--budget", "--previous"])?;
+    let source = positional_after(
+        arguments,
+        "context-compile",
+        0,
+        &["--provider", "--model", "--budget", "--previous"],
+    )?;
     let provider = option_value(arguments, "--provider")?.unwrap_or_else(|| "generic".to_owned());
     let model = option_value(arguments, "--model")?.unwrap_or_else(|| "unknown".to_owned());
     let budget = option_i64(arguments, "--budget", 32_000)?.max(1);
@@ -63,7 +68,10 @@ fn parse_item(row: &Value) -> Result<Item, String> {
         .ok_or_else(|| "context item content must be a string".to_owned())?
         .to_owned();
     let priority = object.get("priority").and_then(Value::as_i64).unwrap_or(0);
-    let stable = object.get("stable").and_then(Value::as_bool).unwrap_or(false);
+    let stable = object
+        .get("stable")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let source = object
         .get("source")
         .and_then(Value::as_str)
@@ -192,9 +200,11 @@ fn compile(
             || left["stable"].as_bool().unwrap_or(false);
         let right_stable = matches!(right["role"].as_str(), Some("system" | "developer"))
             || right["stable"].as_bool().unwrap_or(false);
-        right_stable
-            .cmp(&left_stable)
-            .then_with(|| left["original_index"].as_i64().cmp(&right["original_index"].as_i64()))
+        right_stable.cmp(&left_stable).then_with(|| {
+            left["original_index"]
+                .as_i64()
+                .cmp(&right["original_index"].as_i64())
+        })
     });
     selected_hashes = selected
         .iter()
@@ -209,9 +219,18 @@ fn compile(
                 || row["stable"].as_bool().unwrap_or(false)
         })
         .count();
-    let stable_hashes = selected_hashes.iter().take(stable_count).cloned().collect::<Vec<_>>();
-    let stable_prefix_hash = sha256_hex(canonical_json(&serde_json::to_value(&stable_hashes)
-        .map_err(|error| format!("CONTEXT_STABLE_HASH_VALUE_FAILED:{error}"))?)?.as_bytes());
+    let stable_hashes = selected_hashes
+        .iter()
+        .take(stable_count)
+        .cloned()
+        .collect::<Vec<_>>();
+    let stable_prefix_hash = sha256_hex(
+        canonical_json(
+            &serde_json::to_value(&stable_hashes)
+                .map_err(|error| format!("CONTEXT_STABLE_HASH_VALUE_FAILED:{error}"))?,
+        )?
+        .as_bytes(),
+    );
     let unchanged_prefix = previous_hashes
         .iter()
         .zip(selected_hashes.iter())
@@ -322,7 +341,12 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
         let current = &arguments[index];
         let found = if current == flag {
             index += 1;
-            Some(arguments.get(index).ok_or_else(|| format!("{flag}_VALUE_MISSING"))?.clone())
+            Some(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
+                    .clone(),
+            )
         } else {
             current
                 .strip_prefix(flag)

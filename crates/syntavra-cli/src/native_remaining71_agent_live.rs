@@ -117,7 +117,9 @@ fn agent_run(arguments: &[String], project: &Path, state_root: &Path) -> Result<
     }
     let mut verifiers = discover_verifiers(project)?;
     if verifiers.is_empty() {
-        return Err("agent cannot run safely because no project verifier was discovered".to_owned());
+        return Err(
+            "agent cannot run safely because no project verifier was discovered".to_owned(),
+        );
     }
     verifiers.sort_by(|left, right| {
         right
