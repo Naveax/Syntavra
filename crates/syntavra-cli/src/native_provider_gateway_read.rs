@@ -74,6 +74,14 @@ fn integrity(connection: &Connection) -> Result<bool, String> {
     Ok(result == "ok")
 }
 
+fn emit_and_exit(value: &Value, code: u8) -> ! {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(value).unwrap_or_else(|_| "{\"ok\":false}".to_owned())
+    );
+    std::process::exit(i32::from(code));
+}
+
 pub(crate) fn stats(state_root: &Path) -> Result<Value, String> {
     let connection = initialize(state_root)?;
     let requests = connection
@@ -204,10 +212,14 @@ pub(crate) fn verify(state_root: &Path) -> Result<Value, String> {
         }
     }
 
-    Ok(json!({
+    let result = json!({
         "ok": reasons.is_empty() && database_integrity,
         "entries": entries,
         "reasons": reasons,
         "database_integrity": database_integrity,
-    }))
+    });
+    if result["ok"] != true {
+        emit_and_exit(&result, 3);
+    }
+    Ok(result)
 }
