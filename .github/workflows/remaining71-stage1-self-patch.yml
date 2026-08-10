@@ -7,12 +7,19 @@ on:
     paths:
       - "tools/apply_remaining71_stage1.py"
       - ".github/workflows/remaining71-stage1-self-patch.yml"
+  pull_request:
+    branches:
+      - agent/r31-provider-prepare-native
+    paths:
+      - "tools/apply_remaining71_stage1.py"
+      - ".github/workflows/remaining71-stage1-self-patch.yml"
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
