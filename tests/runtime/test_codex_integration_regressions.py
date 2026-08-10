@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from syntavra_runtime.bootstrap import runtime_health
-from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND, _context
+from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND, _context, main as engine_entry_main
 from syntavra_runtime.host_adapters import host_spec
 from syntavra_runtime.installer import HostInstaller
 from syntavra_runtime.mcp_policy import MCPToolPolicy
@@ -72,6 +72,14 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(forwarded.count("--project"), 1)
         self.assertEqual(forwarded.count("--state-root"), 1)
         self.assertNotIn(self.project.resolve(), state.resolve().parents)
+
+    def test_codex_bridge_bypasses_project_canonicalization_before_binding(self) -> None:
+        with patch("syntavra_runtime.codex_mcp_bridge.main", return_value=0) as bridge_main:
+            with patch("syntavra_runtime.engine_entry._context") as context:
+                result = engine_entry_main([CODEX_BRIDGE_COMMAND])
+        self.assertEqual(result, 0)
+        bridge_main.assert_called_once_with()
+        context.assert_not_called()
 
     def test_runtime_status_exposes_exact_project_root_for_fail_closed_workspace_check(self) -> None:
         state = self.state_home / "health"
