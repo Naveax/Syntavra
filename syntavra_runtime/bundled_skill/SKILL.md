@@ -25,7 +25,9 @@ Syntavra augments the active coding agent; it is not a replacement agent. Correc
 
 ## Codex MCP-controlled execution contract
 
-Codex supports MCP and background jobs but does not provide Syntavra pre-tool hooks or host result replacement. For long-running build, test, lint or analysis commands, use `syntavra.process.submit` when the current user request authorizes command execution and include `_syntavra_authorization: {"user_authorized": true, "exact_evidence": true}`. After `JOB_ACCEPTED`, do not execute the original command again; read `syntavra.process.completions` instead of shell-polling.
+Codex supports MCP and background jobs but does not provide Syntavra pre-tool hooks or host result replacement. At the start of repository work, call `syntavra.status` and compare `details.project_root` with the active workspace's canonical repository root. If they differ, fail closed and do not use Syntavra repository-retrieval or process-execution tools until the integration is repaired/restarted for the correct workspace.
+
+For long-running build, test, lint or analysis commands, use `syntavra.process.submit` when the current user request authorizes command execution and include `_syntavra_authorization: {"user_authorized": true, "exact_evidence": true}`. After `JOB_ACCEPTED`, do not execute the original command again; read `syntavra.process.completions` instead of shell-polling.
 
 If `syntavra.fabric.route` returns a non-empty `replacement_argv`, use that replacement and do not silently fall back to the original command. If it returns `blocked`, stop. If repository retrieval unexpectedly returns Syntavra's own `syntavra_runtime/`, `skills/`, `tests/` or `tools/` tree for a different target repository, treat the result as a project-binding fault and do not consume it as task context.
 
