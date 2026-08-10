@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from syntavra_runtime.bootstrap import runtime_health
-from syntavra_runtime.engine_entry import _context
+from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND, _context
 from syntavra_runtime.host_adapters import host_spec
 from syntavra_runtime.installer import HostInstaller
 from syntavra_runtime.mcp_policy import MCPToolPolicy
@@ -19,7 +19,7 @@ from syntavra_runtime.tool_registry import MINIMAL_TOOLS
 from syntavra_runtime.zero_friction import ZeroFrictionManager
 
 
-BRIDGE_ARGS = ["-m", "syntavra_runtime.codex_mcp_bridge"]
+PYTHON_BRIDGE_ARGS = ["-m", "syntavra_runtime", CODEX_BRIDGE_COMMAND]
 
 
 class CodexIntegrationRegressionTests(unittest.TestCase):
@@ -110,7 +110,7 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(config["mcp_servers"]["other"]["command"], "other")
         entry = config["mcp_servers"]["syntavra"]
         self.assertEqual(entry["command"], sys.executable)
-        self.assertEqual(entry["args"], BRIDGE_ARGS)
+        self.assertEqual(entry["args"], PYTHON_BRIDGE_ARGS)
         self.assertNotIn("cwd", entry)
         self.assertNotIn("SYNTAVRA_PROJECT", entry.get("env", {}))
         self.assertTrue((self.home / ".agents" / "skills" / "syntavra" / "SKILL.md").is_file())
@@ -133,7 +133,7 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         parsed = tomllib.loads(rendered)
         self.assertEqual(parsed["mcp_servers"]["other"]["command"], "other")
         entry = parsed["mcp_servers"]["syntavra"]
-        self.assertEqual(entry["args"], BRIDGE_ARGS)
+        self.assertEqual(entry["args"], PYTHON_BRIDGE_ARGS)
         self.assertNotEqual(entry["command"], "old")
         self.assertNotIn("SYNTAVRA_PROJECT", entry["env"])
         self.assertEqual(rendered.count("[mcp_servers.syntavra]"), 1)
@@ -145,7 +145,7 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         config = tomllib.loads((self.project / ".codex" / "config.toml").read_text(encoding="utf-8"))
         entry = config["mcp_servers"]["syntavra"]
         self.assertEqual(entry["command"], sys.executable)
-        self.assertEqual(entry["args"], BRIDGE_ARGS)
+        self.assertEqual(entry["args"], PYTHON_BRIDGE_ARGS)
         self.assertEqual(entry["cwd"], str(self.project.resolve()))
         self.assertEqual(entry["env"]["SYNTAVRA_PROJECT"], str(self.project.resolve()))
         self.assertTrue((self.project / ".agents" / "skills" / "syntavra" / "SKILL.md").is_file())
