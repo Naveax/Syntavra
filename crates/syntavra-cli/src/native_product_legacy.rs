@@ -25,7 +25,8 @@ pub fn supports(command: &[String]) -> bool {
                 command[1].as_str(),
                 "cache-health" | "delegate" | "provider-route"
             ))
-            || (command[0] == "provider" && matches!(command[1].as_str(), "stats" | "verify")))
+            || (command[0] == "provider"
+                && matches!(command[1].as_str(), "stats" | "verify" | "replay")))
 }
 
 fn number_as_i64(value: Option<&Value>) -> i64 {
@@ -417,6 +418,7 @@ pub fn execute(command: &[String], state_root: &Path) -> Result<Option<Value>, S
         return match command[1].as_str() {
             "stats" => native_provider_gateway_read::stats(state_root).map(Some),
             "verify" => native_provider_gateway_read::verify(state_root).map(Some),
+            "replay" => native_provider_gateway_read::replay(state_root).map(Some),
             _ => Ok(None),
         };
     }
