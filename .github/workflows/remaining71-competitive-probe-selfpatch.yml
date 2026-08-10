@@ -26,6 +26,15 @@ jobs:
           ref: agent/r31-provider-capture-native
       - name: Install Rust 1.82.0
         run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+      - name: Normalize competitive source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/syntavra-cli/src/native_remaining71_competitive.rs')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace("capability.replace('-', ' ')", "capability.replace('-', \" \")")
+          path.write_text(text, encoding='utf-8')
+          PY
       - name: Apply probe integration
         run: python tools/apply_remaining71_competitive_probe.py
       - name: Canonical rustfmt
