@@ -116,11 +116,13 @@ fn apply_output(value: &Value) -> Result<Value, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("PROVIDER_OUTPUT_CREATE_FAILED:{error}"))?;
     }
-    let rendered = format!(
-        "{}\n",
-        serde_json::to_string_pretty(value)
-            .map_err(|error| format!("PROVIDER_OUTPUT_SERIALIZE_FAILED:{error}"))?
-    );
+    let pretty = serde_json::to_string_pretty(value)
+        .map_err(|error| format!("PROVIDER_OUTPUT_SERIALIZE_FAILED:{error}"))?;
+    let rendered = if cfg!(windows) {
+        format!("{}\r\n", pretty.replace('\n', "\r\n"))
+    } else {
+        format!("{pretty}\n")
+    };
     fs::write(&target, rendered.as_bytes())
         .map_err(|error| format!("PROVIDER_OUTPUT_WRITE_FAILED:{error}"))?;
     Ok(json!({
