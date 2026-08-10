@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
+from .runtime_paths import discover_project_root, resolve_state_root
 
 SELECTOR_COMMANDS = frozenset({"engine"})
 READ_ONLY_COMMANDS = {
@@ -65,22 +67,49 @@ def _extract_engine_override(argv: list[str]) -> tuple[str | None, list[str]]:
     return override, forwarded
 
 
-def _context(argv: list[str]) -> tuple[Path, Path, list[str]]:
+def _without_context_flags(argv: list[str]) -> list[str]:
+    """Remove global project/state flags before inserting one canonical pair."""
+
+    forwarded: list[str] = []
+    index = 0
+    while index < len(argv):
+        value = argv[index]
+        if value in {"--project", "--state-root"}:
+            if index + 1 >= len(argv):
+                raise EngineSelectionError(
+                    "CONTEXT_OPTION_MISSING_VALUE",
+                    f"{value} requires a value",
+                )
+            index += 2
+            continue
+        if value.startswith("--project=") or value.startswith("--state-root="):
+            index += 1
+            continue
+        forwarded.append(value)
+        index += 1
+    return forwarded
+
+
+def _context(argv: list[str]) -> tuple[Path, Path, list[str], list[str]]:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--project", default=".")
+    parser.add_argument("--project", default="auto")
     parser.add_argument("--state-root")
     parser.add_argument("--skill-root")
     parser.add_argument("--codex-home")
     parser.add_argument("--host", default="codex")
     parser.add_argument("--json", action="store_true")
-    values, rest = parser.parse_known_args(argv)
-    project = Path(values.project).resolve(strict=False)
-    state = (
-        Path(values.state_root).resolve(strict=False)
-        if values.state_root
-        else project / ".syntavra" / "pre-release"
-    )
-    return project, state, rest
+    values, _ = parser.parse_known_args(argv)
+    project = discover_project_root(values.project, strict=False)
+    state = resolve_state_root(project, values.state_root, namespace="pre-release")
+    canonical = [
+        "--project",
+        str(project),
+        "--state-root",
+        str(state),
+        *_without_context_flags(argv),
+    ]
+    _, rest = parser.parse_known_args(canonical)
+    return project, state, rest, canonical
 
 
 def _find_command(rest: list[str]) -> str:
@@ -154,8 +183,12 @@ def main(argv: list[str] | None = None) -> int:
     _configure_utf8_stdio()
     raw = list(sys.argv[1:] if argv is None else argv)
     try:
-        override, values = _extract_engine_override(raw)
-        project, state, rest = _context(values)
+        override, forwarded = _extract_engine_override(raw)
+        project, state, rest, values = _context(forwarded)
+        # Child Syntavra commands inherit the same project/state identity even when
+        # a host launches them without repeating the global flags.
+        os.environ["SYNTAVRA_PROJECT"] = str(project)
+        os.environ["SYNTAVRA_STATE_ROOT"] = str(state)
         command = _find_command(rest)
         selector = EngineSelector(project_root=project, state_root=state)
         request = _read_only_request(rest)
