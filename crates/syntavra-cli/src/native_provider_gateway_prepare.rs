@@ -615,7 +615,7 @@ fn apply_prompt_cache(
             )
         }
         "anthropic" => {
-            drop(map);
+            let _ = map;
             if apply_anthropic_cache_control(request, ttl_seconds) {
                 (
                     "provider-explicit-breakpoint".to_owned(),
@@ -1005,7 +1005,7 @@ fn prepare_model(model_option: &str, request: &Value) -> String {
         .unwrap_or_else(|| "unknown".to_owned())
 }
 
-pub(crate) fn prepare(state_root: &Path) -> Result<Value, String> {
+fn prepare_impl(state_root: &Path) -> Result<Value, String> {
     let arguments = env::args().skip(1).collect::<Vec<_>>();
 
     // Match competitive_cli._gateway: all durable state surfaces exist before
@@ -1201,4 +1201,14 @@ pub(crate) fn prepare(state_root: &Path) -> Result<Value, String> {
         "cache_reordered": cache_reordered,
     });
     output_value(&value, &arguments)
+}
+
+pub(crate) fn prepare(state_root: &Path) -> Result<Value, String> {
+    match prepare_impl(state_root) {
+        Ok(value) => Ok(value),
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
 }

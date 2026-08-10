@@ -179,7 +179,13 @@ def _scenario(
         rs_file = json.loads(rs_output.read_text(encoding="utf-8"))
         py_plan = py_file
         rs_plan = rs_file
-        wrapper_equal = py_value == rs_value
+        wrapper_equal = (
+            py_value.get("ok") is True
+            and rs_value.get("ok") is True
+            and py_value.get("output") == rs_value.get("output") == "prepare.json"
+            and py_value.get("bytes") == py_output.stat().st_size
+            and rs_value.get("bytes") == rs_output.stat().st_size
+        )
     else:
         py_plan = py_value
         rs_plan = rs_value
@@ -233,7 +239,7 @@ def _rejection(root: Path, selector: Path) -> dict[str, Any]:
         "evidence_exists": (rs_state / "evidence").exists(),
     }
     return {
-        "ok": py_code != 0 and rs_code != 0 and py_shape == rs_shape,
+        "ok": py_code == rs_code == 1 and py_shape == rs_shape,
         "python_exit": py_code,
         "rust_exit": rs_code,
         "python_state": py_shape,
