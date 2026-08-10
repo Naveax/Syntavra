@@ -49,6 +49,13 @@ def _run(
     return completed.returncode, payload
 
 
+def _read_object(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise RuntimeError(f"expected JSON object in {path}: {value!r}")
+    return value
+
+
 def _fixture(project: Path, state: Path) -> None:
     project.mkdir(parents=True)
     (project / ".git").mkdir()
@@ -138,6 +145,34 @@ def verify(selector: Path) -> dict[str, Any]:
             "database_integrity": True,
         }
 
+        stats_output = root / "provider-stats.json"
+        _, python_stats_wrapper = _run(
+            [*python_prefix, "provider", "stats", "--output", str(stats_output)], cwd=ROOT
+        )
+        python_stats_file = _read_object(stats_output)
+        _, rust_stats_wrapper = _run(
+            [*rust_prefix, "provider", "stats", "--output", str(stats_output)], cwd=ROOT
+        )
+        rust_stats_file = _read_object(stats_output)
+        stats_output_equal = (
+            python_stats_wrapper == rust_stats_wrapper
+            and python_stats_file == rust_stats_file == expected_stats
+        )
+
+        verify_output = root / "provider-verify.json"
+        _, python_verify_wrapper = _run(
+            [*python_prefix, "provider", "verify", "--output", str(verify_output)], cwd=ROOT
+        )
+        python_verify_file = _read_object(verify_output)
+        _, rust_verify_wrapper = _run(
+            [*rust_prefix, "provider", "verify", "--output", str(verify_output)], cwd=ROOT
+        )
+        rust_verify_file = _read_object(verify_output)
+        verify_output_equal = (
+            python_verify_wrapper == rust_verify_wrapper
+            and python_verify_file == rust_verify_file == expected_verify
+        )
+
         with closing(sqlite3.connect(state / "provider-gateway.sqlite3")) as database:
             database.execute(
                 "UPDATE provider_response_cache SET response_hash=?",
@@ -146,14 +181,10 @@ def verify(selector: Path) -> dict[str, Any]:
             database.commit()
 
         python_bad_code, python_bad_verify = _run(
-            [*python_prefix, "provider", "verify"],
-            cwd=ROOT,
-            expected_codes=(3,),
+            [*python_prefix, "provider", "verify"], cwd=ROOT, expected_codes=(3,)
         )
         rust_bad_code, rust_bad_verify = _run(
-            [*rust_prefix, "provider", "verify"],
-            cwd=ROOT,
-            expected_codes=(3,),
+            [*rust_prefix, "provider", "verify"], cwd=ROOT, expected_codes=(3,)
         )
         negative_equal = (
             python_bad_code == rust_bad_code == 3
@@ -166,31 +197,54 @@ def verify(selector: Path) -> dict[str, Any]:
             and str(python_bad_verify["reasons"][0]).startswith("response-hash:")
         )
 
+        bad_output = root / "provider-bad-verify.json"
+        python_bad_output_code, python_bad_wrapper = _run(
+            [*python_prefix, "provider", "verify", "--output", str(bad_output)],
+            cwd=ROOT,
+            expected_codes=(3,),
+        )
+        python_bad_file = _read_object(bad_output)
+        rust_bad_output_code, rust_bad_wrapper = _run(
+            [*rust_prefix, "provider", "verify", "--output", str(bad_output)],
+            cwd=ROOT,
+            expected_codes=(3,),
+        )
+        rust_bad_file = _read_object(bad_output)
+        negative_output_equal = (
+            python_bad_output_code == rust_bad_output_code == 3
+            and python_bad_wrapper == rust_bad_wrapper
+            and python_bad_file == rust_bad_file == python_bad_verify
+        )
+
         return {
-            "ok": stats_equal
-            and verify_equal
-            and negative_equal
-            and python_stats == expected_stats
-            and python_verify == expected_verify,
-            "python_stats": python_stats,
-            "rust_stats": rust_stats,
-            "python_verify": python_verify,
-            "rust_verify": rust_verify,
-            "python_bad_verify": python_bad_verify,
-            "rust_bad_verify": rust_bad_verify,
-            "python_bad_exit": python_bad_code,
-            "rust_bad_exit": rust_bad_code,
+            "ok": all(
+                (
+                    stats_equal,
+                    verify_equal,
+                    stats_output_equal,
+                    verify_output_equal,
+                    negative_equal,
+                    negative_output_equal,
+                    python_stats == expected_stats,
+                    python_verify == expected_verify,
+                )
+            ),
             "stats_equal": stats_equal,
             "verify_equal": verify_equal,
+            "stats_output_equal": stats_output_equal,
+            "verify_output_equal": verify_output_equal,
             "negative_equal": negative_equal,
-            "expected_stats_matched": python_stats == expected_stats,
-            "expected_verify_matched": python_verify == expected_verify,
+            "negative_output_equal": negative_output_equal,
+            "python_bad_exit": python_bad_code,
+            "rust_bad_exit": rust_bad_code,
+            "python_bad_output_exit": python_bad_output_code,
+            "rust_bad_output_exit": rust_bad_output_code,
         }
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Verify R31 provider stats/verify Python-Rust success and failure parity"
+        description="Verify R31 provider stats/verify Python-Rust CLI parity"
     )
     parser.add_argument("--selector", required=True)
     return parser
