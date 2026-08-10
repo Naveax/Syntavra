@@ -101,7 +101,9 @@ pub(crate) fn stats(state_root: &Path) -> Result<Value, String> {
         .prepare("SELECT provider,COUNT(*) FROM provider_request_audit GROUP BY provider ORDER BY provider")
         .map_err(|error| format!("PROVIDER_GATEWAY_PROVIDER_PREPARE_FAILED:{error}"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|error| format!("PROVIDER_GATEWAY_PROVIDER_QUERY_FAILED:{error}"))?;
     for row in rows {
         let (provider, count) =
