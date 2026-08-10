@@ -1,0 +1,52 @@
+name: Remaining 71 Stage1 Self Patch
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - "tools/apply_remaining71_stage1.py"
+      - ".github/workflows/remaining71-stage1-self-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/r31-provider-capture-native
+
+      - name: Install Rust 1.82.0
+        run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Apply fail-closed stage1 patch
+        run: python tools/apply_remaining71_stage1.py
+
+      - name: Canonical rustfmt
+        run: cargo +1.82.0 fmt --all
+
+      - name: Compile all Syntavra Rust binaries
+        run: cargo +1.82.0 check --locked -p syntavra-cli --bins
+
+      - name: Remove one-shot machinery
+        shell: bash
+        run: |
+          rm tools/apply_remaining71_stage1.py
+          rm .github/workflows/remaining71-stage1-self-patch.yml
+
+      - name: Commit stage1 source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && exit 0
+          git commit -m "Wire provider capture and clean native dispatcher"
+          git push origin HEAD:agent/r31-provider-capture-native
