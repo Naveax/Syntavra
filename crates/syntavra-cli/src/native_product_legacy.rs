@@ -12,17 +12,21 @@ use syntavra_core::sha256_hex;
 
 #[path = "native_delegate.rs"]
 mod native_delegate;
+#[path = "native_provider_gateway_read.rs"]
+mod native_provider_gateway_read;
 
 const MAX_CACHE_STATE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PROVIDER_INPUT_BYTES: usize = 4 * 1024 * 1024;
 
 pub fn supports(command: &[String]) -> bool {
     command.len() == 2
-        && command[0] == "run"
-        && matches!(
-            command[1].as_str(),
-            "cache-health" | "delegate" | "provider-route"
-        )
+        && ((command[0] == "run"
+            && matches!(
+                command[1].as_str(),
+                "cache-health" | "delegate" | "provider-route"
+            ))
+            || (command[0] == "provider"
+                && matches!(command[1].as_str(), "stats" | "verify")))
 }
 
 fn number_as_i64(value: Option<&Value>) -> i64 {
@@ -409,6 +413,13 @@ fn provider_route(arguments: &[String]) -> Result<Value, String> {
 pub fn execute(command: &[String], state_root: &Path) -> Result<Option<Value>, String> {
     if !supports(command) {
         return Ok(None);
+    }
+    if command[0] == "provider" {
+        return match command[1].as_str() {
+            "stats" => native_provider_gateway_read::stats(state_root).map(Some),
+            "verify" => native_provider_gateway_read::verify(state_root).map(Some),
+            _ => Ok(None),
+        };
     }
     match command[1].as_str() {
         "cache-health" => cache_health(state_root).map(Some),
