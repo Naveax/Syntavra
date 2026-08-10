@@ -111,6 +111,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_remaining71_graph.rs"]
 mod native_remaining71_graph;
+#[path = "native_remaining71_headless.rs"]
+mod native_remaining71_headless;
 #[path = "native_remaining71_memory.rs"]
 mod native_remaining71_memory;
 #[path = "native_remaining71_proxy.rs"]
@@ -216,6 +218,7 @@ pub fn supports(command: &[String]) -> bool {
         || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_graph::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_headless::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -396,6 +399,9 @@ pub fn execute(
     }
     if bulk_parity_probe_enabled() && native_remaining71_graph::supports(command) {
         return native_remaining71_graph::execute(command, &arguments, project_root, state_root);
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_headless::supports(command) {
+        return native_remaining71_headless::execute(command, &arguments, project_root, state_root);
     }
     if native_analytics::supports(command) {
         return native_analytics::execute(&arguments, state_root).map(Some);

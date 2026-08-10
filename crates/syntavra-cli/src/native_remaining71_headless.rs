@@ -55,8 +55,8 @@ pub(crate) fn execute(
 }
 
 fn initialize(path: &Path) -> Result<(), String> {
-    let connection = Connection::open(path)
-        .map_err(|error| format!("HEADLESS_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("HEADLESS_DATABASE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
             "PRAGMA journal_mode=WAL;\
@@ -82,14 +82,18 @@ fn submit(arguments: &[String], project: &Path, database: &Path) -> Result<Value
     let command = load_argv(command_raw, "headless command")?;
     let workspace_raw = option_value(arguments, "--workspace")?.unwrap_or_else(|| ".".to_owned());
     let workspace = project_path(project, &workspace_raw, true)?;
-    let workspace_type = option_value(arguments, "--workspace-type")?
-        .unwrap_or_else(|| "local-worktree".to_owned());
+    let workspace_type =
+        option_value(arguments, "--workspace-type")?.unwrap_or_else(|| "local-worktree".to_owned());
     let policy = load_object(
-        option_value(arguments, "--policy")?.as_deref().unwrap_or("{}"),
+        option_value(arguments, "--policy")?
+            .as_deref()
+            .unwrap_or("{}"),
         "policy",
     )?;
     let metadata = load_object(
-        option_value(arguments, "--metadata")?.as_deref().unwrap_or("{}"),
+        option_value(arguments, "--metadata")?
+            .as_deref()
+            .unwrap_or("{}"),
         "metadata",
     )?;
     submit_record(
@@ -171,7 +175,9 @@ fn status(arguments: &[String], database: &Path) -> Result<Value, String> {
         .prepare("SELECT state,COUNT(*) FROM jobs GROUP BY state ORDER BY state")
         .map_err(|error| format!("HEADLESS_STATS_PREPARE_FAILED:{error}"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|error| format!("HEADLESS_STATS_QUERY_FAILED:{error}"))?;
     for row in rows {
         let (state, count) = row.map_err(|error| format!("HEADLESS_STATS_ROW_FAILED:{error}"))?;
@@ -214,7 +220,12 @@ fn run_once(arguments: &[String], database: &Path, state_root: &Path) -> Result<
     transaction
         .execute(
             "INSERT INTO events(job_id,event_type,payload_json,created_at) VALUES(?,?,?,?)",
-            params![job_id, "claimed", canonical_json(&json!({"worker":worker}))?, claimed_at],
+            params![
+                job_id,
+                "claimed",
+                canonical_json(&json!({"worker":worker}))?,
+                claimed_at
+            ],
         )
         .map_err(|error| format!("HEADLESS_CLAIM_EVENT_FAILED:{error}"))?;
     transaction
@@ -264,12 +275,18 @@ fn sandbox_arguments(command: &[String], policy: &Value) -> Result<Vec<String>, 
     let mut output = vec![
         "run".to_owned(),
         "sandbox-run".to_owned(),
-        canonical_json(&Value::Array(command.iter().cloned().map(Value::String).collect()))?,
+        canonical_json(&Value::Array(
+            command.iter().cloned().map(Value::String).collect(),
+        ))?,
     ];
     if let Some(timeout) = policy.get("timeout_seconds").and_then(Value::as_f64) {
         output.extend(["--timeout".to_owned(), timeout.to_string()]);
     }
-    if policy.get("strict_native").and_then(Value::as_bool).unwrap_or(false) {
+    if policy
+        .get("strict_native")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         output.push("--strict-native".to_owned());
     }
     if !policy
@@ -296,8 +313,8 @@ fn sandbox_arguments(command: &[String], policy: &Value) -> Result<Vec<String>, 
 
 fn cancel(arguments: &[String], database: &Path) -> Result<Value, String> {
     let job_id = positional_after(arguments, "headless-cancel", 0)?;
-    let reason = option_value(arguments, "--reason")?
-        .unwrap_or_else(|| "operator cancellation".to_owned());
+    let reason =
+        option_value(arguments, "--reason")?.unwrap_or_else(|| "operator cancellation".to_owned());
     let connection = Connection::open(database)
         .map_err(|error| format!("HEADLESS_DATABASE_OPEN_FAILED:{error}"))?;
     let job = get_job(&connection, job_id)?;
@@ -340,7 +357,9 @@ fn events(database: &Path, job_id: &str) -> Result<Vec<Value>, String> {
     let connection = Connection::open(database)
         .map_err(|error| format!("HEADLESS_DATABASE_OPEN_FAILED:{error}"))?;
     let exists = connection
-        .query_row("SELECT 1 FROM jobs WHERE job_id=?", params![job_id], |_| Ok(()))
+        .query_row("SELECT 1 FROM jobs WHERE job_id=?", params![job_id], |_| {
+            Ok(())
+        })
         .optional()
         .map_err(|error| format!("HEADLESS_EVENT_JOB_QUERY_FAILED:{error}"))?
         .is_some();
@@ -512,7 +531,10 @@ fn transition_allowed(current: &str, target: &str) -> bool {
     match current {
         "queued" => matches!(target, "claimed" | "cancelled"),
         "claimed" => matches!(target, "running" | "queued" | "cancelled"),
-        "running" => matches!(target, "verifying" | "completed" | "failed" | "blocked" | "cancelled"),
+        "running" => matches!(
+            target,
+            "verifying" | "completed" | "failed" | "blocked" | "cancelled"
+        ),
         "verifying" => matches!(target, "completed" | "failed" | "blocked" | "cancelled"),
         "blocked" => matches!(target, "queued" | "cancelled"),
         "failed" | "cancelled" => target == "queued",
@@ -545,7 +567,21 @@ fn get_job(connection: &Connection, job_id: &str) -> Result<Value, String> {
         )
         .optional()
         .map_err(|error| format!("HEADLESS_JOB_QUERY_FAILED:{error}"))?;
-    let Some((id,state,workspace_type,workspace,command_json,policy_json,metadata_json,result_json,created_at,updated_at,attempts,claimed_by)) = value else {
+    let Some((
+        id,
+        state,
+        workspace_type,
+        workspace,
+        command_json,
+        policy_json,
+        metadata_json,
+        result_json,
+        created_at,
+        updated_at,
+        attempts,
+        claimed_by,
+    )) = value
+    else {
         return Err(format!("HEADLESS_JOB_NOT_FOUND:{job_id}"));
     };
     Ok(json!({
@@ -608,7 +644,12 @@ fn load_json(value: &str) -> Result<Value, String> {
 fn value_strings(value: Option<&Value>) -> Vec<String> {
     value
         .and_then(Value::as_array)
-        .map(|rows| rows.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+        .map(|rows| {
+            rows.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -658,7 +699,11 @@ fn now_iso() -> Result<String, String> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("HEADLESS_CLOCK_FAILED:{error}"))?;
-    Ok(format!("{}.{:06}+00:00", duration.as_secs(), duration.subsec_micros()))
+    Ok(format!(
+        "{}.{:06}+00:00",
+        duration.as_secs(),
+        duration.subsec_micros()
+    ))
 }
 
 fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
@@ -668,9 +713,17 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
         let current = &arguments[index];
         let found = if current == flag {
             index += 1;
-            Some(arguments.get(index).ok_or_else(|| format!("{flag}_VALUE_MISSING"))?.clone())
+            Some(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
+                    .clone(),
+            )
         } else {
-            current.strip_prefix(flag).and_then(|tail| tail.strip_prefix('=')).map(str::to_owned)
+            current
+                .strip_prefix(flag)
+                .and_then(|tail| tail.strip_prefix('='))
+                .map(str::to_owned)
         };
         if let Some(found) = found {
             if output.is_some() {
@@ -683,10 +736,23 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
     Ok(output)
 }
 
-fn positional_after<'a>(arguments: &'a [String], action: &str, position: usize) -> Result<&'a str, String> {
-    action_positionals(arguments, action, &[
-        "--workspace","--workspace-type","--policy","--metadata","--worker","--reason"
-    ])?
+fn positional_after<'a>(
+    arguments: &'a [String],
+    action: &str,
+    position: usize,
+) -> Result<&'a str, String> {
+    action_positionals(
+        arguments,
+        action,
+        &[
+            "--workspace",
+            "--workspace-type",
+            "--policy",
+            "--metadata",
+            "--worker",
+            "--reason",
+        ],
+    )?
     .get(position)
     .copied()
     .ok_or_else(|| format!("HEADLESS_POSITIONAL_MISSING:{action}:{position}"))
