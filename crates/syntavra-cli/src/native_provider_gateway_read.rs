@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
@@ -74,6 +74,62 @@ fn integrity(connection: &Connection) -> Result<bool, String> {
     Ok(result == "ok")
 }
 
+fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
+    let mut found = None;
+    let mut index = 0usize;
+    while index < arguments.len() {
+        let item = &arguments[index];
+        let value = if item == flag {
+            index += 1;
+            Some(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
+                    .clone(),
+            )
+        } else {
+            item.strip_prefix(flag)
+                .and_then(|suffix| suffix.strip_prefix('='))
+                .map(str::to_owned)
+        };
+        if let Some(value) = value {
+            if found.is_some() {
+                return Err(format!("{flag}_DUPLICATE"));
+            }
+            found = Some(value);
+        }
+        index += 1;
+    }
+    Ok(found)
+}
+
+fn apply_output(value: &Value) -> Result<Value, String> {
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    let Some(path) = option_value(&arguments, "--output")? else {
+        return Ok(value.clone());
+    };
+    let target = PathBuf::from(path);
+    if let Some(parent) = target
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("PROVIDER_OUTPUT_CREATE_FAILED:{error}"))?;
+    }
+    let rendered = format!(
+        "{}\n",
+        serde_json::to_string_pretty(value)
+            .map_err(|error| format!("PROVIDER_OUTPUT_SERIALIZE_FAILED:{error}"))?
+    );
+    fs::write(&target, rendered.as_bytes())
+        .map_err(|error| format!("PROVIDER_OUTPUT_WRITE_FAILED:{error}"))?;
+    Ok(json!({
+        "ok": true,
+        "output": target.display().to_string(),
+        "bytes": rendered.len(),
+    }))
+}
+
 fn emit_and_exit(value: &Value, code: u8) -> ! {
     println!(
         "{}",
@@ -119,7 +175,7 @@ pub(crate) fn stats(state_root: &Path) -> Result<Value, String> {
         providers.insert(provider, count);
     }
 
-    Ok(json!({
+    apply_output(&json!({
         "requests": requests,
         "cache_entries": cache_entries,
         "replay_hits": replay_hits,
@@ -218,8 +274,9 @@ pub(crate) fn verify(state_root: &Path) -> Result<Value, String> {
         "reasons": reasons,
         "database_integrity": database_integrity,
     });
+    let rendered = apply_output(&result)?;
     if result["ok"] != true {
-        emit_and_exit(&result, 3);
+        emit_and_exit(&rendered, 3);
     }
-    Ok(result)
+    Ok(rendered)
 }
