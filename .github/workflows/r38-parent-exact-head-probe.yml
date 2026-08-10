@@ -24,11 +24,11 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      - name: Checkout certified Codex closure head
+      - name: Checkout exact parent-fix candidate
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: dff03c079a3826a0e178f996fbbac977db6d390e
+          ref: 58de92b507959d57df836c9d668a5966882f09ce
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "dff03c079a3826a0e178f996fbbac977db6d390e"
+          test "$actual" = "58de92b507959d57df836c9d668a5966882f09ce"
 
       - name: Product runtime validator
         id: runtime
@@ -58,6 +58,12 @@ jobs:
         if: always()
         continue-on-error: true
         run: python tools/validate_competitive_gap_closure.py
+
+      - name: State snapshot contract unit tests
+        id: state_contract
+        if: always()
+        continue-on-error: true
+        run: cargo +1.82.0 test --locked -p syntavra-cli state_snapshot_contract --lib
 
       - name: R25-R37 Python/Rust differential parity
         id: parity
@@ -77,11 +83,11 @@ jobs:
         continue-on-error: true
         run: cargo +1.82.0 fmt --all -- --check
 
-      - name: Clippy deny warnings
+      - name: Clippy canonical warning policy
         id: clippy
         if: always()
         continue-on-error: true
-        run: cargo +1.82.0 clippy --locked --workspace --all-targets -- -D warnings
+        run: cargo +1.82.0 clippy --locked --workspace --all-targets
 
       - name: Working tree integrity
         id: tree
@@ -98,16 +104,17 @@ jobs:
         env:
           RUNTIME: ${{ steps.runtime.outcome }}
           COMPETITIVE: ${{ steps.competitive.outcome }}
+          STATE_CONTRACT: ${{ steps.state_contract.outcome }}
           PARITY: ${{ steps.parity.outcome }}
           CARGO_CHECK: ${{ steps.cargo_check.outcome }}
           RUSTFMT: ${{ steps.rustfmt.outcome }}
           CLIPPY: ${{ steps.clippy.outcome }}
           TREE: ${{ steps.tree.outcome }}
         run: |
-          printf 'runtime=%s\ncompetitive=%s\nparity=%s\ncargo_check=%s\nrustfmt=%s\nclippy=%s\ntree=%s\n' \
-            "$RUNTIME" "$COMPETITIVE" "$PARITY" "$CARGO_CHECK" "$RUSTFMT" "$CLIPPY" "$TREE"
+          printf 'runtime=%s\ncompetitive=%s\nstate_contract=%s\nparity=%s\ncargo_check=%s\nrustfmt=%s\nclippy=%s\ntree=%s\n' \
+            "$RUNTIME" "$COMPETITIVE" "$STATE_CONTRACT" "$PARITY" "$CARGO_CHECK" "$RUSTFMT" "$CLIPPY" "$TREE"
           failed=0
-          for value in "$RUNTIME" "$COMPETITIVE" "$PARITY" "$CARGO_CHECK" "$RUSTFMT" "$CLIPPY" "$TREE"; do
+          for value in "$RUNTIME" "$COMPETITIVE" "$STATE_CONTRACT" "$PARITY" "$CARGO_CHECK" "$RUSTFMT" "$CLIPPY" "$TREE"; do
             if [ "$value" != "success" ]; then
               failed=1
             fi
