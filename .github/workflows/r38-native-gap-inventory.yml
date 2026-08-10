@@ -1,0 +1,31 @@
+name: R38 Native Gap Inventory
+
+on:
+  push:
+    branches:
+      - agent/r38-native-gap-inventory
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout inventory head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install runtime
+        run: python -m pip install -e .
+
+      - name: Report missing native public routes
+        run: python tools/report_missing_native_public_routes.py
