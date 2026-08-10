@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -14,6 +15,7 @@ CODEX_SKILL_PATH = ".agents/skills/syntavra"
 MANAGED_START = "# SYNTAVRA-MANAGED-MCP-START"
 MANAGED_END = "# SYNTAVRA-MANAGED-MCP-END"
 _TABLE_RE = re.compile(r"^\s*(\[\[?)(.+?)(\]\]?)\s*(?:#.*)?$")
+_BRIDGE_ARGS = ["-m", "syntavra_runtime.codex_mcp_bridge"]
 
 
 def _normalize_table_name(value: str) -> str:
@@ -46,12 +48,18 @@ def mcp_entry(
     project: Path,
     scope: str,
 ) -> dict[str, Any]:
+    """Return the current Codex stdio entry.
+
+    The generic executable argument is retained for API compatibility, but Codex
+    always launches the dedicated workspace bridge with the current interpreter so
+    user/global integration cannot derive repository identity from process cwd.
+    """
+
     if not executable:
         raise ValueError("Codex MCP executable must not be empty")
-    args = [str(item) for item in executable[1:]]
     entry: dict[str, Any] = {
-        "command": str(executable[0]),
-        "args": args,
+        "command": sys.executable,
+        "args": list(_BRIDGE_ARGS),
         "env": {
             "SYNTAVRA_VERSION": VERSION,
             "SYNTAVRA_CHANNEL": CHANNEL,
@@ -59,12 +67,10 @@ def mcp_entry(
     }
     if scope == "project":
         resolved = project.resolve(strict=False)
-        entry["args"].extend(("--project", str(resolved)))
         entry["cwd"] = str(resolved)
         entry["env"]["SYNTAVRA_PROJECT"] = str(resolved)
     elif scope != "user":
         raise ValueError("scope must be project or user")
-    entry["args"].extend(("mcp", "serve"))
     return entry
 
 
@@ -120,21 +126,17 @@ def verify_entry(entry: Mapping[str, Any], *, project: Path, scope: str) -> list
     env = entry.get("env") if isinstance(entry.get("env"), Mapping) else {}
     if not command:
         reasons.append("missing-syntavra-mcp-command")
-    if args[-2:] != ["mcp", "serve"]:
-        reasons.append("invalid-syntavra-mcp-args")
+    if args != _BRIDGE_ARGS:
+        reasons.append("invalid-syntavra-codex-bridge-args")
     resolved = str(project.resolve(strict=False))
     if scope == "project":
         if entry.get("cwd") != resolved:
             reasons.append("incorrect-project-cwd")
-        if resolved not in args:
-            reasons.append("missing-project-binding")
         if env.get("SYNTAVRA_PROJECT") != resolved:
             reasons.append("incorrect-project-env")
     elif scope == "user":
         if entry.get("cwd"):
             reasons.append("user-scope-static-cwd")
-        if "--project" in args or any(item.startswith("--project=") for item in args):
-            reasons.append("user-scope-static-project-arg")
         if env.get("SYNTAVRA_PROJECT"):
             reasons.append("user-scope-static-project-env")
     else:
