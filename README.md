@@ -67,11 +67,13 @@ syntavra prove plan
 
 Normal daily work still happens in the existing coding agent. Syntavra is intended to activate through its skill, MCP integration and host hooks rather than requiring every command to be prefixed manually.
 
+For Codex, the managed MCP entry starts through the same Syntavra launcher using the internal `codex-mcp-bridge` route. User/global installs begin repository-unbound and require `syntavra.project.bind` before repository or process tools can run; trusted project-scope installs may auto-bind only to their exact project.
+
 ## MCP profiles
 
 | Profile | Purpose | Maximum public surface |
 |---|---|---:|
-| `minimal` | Default hot-loop token saver | 8 tools |
+| `minimal` | Default hot-loop token saver | 10 tools |
 | `balanced` | Repository context, output, memory and provider controls | 36 tools |
 | `audit` | Full inspection and administration | Entire installed catalog |
 
