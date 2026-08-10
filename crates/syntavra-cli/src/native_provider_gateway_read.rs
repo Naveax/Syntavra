@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
@@ -103,9 +103,12 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
     Ok(found)
 }
 
-fn apply_output(value: &Value) -> Result<Value, String> {
-    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    let Some(path) = option_value(&arguments, "--output")? else {
+fn process_arguments() -> Vec<String> {
+    std::env::args().skip(1).collect()
+}
+
+fn apply_output_with_arguments(value: &Value, arguments: &[String]) -> Result<Value, String> {
+    let Some(path) = option_value(arguments, "--output")? else {
         return Ok(value.clone());
     };
     let target = PathBuf::from(path);
@@ -130,6 +133,10 @@ fn apply_output(value: &Value) -> Result<Value, String> {
         "output": target.display().to_string(),
         "bytes": rendered.len(),
     }))
+}
+
+fn apply_output(value: &Value) -> Result<Value, String> {
+    apply_output_with_arguments(value, &process_arguments())
 }
 
 fn emit_and_exit(value: &Value, code: u8) -> ! {
@@ -213,6 +220,13 @@ fn evidence_project_id(state_root: &Path, handle: &str) -> Result<String, String
         .ok_or_else(|| "PROVIDER_GATEWAY_EVIDENCE_PROJECT_ID_MISSING".to_owned())
 }
 
+fn evidence_json(state_root: &Path, handle: &str) -> Result<Value, String> {
+    let project_id = evidence_project_id(state_root, handle)?;
+    let payload = NativeEvidenceStore::open(state_root, &project_id)?.get(handle)?;
+    serde_json::from_slice(&payload)
+        .map_err(|error| format!("PROVIDER_GATEWAY_REPLAY_JSON_INVALID:{error}"))
+}
+
 pub(crate) fn verify(state_root: &Path) -> Result<Value, String> {
     let connection = initialize(state_root)?;
     let database_integrity = integrity(&connection)?;
@@ -281,4 +295,88 @@ pub(crate) fn verify(state_root: &Path) -> Result<Value, String> {
         emit_and_exit(&rendered, 3);
     }
     Ok(rendered)
+}
+
+fn replay_handle_for_cache_key(state_root: &Path, cache_key: &str) -> Result<String, String> {
+    let mut connection = initialize(state_root)?;
+    let now = now_seconds()?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| format!("PROVIDER_GATEWAY_REPLAY_TRANSACTION_FAILED:{error}"))?;
+    let handle = transaction
+        .query_row(
+            "SELECT response_handle FROM provider_response_cache WHERE cache_key=?1 AND expires_at>?2",
+            (cache_key, now),
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| format!("PROVIDER_GATEWAY_REPLAY_LOOKUP_FAILED:{error}"))?;
+    if handle.is_none() {
+        transaction
+            .execute(
+                "DELETE FROM provider_response_cache WHERE expires_at<=?1",
+                [now],
+            )
+            .map_err(|error| format!("PROVIDER_GATEWAY_REPLAY_EXPIRE_FAILED:{error}"))?;
+    } else {
+        transaction
+            .execute(
+                "UPDATE provider_response_cache SET hit_count=hit_count+1,last_hit_at=?1 WHERE cache_key=?2",
+                (now, cache_key),
+            )
+            .map_err(|error| format!("PROVIDER_GATEWAY_REPLAY_HIT_UPDATE_FAILED:{error}"))?;
+    }
+    transaction
+        .commit()
+        .map_err(|error| format!("PROVIDER_GATEWAY_REPLAY_COMMIT_FAILED:{error}"))?;
+    Ok(handle.unwrap_or_default())
+}
+
+fn replay_target(arguments: &[String]) -> Result<(String, bool), String> {
+    let plan = option_value(arguments, "--plan")?;
+    let cache_key = option_value(arguments, "--cache-key")?;
+    match (plan, cache_key) {
+        (Some(_), Some(_)) => Err("PROVIDER_REPLAY_TARGET_CONFLICT".to_owned()),
+        (None, None) => Err("PROVIDER_REPLAY_TARGET_MISSING".to_owned()),
+        (None, Some(key)) => Ok((key, false)),
+        (Some(path), None) => {
+            let value = serde_json::from_slice::<Value>(
+                &fs::read(path)
+                    .map_err(|error| format!("PROVIDER_REPLAY_PLAN_READ_FAILED:{error}"))?,
+            )
+            .map_err(|error| format!("PROVIDER_REPLAY_PLAN_INVALID:{error}"))?;
+            let object = value
+                .as_object()
+                .ok_or_else(|| "PROVIDER_REPLAY_PLAN_NOT_OBJECT".to_owned())?;
+            let direct = object
+                .get("replay_response_handle")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if !direct.is_empty() {
+                return Ok((direct.to_owned(), true));
+            }
+            let key = object
+                .get("cache_key")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "PROVIDER_REPLAY_PLAN_CACHE_KEY_MISSING".to_owned())?;
+            Ok((key.to_owned(), false))
+        }
+    }
+}
+
+pub(crate) fn replay(state_root: &Path) -> Result<Value, String> {
+    let arguments = process_arguments();
+    let (target, direct_handle) = replay_target(&arguments)?;
+    let handle = if direct_handle {
+        target
+    } else {
+        replay_handle_for_cache_key(state_root, &target)?
+    };
+    if handle.is_empty() {
+        let rendered = apply_output_with_arguments(&json!({"hit": false}), &arguments)?;
+        emit_and_exit(&rendered, 4);
+    }
+    let response = evidence_json(state_root, &handle)?;
+    apply_output_with_arguments(&response, &arguments)
 }
