@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import time
+import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -13,6 +15,13 @@ from .host_adapters import KNOWN_HOSTS, detect_hosts, host_spec, negotiate
 from .release_identity import CHANNEL, VERSION
 from .runtime_paths import default_state_root
 from .util import atomic_write_json, sha256_bytes
+
+
+_CODEX_CONFIG_PATH = ".codex/config.toml"
+_CODEX_SKILL_PATH = ".agents/skills/syntavra"
+_CODEX_MANAGED_START = "# SYNTAVRA-MANAGED-MCP-START"
+_CODEX_MANAGED_END = "# SYNTAVRA-MANAGED-MCP-END"
+_CODEX_TABLE_RE = re.compile(r"^\s*\[([^\[\]]+)\]\s*(?:#.*)?$")
 
 
 @dataclass(frozen=True)
@@ -43,15 +52,20 @@ class HostInstaller:
         self.skill_root = skill_root.resolve(strict=True)
         self.home = (home or Path.home()).resolve(strict=False)
         self.executable = executable or (sys.executable, "-m", "syntavra_runtime")
-        # Installer metadata is product state, not repository content. Keeping it
-        # out of the target worktree prevents Syntavra from invalidating clean-tree
-        # reviews simply by being installed or repaired.
         self.state_root = default_state_root(self.project, namespace="install", home=self.home)
         self.backup_root = self.state_root / "backups"
         self.manifest_path = self.state_root / "manifest.json"
 
     def detect(self) -> list[dict[str, Any]]:
         return detect_hosts(self.project, home=self.home)
+
+    @staticmethod
+    def _config_path(host: str) -> str:
+        return _CODEX_CONFIG_PATH if host == "codex" else host_spec(host).config_path
+
+    @staticmethod
+    def _skill_path(host: str) -> str:
+        return _CODEX_SKILL_PATH if host == "codex" else host_spec(host).skill_path
 
     def _backup(self, path: Path) -> str:
         if not path.exists():
@@ -77,8 +91,6 @@ class HostInstaller:
 
     @staticmethod
     def _writable_ancestor(path: Path) -> bool:
-        """Check whether a not-yet-created state path can be created safely."""
-
         candidate = path.resolve(strict=False)
         while not candidate.exists() and candidate.parent != candidate:
             candidate = candidate.parent
@@ -94,18 +106,70 @@ class HostInstaller:
             },
         }
         if scope == "project":
-            # Project-local configuration is allowed to bind to its own project.
             args.extend(("--project", str(self.project)))
             entry["cwd"] = str(self.project)
             entry["env"]["SYNTAVRA_PROJECT"] = str(self.project)
         elif scope != "user":
             raise ValueError("scope must be project or user")
-        # User/global installation must resolve the active project at launch time.
-        # Pinning this to the repository from which Syntavra was installed caused
-        # Codex retrieval to index Syntavra itself while working in another repo.
         args.extend(("mcp", "serve"))
         entry["args"] = args
         return entry
+
+    @staticmethod
+    def _normalize_codex_table_name(value: str) -> str:
+        return value.strip().replace('"syntavra"', "syntavra").replace("'syntavra'", "syntavra")
+
+    @classmethod
+    def _strip_codex_mcp_tables(cls, text: str) -> str:
+        """Remove only Syntavra's current/legacy TOML tables, preserving other config."""
+
+        marker_pattern = re.compile(
+            re.escape(_CODEX_MANAGED_START) + r".*?" + re.escape(_CODEX_MANAGED_END) + r"\s*",
+            flags=re.DOTALL,
+        )
+        text = marker_pattern.sub("", text)
+        output: list[str] = []
+        skipping = False
+        for line in text.splitlines():
+            match = _CODEX_TABLE_RE.match(line)
+            if match:
+                name = cls._normalize_codex_table_name(match.group(1))
+                skipping = name == "mcp_servers.syntavra" or name.startswith("mcp_servers.syntavra.")
+            if not skipping:
+                output.append(line)
+        return "\n".join(output).rstrip()
+
+    def _render_codex_toml(self, existing: str, *, scope: str) -> str:
+        if existing.strip():
+            try:
+                tomllib.loads(existing)
+            except tomllib.TOMLDecodeError as exc:
+                raise InstallerError(f"refusing to modify invalid Codex TOML: {exc}") from exc
+
+        entry = self._mcp_entry(scope=scope)
+        base = self._strip_codex_mcp_tables(existing)
+        args = json.dumps(entry["args"], ensure_ascii=False)
+        block = [
+            _CODEX_MANAGED_START,
+            "[mcp_servers.syntavra]",
+            f"command = {json.dumps(entry['command'], ensure_ascii=False)}",
+            f"args = {args}",
+            "enabled = true",
+            "startup_timeout_sec = 20",
+            "tool_timeout_sec = 120",
+        ]
+        if entry.get("cwd"):
+            block.append(f"cwd = {json.dumps(entry['cwd'], ensure_ascii=False)}")
+        block.extend(("", "[mcp_servers.syntavra.env]"))
+        for key, value in sorted(entry["env"].items()):
+            block.append(f"{key} = {json.dumps(value, ensure_ascii=False)}")
+        block.append(_CODEX_MANAGED_END)
+        rendered = (base + ("\n\n" if base else "") + "\n".join(block) + "\n")
+        try:
+            tomllib.loads(rendered)
+        except tomllib.TOMLDecodeError as exc:
+            raise InstallerError(f"generated Codex TOML is invalid: {exc}") from exc
+        return rendered
 
     def _hook_entry(self, phase: str) -> dict[str, Any]:
         return {
@@ -144,11 +208,11 @@ class HostInstaller:
         return value
 
     def _install_skill(self, host: str, *, scope: str) -> InstallChange | None:
-        spec = host_spec(host)
-        if not spec.skill_path or spec.skill_path == "AGENTS.md" or spec.skill_path.endswith((".md", ".mdc")):
+        skill_path = self._skill_path(host)
+        if not skill_path or skill_path == "AGENTS.md" or skill_path.endswith((".md", ".mdc")):
             return self._install_instruction(host, scope=scope)
         base = self.project if scope == "project" else self.home
-        destination = base / spec.skill_path
+        destination = base / skill_path
         backup = self._backup(destination)
         if destination.exists():
             shutil.rmtree(destination)
@@ -157,11 +221,11 @@ class HostInstaller:
         return InstallChange(host, str(destination), "copy-skill", backup, negotiate(host)["mode"])
 
     def _install_instruction(self, host: str, *, scope: str) -> InstallChange | None:
-        spec = host_spec(host)
-        if not spec.skill_path:
+        skill_path = self._skill_path(host)
+        if not skill_path:
             return None
         base = self.project if scope == "project" else self.home
-        destination = base / spec.skill_path
+        destination = base / skill_path
         backup = self._backup(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         marker_start = "<!-- SYNTAVRA-MANAGED-START -->"
@@ -184,26 +248,32 @@ class HostInstaller:
         return InstallChange(host, str(destination), "write-instruction", backup, negotiate(host)["mode"])
 
     def _install_config(self, host: str, *, scope: str) -> InstallChange | None:
-        spec = host_spec(host)
-        if not spec.config_path:
+        config_path = self._config_path(host)
+        if not config_path:
             return None
         base = self.project if scope == "project" else self.home
-        destination = base / spec.config_path
-        existing = self._load_json(destination)
-        rendered = self._render_config(host, existing, scope=scope)
-        canonical = json.dumps(rendered, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        destination = base / config_path
+        if host == "codex":
+            existing_text = destination.read_text(encoding="utf-8", errors="strict") if destination.is_file() else ""
+            canonical = self._render_codex_toml(existing_text, scope=scope)
+        else:
+            existing = self._load_json(destination)
+            rendered = self._render_config(host, existing, scope=scope)
+            canonical = json.dumps(rendered, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         if destination.is_file() and destination.read_text(encoding="utf-8", errors="replace") == canonical:
             return InstallChange(host, str(destination), "unchanged", "", negotiate(host, installed=True)["mode"])
         backup = self._backup(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(canonical, encoding="utf-8", newline="\n")
-        return InstallChange(host, str(destination), "merge-config", backup, negotiate(host, installed=True)["mode"])
+        action = "merge-codex-toml" if host == "codex" else "merge-config"
+        return InstallChange(host, str(destination), action, backup, negotiate(host, installed=True)["mode"])
 
     def plan(self, hosts: Iterable[str], *, scope: str = "project") -> dict[str, Any]:
         resolved = tuple(dict.fromkeys(host.casefold() for host in hosts))
         unknown = [host for host in resolved if host not in KNOWN_HOSTS]
         if unknown:
             raise InstallerError(f"unknown hosts: {', '.join(unknown)}")
+        base = self.project if scope == "project" else self.home
         return {
             "version": VERSION,
             "release_channel": CHANNEL,
@@ -212,8 +282,8 @@ class HostInstaller:
             "changes": [
                 {
                     "host": host,
-                    "skill": str((self.project if scope == "project" else self.home) / host_spec(host).skill_path) if host_spec(host).skill_path else None,
-                    "config": str((self.project if scope == "project" else self.home) / host_spec(host).config_path) if host_spec(host).config_path else None,
+                    "skill": str(base / self._skill_path(host)) if self._skill_path(host) else None,
+                    "config": str(base / self._config_path(host)) if self._config_path(host) else None,
                     "mode": negotiate(host)["mode"],
                 }
                 for host in resolved
