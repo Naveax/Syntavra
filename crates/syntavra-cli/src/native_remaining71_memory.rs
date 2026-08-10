@@ -13,8 +13,16 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest as _, Sha256};
 
 const SESSION_VIEWS: &[&str] = &[
-    "task", "decision", "change", "failure", "security", "dependency", "repository", "test",
-    "provider", "handoff",
+    "task",
+    "decision",
+    "change",
+    "failure",
+    "security",
+    "dependency",
+    "repository",
+    "test",
+    "provider",
+    "handoff",
 ];
 
 pub(crate) fn supports(command: &[String]) -> bool {
@@ -73,7 +81,11 @@ fn now_seconds() -> Result<f64, String> {
 
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let shifted = days + 719_468;
-    let era = if shifted >= 0 { shifted } else { shifted - 146_096 } / 146_097;
+    let era = if shifted >= 0 {
+        shifted
+    } else {
+        shifted - 146_096
+    } / 146_097;
     let day_of_era = shifted - era * 146_097;
     let year_of_era =
         (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
@@ -167,8 +179,15 @@ fn action_index(arguments: &[String], action: &str) -> Result<usize, String> {
 fn positional_after_action(arguments: &[String], action: &str) -> Result<Vec<String>, String> {
     let start = action_index(arguments, action)? + 1;
     let flags_with_values = [
-        "--kind", "--importance", "--confidence", "--limit", "--session-id", "--parent",
-        "--metadata", "--view", "--label",
+        "--kind",
+        "--importance",
+        "--confidence",
+        "--limit",
+        "--session-id",
+        "--parent",
+        "--metadata",
+        "--view",
+        "--label",
     ];
     let mut output = Vec::new();
     let mut index = start;
@@ -211,7 +230,8 @@ fn open_db(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| format!("MEMORY_DB_PARENT_FAILED:{error}"))?;
     }
-    let connection = Connection::open(path).map_err(|error| format!("MEMORY_DB_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("MEMORY_DB_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; PRAGMA busy_timeout=30000;")
         .map_err(|error| format!("MEMORY_DB_PRAGMA_FAILED:{error}"))?;
@@ -264,7 +284,10 @@ impl Observation {
             "metadata": self.metadata,
         });
         if include_roi {
-            value.as_object_mut().expect("object").insert("roi".to_owned(), Value::from(self.roi()));
+            value
+                .as_object_mut()
+                .expect("object")
+                .insert("roi".to_owned(), Value::from(self.roi()));
         }
         value
     }
@@ -314,7 +337,10 @@ fn token_regex() -> Result<Regex, String> {
 
 fn tokens(text: &str) -> Result<Vec<String>, String> {
     let regex = token_regex()?;
-    Ok(regex.find_iter(text).map(|item| item.as_str().to_lowercase()).collect())
+    Ok(regex
+        .find_iter(text)
+        .map(|item| item.as_str().to_lowercase())
+        .collect())
 }
 
 fn embedding(text: &str) -> Result<Vec<f64>, String> {
@@ -335,11 +361,13 @@ fn embedding(text: &str) -> Result<Vec<f64>, String> {
 }
 
 fn embedding_json(text: &str) -> Result<String, String> {
-    serde_json::to_string(&embedding(text)?).map_err(|error| format!("MEMORY_EMBED_SERIALIZE_FAILED:{error}"))
+    serde_json::to_string(&embedding(text)?)
+        .map_err(|error| format!("MEMORY_EMBED_SERIALIZE_FAILED:{error}"))
 }
 
 fn metadata_json(value: &Value) -> Result<String, String> {
-    serde_json::to_string(&sorted(value)).map_err(|error| format!("MEMORY_METADATA_SERIALIZE_FAILED:{error}"))
+    serde_json::to_string(&sorted(value))
+        .map_err(|error| format!("MEMORY_METADATA_SERIALIZE_FAILED:{error}"))
 }
 
 fn add_observation(
@@ -363,7 +391,11 @@ fn add_observation(
         "kind": kind,
         "source_hash": source_hash,
     }))?);
-    let embed_json = if embed { Some(embedding_json(text)?) } else { None };
+    let embed_json = if embed {
+        Some(embedding_json(text)?)
+    } else {
+        None
+    };
     let db = init_intelligence(path)?;
     db.execute(
         r#"
@@ -445,7 +477,10 @@ fn intelligence_search(path: &Path, query: &str, limit: usize) -> Result<Value, 
         let length = doc.len().max(1) as f64;
         let mut counts = HashMap::<String, usize>::new();
         for term in query_tokens.iter().cloned().collect::<BTreeSet<_>>() {
-            counts.insert(term.clone(), doc.iter().filter(|value| **value == term).count());
+            counts.insert(
+                term.clone(),
+                doc.iter().filter(|value| **value == term).count(),
+            );
         }
         let mut bm25 = 0.0;
         for term in &query_tokens {
@@ -509,7 +544,11 @@ fn ranked_observations(path: &Path, limit: usize) -> Result<Vec<Value>, String> 
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.observation_id.cmp(&right.observation_id))
     });
-    Ok(rows.into_iter().take(limit).map(|row| row.value(true)).collect())
+    Ok(rows
+        .into_iter()
+        .take(limit)
+        .map(|row| row.value(true))
+        .collect())
 }
 
 fn intelligence_stats(path: &Path) -> Result<Value, String> {
@@ -518,48 +557,104 @@ fn intelligence_stats(path: &Path) -> Result<Value, String> {
         .query_row("SELECT COUNT(*) FROM observations", [], |row| row.get(0))
         .map_err(|error| format!("MEMORY_STATS_FAILED:{error}"))?;
     let valid: i64 = db
-        .query_row("SELECT COUNT(*) FROM observations WHERE validity>0", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM observations WHERE validity>0",
+            [],
+            |row| row.get(0),
+        )
         .map_err(|error| format!("MEMORY_STATS_FAILED:{error}"))?;
     let missing: i64 = db
-        .query_row("SELECT COUNT(*) FROM observations WHERE embedding_json IS NULL", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM observations WHERE embedding_json IS NULL",
+            [],
+            |row| row.get(0),
+        )
         .map_err(|error| format!("MEMORY_STATS_FAILED:{error}"))?;
     Ok(json!({"observations": observations, "valid": valid, "missing_embeddings": missing}))
 }
 
-fn memory_intelligence(action: &str, arguments: &[String], state_root: &Path) -> Result<Value, String> {
+fn memory_intelligence(
+    action: &str,
+    arguments: &[String],
+    state_root: &Path,
+) -> Result<Value, String> {
     let db_path = state_root.join("memory-intelligence.sqlite3");
     match action {
         "memory-add" => {
             let positional = positional_after_action(arguments, action)?;
-            let text = positional.first().ok_or_else(|| "memory text is required".to_owned())?;
-            let kind = option_value(arguments, "--kind")?.unwrap_or_else(|| "observation".to_owned());
+            let text = positional
+                .first()
+                .ok_or_else(|| "memory text is required".to_owned())?;
+            let kind =
+                option_value(arguments, "--kind")?.unwrap_or_else(|| "observation".to_owned());
             let importance = option_value(arguments, "--importance")?
-                .map(|value| value.parse::<f64>().map_err(|_| "MEMORY_IMPORTANCE_INVALID".to_owned()))
+                .map(|value| {
+                    value
+                        .parse::<f64>()
+                        .map_err(|_| "MEMORY_IMPORTANCE_INVALID".to_owned())
+                })
                 .transpose()?
                 .unwrap_or(0.5);
             let confidence = option_value(arguments, "--confidence")?
-                .map(|value| value.parse::<f64>().map_err(|_| "MEMORY_CONFIDENCE_INVALID".to_owned()))
+                .map(|value| {
+                    value
+                        .parse::<f64>()
+                        .map_err(|_| "MEMORY_CONFIDENCE_INVALID".to_owned())
+                })
                 .transpose()?
                 .unwrap_or(0.7);
-            Ok(add_observation(&db_path, text, &kind, importance, confidence, 1.0, &json!({}), true)?.value(false))
+            Ok(add_observation(
+                &db_path,
+                text,
+                &kind,
+                importance,
+                confidence,
+                1.0,
+                &json!({}),
+                true,
+            )?
+            .value(false))
         }
         "memory-extract" => {
             let positional = positional_after_action(arguments, action)?;
-            let source = positional.first().ok_or_else(|| "MEMORY_SOURCE_REQUIRED".to_owned())?;
+            let source = positional
+                .first()
+                .ok_or_else(|| "MEMORY_SOURCE_REQUIRED".to_owned())?;
             let text = read_text_or_path(source)?;
             let patterns = [
-                ("decision", r"(?im)^\s*(?:decision|decided|we will|keep|use)\s*[:-]?\s*(.+)$", 0.8),
-                ("failure", r"(?im)^\s*(?:root cause|failure|error cause)\s*[:-]?\s*(.+)$", 0.75),
-                ("constraint", r"(?im)^\s*(?:constraint|must|never)\s*[:-]?\s*(.+)$", 0.85),
-                ("preference", r"(?im)^\s*(?:preference|prefer)\s*[:-]?\s*(.+)$", 0.65),
+                (
+                    "decision",
+                    r"(?im)^\s*(?:decision|decided|we will|keep|use)\s*[:-]?\s*(.+)$",
+                    0.8,
+                ),
+                (
+                    "failure",
+                    r"(?im)^\s*(?:root cause|failure|error cause)\s*[:-]?\s*(.+)$",
+                    0.75,
+                ),
+                (
+                    "constraint",
+                    r"(?im)^\s*(?:constraint|must|never)\s*[:-]?\s*(.+)$",
+                    0.85,
+                ),
+                (
+                    "preference",
+                    r"(?im)^\s*(?:preference|prefer)\s*[:-]?\s*(.+)$",
+                    0.65,
+                ),
             ];
             let mut observations = Vec::new();
             for (kind, pattern, importance) in patterns {
-                let regex = Regex::new(pattern).map_err(|error| format!("MEMORY_EXTRACT_REGEX:{error}"))?;
+                let regex =
+                    Regex::new(pattern).map_err(|error| format!("MEMORY_EXTRACT_REGEX:{error}"))?;
                 for capture in regex.captures_iter(&text) {
-                    let Some(found) = capture.get(1) else { continue };
+                    let Some(found) = capture.get(1) else {
+                        continue;
+                    };
                     let value = found.as_str().trim();
-                    if value.is_empty() { continue; }
+                    if value.is_empty() {
+                        continue;
+                    }
                     observations.push(
                         add_observation(
                             &db_path,
@@ -579,19 +674,33 @@ fn memory_intelligence(action: &str, arguments: &[String], state_root: &Path) ->
         }
         "memory-search" => {
             let positional = positional_after_action(arguments, action)?;
-            let query = positional.first().ok_or_else(|| "MEMORY_QUERY_REQUIRED".to_owned())?;
+            let query = positional
+                .first()
+                .ok_or_else(|| "MEMORY_QUERY_REQUIRED".to_owned())?;
             let limit = option_value(arguments, "--limit")?
-                .map(|value| value.parse::<usize>().map_err(|_| "MEMORY_LIMIT_INVALID".to_owned()))
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "MEMORY_LIMIT_INVALID".to_owned())
+                })
                 .transpose()?
                 .unwrap_or(20);
             Ok(json!({"results": intelligence_search(&db_path, query, limit)?}))
         }
         "memory-export" => {
             let positional = positional_after_action(arguments, action)?;
-            let target = PathBuf::from(positional.first().ok_or_else(|| "MEMORY_EXPORT_PATH_REQUIRED".to_owned())?);
+            let target = PathBuf::from(
+                positional
+                    .first()
+                    .ok_or_else(|| "MEMORY_EXPORT_PATH_REQUIRED".to_owned())?,
+            );
             let rows = ranked_observations(&db_path, 1_000_000)?;
-            if let Some(parent) = target.parent().filter(|value| !value.as_os_str().is_empty()) {
-                fs::create_dir_all(parent).map_err(|error| format!("MEMORY_EXPORT_PARENT_FAILED:{error}"))?;
+            if let Some(parent) = target
+                .parent()
+                .filter(|value| !value.as_os_str().is_empty())
+            {
+                fs::create_dir_all(parent)
+                    .map_err(|error| format!("MEMORY_EXPORT_PARENT_FAILED:{error}"))?;
             }
             let mut output = OpenOptions::new()
                 .create(true)
@@ -602,15 +711,26 @@ fn memory_intelligence(action: &str, arguments: &[String], state_root: &Path) ->
             for row in &rows {
                 let mut line = canonical_json(row)?;
                 line.push(b'\n');
-                output.write_all(&line).map_err(|error| format!("MEMORY_EXPORT_WRITE_FAILED:{error}"))?;
+                output
+                    .write_all(&line)
+                    .map_err(|error| format!("MEMORY_EXPORT_WRITE_FAILED:{error}"))?;
             }
-            output.flush().map_err(|error| format!("MEMORY_EXPORT_FLUSH_FAILED:{error}"))?;
-            let raw = fs::read(&target).map_err(|error| format!("MEMORY_EXPORT_READBACK_FAILED:{error}"))?;
-            Ok(json!({"path": target.to_string_lossy(), "observations": rows.len(), "sha256": sha256_bytes(&raw)}))
+            output
+                .flush()
+                .map_err(|error| format!("MEMORY_EXPORT_FLUSH_FAILED:{error}"))?;
+            let raw = fs::read(&target)
+                .map_err(|error| format!("MEMORY_EXPORT_READBACK_FAILED:{error}"))?;
+            Ok(
+                json!({"path": target.to_string_lossy(), "observations": rows.len(), "sha256": sha256_bytes(&raw)}),
+            )
         }
         "memory-backfill" => {
             let limit = option_value(arguments, "--limit")?
-                .map(|value| value.parse::<usize>().map_err(|_| "MEMORY_LIMIT_INVALID".to_owned()))
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "MEMORY_LIMIT_INVALID".to_owned())
+                })
                 .transpose()?
                 .unwrap_or(1000);
             let db = init_intelligence(&db_path)?;
@@ -618,7 +738,9 @@ fn memory_intelligence(action: &str, arguments: &[String], state_root: &Path) ->
                 .prepare("SELECT observation_id,text FROM observations WHERE embedding_json IS NULL LIMIT ?1")
                 .map_err(|error| format!("MEMORY_BACKFILL_PREPARE:{error}"))?;
             let rows = statement
-                .query_map([i64::try_from(limit).unwrap_or(i64::MAX)], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .query_map([i64::try_from(limit).unwrap_or(i64::MAX)], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
                 .map_err(|error| format!("MEMORY_BACKFILL_QUERY:{error}"))?
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .map_err(|error| format!("MEMORY_BACKFILL_ROWS:{error}"))?;
@@ -689,7 +811,9 @@ fn open_session(
     parents: &[String],
     metadata: &Value,
 ) -> Result<Value, String> {
-    let session_id = requested_id.filter(|value| !value.is_empty()).unwrap_or_else(random_session_id);
+    let session_id = requested_id
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(random_session_id);
     let now = now_iso()?;
     let db = init_session(path)?;
     let existing = db
@@ -706,7 +830,9 @@ fn open_session(
         )
         .optional()
         .map_err(|error| format!("SESSION_MEMORY_OPEN_QUERY:{error}"))?;
-    if let Some((id, project_id, state, parents_json, metadata_json, created_at, updated_at)) = existing {
+    if let Some((id, project_id, state, parents_json, metadata_json, created_at, updated_at)) =
+        existing
+    {
         return Ok(json!({
             "session_id": id,
             "project_id": project_id,
@@ -722,7 +848,11 @@ fn open_session(
     }
     for parent in parents {
         let exists: Option<i64> = db
-            .query_row("SELECT 1 FROM sessions WHERE session_id=?1", [parent], |row| row.get(0))
+            .query_row(
+                "SELECT 1 FROM sessions WHERE session_id=?1",
+                [parent],
+                |row| row.get(0),
+            )
             .optional()
             .map_err(|error| format!("SESSION_PARENT_QUERY:{error}"))?;
         if exists.is_none() {
@@ -730,11 +860,20 @@ fn open_session(
         }
     }
     let project_id = session_project_id(project_root);
-    let parents_json = serde_json::to_string(parents).map_err(|error| format!("SESSION_PARENTS_JSON:{error}"))?;
-    let metadata_json = serde_json::to_string(&sorted(metadata)).map_err(|error| format!("SESSION_METADATA_JSON:{error}"))?;
+    let parents_json =
+        serde_json::to_string(parents).map_err(|error| format!("SESSION_PARENTS_JSON:{error}"))?;
+    let metadata_json = serde_json::to_string(&sorted(metadata))
+        .map_err(|error| format!("SESSION_METADATA_JSON:{error}"))?;
     db.execute(
         "INSERT INTO sessions VALUES(?1,?2,'ACTIVE',?3,?4,?5,?6)",
-        params![session_id, project_id, parents_json, metadata_json, now, now],
+        params![
+            session_id,
+            project_id,
+            parents_json,
+            metadata_json,
+            now,
+            now
+        ],
     )
     .map_err(|error| format!("SESSION_OPEN_INSERT:{error}"))?;
     Ok(json!({
@@ -774,10 +913,19 @@ fn session_events(path: &Path, session_id: &str) -> Result<Vec<Value>, String> {
         .map_err(|error| format!("SESSION_EVENTS_ROWS:{error}"))
 }
 
-fn append_session(path: &Path, session_id: &str, event_type: &str, payload: &Value) -> Result<Value, String> {
+fn append_session(
+    path: &Path,
+    session_id: &str,
+    event_type: &str,
+    payload: &Value,
+) -> Result<Value, String> {
     let db = init_session(path)?;
     let exists: Option<i64> = db
-        .query_row("SELECT 1 FROM sessions WHERE session_id=?1", [session_id], |row| row.get(0))
+        .query_row(
+            "SELECT 1 FROM sessions WHERE session_id=?1",
+            [session_id],
+            |row| row.get(0),
+        )
         .optional()
         .map_err(|error| format!("SESSION_APPEND_SESSION_QUERY:{error}"))?;
     if exists.is_none() {
@@ -801,17 +949,35 @@ fn append_session(path: &Path, session_id: &str, event_type: &str, payload: &Val
     });
     let digest = sha256_bytes(&canonical_json(&body)?);
     let created = now_iso()?;
-    let payload_json = String::from_utf8(canonical_json(payload)?).map_err(|error| format!("SESSION_PAYLOAD_UTF8:{error}"))?;
+    let payload_json = String::from_utf8(canonical_json(payload)?)
+        .map_err(|error| format!("SESSION_PAYLOAD_UTF8:{error}"))?;
     db.execute(
         "INSERT INTO events VALUES(?1,?2,?3,?4,?5,?6,?7)",
-        params![session_id, sequence, event_type, payload_json, previous, digest, created],
+        params![
+            session_id,
+            sequence,
+            event_type,
+            payload_json,
+            previous,
+            digest,
+            created
+        ],
     )
     .map_err(|error| format!("SESSION_APPEND_INSERT:{error}"))?;
-    db.execute("UPDATE sessions SET updated_at=?1 WHERE session_id=?2", params![created, session_id])
-        .map_err(|error| format!("SESSION_APPEND_UPDATE:{error}"))?;
+    db.execute(
+        "UPDATE sessions SET updated_at=?1 WHERE session_id=?2",
+        params![created, session_id],
+    )
+    .map_err(|error| format!("SESSION_APPEND_UPDATE:{error}"))?;
     let mut output = body;
-    output.as_object_mut().expect("object").insert("event_hash".to_owned(), Value::String(digest));
-    output.as_object_mut().expect("object").insert("created_at".to_owned(), Value::String(created));
+    output
+        .as_object_mut()
+        .expect("object")
+        .insert("event_hash".to_owned(), Value::String(digest));
+    output
+        .as_object_mut()
+        .expect("object")
+        .insert("created_at".to_owned(), Value::String(created));
     Ok(output)
 }
 
@@ -849,12 +1015,33 @@ fn verify_session(path: &Path, session_id: &str) -> Result<Value, String> {
 fn summary_terms(view: &str) -> &'static [&'static str] {
     match view {
         "task" => &["task", "goal", "request", "plan"],
-        "decision" => &["decision", "decide", "chosen", "keep", "revert", "supersede"],
+        "decision" => &[
+            "decision",
+            "decide",
+            "chosen",
+            "keep",
+            "revert",
+            "supersede",
+        ],
         "change" => &["patch", "edit", "change", "file", "commit", "diff"],
         "failure" => &["fail", "error", "exception", "test", "panic", "timeout"],
-        "security" => &["security", "authorization", "policy", "secret", "sandbox", "capability"],
+        "security" => &[
+            "security",
+            "authorization",
+            "policy",
+            "secret",
+            "sandbox",
+            "capability",
+        ],
         "dependency" => &["dependency", "import", "package", "provider", "adapter"],
-        "repository" => &["repository", "branch", "commit", "symbol", "module", "worktree"],
+        "repository" => &[
+            "repository",
+            "branch",
+            "commit",
+            "symbol",
+            "module",
+            "worktree",
+        ],
         "test" => &["test", "verify", "coverage", "assert", "benchmark"],
         "provider" => &["provider", "model", "token", "cost", "receipt", "cache"],
         "handoff" => &["handoff", "agent", "resume", "migration", "fork", "merge"],
@@ -867,7 +1054,11 @@ fn event_summary(view: &str, events: &[Value]) -> Result<String, String> {
     for event in events {
         let payload = serde_json::to_string(&sorted(&event["payload"]))
             .map_err(|error| format!("SESSION_SUMMARY_JSON:{error}"))?;
-        let corpus = format!("{} {payload}", event["event_type"].as_str().unwrap_or_default()).to_lowercase();
+        let corpus = format!(
+            "{} {payload}",
+            event["event_type"].as_str().unwrap_or_default()
+        )
+        .to_lowercase();
         if summary_terms(view).iter().any(|term| corpus.contains(term)) {
             let sequence = event["sequence"].as_i64().unwrap_or_default();
             let event_type = event["event_type"].as_str().unwrap_or_default();
@@ -883,10 +1074,17 @@ fn event_summary(view: &str, events: &[Value]) -> Result<String, String> {
     }
 }
 
-fn compact_session(path: &Path, session_id: &str, requested_views: &[String]) -> Result<Value, String> {
+fn compact_session(
+    path: &Path,
+    session_id: &str,
+    requested_views: &[String],
+) -> Result<Value, String> {
     let events = session_events(path, session_id)?;
     let views = if requested_views.is_empty() {
-        SESSION_VIEWS.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>()
+        SESSION_VIEWS
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect::<Vec<_>>()
     } else {
         requested_views.to_vec()
     };
@@ -902,7 +1100,10 @@ fn compact_session(path: &Path, session_id: &str, requested_views: &[String]) ->
     let mut created = Vec::<Value>::new();
     for view in views {
         let text = event_summary(&view, &events)?;
-        let source_sequences = events.iter().map(|event| event["sequence"].clone()).collect::<Vec<_>>();
+        let source_sequences = events
+            .iter()
+            .map(|event| event["sequence"].clone())
+            .collect::<Vec<_>>();
         let parent: Option<String> = db
             .query_row(
                 "SELECT summary_id FROM summaries WHERE session_id=?1 AND view=?2 ORDER BY created_at DESC LIMIT 1",
@@ -926,24 +1127,36 @@ fn compact_session(path: &Path, session_id: &str, requested_views: &[String]) ->
                 summary_id,
                 session_id,
                 view,
-                serde_json::to_string(&source_sequences).map_err(|error| format!("SESSION_SUMMARY_SEQS:{error}"))?,
-                serde_json::to_string(&parents).map_err(|error| format!("SESSION_SUMMARY_PARENTS:{error}"))?,
+                serde_json::to_string(&source_sequences)
+                    .map_err(|error| format!("SESSION_SUMMARY_SEQS:{error}"))?,
+                serde_json::to_string(&parents)
+                    .map_err(|error| format!("SESSION_SUMMARY_PARENTS:{error}"))?,
                 text,
                 now_iso()?,
             ],
         )
         .map_err(|error| format!("SESSION_SUMMARY_INSERT:{error}"))?;
         let mut row = body;
-        row.as_object_mut().expect("object").insert("summary_id".to_owned(), Value::String(summary_id));
+        row.as_object_mut()
+            .expect("object")
+            .insert("summary_id".to_owned(), Value::String(summary_id));
         created.push(row);
     }
-    let verified = verify_session(path, session_id)?["ok"].as_bool().unwrap_or(false);
-    Ok(json!({"ok": true, "session_id": session_id, "events": events.len(), "summaries": created, "exact_history_preserved": verified}))
+    let verified = verify_session(path, session_id)?["ok"]
+        .as_bool()
+        .unwrap_or(false);
+    Ok(
+        json!({"ok": true, "session_id": session_id, "events": events.len(), "summaries": created, "exact_history_preserved": verified}),
+    )
 }
 
 fn payload_weight(payload: &Value) -> f64 {
     let importance = payload["importance"].as_f64().unwrap_or(0.0);
-    let pinned = if payload["pinned"].as_bool().unwrap_or(false) { 15.0 } else { 0.0 };
+    let pinned = if payload["pinned"].as_bool().unwrap_or(false) {
+        15.0
+    } else {
+        0.0
+    };
     let stale = if payload["stale"].as_bool().unwrap_or(false)
         || payload["reverted"].as_bool().unwrap_or(false)
         || payload["superseded"].as_bool().unwrap_or(false)
@@ -956,7 +1169,8 @@ fn payload_weight(payload: &Value) -> f64 {
 }
 
 fn session_tokens(text: &str) -> Result<BTreeSet<String>, String> {
-    let regex = Regex::new(r"[A-Za-z0-9_./:-]+").map_err(|error| format!("SESSION_TOKEN_REGEX:{error}"))?;
+    let regex =
+        Regex::new(r"[A-Za-z0-9_./:-]+").map_err(|error| format!("SESSION_TOKEN_REGEX:{error}"))?;
     let mut output = BTreeSet::new();
     for found in regex.find_iter(&text.to_lowercase()) {
         let token = found.as_str();
@@ -972,7 +1186,12 @@ fn session_tokens(text: &str) -> Result<BTreeSet<String>, String> {
     Ok(output)
 }
 
-fn retrieve_session(path: &Path, session_id: &str, query: &str, limit: usize) -> Result<Value, String> {
+fn retrieve_session(
+    path: &Path,
+    session_id: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Value, String> {
     let query_terms = session_tokens(query)?;
     let events = session_events(path, session_id)?;
     let total = events.len().max(1) as f64;
@@ -984,7 +1203,9 @@ fn retrieve_session(path: &Path, session_id: &str, query: &str, limit: usize) ->
         let corpus = format!("{event_type} {payload_rendered}");
         let terms = session_tokens(&corpus)?;
         let matched = query_terms.intersection(&terms).count();
-        if !query_terms.is_empty() && matched == 0 { continue; }
+        if !query_terms.is_empty() && matched == 0 {
+            continue;
+        }
         let relevance = matched as f64 / query_terms.len().max(1) as f64 * 65.0;
         let sequence = event["sequence"].as_i64().unwrap_or_default();
         let recency = sequence as f64 / total * 15.0;
@@ -1004,14 +1225,23 @@ fn retrieve_session(path: &Path, session_id: &str, query: &str, limit: usize) ->
         .prepare("SELECT summary_id,view,summary_text,source_sequences_json FROM summaries WHERE session_id=?1")
         .map_err(|error| format!("SESSION_RETRIEVE_SUMMARY_PREPARE:{error}"))?;
     let summaries = statement
-        .query_map([session_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?)))
+        .query_map([session_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
         .map_err(|error| format!("SESSION_RETRIEVE_SUMMARY_QUERY:{error}"))?
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(|error| format!("SESSION_RETRIEVE_SUMMARY_ROWS:{error}"))?;
     for (summary_id, view, summary, source_raw) in summaries {
         let terms = session_tokens(&format!("{view} {summary}"))?;
         let matched = query_terms.intersection(&terms).count();
-        if !query_terms.is_empty() && matched == 0 { continue; }
+        if !query_terms.is_empty() && matched == 0 {
+            continue;
+        }
         let score = matched as f64 / query_terms.len().max(1) as f64 * 70.0 + 8.0;
         candidates.push((
             score,
@@ -1024,9 +1254,15 @@ fn retrieve_session(path: &Path, session_id: &str, query: &str, limit: usize) ->
         ));
     }
     candidates.sort_by(|left, right| {
-        right.0.partial_cmp(&left.0).unwrap_or(std::cmp::Ordering::Equal).then_with(|| left.1.cmp(&right.1))
+        right
+            .0
+            .partial_cmp(&left.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.1.cmp(&right.1))
     });
-    let verified = verify_session(path, session_id)?["ok"].as_bool().unwrap_or(false);
+    let verified = verify_session(path, session_id)?["ok"]
+        .as_bool()
+        .unwrap_or(false);
     Ok(json!({
         "session_id": session_id,
         "query": query,
@@ -1051,12 +1287,25 @@ fn checkpoint_session(path: &Path, session_id: &str, label: &str) -> Result<Valu
     let created = now_iso()?;
     db.execute(
         "INSERT OR IGNORE INTO checkpoints VALUES(?1,?2,?3,?4,?5,?6)",
-        params![checkpoint_id, session_id, label, sequence, event_hash, created],
+        params![
+            checkpoint_id,
+            session_id,
+            label,
+            sequence,
+            event_hash,
+            created
+        ],
     )
     .map_err(|error| format!("SESSION_CHECKPOINT_INSERT:{error}"))?;
     let mut output = body;
-    output.as_object_mut().expect("object").insert("checkpoint_id".to_owned(), Value::String(checkpoint_id));
-    output.as_object_mut().expect("object").insert("created_at".to_owned(), Value::String(created));
+    output
+        .as_object_mut()
+        .expect("object")
+        .insert("checkpoint_id".to_owned(), Value::String(checkpoint_id));
+    output
+        .as_object_mut()
+        .expect("object")
+        .insert("created_at".to_owned(), Value::String(created));
     Ok(output)
 }
 
@@ -1081,55 +1330,90 @@ fn restore_session(path: &Path, checkpoint_id: &str) -> Result<Value, String> {
         .into_iter()
         .filter(|event| event["sequence"].as_i64().unwrap_or_default() <= limit_sequence)
         .collect::<Vec<_>>();
-    let actual = events.last().and_then(|event| event["event_hash"].as_str()).unwrap_or_else(|| "");
-    let actual = if events.is_empty() { "0".repeat(64) } else { actual.to_owned() };
+    let actual = events
+        .last()
+        .and_then(|event| event["event_hash"].as_str())
+        .unwrap_or_else(|| "");
+    let actual = if events.is_empty() {
+        "0".repeat(64)
+    } else {
+        actual.to_owned()
+    };
     let valid = actual == checkpoint["event_hash"].as_str().unwrap_or_default();
     Ok(json!({"ok": valid, "checkpoint": checkpoint, "events": events, "exact_recovery": valid}))
 }
 
-fn session_memory(action: &str, arguments: &[String], project_root: &Path, state_root: &Path) -> Result<Value, String> {
+fn session_memory(
+    action: &str,
+    arguments: &[String],
+    project_root: &Path,
+    state_root: &Path,
+) -> Result<Value, String> {
     let db_path = state_root.join("unified").join("session-memory.sqlite3");
     match action {
         "memory-open" => {
             let requested = option_value(arguments, "--session-id")?;
             let parents = repeated_values(arguments, "--parent")?;
-            let metadata_raw = option_value(arguments, "--metadata")?.unwrap_or_else(|| "{}".to_owned());
+            let metadata_raw =
+                option_value(arguments, "--metadata")?.unwrap_or_else(|| "{}".to_owned());
             let metadata = read_json_or_inline(&metadata_raw)?;
-            if !metadata.is_object() { return Err("metadata must be a JSON object".to_owned()); }
+            if !metadata.is_object() {
+                return Err("metadata must be a JSON object".to_owned());
+            }
             open_session(&db_path, project_root, requested, &parents, &metadata)
         }
         "memory-append" => {
             let positional = positional_after_action(arguments, action)?;
-            if positional.len() < 3 { return Err("MEMORY_APPEND_ARGUMENTS_REQUIRED".to_owned()); }
+            if positional.len() < 3 {
+                return Err("MEMORY_APPEND_ARGUMENTS_REQUIRED".to_owned());
+            }
             let payload = read_json_or_inline(&positional[2])?;
-            if !payload.is_object() { return Err("payload must be a JSON object".to_owned()); }
+            if !payload.is_object() {
+                return Err("payload must be a JSON object".to_owned());
+            }
             append_session(&db_path, &positional[0], &positional[1], &payload)
         }
         "memory-compact" => {
             let positional = positional_after_action(arguments, action)?;
-            let session_id = positional.first().ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?;
+            let session_id = positional
+                .first()
+                .ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?;
             compact_session(&db_path, session_id, &repeated_values(arguments, "--view")?)
         }
         "memory-retrieve" => {
             let positional = positional_after_action(arguments, action)?;
-            if positional.len() < 2 { return Err("MEMORY_RETRIEVE_ARGUMENTS_REQUIRED".to_owned()); }
+            if positional.len() < 2 {
+                return Err("MEMORY_RETRIEVE_ARGUMENTS_REQUIRED".to_owned());
+            }
             let limit = option_value(arguments, "--limit")?
-                .map(|value| value.parse::<usize>().map_err(|_| "MEMORY_LIMIT_INVALID".to_owned()))
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "MEMORY_LIMIT_INVALID".to_owned())
+                })
                 .transpose()?
                 .unwrap_or(12);
             retrieve_session(&db_path, &positional[0], &positional[1], limit)
         }
         "memory-checkpoint" => {
             let positional = positional_after_action(arguments, action)?;
-            let session_id = positional.first().ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?;
+            let session_id = positional
+                .first()
+                .ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?;
             let label = option_value(arguments, "--label")?.unwrap_or_default();
             checkpoint_session(&db_path, session_id, &label)
         }
         "memory-fork" => {
             let positional = positional_after_action(arguments, action)?;
-            let session_id = positional.first().ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?;
+            let session_id = positional
+                .first()
+                .ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?;
             let label = option_value(arguments, "--label")?.unwrap_or_default();
-            let checkpoint = checkpoint_session(&db_path, session_id, if label.is_empty() { "fork" } else { &label })?;
+            let checkpoint = checkpoint_session(
+                &db_path,
+                session_id,
+                if label.is_empty() { "fork" } else { &label },
+            )?;
             let child = open_session(
                 &db_path,
                 project_root,
@@ -1147,9 +1431,16 @@ fn session_memory(action: &str, arguments: &[String], project_root: &Path, state
             let label = option_value(arguments, "--label")?.unwrap_or_default();
             let mut checkpoints = Vec::new();
             for session_id in &session_ids {
-                checkpoints.push(checkpoint_session(&db_path, session_id, if label.is_empty() { "merge" } else { &label })?);
+                checkpoints.push(checkpoint_session(
+                    &db_path,
+                    session_id,
+                    if label.is_empty() { "merge" } else { &label },
+                )?);
             }
-            let ids = checkpoints.iter().map(|item| item["checkpoint_id"].clone()).collect::<Vec<_>>();
+            let ids = checkpoints
+                .iter()
+                .map(|item| item["checkpoint_id"].clone())
+                .collect::<Vec<_>>();
             let merged = open_session(
                 &db_path,
                 project_root,
@@ -1158,16 +1449,31 @@ fn session_memory(action: &str, arguments: &[String], project_root: &Path, state
                 &json!({"merge_checkpoints": ids, "label": label}),
             )?;
             let merged_id = merged["session_id"].as_str().unwrap_or_default().to_owned();
-            let _ = append_session(&db_path, &merged_id, "merge", &json!({"parents": session_ids, "checkpoints": checkpoints}))?;
+            let _ = append_session(
+                &db_path,
+                &merged_id,
+                "merge",
+                &json!({"parents": session_ids, "checkpoints": checkpoints}),
+            )?;
             Ok(json!({"merged": merged, "parents": session_ids, "checkpoints": checkpoints}))
         }
         "memory-restore" => {
             let positional = positional_after_action(arguments, action)?;
-            restore_session(&db_path, positional.first().ok_or_else(|| "MEMORY_CHECKPOINT_REQUIRED".to_owned())?)
+            restore_session(
+                &db_path,
+                positional
+                    .first()
+                    .ok_or_else(|| "MEMORY_CHECKPOINT_REQUIRED".to_owned())?,
+            )
         }
         "memory-verify" => {
             let positional = positional_after_action(arguments, action)?;
-            verify_session(&db_path, positional.first().ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?)
+            verify_session(
+                &db_path,
+                positional
+                    .first()
+                    .ok_or_else(|| "MEMORY_SESSION_REQUIRED".to_owned())?,
+            )
         }
         _ => Err(format!("SESSION_MEMORY_UNSUPPORTED:{action}")),
     }
@@ -1185,7 +1491,12 @@ pub(crate) fn execute(
     let action = command[1].as_str();
     let value = if matches!(
         action,
-        "memory-add" | "memory-extract" | "memory-search" | "memory-export" | "memory-backfill" | "memory-intelligence-status"
+        "memory-add"
+            | "memory-extract"
+            | "memory-search"
+            | "memory-export"
+            | "memory-backfill"
+            | "memory-intelligence-status"
     ) {
         memory_intelligence(action, arguments, state_root)?
     } else {

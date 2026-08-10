@@ -109,6 +109,8 @@ mod native_proxy_plan;
 mod native_read_only_product;
 #[path = "native_redact.rs"]
 mod native_redact;
+#[path = "native_remaining71_memory.rs"]
+mod native_remaining71_memory;
 #[path = "native_route.rs"]
 mod native_route;
 #[path = "native_run_adapter_certify.rs"]
@@ -158,6 +160,10 @@ mod state_snapshot_contract;
 #[path = "telemetry_metrics_contract.rs"]
 mod telemetry_metrics_contract;
 
+fn bulk_parity_probe_enabled() -> bool {
+    std::env::var_os("SYNTAVRA_BULK_PARITY_PROBE").is_some_and(|value| value == "1")
+}
+
 pub fn supports(command: &[String]) -> bool {
     native_analytics::supports(command)
         || native_backup::supports(command)
@@ -195,6 +201,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_verify_install::supports(command)
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
+        || (bulk_parity_probe_enabled() && native_remaining71_memory::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -354,6 +361,9 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
+        return native_remaining71_memory::execute(command, &arguments, project_root, state_root);
+    }
     if native_analytics::supports(command) {
         return native_analytics::execute(&arguments, state_root).map(Some);
     }
