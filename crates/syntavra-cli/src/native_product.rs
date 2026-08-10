@@ -117,6 +117,8 @@ mod native_remaining71_graph;
 mod native_remaining71_headless;
 #[path = "native_remaining71_memory.rs"]
 mod native_remaining71_memory;
+#[path = "native_remaining71_proof.rs"]
+mod native_remaining71_proof;
 #[path = "native_remaining71_proxy.rs"]
 mod native_remaining71_proxy;
 #[path = "native_remaining71_sandbox.rs"]
@@ -219,6 +221,7 @@ pub fn supports(command: &[String]) -> bool {
         || (bulk_parity_probe_enabled() && native_remaining71_security::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_proof::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_graph::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_agent::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_headless::supports(command))
@@ -399,6 +402,14 @@ pub fn execute(
     }
     if bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command) {
         return native_remaining71_proxy::execute(command, &arguments, project_root, state_root);
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_proof::supports(command) {
+        if let Some(decision) = native_remaining71_proof::execute(command, &arguments)? {
+            if decision.exit_code != 0 {
+                emit_failed_decision(&decision.value, decision.exit_code);
+            }
+            return Ok(Some(decision.value));
+        }
     }
     if bulk_parity_probe_enabled() && native_remaining71_graph::supports(command) {
         return native_remaining71_graph::execute(command, &arguments, project_root, state_root);
