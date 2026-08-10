@@ -1,0 +1,33 @@
+name: Remaining 71 Exact Inventory Observer
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+      - name: Print canonical gap inventory
+        run: |
+          set +e
+          python tools/report_missing_native_public_routes.py | tee /tmp/remaining71-inventory.json
+          rc=${PIPESTATUS[0]}
+          echo "report_exit=$rc"
+          exit 0
+      - name: Compile current probe surface
+        run: |
+          rustup toolchain install 1.82.0 --profile minimal
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+      - name: Show exact head and clean tree
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git status --porcelain --untracked-files=all
