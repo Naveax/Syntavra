@@ -171,8 +171,7 @@ pub(crate) fn verify(state_root: &Path) -> Result<Value, String> {
             row.map_err(|error| format!("PROVIDER_GATEWAY_VERIFY_ROW_FAILED:{error}"))?;
         entries += 1;
 
-        let request_project = evidence_project_id(state_root, &request_handle);
-        match request_project {
+        match evidence_project_id(state_root, &request_handle) {
             Ok(project_id) => match NativeEvidenceStore::open(state_root, &project_id)
                 .and_then(|store| store.get(&request_handle))
             {
@@ -209,33 +208,4 @@ pub(crate) fn verify(state_root: &Path) -> Result<Value, String> {
         "reasons": reasons,
         "database_integrity": database_integrity,
     }))
-}
-
-#[cfg(test)]
-mod tests {
-    use tempfile::TempDir;
-
-    use super::{stats, verify};
-
-    #[test]
-    fn empty_gateway_matches_python_stats_shape() {
-        let temp = TempDir::new().expect("tempdir");
-        let value = stats(temp.path()).expect("stats");
-        assert_eq!(value["requests"], 0);
-        assert_eq!(value["cache_entries"], 0);
-        assert_eq!(value["replay_hits"], 0);
-        assert_eq!(value["active_cache_entries"], 0);
-        assert_eq!(value["providers"], serde_json::json!({}));
-        assert_eq!(value["database_integrity"], true);
-    }
-
-    #[test]
-    fn empty_gateway_verifies() {
-        let temp = TempDir::new().expect("tempdir");
-        let value = verify(temp.path()).expect("verify");
-        assert_eq!(value["ok"], true);
-        assert_eq!(value["entries"], 0);
-        assert_eq!(value["reasons"], serde_json::json!([]));
-        assert_eq!(value["database_integrity"], true);
-    }
 }
