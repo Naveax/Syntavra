@@ -15,12 +15,20 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = DATA / "platforms.json"
 BEGIN = "<!-- SYNTAVRA:BEGIN -->"
 END = "<!-- SYNTAVRA:END -->"
+CODEX_SKILL_TARGET = ".agents/skills/syntavra"
 
 
 def registry() -> dict[str, Any]:
     value = load_json(REGISTRY_PATH)
     if value.get("schema_version") != 1 or not isinstance(value.get("platforms"), list):
         raise RuntimeError("invalid platform registry")
+    # Keep the standalone installer aligned with the current Codex Agent Skills
+    # discovery contract even when upgrading from an older packaged registry.
+    for item in value["platforms"]:
+        if isinstance(item, dict) and item.get("id") == "codex":
+            item["project_target"] = CODEX_SKILL_TARGET
+            item["user_target"] = CODEX_SKILL_TARGET
+            item["notes"] = "Current Codex Agent Skill discovery through .agents/skills."
     return value
 
 
@@ -175,7 +183,7 @@ def status(platform_id: str, *, scope: str, project: Path, home: Path) -> dict[s
 
 def detect(project: Path, home: Path) -> list[dict[str, Any]]:
     markers = {
-        "codex": [home / ".codex", project / ".codex"],
+        "codex": [home / ".codex", home / ".agents", project / ".codex", project / ".agents"],
         "claude-code": [home / ".claude", project / ".claude"],
         "gemini-cli": [home / ".gemini", project / ".gemini"],
         "antigravity": [project / ".agent"],
