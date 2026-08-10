@@ -32,9 +32,9 @@ KNOWN_HOSTS: dict[str, HostCapabilities] = {
     "codex": HostCapabilities(
         "codex", "OpenAI Codex", supports_mcp=True, supports_session_events=True,
         supports_usage_telemetry=True, supports_background_jobs=True,
-        supports_native_skill=True, verified=True, project_markers=(".codex",),
-        user_markers=(".codex",), config_path=".codex/mcp.json", skill_path=".codex/skills/syntavra",
-        integration_notes=("mcp", "native-skill", "session-events"),
+        supports_native_skill=True, verified=True, project_markers=(".codex", ".agents"),
+        user_markers=(".codex", ".agents"), config_path=".codex/config.toml", skill_path=".agents/skills/syntavra",
+        integration_notes=("mcp", "native-skill", "session-events", "toml-config"),
     ),
     "claude-code": HostCapabilities(
         "claude-code", "Claude Code", True, True, True, True, False, True, False, True, True,
@@ -170,7 +170,7 @@ KNOWN_HOSTS: dict[str, HostCapabilities] = {
 }
 
 
-# Additional installable host contracts.  These entries provide concrete project
+# Additional installable host contracts. These entries provide concrete project
 # config/skill destinations and executable aliases; ``verified`` remains false
 # until a live multi-OS certification receipt exists.
 KNOWN_HOSTS.update({
