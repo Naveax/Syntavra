@@ -47,6 +47,7 @@ class CodexWorkspaceMCPBridge:
         self.server: MCPServer | None = None
         self.project: Path | None = None
         self.state_root: Path | None = None
+        self._bootstrap: MCPServer | None = None
 
         configured = str(os.environ.get("SYNTAVRA_PROJECT", "")).strip()
         if configured and configured.casefold() not in {"auto", "cwd", "."}:
@@ -87,6 +88,7 @@ class CodexWorkspaceMCPBridge:
             )
             self.project = project
             self.state_root = state
+            self._bootstrap = None
         return {
             "bound": True,
             "changed": changed,
@@ -96,19 +98,21 @@ class CodexWorkspaceMCPBridge:
         }
 
     def _bootstrap_server(self) -> MCPServer:
-        """Create a protocol/catalog server only; repository tools remain blocked."""
+        """Create one protocol/catalog server only; repository tools remain blocked."""
 
         if self.server is not None:
             return self.server
-        fallback = discover_project_root("auto", cwd=Path.cwd(), strict=False)
-        state = resolve_state_root(fallback, None, namespace="codex-bootstrap")
-        return MCPServer(
-            project=fallback,
-            state_root=state,
-            skill_root=self.skill_root,
-            codex_home=self.codex_home,
-            host=self.host,
-        )
+        if self._bootstrap is None:
+            fallback = discover_project_root("auto", cwd=Path.cwd(), strict=False)
+            state = resolve_state_root(fallback, None, namespace="codex-bootstrap")
+            self._bootstrap = MCPServer(
+                project=fallback,
+                state_root=state,
+                skill_root=self.skill_root,
+                codex_home=self.codex_home,
+                host=self.host,
+            )
+        return self._bootstrap
 
     @staticmethod
     def _error(request_id: Any, *, code: int, message: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
