@@ -15,7 +15,23 @@ metadata:
 
 # Syntavra bundled skill
 
-Syntavra augments the active coding agent; it is not a replacement agent. Run `syntavra status --doctor` before relying on enforcement. Prefer exact task-scoped repository context, keep full tool output in local evidence, preserve recovery handles, use the smallest sufficient MCP profile, keep active context bounded and never claim savings without provider-observed usage plus verifier success.
+Syntavra augments the active coding agent; it is not a replacement agent. Correctness and exact evidence outrank token reduction. Run `syntavra status --doctor` before relying on enforcement.
+
+## Runtime invariants
+
+- Resolve the active project from the host working directory or an explicit project argument, never from Syntavra's installation directory.
+- Keep runtime, installer and analytics state outside the target repository unless the user explicitly supplies an in-repository `--state-root`.
+- Prefer exact task-scoped repository context, keep full tool output in local evidence, preserve recovery handles and use the smallest sufficient MCP profile.
+
+## Codex MCP-controlled execution contract
+
+Codex supports MCP and background jobs but does not provide Syntavra pre-tool hooks or host result replacement. For long-running build, test, lint or analysis commands, use `syntavra.process.submit` when the current user request authorizes command execution and include `_syntavra_authorization: {"user_authorized": true, "exact_evidence": true}`. After `JOB_ACCEPTED`, do not execute the original command again; read `syntavra.process.completions` instead of shell-polling.
+
+If `syntavra.fabric.route` returns a non-empty `replacement_argv`, use that replacement and do not silently fall back to the original command. If it returns `blocked`, stop. If repository retrieval unexpectedly returns Syntavra's own `syntavra_runtime/`, `skills/`, `tests/` or `tools/` tree for a different target repository, treat the result as a project-binding fault and do not consume it as task context.
+
+## Savings claim boundary
+
+Local tool-output or schema reductions are model-visible context estimates, not proof of provider-billed or whole-session savings. Net token, cost or latency superiority requires paired provider-observed baseline/candidate receipts under equivalent workload, cache, model/environment and verifier conditions. Without that evidence, report `LOCAL_MODEL_VISIBLE_ESTIMATE` rather than a net savings claim.
 
 ## Competitive runtime controls
 
