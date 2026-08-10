@@ -25,8 +25,7 @@ pub fn supports(command: &[String]) -> bool {
                 command[1].as_str(),
                 "cache-health" | "delegate" | "provider-route"
             ))
-            || (command[0] == "provider"
-                && matches!(command[1].as_str(), "stats" | "verify")))
+            || (command[0] == "provider" && matches!(command[1].as_str(), "stats" | "verify")))
 }
 
 fn number_as_i64(value: Option<&Value>) -> i64 {
