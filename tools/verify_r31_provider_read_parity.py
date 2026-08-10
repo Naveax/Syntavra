@@ -47,7 +47,6 @@ def _fixture(project: Path, state: Path) -> None:
     gateway = ProviderGateway(state / "provider-gateway.sqlite3", evidence=evidence, usage_ledger=usage)
     plan = gateway.prepare(
         "openai",
-        "gpt-test",
         {
             "messages": [
                 {"role": "system", "content": "Return one stable answer."},
@@ -56,8 +55,10 @@ def _fixture(project: Path, state: Path) -> None:
             "temperature": 0,
             "request_id": "volatile-request-id",
         },
-        prompt_cache=True,
-        replay=True,
+        model="gpt-test",
+        cache_policy="read-write",
+        replay_ttl_seconds=600,
+        prompt_cache_ttl_seconds=300,
     )
     gateway.capture(
         plan,
