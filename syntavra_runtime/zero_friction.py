@@ -14,6 +14,7 @@ from .integration_matrix import HOSTS, IntegrationMatrix
 from .product_surface import MCP_PROFILES, PlatformAdapterRegistry, ProductSurface, SessionAnalyticsStore
 from .proxy_product import ProxyProductRegistry
 from .release_identity import CHANNEL, VERSION, ReleaseIdentity
+from .runtime_paths import default_state_root
 from .usage_receipt_ledger import UsageReceiptLedger
 from .util import atomic_write_json
 
@@ -47,7 +48,9 @@ class ZeroFrictionManager:
     def __init__(self, project_root: Path, state_root: Path | None = None):
         self.project_root = project_root.resolve(strict=False)
         self.project_root.mkdir(parents=True, exist_ok=True)
-        self.state_root = (state_root or self.project_root / ".syntavra" / "pre-release").resolve(strict=False)
+        self.state_root = (
+            state_root or default_state_root(self.project_root, namespace="pre-release")
+        ).resolve(strict=False)
         self.state_root.mkdir(parents=True, exist_ok=True)
 
     def _skill_root(self) -> Path:
@@ -277,7 +280,12 @@ class ZeroFrictionManager:
             "runtime": {
                 "state": "PRE_RELEASE_INSTALLED" if installed else "PRE_RELEASE_READY",
                 "healthy": healthy,
-                "details": {"version": VERSION, "release_channel": CHANNEL},
+                "details": {
+                    "version": VERSION,
+                    "release_channel": CHANNEL,
+                    "state_root": str(self.state_root),
+                    "state_outside_project": self.project_root not in self.state_root.parents and self.state_root != self.project_root,
+                },
             },
             "product_surface": {
                 "mental_model": ["setup", "status", "run", "prove"],
