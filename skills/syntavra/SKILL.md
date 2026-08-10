@@ -37,9 +37,10 @@ Syntavra is a local-first token/context optimization Agent Skill and runtime mid
 
 ## Codex MCP-controlled execution contract
 
-Codex has MCP, session-event and background-job integration, but no Syntavra pre-tool hook or host result-replacement authority. Therefore routing must be explicit rather than pretending an unavailable hook exists.
+Codex has MCP, session-event and background-job integration, but no Syntavra pre-tool hook or host result-replacement authority. Repository identity must therefore be explicit rather than inherited from the MCP process working directory.
 
-- At the start of repository work, call `syntavra.status` and compare `details.project_root` with the active workspace's canonical repository root. If they differ, fail closed: do not call Syntavra repository-retrieval or process-execution tools until the integration is repaired/restarted for the correct workspace.
+- At the start of repository work, call `syntavra.project.bind` with the active workspace's canonical Git root. Project-scoped installations are already bound, but this call is idempotent and should still be used when the workspace is known.
+- After binding, call `syntavra.status` and require `details.project_root` to equal the active workspace's canonical Git root. If it differs, fail closed: do not call Syntavra repository-retrieval or process-execution tools until the integration is repaired/restarted for the correct workspace.
 - For a long-running build, test, lint or analysis command, use `syntavra.process.submit` instead of running the original command directly when the current user request authorizes command execution. Include `_syntavra_authorization: {"user_authorized": true, "exact_evidence": true}` in that MCP call.
 - After `JOB_ACCEPTED`, do not execute the original command a second time. Read completion events through `syntavra.process.completions`; do not spend model turns shell-polling the process.
 - If `syntavra.fabric.route` returns a non-empty `replacement_argv`, that replacement is the selected execution path. Do not silently ignore it and then run the original command.
