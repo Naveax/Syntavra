@@ -111,6 +111,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_remaining71_memory.rs"]
 mod native_remaining71_memory;
+#[path = "native_remaining71_security.rs"]
+mod native_remaining71_security;
 #[path = "native_route.rs"]
 mod native_route;
 #[path = "native_run_adapter_certify.rs"]
@@ -202,6 +204,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
         || (bulk_parity_probe_enabled() && native_remaining71_memory::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_security::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -363,6 +366,9 @@ pub fn execute(
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
         return native_remaining71_memory::execute(command, &arguments, project_root, state_root);
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_security::supports(command) {
+        return native_remaining71_security::execute(command, &arguments, state_root);
     }
     if native_analytics::supports(command) {
         return native_analytics::execute(&arguments, state_root).map(Some);
