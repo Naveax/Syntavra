@@ -11,6 +11,7 @@ from .host_adapters import negotiate
 from .models import RuntimeHealth
 from .release_identity import CHANNEL, VERSION
 from .rollout import discover_rollouts
+from .runtime_paths import default_state_root, project_identity
 from .state import StateDB
 from .util import atomic_write_json, stable_project_id
 
@@ -35,6 +36,14 @@ def git_identity(project: Path) -> dict[str, Any]:
     tree = run("write-tree")
     dirty = bool(run("status", "--porcelain") not in ("", "unknown"))
     return {"head": head, "branch": branch, "tree_hash": tree, "dirty": dirty}
+
+
+def _state_inside_project(project: Path, state_root: Path) -> bool:
+    try:
+        state_root.resolve(strict=False).relative_to(project.resolve(strict=False))
+        return True
+    except ValueError:
+        return False
 
 
 def runtime_health(
@@ -70,6 +79,7 @@ def runtime_health(
     }
     checks["skill_installed"] = (skill_root / "SKILL.md").is_file()
     checks["runtime_package"] = (package / "__init__.py").is_file()
+    checks["state_outside_project"] = not _state_inside_project(project, state_root)
     for name, filename in required_modules.items():
         checks[name] = (package / filename).is_file()
     try:
@@ -95,6 +105,8 @@ def runtime_health(
     for name in mandatory:
         if not checks.get(name, False):
             reasons.append(f"check-failed:{name}")
+    if not checks["state_outside_project"]:
+        reasons.append("warning:state-root-inside-project-explicit-or-legacy")
     if not checks["skill_installed"] and not checks["runtime_package"]:
         state_name = "NOT_INSTALLED"
     elif checks["skill_installed"] and not checks["runtime_package"]:
@@ -115,6 +127,9 @@ def runtime_health(
             "release_channel": CHANNEL,
             "host": host,
             "host_negotiation": negotiation,
+            "project_identity": project_identity(project),
+            "state_root": str(state_root.resolve(strict=False)),
+            "state_outside_project": checks["state_outside_project"],
             "rollout_candidates": [str(path) for path in rollouts[:5]],
             "enforcement_boundary": negotiation["mode"],
             "runtime_plane": "pre-release-001",
@@ -132,7 +147,7 @@ def start_runtime(
     host: str = "codex",
 ) -> dict[str, Any]:
     project = project.resolve(strict=True)
-    state_root = state_root or project / ".syntavra" / "pre-release"
+    state_root = state_root or default_state_root(project, namespace="pre-release")
     health = runtime_health(
         project=project,
         skill_root=skill_root,
