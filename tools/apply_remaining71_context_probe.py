@@ -26,7 +26,7 @@ def main() -> int:
         '        || (bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command))\n        || (bulk_parity_probe_enabled() && native_remaining71_context::supports(command))\n',
         "supports",
     )
-    anchor = '''    if bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command) {\n        return native_remaining71_competitive::execute(command, &arguments, project_root, state_root);\n    }\n'''
+    anchor = '''    if bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command) {\n        return native_remaining71_competitive::execute(\n            command,\n            &arguments,\n            project_root,\n            state_root,\n        );\n    }\n'''
     addition = '''    if bulk_parity_probe_enabled() && native_remaining71_context::supports(command) {\n        return native_remaining71_context::execute(command, &arguments, state_root);\n    }\n'''
     text = one(text, anchor, anchor + addition, "execute")
     PRODUCT.write_text(text, encoding="utf-8")
