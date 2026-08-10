@@ -24,6 +24,16 @@ jobs:
           ref: agent/r31-provider-capture-native
       - name: Install Rust 1.82.0
         run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+      - name: Normalize proof source for Rust 1.82
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/syntavra-cli/src/native_remaining71_proof.rs')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('.sqrt().add(0.5).min(1.5)', '.sqrt().add(0.5).min(1.5)') if False else text
+          text = text.replace('(critical_floor/geometric.max(0.01)).sqrt().add(0.5).min(1.5)', '((critical_floor/geometric.max(0.01)).sqrt() + 0.5).min(1.5)')
+          path.write_text(text, encoding='utf-8')
+          PY
       - name: Apply probe integration
         run: python tools/apply_remaining71_proof_probe.py
       - name: Canonical rustfmt
