@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - agent/r38-native-gap-inventory
+  pull_request:
+    branches:
+      - agent/r38-parent-gate-fixes-after-codex
+    paths:
+      - "tools/report_missing_native_public_routes.py"
+      - ".github/workflows/r38-native-gap-inventory.yml"
 
 permissions:
   contents: read
@@ -17,6 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
