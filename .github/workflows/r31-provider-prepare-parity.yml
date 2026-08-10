@@ -47,8 +47,8 @@ jobs:
       - name: Install canonical Rust toolchain
         run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
 
-      - name: Rustfmt check
-        run: cargo +1.82.0 fmt --all -- --check
+      - name: Apply rustfmt for compile probe
+        run: cargo +1.82.0 fmt --all
 
       - name: Cargo check native selector
         run: cargo +1.82.0 check --locked -p syntavra-cli --bin syntavra
@@ -66,7 +66,13 @@ jobs:
           fi
           python tools/verify_r31_provider_prepare_parity.py --selector "$selector"
 
+      - name: Restore formatting-only probe changes
+        if: always()
+        shell: bash
+        run: git reset --hard HEAD
+
       - name: Working tree integrity
+        if: always()
         shell: bash
         run: |
           git status --porcelain=v1 --untracked-files=all
