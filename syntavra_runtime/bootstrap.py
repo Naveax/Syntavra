@@ -127,6 +127,7 @@ def runtime_health(
             "release_channel": CHANNEL,
             "host": host,
             "host_negotiation": negotiation,
+            "project_root": str(project.resolve(strict=False)),
             "project_identity": project_identity(project),
             "state_root": str(state_root.resolve(strict=False)),
             "state_outside_project": checks["state_outside_project"],
