@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from syntavra_runtime.bootstrap import runtime_health
+from syntavra_runtime.competitive_fabric import PlatformPlanBuilder
 from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND, _context, main as engine_entry_main
 from syntavra_runtime.host_adapters import host_spec
 from syntavra_runtime.installer import HostInstaller
@@ -100,6 +101,22 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(spec.skill_path, ".agents/skills/syntavra")
         self.assertIn(".agents", spec.project_markers)
         self.assertIn(".agents", spec.user_markers)
+
+    def test_fabric_codex_plan_uses_toml_workspace_bridge_contract(self) -> None:
+        user_plan = PlatformPlanBuilder().plan("codex", project=self.project, scope="user")
+        config_file = next(row for row in user_plan["files"] if row["path"] == ".codex/config.toml")
+        entry = config_file["entry"]
+        self.assertEqual(config_file["format"], "toml")
+        self.assertEqual(entry["command"], "syntavra")
+        self.assertEqual(entry["args"], [CODEX_BRIDGE_COMMAND])
+        self.assertNotIn("cwd", entry)
+        self.assertNotIn("SYNTAVRA_PROJECT", entry.get("env", {}))
+        self.assertIn(".agents/skills/syntavra/SKILL.md", [row["path"] for row in user_plan["files"]])
+
+        project_plan = PlatformPlanBuilder().plan("codex", project=self.project, scope="project")
+        project_entry = next(row for row in project_plan["files"] if row["path"] == ".codex/config.toml")["entry"]
+        self.assertEqual(project_entry["cwd"], str(self.project.resolve()))
+        self.assertEqual(project_entry["env"]["SYNTAVRA_PROJECT"], str(self.project.resolve()))
 
     def test_user_scope_codex_mcp_is_dynamic_and_uses_workspace_bridge(self) -> None:
         codex_dir = self.home / ".codex"
