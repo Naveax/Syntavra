@@ -7,6 +7,7 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND
 from syntavra_runtime.host_installation import HostInstallationManager
 
 
@@ -45,6 +46,7 @@ class HostInstallationV4Tests(unittest.TestCase):
         self.assertEqual(merged["mcp_servers"]["existing"]["command"], "existing")
         syntavra = merged["mcp_servers"]["syntavra"]
         self.assertEqual(syntavra["command"], "syntavra")
+        self.assertEqual(syntavra["args"], [CODEX_BRIDGE_COMMAND])
         self.assertEqual(syntavra["cwd"], str(self.project.resolve()))
         self.assertEqual(syntavra["env"]["SYNTAVRA_PROJECT"], str(self.project.resolve()))
         installed_skill = self.project / ".agents" / "skills" / "syntavra"
@@ -93,6 +95,8 @@ class HostInstallationV4Tests(unittest.TestCase):
         config = self.home / ".codex" / "config.toml"
         self.assertTrue(config.is_file())
         entry = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]["syntavra"]
+        self.assertEqual(entry["command"], "syntavra")
+        self.assertEqual(entry["args"], [CODEX_BRIDGE_COMMAND])
         self.assertNotIn("cwd", entry)
         self.assertNotIn("SYNTAVRA_PROJECT", entry.get("env", {}))
         self.assertNotIn(str(self.project.resolve()), entry.get("args", []))
