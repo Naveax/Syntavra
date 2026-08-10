@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PREP = ROOT / "crates/syntavra-cli/src/native_provider_gateway_prepare.rs"
+CAPTURE = ROOT / "crates/syntavra-cli/src/native_provider_gateway_capture.rs"
 LEGACY = ROOT / "crates/syntavra-cli/src/native_product_legacy.rs"
 PRODUCT = ROOT / "crates/syntavra-cli/src/native_product.rs"
 
@@ -36,6 +37,26 @@ def expose_prepare_helpers() -> None:
             raise SystemExit(f"prepare-helper-{name}: expected one private fn, found {len(matches)}")
         text = re.sub(pattern, f"pub(super) fn {name}(", text, count=1)
     PREP.write_text(text, encoding="utf-8")
+
+
+def fix_capture_compile() -> None:
+    text = CAPTURE.read_text(encoding="utf-8")
+    text = replace_once(
+        text,
+        "use std::path::{Path, PathBuf};\n",
+        "use std::path::Path;\n",
+        "capture-unused-pathbuf",
+    )
+    text = replace_once(
+        text,
+        "    let mut current: &Value = &Value::Object(value.clone());\n",
+        "    let current: &Value = &Value::Object(value.clone());\n",
+        "capture-unused-mut",
+    )
+    old = '''            (\n                task_id,\n                arm_id,\n                repetition,\n                cache_mode,\n                normalized.provider,\n                request_id_hash,\n                provider_response_hash,\n                normalized.fresh_input_tokens,\n                normalized.cached_input_tokens,\n                normalized.output_tokens,\n                normalized.reasoning_tokens,\n                quota_cost,\n                hardware_hash,\n                receipt_hash,\n                previous_chain,\n                chain_hash,\n                signature_mode,\n                signature,\n                raw_usage_hash,\n                raw_usage_json,\n                created_at,\n            ),\n'''
+    new = '''            rusqlite::params![\n                task_id,\n                arm_id,\n                repetition,\n                cache_mode,\n                normalized.provider,\n                request_id_hash,\n                provider_response_hash,\n                normalized.fresh_input_tokens,\n                normalized.cached_input_tokens,\n                normalized.output_tokens,\n                normalized.reasoning_tokens,\n                quota_cost,\n                hardware_hash,\n                receipt_hash,\n                previous_chain,\n                chain_hash,\n                signature_mode,\n                signature,\n                raw_usage_hash,\n                raw_usage_json,\n                created_at,\n            ],\n'''
+    text = replace_once(text, old, new, "capture-receipt-params")
+    CAPTURE.write_text(text, encoding="utf-8")
 
 
 def wire_capture() -> None:
@@ -81,6 +102,7 @@ def collapse_duplicate_engine_dispatch() -> None:
 
 def main() -> int:
     expose_prepare_helpers()
+    fix_capture_compile()
     wire_capture()
     collapse_duplicate_engine_dispatch()
     print("stage1 capture wiring and selector cleanup applied")
