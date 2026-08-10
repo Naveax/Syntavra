@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import json
 import sqlite3
 import subprocess
@@ -137,7 +138,7 @@ def verify(selector: Path) -> dict[str, Any]:
             "database_integrity": True,
         }
 
-        with sqlite3.connect(state / "provider-gateway.sqlite3") as database:
+        with closing(sqlite3.connect(state / "provider-gateway.sqlite3")) as database:
             database.execute(
                 "UPDATE provider_response_cache SET response_hash=?",
                 ("0" * 64,),
