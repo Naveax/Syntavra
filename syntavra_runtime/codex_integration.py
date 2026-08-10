@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import tomllib
@@ -15,7 +16,7 @@ CODEX_SKILL_PATH = ".agents/skills/syntavra"
 MANAGED_START = "# SYNTAVRA-MANAGED-MCP-START"
 MANAGED_END = "# SYNTAVRA-MANAGED-MCP-END"
 _TABLE_RE = re.compile(r"^\s*(\[\[?)(.+?)(\]\]?)\s*(?:#.*)?$")
-_BRIDGE_ARGS = ["-m", "syntavra_runtime.codex_mcp_bridge"]
+_BRIDGE_COMMAND = "codex-mcp-bridge"
 
 
 def _normalize_table_name(value: str) -> str:
@@ -42,29 +43,52 @@ def strip_syntavra_tables(text: str) -> str:
     return "\n".join(output).rstrip()
 
 
+def _source_checkout_root() -> Path | None:
+    """Return the source checkout root when this runtime is not site-package only."""
+
+    root = Path(__file__).resolve().parents[1]
+    if (root / "pyproject.toml").is_file() and (root / "syntavra_runtime" / "__init__.py").is_file():
+        return root
+    return None
+
+
 def mcp_entry(
     executable: Sequence[str],
     *,
     project: Path,
     scope: str,
 ) -> dict[str, Any]:
-    """Return the current Codex stdio entry.
+    """Return the current Codex stdio entry through the active Syntavra launcher.
 
-    The generic executable argument is retained for API compatibility, but Codex
-    always launches the dedicated workspace bridge with the current interpreter so
-    user/global integration cannot derive repository identity from process cwd.
+    Reusing the installer/runtime launcher avoids assuming that ``sys.executable``
+    itself can execute Python modules. That matters for portable/frozen launchers.
+    Source-checkout Python installs receive an MCP-process-only ``PYTHONPATH`` so a
+    global Codex session can import Syntavra from an arbitrary working directory.
+    Repository identity still comes only from ``syntavra.project.bind`` or an exact
+    project-scope ``SYNTAVRA_PROJECT`` value, never from this import path.
     """
 
-    if not executable:
+    prefix = [str(item) for item in executable if str(item)]
+    if not prefix:
         raise ValueError("Codex MCP executable must not be empty")
+
     entry: dict[str, Any] = {
-        "command": sys.executable,
-        "args": list(_BRIDGE_ARGS),
+        "command": prefix[0],
+        "args": [*prefix[1:], _BRIDGE_COMMAND],
         "env": {
             "SYNTAVRA_VERSION": VERSION,
             "SYNTAVRA_CHANNEL": CHANNEL,
         },
     }
+
+    source_root = _source_checkout_root()
+    if (
+        source_root is not None
+        and Path(prefix[0]).resolve(strict=False) == Path(sys.executable).resolve(strict=False)
+        and prefix[1:3] == ["-m", "syntavra_runtime"]
+    ):
+        entry["env"]["PYTHONPATH"] = str(source_root)
+
     if scope == "project":
         resolved = project.resolve(strict=False)
         entry["cwd"] = str(resolved)
@@ -126,8 +150,10 @@ def verify_entry(entry: Mapping[str, Any], *, project: Path, scope: str) -> list
     env = entry.get("env") if isinstance(entry.get("env"), Mapping) else {}
     if not command:
         reasons.append("missing-syntavra-mcp-command")
-    if args != _BRIDGE_ARGS:
+    if not args or args[-1] != _BRIDGE_COMMAND:
         reasons.append("invalid-syntavra-codex-bridge-args")
+    if args[-2:] == ["mcp", "serve"] or "--project" in args or any(item.startswith("--project=") for item in args):
+        reasons.append("legacy-or-static-project-bridge-args")
     resolved = str(project.resolve(strict=False))
     if scope == "project":
         if entry.get("cwd") != resolved:
