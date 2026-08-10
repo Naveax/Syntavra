@@ -13,6 +13,7 @@ from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 from .runtime_paths import discover_project_root, resolve_state_root
 
 SELECTOR_COMMANDS = frozenset({"engine"})
+CODEX_BRIDGE_COMMAND = "codex-mcp-bridge"
 READ_ONLY_COMMANDS = {
     ("config", "show"): "config.show",
     ("config", "validate"): "config.validate",
@@ -182,6 +183,16 @@ def _read_only_request(rest: list[str]) -> tuple[str, dict[str, Any]] | None:
 def main(argv: list[str] | None = None) -> int:
     _configure_utf8_stdio()
     raw = list(sys.argv[1:] if argv is None else argv)
+
+    # This route intentionally runs before project/state canonicalization. A global
+    # Codex MCP process must start unbound and receive repository identity through
+    # syntavra.project.bind; project-scope installs may still auto-bind via the
+    # SYNTAVRA_PROJECT value placed in their local Codex configuration.
+    if raw == [CODEX_BRIDGE_COMMAND]:
+        from .codex_mcp_bridge import main as codex_bridge_main
+
+        return int(codex_bridge_main())
+
     try:
         override, forwarded = _extract_engine_override(raw)
         project, state, rest, values = _context(forwarded)
