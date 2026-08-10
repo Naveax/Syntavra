@@ -109,6 +109,8 @@ mod native_proxy_plan;
 mod native_read_only_product;
 #[path = "native_redact.rs"]
 mod native_redact;
+#[path = "native_remaining71_graph.rs"]
+mod native_remaining71_graph;
 #[path = "native_remaining71_memory.rs"]
 mod native_remaining71_memory;
 #[path = "native_remaining71_proxy.rs"]
@@ -151,6 +153,8 @@ mod native_signalbench_plan;
 mod native_static_surfaces;
 #[path = "native_statusline.rs"]
 mod native_statusline;
+#[path = "native_structural.rs"]
+mod native_structural;
 #[path = "native_upgrade.rs"]
 mod native_upgrade;
 #[path = "native_wire.rs"]
@@ -211,6 +215,7 @@ pub fn supports(command: &[String]) -> bool {
         || (bulk_parity_probe_enabled() && native_remaining71_security::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_graph::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -388,6 +393,9 @@ pub fn execute(
     }
     if bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command) {
         return native_remaining71_proxy::execute(command, &arguments, project_root, state_root);
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_graph::supports(command) {
+        return native_remaining71_graph::execute(command, &arguments, project_root, state_root);
     }
     if native_analytics::supports(command) {
         return native_analytics::execute(&arguments, state_root).map(Some);

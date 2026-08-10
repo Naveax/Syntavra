@@ -12,8 +12,21 @@ use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
 const IGNORE_PARTS: &[&str] = &[
-    ".git", ".hg", ".svn", ".syntavra", "node_modules", ".venv", "venv", "dist",
-    "build", "target", "vendor", "coverage", ".cache", "__pycache__", ".mypy_cache",
+    ".git",
+    ".hg",
+    ".svn",
+    ".syntavra",
+    "node_modules",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    "target",
+    "vendor",
+    "coverage",
+    ".cache",
+    "__pycache__",
+    ".mypy_cache",
     ".pytest_cache",
 ];
 
@@ -81,23 +94,41 @@ pub(crate) fn execute(
     let action = command[1].as_str();
     match action {
         "graph-index" => {
-            let max_file_bytes = option_i64(arguments, "--max-file-bytes", 2_000_000)?.max(1) as u64;
-            Ok(Some(index_repository(project_root, &unified, &database, max_file_bytes)?))
+            let max_file_bytes =
+                option_i64(arguments, "--max-file-bytes", 2_000_000)?.max(1) as u64;
+            Ok(Some(index_repository(
+                project_root,
+                &unified,
+                &database,
+                max_file_bytes,
+            )?))
         }
         "graph-query" => {
             let query = positional_after(arguments, "graph-query", 0)?;
             let limit = option_i64(arguments, "--limit", 20)?.clamp(1, 200);
             let results = query_repository(&database, query, limit)?;
-            Ok(Some(json!({"ok": true, "query": query, "results": results})))
+            Ok(Some(
+                json!({"ok": true, "query": query, "results": results}),
+            ))
         }
         "graph-impact" => {
             let node_id = positional_after(arguments, "graph-impact", 0)?;
             let max_depth = option_i64(arguments, "--max-depth", 6)?.max(0);
             Ok(Some(impact(&database, node_id, max_depth)?))
         }
-        "language" => Ok(Some(language_action(arguments, project_root, &unified, &database)?)),
+        "language" => Ok(Some(language_action(
+            arguments,
+            project_root,
+            &unified,
+            &database,
+        )?)),
         "semantic-services" => Ok(Some(language_status(project_root, &database)?)),
-        "semantic-import" => Ok(Some(semantic_import(arguments, project_root, &database, &unified)?)),
+        "semantic-import" => Ok(Some(semantic_import(
+            arguments,
+            project_root,
+            &database,
+            &unified,
+        )?)),
         "evidence-stats" => Ok(Some(runtime_evidence_stats(&unified)?)),
         "evidence-neighbors" => Ok(Some(runtime_evidence_neighbors(arguments, &unified)?)),
         _ => Ok(None),
@@ -105,7 +136,8 @@ pub(crate) fn execute(
 }
 
 fn initialize_graph(path: &Path) -> Result<(), String> {
-    let connection = Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
     connection
         .execute_batch(
             "PRAGMA busy_timeout=30000;\
@@ -162,7 +194,8 @@ fn index_repository(
     let structural_path = scratch.join("structural.sqlite3");
     let structural = Connection::open(&structural_path)
         .map_err(|error| format!("GRAPH_STRUCTURAL_OPEN_FAILED:{error}"))?;
-    let mut graph = Connection::open(database).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let mut graph = Connection::open(database)
+        .map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
 
     let old_hashes = load_file_hashes(&graph)?;
     let mut current = BTreeMap::<String, (String, String, String, bool, Vec<String>)>::new();
@@ -190,7 +223,8 @@ fn index_repository(
             if size > max_file_bytes {
                 continue;
             }
-            let diagnostics = serde_json::from_str::<Vec<String>>(&diagnostics_json).unwrap_or_default();
+            let diagnostics =
+                serde_json::from_str::<Vec<String>>(&diagnostics_json).unwrap_or_default();
             current.insert(path, (digest, language, parser, semantic, diagnostics));
         }
     }
@@ -217,7 +251,13 @@ fn index_repository(
         changed += 1;
         remove_local_file(&transaction, relative)?;
         let evidence_ref = format!("sha256:{digest}");
-        let capability = if *semantic { "semantic" } else if parser != "lexical" { "syntax" } else { "lexical" };
+        let capability = if *semantic {
+            "semantic"
+        } else if parser != "lexical" {
+            "syntax"
+        } else {
+            "lexical"
+        };
         let module_id = node_id(relative, "module", relative, 1);
         let module_name = Path::new(relative)
             .file_stem()
@@ -373,7 +413,8 @@ fn index_repository(
             } else {
                 edge_type.as_str()
             };
-            let mut metadata = serde_json::from_str::<Value>(&raw_metadata).unwrap_or_else(|_| json!({}));
+            let mut metadata =
+                serde_json::from_str::<Value>(&raw_metadata).unwrap_or_else(|_| json!({}));
             if let Value::Object(map) = &mut metadata {
                 map.insert("source".to_owned(), Value::String(parser.clone()));
                 map.insert("exact_semantic".to_owned(), Value::Bool(*semantic));
@@ -409,7 +450,9 @@ fn index_repository(
             )
             .map_err(|error| format!("GRAPH_FILE_INSERT_FAILED:{error}"))?;
     }
-    transaction.commit().map_err(|error| format!("GRAPH_COMMIT_FAILED:{error}"))?;
+    transaction
+        .commit()
+        .map_err(|error| format!("GRAPH_COMMIT_FAILED:{error}"))?;
     refresh_search(database)?;
     let mut value = graph_stats(database)?;
     let object = value.as_object_mut().expect("stats object");
@@ -418,13 +461,25 @@ fn index_repository(
     object.insert("unchanged_files".to_owned(), Value::from(unchanged));
     object.insert("removed_files".to_owned(), Value::from(stale.len()));
     object.insert("binary_skipped".to_owned(), Value::from(0));
-    object.insert("oversized_skipped".to_owned(), Value::from(count_oversized(&project, max_file_bytes)?));
+    object.insert(
+        "oversized_skipped".to_owned(),
+        Value::from(count_oversized(&project, max_file_bytes)?),
+    );
     object.insert("errors".to_owned(), Value::Array(Vec::new()));
     object.insert("warnings".to_owned(), Value::Array(Vec::new()));
-    object.insert("language_platform".to_owned(), language_inventory(&project)?);
-    object.insert("language_services".to_owned(), empty_service_inventory("analyzers"));
+    object.insert(
+        "language_platform".to_owned(),
+        language_inventory(&project)?,
+    );
+    object.insert(
+        "language_services".to_owned(),
+        empty_service_inventory("analyzers"),
+    );
     object.insert("lsp_services".to_owned(), empty_service_inventory("lsp"));
-    object.insert("repository_query".to_owned(), repository_query_stats(database)?);
+    object.insert(
+        "repository_query".to_owned(),
+        repository_query_stats(database)?,
+    );
     object.insert("canonical_graph".to_owned(), Value::Bool(true));
     Ok(value)
 }
@@ -434,7 +489,9 @@ fn load_file_hashes(connection: &Connection) -> Result<BTreeMap<String, String>,
         .prepare("SELECT path,sha256 FROM files")
         .map_err(|error| format!("GRAPH_HASH_PREPARE_FAILED:{error}"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|error| format!("GRAPH_HASH_QUERY_FAILED:{error}"))?;
     let mut output = BTreeMap::new();
     for row in rows {
@@ -457,7 +514,10 @@ fn remove_local_file(connection: &Connection, relative: &str) -> Result<(), Stri
     };
     for id in ids {
         connection
-            .execute("DELETE FROM edges WHERE source=? OR target=?", params![id, id])
+            .execute(
+                "DELETE FROM edges WHERE source=? OR target=?",
+                params![id, id],
+            )
             .map_err(|error| format!("GRAPH_REMOVE_EDGE_FAILED:{error}"))?;
         connection
             .execute("DELETE FROM nodes WHERE node_id=?", params![id])
@@ -514,7 +574,10 @@ fn file_line_count(path: &Path) -> i64 {
 fn count_oversized(project: &Path, max_file_bytes: u64) -> Result<i64, String> {
     let mut count = 0i64;
     visit_files(project, &mut |path| {
-        if fs::metadata(path).map(|value| value.len() > max_file_bytes).unwrap_or(false) {
+        if fs::metadata(path)
+            .map(|value| value.len() > max_file_bytes)
+            .unwrap_or(false)
+        {
             count += 1;
         }
         Ok(())
@@ -533,7 +596,9 @@ where
     entries.sort_by_key(|entry| entry.file_name());
     for entry in entries {
         let path = entry.path();
-        let file_type = entry.file_type().map_err(|error| format!("GRAPH_FILE_TYPE_FAILED:{error}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("GRAPH_FILE_TYPE_FAILED:{error}"))?;
         if file_type.is_dir() {
             if path
                 .file_name()
@@ -551,7 +616,8 @@ where
 }
 
 fn metadata_json(value: Value) -> Result<String, String> {
-    serde_json::to_string(&sort_json(&value)).map_err(|error| format!("GRAPH_METADATA_JSON_FAILED:{error}"))
+    serde_json::to_string(&sort_json(&value))
+        .map_err(|error| format!("GRAPH_METADATA_JSON_FAILED:{error}"))
 }
 
 fn sort_json(value: &Value) -> Value {
@@ -578,14 +644,28 @@ fn now_string() -> String {
 }
 
 fn graph_stats(path: &Path) -> Result<Value, String> {
-    let connection = Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
     let files = scalar_i64(&connection, "SELECT COUNT(*) FROM files")?;
     let nodes = scalar_i64(&connection, "SELECT COUNT(*) FROM nodes")?;
     let edges = scalar_i64(&connection, "SELECT COUNT(*) FROM edges")?;
-    let languages = grouped(&connection, "SELECT language,COUNT(*) FROM files GROUP BY language ORDER BY language", "language", "files")?;
+    let languages = grouped(
+        &connection,
+        "SELECT language,COUNT(*) FROM files GROUP BY language ORDER BY language",
+        "language",
+        "files",
+    )?;
     let capabilities = grouped(&connection, "SELECT capability_level,COUNT(*) FROM files GROUP BY capability_level ORDER BY capability_level", "capability_level", "files")?;
-    let detectors = grouped(&connection, "SELECT detector,COUNT(*) FROM files GROUP BY detector ORDER BY detector", "detector", "files")?;
-    let unknown = scalar_i64(&connection, "SELECT COUNT(*) FROM files WHERE language LIKE 'unknown:%'")?;
+    let detectors = grouped(
+        &connection,
+        "SELECT detector,COUNT(*) FROM files GROUP BY detector ORDER BY detector",
+        "detector",
+        "files",
+    )?;
+    let unknown = scalar_i64(
+        &connection,
+        "SELECT COUNT(*) FROM files WHERE language LIKE 'unknown:%'",
+    )?;
     let semantic = semantic_stats(&connection)?;
     Ok(json!({
         "files": files,
@@ -616,9 +696,13 @@ fn grouped(
     key: &str,
     count: &str,
 ) -> Result<Vec<Value>, String> {
-    let mut statement = connection.prepare(sql).map_err(|error| format!("GRAPH_GROUP_PREPARE_FAILED:{error}"))?;
+    let mut statement = connection
+        .prepare(sql)
+        .map_err(|error| format!("GRAPH_GROUP_PREPARE_FAILED:{error}"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|error| format!("GRAPH_GROUP_QUERY_FAILED:{error}"))?;
     let mut output = Vec::new();
     for row in rows {
@@ -629,11 +713,9 @@ fn grouped(
 }
 
 fn refresh_search(path: &Path) -> Result<(), String> {
-    let connection = Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
-    if connection
-        .execute("DELETE FROM node_search", [])
-        .is_err()
-    {
+    let connection =
+        Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    if connection.execute("DELETE FROM node_search", []).is_err() {
         return Ok(());
     }
     connection
@@ -646,12 +728,21 @@ fn refresh_search(path: &Path) -> Result<(), String> {
 }
 
 fn repository_query_stats(path: &Path) -> Result<Value, String> {
-    let connection = Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
-    let graph_nodes = scalar_i64(&connection, "SELECT COUNT(*) FROM nodes WHERE kind!='external'")?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let graph_nodes = scalar_i64(
+        &connection,
+        "SELECT COUNT(*) FROM nodes WHERE kind!='external'",
+    )?;
     let indexed = connection
-        .query_row("SELECT COUNT(*) FROM node_search", [], |row| row.get::<_, i64>(0))
+        .query_row("SELECT COUNT(*) FROM node_search", [], |row| {
+            row.get::<_, i64>(0)
+        })
         .unwrap_or(graph_nodes);
-    let backend = if connection.prepare("SELECT bm25(node_search) FROM node_search LIMIT 1").is_ok() {
+    let backend = if connection
+        .prepare("SELECT bm25(node_search) FROM node_search LIMIT 1")
+        .is_ok()
+    {
         "sqlite-fts5"
     } else {
         "sqlite-like"
@@ -660,7 +751,8 @@ fn repository_query_stats(path: &Path) -> Result<Value, String> {
 }
 
 fn query_repository(path: &Path, text: &str, limit: i64) -> Result<Vec<Value>, String> {
-    let connection = Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
     let normalized = text.trim().to_lowercase();
     let terms = tokens(text);
     let candidate_limit = (limit * 8).max(40);
@@ -671,7 +763,10 @@ fn query_repository(path: &Path, text: &str, limit: i64) -> Result<Vec<Value>, S
             .prepare("SELECT node_id,path,kind,name,qualified_name,start_line,end_line,language,evidence_ref,metadata_json FROM nodes WHERE kind!='external' AND (lower(name)=? OR lower(qualified_name)=?) ORDER BY path,start_line LIMIT ?")
             .map_err(|error| format!("GRAPH_QUERY_EXACT_PREPARE_FAILED:{error}"))?;
         let mapped = statement
-            .query_map(params![normalized, normalized, candidate_limit], row_to_node)
+            .query_map(
+                params![normalized, normalized, candidate_limit],
+                row_to_node,
+            )
             .map_err(|error| format!("GRAPH_QUERY_EXACT_FAILED:{error}"))?;
         for row in mapped {
             let mut value = row.map_err(|error| format!("GRAPH_QUERY_EXACT_ROW_FAILED:{error}"))?;
@@ -686,7 +781,10 @@ fn query_repository(path: &Path, text: &str, limit: i64) -> Result<Vec<Value>, S
             .prepare("SELECT node_id,path,kind,name,qualified_name,start_line,end_line,language,evidence_ref,metadata_json FROM nodes WHERE kind!='external' AND (lower(name) LIKE ? OR lower(qualified_name) LIKE ? OR lower(path) LIKE ?) ORDER BY path,start_line LIMIT ?")
             .map_err(|error| format!("GRAPH_QUERY_LIKE_PREPARE_FAILED:{error}"))?;
         let mapped = statement
-            .query_map(params![pattern, pattern, pattern, candidate_limit], row_to_node)
+            .query_map(
+                params![pattern, pattern, pattern, candidate_limit],
+                row_to_node,
+            )
             .map_err(|error| format!("GRAPH_QUERY_LIKE_FAILED:{error}"))?;
         for row in mapped {
             let mut value = row.map_err(|error| format!("GRAPH_QUERY_LIKE_ROW_FAILED:{error}"))?;
@@ -700,29 +798,81 @@ fn query_repository(path: &Path, text: &str, limit: i64) -> Result<Vec<Value>, S
         let degree = connection
             .query_row("SELECT COUNT(*) FROM (SELECT source FROM edges WHERE source=? UNION ALL SELECT target FROM edges WHERE target=?)", params![node_id,node_id], |row| row.get::<_,i64>(0))
             .unwrap_or(0);
-        let metadata = serde_json::from_str::<Value>(value["metadata_json"].as_str().unwrap_or("{}"))
-            .unwrap_or_else(|_| json!({}));
-        let corpus = tokens(&format!("{} {} {} {} {}", value["name"].as_str().unwrap_or_default(), value["qualified_name"].as_str().unwrap_or_default(), value["path"].as_str().unwrap_or_default(), value["kind"].as_str().unwrap_or_default(), value["language"].as_str().unwrap_or_default()));
+        let metadata =
+            serde_json::from_str::<Value>(value["metadata_json"].as_str().unwrap_or("{}"))
+                .unwrap_or_else(|_| json!({}));
+        let corpus = tokens(&format!(
+            "{} {} {} {} {}",
+            value["name"].as_str().unwrap_or_default(),
+            value["qualified_name"].as_str().unwrap_or_default(),
+            value["path"].as_str().unwrap_or_default(),
+            value["kind"].as_str().unwrap_or_default(),
+            value["language"].as_str().unwrap_or_default()
+        ));
         let matched = terms.intersection(&corpus).cloned().collect::<Vec<_>>();
         let exact = normalized == value["name"].as_str().unwrap_or_default().to_lowercase()
-            || normalized == value["qualified_name"].as_str().unwrap_or_default().to_lowercase();
-        let semantic_bonus = if metadata["exact_semantic"].as_bool().unwrap_or(false) { 10.0 } else if metadata["exact_syntax"].as_bool().unwrap_or(false) { 4.0 } else { 0.0 };
+            || normalized
+                == value["qualified_name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_lowercase();
+        let semantic_bonus = if metadata["exact_semantic"].as_bool().unwrap_or(false) {
+            10.0
+        } else if metadata["exact_syntax"].as_bool().unwrap_or(false) {
+            4.0
+        } else {
+            0.0
+        };
         let rank = value["_rank"].as_f64().unwrap_or(0.0);
-        let score = rank + semantic_bonus + (degree as f64 * 0.4).min(12.0) + if exact { 20.0 } else { 0.0 };
+        let score = rank
+            + semantic_bonus
+            + (degree as f64 * 0.4).min(12.0)
+            + if exact { 20.0 } else { 0.0 };
         value.as_object_mut().expect("node object").remove("_rank");
-        value.as_object_mut().expect("node object").remove("metadata_json");
+        value
+            .as_object_mut()
+            .expect("node object")
+            .remove("metadata_json");
         value["metadata"] = metadata.clone();
         value["score"] = Value::from((score * 1_000_000.0).round() / 1_000_000.0);
-        value["matched_terms"] = serde_json::to_value(matched).map_err(|error| format!("GRAPH_QUERY_MATCHED_JSON_FAILED:{error}"))?;
+        value["matched_terms"] = serde_json::to_value(matched)
+            .map_err(|error| format!("GRAPH_QUERY_MATCHED_JSON_FAILED:{error}"))?;
         value["degree"] = Value::from(degree);
-        value["semantic_status"] = Value::String(if metadata["exact_semantic"].as_bool().unwrap_or(false) { "exact" } else if metadata["exact_syntax"].as_bool().unwrap_or(false) { "syntax" } else { "candidate" }.to_owned());
-        value["query_backend"] = Value::String(repository_query_stats(path)?["backend"].as_str().unwrap_or("sqlite-like").to_owned());
+        value["semantic_status"] = Value::String(
+            if metadata["exact_semantic"].as_bool().unwrap_or(false) {
+                "exact"
+            } else if metadata["exact_syntax"].as_bool().unwrap_or(false) {
+                "syntax"
+            } else {
+                "candidate"
+            }
+            .to_owned(),
+        );
+        value["query_backend"] = Value::String(
+            repository_query_stats(path)?["backend"]
+                .as_str()
+                .unwrap_or("sqlite-like")
+                .to_owned(),
+        );
         scored.push((score, value));
     }
-    scored.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(std::cmp::Ordering::Equal)
-        .then_with(|| left.1["path"].as_str().cmp(&right.1["path"].as_str()))
-        .then_with(|| left.1["start_line"].as_i64().cmp(&right.1["start_line"].as_i64())));
-    Ok(scored.into_iter().take(limit as usize).map(|(_, value)| value).collect())
+    scored.sort_by(|left, right| {
+        right
+            .0
+            .partial_cmp(&left.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.1["path"].as_str().cmp(&right.1["path"].as_str()))
+            .then_with(|| {
+                left.1["start_line"]
+                    .as_i64()
+                    .cmp(&right.1["start_line"].as_i64())
+            })
+    });
+    Ok(scored
+        .into_iter()
+        .take(limit as usize)
+        .map(|(_, value)| value)
+        .collect())
 }
 
 fn row_to_node(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
@@ -760,32 +910,62 @@ fn tokens(value: &str) -> BTreeSet<String> {
 }
 
 fn impact(path: &Path, node_id: &str, max_depth: i64) -> Result<Value, String> {
-    let connection = Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
     let exists = connection
-        .query_row("SELECT 1 FROM nodes WHERE node_id=?", params![node_id], |_| Ok(()))
+        .query_row(
+            "SELECT 1 FROM nodes WHERE node_id=?",
+            params![node_id],
+            |_| Ok(()),
+        )
         .optional()
         .map_err(|error| format!("GRAPH_IMPACT_ROOT_QUERY_FAILED:{error}"))?
         .is_some();
     if !exists {
         return Err(format!("GRAPH_NODE_NOT_FOUND:{node_id}"));
     }
-    let allowed = ["calls","imports","depends-on","implements","overrides","tested-by","defines-candidate","imports-candidate","contains-identifier-candidate"];
+    let allowed = [
+        "calls",
+        "imports",
+        "depends-on",
+        "implements",
+        "overrides",
+        "tested-by",
+        "defines-candidate",
+        "imports-candidate",
+        "contains-identifier-candidate",
+    ];
     let mut queue = VecDeque::from([(node_id.to_owned(), 0i64)]);
     let mut seen = BTreeSet::from([node_id.to_owned()]);
     let mut ordered = vec![node_id.to_owned()];
     let mut traversed = Vec::<Value>::new();
     while let Some((current, depth)) = queue.pop_front() {
-        if depth >= max_depth { continue; }
+        if depth >= max_depth {
+            continue;
+        }
         let mut statement = connection
             .prepare("SELECT source,target,edge_type,confidence,evidence_ref,metadata_json FROM edges WHERE target=? ORDER BY source,edge_type")
             .map_err(|error| format!("GRAPH_IMPACT_EDGE_PREPARE_FAILED:{error}"))?;
         let rows = statement
-            .query_map(params![current], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,f64>(3)?,row.get::<_,String>(4)?,row.get::<_,String>(5)?)))
+            .query_map(params![current], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, f64>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            })
             .map_err(|error| format!("GRAPH_IMPACT_EDGE_QUERY_FAILED:{error}"))?;
         for row in rows {
-            let (source,target,edge_type,confidence,evidence_ref,metadata_json) = row.map_err(|error| format!("GRAPH_IMPACT_EDGE_ROW_FAILED:{error}"))?;
-            if !allowed.contains(&edge_type.as_str()) { continue; }
-            let metadata = serde_json::from_str::<Value>(&metadata_json).unwrap_or_else(|_| json!({}));
+            let (source, target, edge_type, confidence, evidence_ref, metadata_json) =
+                row.map_err(|error| format!("GRAPH_IMPACT_EDGE_ROW_FAILED:{error}"))?;
+            if !allowed.contains(&edge_type.as_str()) {
+                continue;
+            }
+            let metadata =
+                serde_json::from_str::<Value>(&metadata_json).unwrap_or_else(|_| json!({}));
             traversed.push(json!({"source":source,"target":target,"edge_type":edge_type,"confidence":confidence,"evidence_ref":evidence_ref,"metadata":metadata}));
             if seen.insert(source.clone()) {
                 ordered.push(source.clone());
@@ -809,8 +989,26 @@ fn impact(path: &Path, node_id: &str, max_depth: i64) -> Result<Value, String> {
             nodes.push(value);
         }
     }
-    let tests = nodes.iter().filter(|node| node["path"].as_str().unwrap_or_default().to_lowercase().contains("test") || node["kind"].as_str().unwrap_or_default().starts_with("test")).cloned().collect::<Vec<_>>();
-    let edge_exact = traversed.iter().all(|edge| edge["metadata"]["exact_semantic"].as_bool().unwrap_or(false));
+    let tests = nodes
+        .iter()
+        .filter(|node| {
+            node["path"]
+                .as_str()
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains("test")
+                || node["kind"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .starts_with("test")
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let edge_exact = traversed.iter().all(|edge| {
+        edge["metadata"]["exact_semantic"]
+            .as_bool()
+            .unwrap_or(false)
+    });
     let exact = !exact_flags.is_empty() && exact_flags.iter().all(|value| *value) && edge_exact;
     Ok(json!({
         "root": node_id,
@@ -834,8 +1032,11 @@ fn language_action(
         "detect" => {
             let raw = positional_after(arguments, "language", 1)?;
             let source = safe_project_path(project, raw, true)?;
-            if !source.is_file() { return Err("language detection path must be a file".to_owned()); }
-            let data = fs::read(&source).map_err(|error| format!("LANGUAGE_SOURCE_READ_FAILED:{error}"))?;
+            if !source.is_file() {
+                return Err("language detection path must be a file".to_owned());
+            }
+            let data = fs::read(&source)
+                .map_err(|error| format!("LANGUAGE_SOURCE_READ_FAILED:{error}"))?;
             let detection = detect_language(project, &source, &data)?;
             Ok(json!({
                 "ok": true,
@@ -880,7 +1081,9 @@ fn language_status(project: &Path, database: &Path) -> Result<Value, String> {
         "repository_query": repository_query_stats(database)?,
         "canonical_graph": true,
     });
-    let declared = value["language_registry"]["registered_languages"].as_i64().unwrap_or(0);
+    let declared = value["language_registry"]["registered_languages"]
+        .as_i64()
+        .unwrap_or(0);
     value["declared"] = Value::from(declared);
     value["available"] = Value::from(0);
     Ok(value)
@@ -897,13 +1100,46 @@ fn language_inventory(project: &Path) -> Result<Value, String> {
         entries.sort_by_key(|entry| entry.file_name());
         for entry in entries {
             let path = entry.path();
-            if path.extension().and_then(|value| value.to_str()) != Some("json") { continue; }
-            let value = serde_json::from_slice::<Value>(&fs::read(&path).map_err(|error| format!("LANGUAGE_MANIFEST_READ_FAILED:{error}"))?)
-                .map_err(|error| format!("LANGUAGE_MANIFEST_JSON_INVALID:{error}"))?;
-            let id = value["id"].as_str().or_else(|| value["language_id"].as_str()).unwrap_or_default().trim().to_lowercase();
-            if id.is_empty() { continue; }
-            let suffixes = value["suffixes"].as_array().map(|rows| rows.iter().filter_map(Value::as_str).map(|item| if item.starts_with('.') { item.to_lowercase() } else { format!(".{}",item.to_lowercase()) }).collect::<Vec<_>>()).unwrap_or_default();
-            descriptors.insert(id.clone(), (suffixes, "repository-manifest".to_owned(), "lexical".to_owned()));
+            if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                continue;
+            }
+            let value = serde_json::from_slice::<Value>(
+                &fs::read(&path)
+                    .map_err(|error| format!("LANGUAGE_MANIFEST_READ_FAILED:{error}"))?,
+            )
+            .map_err(|error| format!("LANGUAGE_MANIFEST_JSON_INVALID:{error}"))?;
+            let id = value["id"]
+                .as_str()
+                .or_else(|| value["language_id"].as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_lowercase();
+            if id.is_empty() {
+                continue;
+            }
+            let suffixes = value["suffixes"]
+                .as_array()
+                .map(|rows| {
+                    rows.iter()
+                        .filter_map(Value::as_str)
+                        .map(|item| {
+                            if item.starts_with('.') {
+                                item.to_lowercase()
+                            } else {
+                                format!(".{}", item.to_lowercase())
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            descriptors.insert(
+                id.clone(),
+                (
+                    suffixes,
+                    "repository-manifest".to_owned(),
+                    "lexical".to_owned(),
+                ),
+            );
         }
     }
     let rows = descriptors.iter().map(|(id,(suffixes,source,capability))| json!({"id":id,"suffixes":suffixes,"source":source,"capabilities":[capability]})).collect::<Vec<_>>();
@@ -918,75 +1154,236 @@ fn language_inventory(project: &Path) -> Result<Value, String> {
 
 fn builtin_descriptors() -> BTreeMap<String, (Vec<String>, String, String)> {
     let rows: &[(&str, &[&str], &str)] = &[
-        ("python", &[".py",".pyi",".pyw"], "semantic"),
-        ("javascript", &[".js",".jsx",".mjs",".cjs"], "lexical"),
-        ("typescript", &[".ts",".tsx",".mts",".cts"], "lexical"),
-        ("rust", &[".rs"], "lexical"), ("go", &[".go"], "lexical"),
-        ("java", &[".java"], "lexical"), ("kotlin", &[".kt",".kts"], "lexical"),
-        ("csharp", &[".cs",".csx"], "lexical"), ("c", &[".c",".h"], "lexical"),
-        ("cpp", &[".cc",".cpp",".cxx",".hpp",".hh",".hxx"], "lexical"),
-        ("shell", &[".sh",".bash",".zsh",".ksh"], "lexical"),
-        ("powershell", &[".ps1",".psm1",".psd1"], "lexical"),
-        ("ruby", &[".rb",".rake",".gemspec"], "lexical"),
-        ("php", &[".php",".phtml"], "lexical"), ("lua", &[".lua"], "lexical"),
-        ("sql", &[".sql",".ddl",".dml"], "lexical"),
-        ("json", &[".json",".jsonc",".json5"], "lexical"),
-        ("yaml", &[".yaml",".yml"], "lexical"), ("toml", &[".toml"], "lexical"),
-        ("markdown", &[".md",".mdx",".markdown"], "lexical"),
-        ("html", &[".html",".htm",".xhtml"], "lexical"),
-        ("css", &[".css"], "lexical"), ("scss", &[".scss"], "lexical"),
-        ("swift", &[".swift"], "lexical"), ("zig", &[".zig"], "lexical"),
-        ("dart", &[".dart"], "lexical"), ("haskell", &[".hs",".lhs"], "lexical"),
-        ("elixir", &[".ex",".exs"], "lexical"), ("erlang", &[".erl",".hrl"], "lexical"),
-        ("clojure", &[".clj",".cljs",".cljc",".edn"], "lexical"),
-        ("solidity", &[".sol"], "lexical"), ("terraform", &[".tf",".tfvars"], "lexical"),
-        ("nix", &[".nix"], "lexical"), ("protobuf", &[".proto"], "lexical"),
+        ("python", &[".py", ".pyi", ".pyw"], "semantic"),
+        ("javascript", &[".js", ".jsx", ".mjs", ".cjs"], "lexical"),
+        ("typescript", &[".ts", ".tsx", ".mts", ".cts"], "lexical"),
+        ("rust", &[".rs"], "lexical"),
+        ("go", &[".go"], "lexical"),
+        ("java", &[".java"], "lexical"),
+        ("kotlin", &[".kt", ".kts"], "lexical"),
+        ("csharp", &[".cs", ".csx"], "lexical"),
+        ("c", &[".c", ".h"], "lexical"),
+        (
+            "cpp",
+            &[".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx"],
+            "lexical",
+        ),
+        ("shell", &[".sh", ".bash", ".zsh", ".ksh"], "lexical"),
+        ("powershell", &[".ps1", ".psm1", ".psd1"], "lexical"),
+        ("ruby", &[".rb", ".rake", ".gemspec"], "lexical"),
+        ("php", &[".php", ".phtml"], "lexical"),
+        ("lua", &[".lua"], "lexical"),
+        ("sql", &[".sql", ".ddl", ".dml"], "lexical"),
+        ("json", &[".json", ".jsonc", ".json5"], "lexical"),
+        ("yaml", &[".yaml", ".yml"], "lexical"),
+        ("toml", &[".toml"], "lexical"),
+        ("markdown", &[".md", ".mdx", ".markdown"], "lexical"),
+        ("html", &[".html", ".htm", ".xhtml"], "lexical"),
+        ("css", &[".css"], "lexical"),
+        ("scss", &[".scss"], "lexical"),
+        ("swift", &[".swift"], "lexical"),
+        ("zig", &[".zig"], "lexical"),
+        ("dart", &[".dart"], "lexical"),
+        ("haskell", &[".hs", ".lhs"], "lexical"),
+        ("elixir", &[".ex", ".exs"], "lexical"),
+        ("erlang", &[".erl", ".hrl"], "lexical"),
+        ("clojure", &[".clj", ".cljs", ".cljc", ".edn"], "lexical"),
+        ("solidity", &[".sol"], "lexical"),
+        ("terraform", &[".tf", ".tfvars"], "lexical"),
+        ("nix", &[".nix"], "lexical"),
+        ("protobuf", &[".proto"], "lexical"),
     ];
-    rows.iter().map(|(id,suffixes,capability)| ((*id).to_owned(), (suffixes.iter().map(|value| (*value).to_owned()).collect(), "builtin".to_owned(), (*capability).to_owned()))).collect()
+    rows.iter()
+        .map(|(id, suffixes, capability)| {
+            (
+                (*id).to_owned(),
+                (
+                    suffixes.iter().map(|value| (*value).to_owned()).collect(),
+                    "builtin".to_owned(),
+                    (*capability).to_owned(),
+                ),
+            )
+        })
+        .collect()
 }
 
 fn detect_language(project: &Path, path: &Path, data: &[u8]) -> Result<Detection, String> {
     if data.iter().take(8192).any(|byte| *byte == 0) {
-        return Ok(Detection { language_id:"binary".to_owned(), confidence:1.0, evidence:"binary-nul".to_owned(), capability_level:"none".to_owned(), descriptor_source:"builtin".to_owned(), text_encoding:None, binary:true, generated:false, minified:false, diagnostics:Vec::new(), candidates:Vec::new() });
+        return Ok(Detection {
+            language_id: "binary".to_owned(),
+            confidence: 1.0,
+            evidence: "binary-nul".to_owned(),
+            capability_level: "none".to_owned(),
+            descriptor_source: "builtin".to_owned(),
+            text_encoding: None,
+            binary: true,
+            generated: false,
+            minified: false,
+            diagnostics: Vec::new(),
+            candidates: Vec::new(),
+        });
     }
     let text = String::from_utf8_lossy(data);
     let generated = text.lines().take(8).any(|line| {
         let value = line.to_lowercase();
-        value.contains("generated file") || value.contains("generated code") || value.contains("do not edit") || value.contains("auto-generated")
+        value.contains("generated file")
+            || value.contains("generated code")
+            || value.contains("do not edit")
+            || value.contains("auto-generated")
     });
     let minified = text.lines().take(4).any(|line| line.len() > 10_000);
     let descriptors = builtin_descriptors();
-    let filename = path.file_name().and_then(|value| value.to_str()).unwrap_or_default().to_lowercase();
-    let extension = path.extension().and_then(|value| value.to_str()).map(|value| format!(".{}", value.to_lowercase()));
+    let filename = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_lowercase();
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| format!(".{}", value.to_lowercase()));
     if extension.is_none() && text.starts_with("#!") {
         let first = text.lines().next().unwrap_or_default().to_lowercase();
-        let id = if first.contains("python") { Some("python") } else if first.contains("bash") || first.contains("/sh") || first.contains(" zsh") { Some("shell") } else if first.contains("pwsh") || first.contains("powershell") { Some("powershell") } else if first.contains("node") || first.contains("deno") { Some("javascript") } else { None };
+        let id = if first.contains("python") {
+            Some("python")
+        } else if first.contains("bash") || first.contains("/sh") || first.contains(" zsh") {
+            Some("shell")
+        } else if first.contains("pwsh") || first.contains("powershell") {
+            Some("powershell")
+        } else if first.contains("node") || first.contains("deno") {
+            Some("javascript")
+        } else {
+            None
+        };
         if let Some(id) = id {
-            return Ok(Detection { language_id:id.to_owned(), confidence:0.98, evidence:"shebang".to_owned(), capability_level:if id=="python"{"semantic"}else{"lexical"}.to_owned(), descriptor_source:"builtin".to_owned(), text_encoding:Some("utf-8".to_owned()), binary:false, generated, minified, diagnostics:Vec::new(), candidates:vec![id.to_owned()] });
+            return Ok(Detection {
+                language_id: id.to_owned(),
+                confidence: 0.98,
+                evidence: "shebang".to_owned(),
+                capability_level: if id == "python" {
+                    "semantic"
+                } else {
+                    "lexical"
+                }
+                .to_owned(),
+                descriptor_source: "builtin".to_owned(),
+                text_encoding: Some("utf-8".to_owned()),
+                binary: false,
+                generated,
+                minified,
+                diagnostics: Vec::new(),
+                candidates: vec![id.to_owned()],
+            });
         }
     }
     if let Some(ext) = extension {
-        let matches = descriptors.iter().filter(|(_, (suffixes,_,_))| suffixes.contains(&ext)).map(|(id,(_,source,cap))| (id.clone(),source.clone(),cap.clone())).collect::<Vec<_>>();
-        if let Some((id,source,capability)) = matches.first() {
-            return Ok(Detection { language_id:id.clone(), confidence:if matches.len()==1{0.97}else{0.72}, evidence:"suffix".to_owned(), capability_level:capability.clone(), descriptor_source:source.clone(), text_encoding:Some("utf-8".to_owned()), binary:false, generated, minified, diagnostics:Vec::new(), candidates:matches.iter().map(|(id,_,_)| id.clone()).collect() });
+        let matches = descriptors
+            .iter()
+            .filter(|(_, (suffixes, _, _))| suffixes.contains(&ext))
+            .map(|(id, (_, source, cap))| (id.clone(), source.clone(), cap.clone()))
+            .collect::<Vec<_>>();
+        if let Some((id, source, capability)) = matches.first() {
+            return Ok(Detection {
+                language_id: id.clone(),
+                confidence: if matches.len() == 1 { 0.97 } else { 0.72 },
+                evidence: "suffix".to_owned(),
+                capability_level: capability.clone(),
+                descriptor_source: source.clone(),
+                text_encoding: Some("utf-8".to_owned()),
+                binary: false,
+                generated,
+                minified,
+                diagnostics: Vec::new(),
+                candidates: matches.iter().map(|(id, _, _)| id.clone()).collect(),
+            });
         }
         let custom = project.join(".syntavra/languages");
         if custom.is_dir() {
-            for entry in fs::read_dir(custom).map_err(|error| format!("LANGUAGE_MANIFEST_DIRECTORY_READ_FAILED:{error}"))? {
-                let path = entry.map_err(|error| format!("LANGUAGE_MANIFEST_ENTRY_FAILED:{error}"))?.path();
-                if path.extension().and_then(|value| value.to_str()) != Some("json") { continue; }
-                let value = serde_json::from_slice::<Value>(&fs::read(&path).map_err(|error| format!("LANGUAGE_MANIFEST_READ_FAILED:{error}"))?).map_err(|error| format!("LANGUAGE_MANIFEST_JSON_INVALID:{error}"))?;
+            for entry in fs::read_dir(custom)
+                .map_err(|error| format!("LANGUAGE_MANIFEST_DIRECTORY_READ_FAILED:{error}"))?
+            {
+                let path = entry
+                    .map_err(|error| format!("LANGUAGE_MANIFEST_ENTRY_FAILED:{error}"))?
+                    .path();
+                if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                    continue;
+                }
+                let value = serde_json::from_slice::<Value>(
+                    &fs::read(&path)
+                        .map_err(|error| format!("LANGUAGE_MANIFEST_READ_FAILED:{error}"))?,
+                )
+                .map_err(|error| format!("LANGUAGE_MANIFEST_JSON_INVALID:{error}"))?;
                 let suffixes = value["suffixes"].as_array().cloned().unwrap_or_default();
-                if suffixes.iter().filter_map(Value::as_str).any(|item| ext == if item.starts_with('.') { item.to_lowercase() } else { format!(".{}",item.to_lowercase()) }) {
-                    let id = value["id"].as_str().or_else(|| value["language_id"].as_str()).unwrap_or("unknown").to_lowercase();
-                    return Ok(Detection { language_id:id.clone(), confidence:0.97, evidence:"suffix".to_owned(), capability_level:"lexical".to_owned(), descriptor_source:"repository-manifest".to_owned(), text_encoding:Some("utf-8".to_owned()), binary:false, generated, minified, diagnostics:Vec::new(), candidates:vec![id] });
+                if suffixes.iter().filter_map(Value::as_str).any(|item| {
+                    ext == if item.starts_with('.') {
+                        item.to_lowercase()
+                    } else {
+                        format!(".{}", item.to_lowercase())
+                    }
+                }) {
+                    let id = value["id"]
+                        .as_str()
+                        .or_else(|| value["language_id"].as_str())
+                        .unwrap_or("unknown")
+                        .to_lowercase();
+                    return Ok(Detection {
+                        language_id: id.clone(),
+                        confidence: 0.97,
+                        evidence: "suffix".to_owned(),
+                        capability_level: "lexical".to_owned(),
+                        descriptor_source: "repository-manifest".to_owned(),
+                        text_encoding: Some("utf-8".to_owned()),
+                        binary: false,
+                        generated,
+                        minified,
+                        diagnostics: Vec::new(),
+                        candidates: vec![id],
+                    });
                 }
             }
         }
-        return Ok(Detection { language_id:format!("unknown:{}", ext.trim_start_matches('.')), confidence:0.2, evidence:"unregistered-text".to_owned(), capability_level:"lexical".to_owned(), descriptor_source:"fallback".to_owned(), text_encoding:Some("utf-8".to_owned()), binary:false, generated, minified, diagnostics:Vec::new(), candidates:Vec::new() });
+        return Ok(Detection {
+            language_id: format!("unknown:{}", ext.trim_start_matches('.')),
+            confidence: 0.2,
+            evidence: "unregistered-text".to_owned(),
+            capability_level: "lexical".to_owned(),
+            descriptor_source: "fallback".to_owned(),
+            text_encoding: Some("utf-8".to_owned()),
+            binary: false,
+            generated,
+            minified,
+            diagnostics: Vec::new(),
+            candidates: Vec::new(),
+        });
     }
-    let id = match filename.as_str() { "makefile"|"gnumakefile"=>"make", "dockerfile"=>"dockerfile", "cmakelists.txt"=>"cmake", _=>"unknown:extensionless" };
-    Ok(Detection { language_id:id.to_owned(), confidence:if id.starts_with("unknown:"){0.2}else{0.95}, evidence:"filename".to_owned(), capability_level:"lexical".to_owned(), descriptor_source:if id.starts_with("unknown:"){"fallback"}else{"builtin"}.to_owned(), text_encoding:Some("utf-8".to_owned()), binary:false, generated, minified, diagnostics:Vec::new(), candidates:Vec::new() })
+    let id = match filename.as_str() {
+        "makefile" | "gnumakefile" => "make",
+        "dockerfile" => "dockerfile",
+        "cmakelists.txt" => "cmake",
+        _ => "unknown:extensionless",
+    };
+    Ok(Detection {
+        language_id: id.to_owned(),
+        confidence: if id.starts_with("unknown:") {
+            0.2
+        } else {
+            0.95
+        },
+        evidence: "filename".to_owned(),
+        capability_level: "lexical".to_owned(),
+        descriptor_source: if id.starts_with("unknown:") {
+            "fallback"
+        } else {
+            "builtin"
+        }
+        .to_owned(),
+        text_encoding: Some("utf-8".to_owned()),
+        binary: false,
+        generated,
+        minified,
+        diagnostics: Vec::new(),
+        candidates: Vec::new(),
+    })
 }
 
 fn empty_service_inventory(kind: &str) -> Value {
@@ -995,14 +1392,28 @@ fn empty_service_inventory(kind: &str) -> Value {
 
 fn semantic_stats(connection: &Connection) -> Result<Value, String> {
     let sources = scalar_i64(connection, "SELECT COUNT(*) FROM semantic_sources")?;
-    let stale = scalar_i64(connection, "SELECT COUNT(*) FROM semantic_sources WHERE stale=1")?;
+    let stale = scalar_i64(
+        connection,
+        "SELECT COUNT(*) FROM semantic_sources WHERE stale=1",
+    )?;
     let nodes = scalar_i64(connection, "SELECT COUNT(*) FROM semantic_source_nodes")?;
     let edges = scalar_i64(connection, "SELECT COUNT(*) FROM semantic_source_edges")?;
-    let formats = grouped(connection, "SELECT format,COUNT(*) FROM semantic_sources GROUP BY format ORDER BY format", "format", "sources")?;
-    Ok(json!({"semantic_index_sources":sources,"stale_semantic_index_sources":stale,"semantic_index_nodes":nodes,"semantic_index_edges":edges,"semantic_index_formats":formats}))
+    let formats = grouped(
+        connection,
+        "SELECT format,COUNT(*) FROM semantic_sources GROUP BY format ORDER BY format",
+        "format",
+        "sources",
+    )?;
+    Ok(
+        json!({"semantic_index_sources":sources,"stale_semantic_index_sources":stale,"semantic_index_nodes":nodes,"semantic_index_edges":edges,"semantic_index_formats":formats}),
+    )
 }
 
-fn import_semantic_index(arguments: &[String], project: &Path, database: &Path) -> Result<Value, String> {
+fn import_semantic_index(
+    arguments: &[String],
+    project: &Path,
+    database: &Path,
+) -> Result<Value, String> {
     let path_raw = positional_after(arguments, "language", 1)?;
     let path = safe_project_or_absolute(project, path_raw, true)?;
     let format = option_value(arguments, "--format")?.unwrap_or_else(|| "auto".to_owned());
@@ -1010,7 +1421,15 @@ fn import_semantic_index(arguments: &[String], project: &Path, database: &Path) 
     let current_commit = option_value(arguments, "--current-commit")?.or_else(|| git_head(project));
     let allow_stale = has_flag(arguments, "--allow-stale");
     let source_name = option_value(arguments, "--source-name")?;
-    semantic_index_import(database, &path, &format, repository_commit.as_deref(), current_commit.as_deref(), allow_stale, source_name.as_deref())
+    semantic_index_import(
+        database,
+        &path,
+        &format,
+        repository_commit.as_deref(),
+        current_commit.as_deref(),
+        allow_stale,
+        source_name.as_deref(),
+    )
 }
 
 fn semantic_index_import(
@@ -1024,51 +1443,115 @@ fn semantic_index_import(
 ) -> Result<Value, String> {
     let raw = fs::read(path).map_err(|error| format!("SEMANTIC_INDEX_READ_FAILED:{error}"))?;
     let source_sha = sha256_hex(&raw);
-    let value = serde_json::from_slice::<Value>(&raw).map_err(|error| format!("SEMANTIC_INDEX_JSON_INVALID:{error}"))?;
+    let value = serde_json::from_slice::<Value>(&raw)
+        .map_err(|error| format!("SEMANTIC_INDEX_JSON_INVALID:{error}"))?;
     let normalized_format = if format == "auto" {
-        if value.get("documents").is_some() || value.get("metadata").is_some() { "scip-json" } else { "lsif" }
-    } else { format };
-    if !matches!(normalized_format, "lsif" | "scip-json") { return Err("SEMANTIC_INDEX_FORMAT_INVALID".to_owned()); }
+        if value.get("documents").is_some() || value.get("metadata").is_some() {
+            "scip-json"
+        } else {
+            "lsif"
+        }
+    } else {
+        format
+    };
+    if !matches!(normalized_format, "lsif" | "scip-json") {
+        return Err("SEMANTIC_INDEX_FORMAT_INVALID".to_owned());
+    }
     let index_commit = repository_commit.map(str::to_lowercase);
     let current = current_commit.map(str::to_lowercase);
-    let stale = index_commit.as_ref().zip(current.as_ref()).is_some_and(|(left,right)| left != right);
-    if stale && !allow_stale { return Err(format!("semantic index commit mismatch: index={} repository={}", index_commit.as_deref().unwrap_or(""), current.as_deref().unwrap_or(""))); }
-    let identity = source_name.map(str::to_owned).unwrap_or_else(|| path.to_string_lossy().into_owned());
-    let source_key = format!("semantic-source:{}", sha256_hex(format!("{}\0{}", normalized_format, identity).as_bytes()));
-    let mut connection = Connection::open(database).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
-    let transaction = connection.transaction().map_err(|error| format!("SEMANTIC_TRANSACTION_FAILED:{error}"))?;
+    let stale = index_commit
+        .as_ref()
+        .zip(current.as_ref())
+        .is_some_and(|(left, right)| left != right);
+    if stale && !allow_stale {
+        return Err(format!(
+            "semantic index commit mismatch: index={} repository={}",
+            index_commit.as_deref().unwrap_or(""),
+            current.as_deref().unwrap_or("")
+        ));
+    }
+    let identity = source_name
+        .map(str::to_owned)
+        .unwrap_or_else(|| path.to_string_lossy().into_owned());
+    let source_key = format!(
+        "semantic-source:{}",
+        sha256_hex(format!("{}\0{}", normalized_format, identity).as_bytes())
+    );
+    let mut connection = Connection::open(database)
+        .map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("SEMANTIC_TRANSACTION_FAILED:{error}"))?;
     remove_semantic_source_tx(&transaction, &source_key)?;
     let (nodes, edges) = extract_semantic_bundle(&value, normalized_format, &source_sha, stale)?;
     for node in &nodes {
-        let node_id = node["node_id"].as_str().ok_or_else(|| "SEMANTIC_NODE_ID_INVALID".to_owned())?;
-        let collision = transaction.query_row("SELECT 1 FROM nodes WHERE node_id=?", params![node_id], |_| Ok(())).optional().map_err(|error| format!("SEMANTIC_COLLISION_QUERY_FAILED:{error}"))?.is_some();
-        if collision { return Err(format!("semantic index node id collision: {node_id}")); }
+        let node_id = node["node_id"]
+            .as_str()
+            .ok_or_else(|| "SEMANTIC_NODE_ID_INVALID".to_owned())?;
+        let collision = transaction
+            .query_row(
+                "SELECT 1 FROM nodes WHERE node_id=?",
+                params![node_id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|error| format!("SEMANTIC_COLLISION_QUERY_FAILED:{error}"))?
+            .is_some();
+        if collision {
+            return Err(format!("semantic index node id collision: {node_id}"));
+        }
     }
     transaction.execute("INSERT INTO semantic_sources(source_key,source_name,source_path,format,source_sha256,repository_commit,current_commit,stale,imported_at,node_count,edge_count,diagnostics_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", params![source_key, source_name.unwrap_or_else(|| path.file_name().and_then(|value|value.to_str()).unwrap_or("index")), path.to_string_lossy(), normalized_format, source_sha, index_commit, current, if stale{1}else{0}, now_string(), nodes.len() as i64, edges.len() as i64, "[]"]).map_err(|error| format!("SEMANTIC_SOURCE_INSERT_FAILED:{error}"))?;
     for node in &nodes {
         transaction.execute("INSERT INTO nodes(node_id,path,kind,name,qualified_name,start_line,end_line,language,evidence_ref,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?)", params![node["node_id"].as_str(),node["path"].as_str(),node["kind"].as_str(),node["name"].as_str(),node["qualified_name"].as_str(),node["start_line"].as_i64(),node["end_line"].as_i64(),node["language"].as_str(),node["evidence_ref"].as_str(),metadata_json(node["metadata"].clone())?]).map_err(|error| format!("SEMANTIC_NODE_INSERT_FAILED:{error}"))?;
-        transaction.execute("INSERT INTO semantic_source_nodes(source_key,node_id) VALUES(?,?)", params![source_key,node["node_id"].as_str()]).map_err(|error| format!("SEMANTIC_SOURCE_NODE_INSERT_FAILED:{error}"))?;
+        transaction
+            .execute(
+                "INSERT INTO semantic_source_nodes(source_key,node_id) VALUES(?,?)",
+                params![source_key, node["node_id"].as_str()],
+            )
+            .map_err(|error| format!("SEMANTIC_SOURCE_NODE_INSERT_FAILED:{error}"))?;
     }
     for edge in &edges {
         transaction.execute("INSERT OR REPLACE INTO edges(source,target,edge_type,confidence,evidence_ref,metadata_json) VALUES(?,?,?,?,?,?)", params![edge["source"].as_str(),edge["target"].as_str(),edge["edge_type"].as_str(),edge["confidence"].as_f64(),edge["evidence_ref"].as_str(),metadata_json(edge["metadata"].clone())?]).map_err(|error| format!("SEMANTIC_EDGE_INSERT_FAILED:{error}"))?;
         transaction.execute("INSERT INTO semantic_source_edges(source_key,source,target,edge_type,evidence_ref) VALUES(?,?,?,?,?)", params![source_key,edge["source"].as_str(),edge["target"].as_str(),edge["edge_type"].as_str(),edge["evidence_ref"].as_str()]).map_err(|error| format!("SEMANTIC_SOURCE_EDGE_INSERT_FAILED:{error}"))?;
     }
-    transaction.commit().map_err(|error| format!("SEMANTIC_COMMIT_FAILED:{error}"))?;
+    transaction
+        .commit()
+        .map_err(|error| format!("SEMANTIC_COMMIT_FAILED:{error}"))?;
     refresh_search(database)?;
-    Ok(json!({"ok":true,"source_key":source_key,"format":normalized_format,"source_sha256":source_sha,"repository_commit":index_commit,"current_commit":current,"stale":stale,"evidence_status":if stale{"candidate-stale"}else{"exact"},"nodes":nodes.len(),"edges":edges.len(),"diagnostics":[]}))
+    Ok(
+        json!({"ok":true,"source_key":source_key,"format":normalized_format,"source_sha256":source_sha,"repository_commit":index_commit,"current_commit":current,"stale":stale,"evidence_status":if stale{"candidate-stale"}else{"exact"},"nodes":nodes.len(),"edges":edges.len(),"diagnostics":[]}),
+    )
 }
 
-fn extract_semantic_bundle(value: &Value, format: &str, source_sha: &str, stale: bool) -> Result<(Vec<Value>, Vec<Value>), String> {
+fn extract_semantic_bundle(
+    value: &Value,
+    format: &str,
+    source_sha: &str,
+    stale: bool,
+) -> Result<(Vec<Value>, Vec<Value>), String> {
     let mut nodes = Vec::<Value>::new();
     let mut edges = Vec::<Value>::new();
     if let Some(raw_nodes) = value.get("nodes").and_then(Value::as_array) {
         for (index, row) in raw_nodes.iter().enumerate() {
-            if !row.is_object() { continue; }
+            if !row.is_object() {
+                continue;
+            }
             let name = row["name"].as_str().unwrap_or("symbol");
             let path = row["path"].as_str().unwrap_or("");
-            let node_id = row["node_id"].as_str().map(str::to_owned).unwrap_or_else(|| format!("semantic:{}", sha256_hex(format!("{path}\0{name}\0{index}").as_bytes())));
+            let node_id = row["node_id"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| {
+                    format!(
+                        "semantic:{}",
+                        sha256_hex(format!("{path}\0{name}\0{index}").as_bytes())
+                    )
+                });
             let mut metadata = row["metadata"].clone();
-            if !metadata.is_object() { metadata=json!({}); }
+            if !metadata.is_object() {
+                metadata = json!({});
+            }
             metadata["semantic_source_sha256"] = Value::String(source_sha.to_owned());
             metadata["stale_semantic_index"] = Value::Bool(stale);
             metadata["exact_semantic"] = Value::Bool(!stale);
@@ -1077,15 +1560,23 @@ fn extract_semantic_bundle(value: &Value, format: &str, source_sha: &str, stale:
     } else if format == "scip-json" {
         if let Some(documents) = value.get("documents").and_then(Value::as_array) {
             for document in documents {
-                let path = document["relative_path"].as_str().or_else(||document["relativePath"].as_str()).unwrap_or("");
+                let path = document["relative_path"]
+                    .as_str()
+                    .or_else(|| document["relativePath"].as_str())
+                    .unwrap_or("");
                 if let Some(occurrences) = document["occurrences"].as_array() {
                     for (index, occurrence) in occurrences.iter().enumerate() {
                         let symbol = occurrence["symbol"].as_str().unwrap_or("");
-                        if symbol.is_empty() { continue; }
-                        let name = short_name(symbol).trim_matches(['`','.', '#']).to_owned();
+                        if symbol.is_empty() {
+                            continue;
+                        }
+                        let name = short_name(symbol).trim_matches(['`', '.', '#']).to_owned();
                         let range = occurrence["range"].as_array().cloned().unwrap_or_default();
                         let line = range.first().and_then(Value::as_i64).unwrap_or(0) + 1;
-                        let node_id = format!("scip:{}", sha256_hex(format!("{path}\0{symbol}\0{index}").as_bytes()));
+                        let node_id = format!(
+                            "scip:{}",
+                            sha256_hex(format!("{path}\0{symbol}\0{index}").as_bytes())
+                        );
                         nodes.push(json!({"node_id":node_id,"path":path,"kind":"symbol","name":name,"qualified_name":symbol,"start_line":line,"end_line":line,"language":Path::new(path).extension().and_then(|v|v.to_str()).unwrap_or("unknown"),"evidence_ref":format!("sha256:{source_sha}"),"metadata":{"source":"scip-json","exact_semantic":!stale,"stale_semantic_index":stale,"semantic_source_sha256":source_sha}}));
                     }
                 }
@@ -1094,68 +1585,520 @@ fn extract_semantic_bundle(value: &Value, format: &str, source_sha: &str, stale:
     }
     if let Some(raw_edges) = value.get("edges").and_then(Value::as_array) {
         for row in raw_edges {
-            let source = row["source"].as_str().unwrap_or(""); let target=row["target"].as_str().unwrap_or("");
-            if source.is_empty() || target.is_empty() { continue; }
+            let source = row["source"].as_str().unwrap_or("");
+            let target = row["target"].as_str().unwrap_or("");
+            if source.is_empty() || target.is_empty() {
+                continue;
+            }
             edges.push(json!({"source":source,"target":target,"edge_type":row["edge_type"].as_str().unwrap_or("references"),"confidence":if stale{row["confidence"].as_f64().unwrap_or(1.0).min(0.6)}else{row["confidence"].as_f64().unwrap_or(1.0)},"evidence_ref":row["evidence_ref"].as_str().unwrap_or("sha256:index"),"metadata":{"source":format,"exact_semantic":!stale,"stale_semantic_index":stale,"semantic_source_sha256":source_sha}}));
         }
     }
-    let ids = nodes.iter().filter_map(|node|node["node_id"].as_str()).collect::<BTreeSet<_>>();
-    edges.retain(|edge| edge["source"].as_str().is_some_and(|id|ids.contains(id)) && edge["target"].as_str().is_some_and(|id|ids.contains(id)));
-    Ok((nodes,edges))
+    let ids = nodes
+        .iter()
+        .filter_map(|node| node["node_id"].as_str())
+        .collect::<BTreeSet<_>>();
+    edges.retain(|edge| {
+        edge["source"].as_str().is_some_and(|id| ids.contains(id))
+            && edge["target"].as_str().is_some_and(|id| ids.contains(id))
+    });
+    Ok((nodes, edges))
 }
 
 fn remove_semantic_source(database: &Path, source_key: &str) -> Result<Value, String> {
-    let mut connection=Connection::open(database).map_err(|error|format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
-    let exists=connection.query_row("SELECT 1 FROM semantic_sources WHERE source_key=?",params![source_key],|_|Ok(())).optional().map_err(|error|format!("SEMANTIC_SOURCE_QUERY_FAILED:{error}"))?.is_some();
-    if !exists { return Ok(json!({"ok":true,"removed":false,"source_key":source_key})); }
-    let transaction=connection.transaction().map_err(|error|format!("SEMANTIC_REMOVE_TRANSACTION_FAILED:{error}"))?;
-    remove_semantic_source_tx(&transaction,source_key)?;
-    transaction.commit().map_err(|error|format!("SEMANTIC_REMOVE_COMMIT_FAILED:{error}"))?;
+    let mut connection = Connection::open(database)
+        .map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
+    let exists = connection
+        .query_row(
+            "SELECT 1 FROM semantic_sources WHERE source_key=?",
+            params![source_key],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(|error| format!("SEMANTIC_SOURCE_QUERY_FAILED:{error}"))?
+        .is_some();
+    if !exists {
+        return Ok(json!({"ok":true,"removed":false,"source_key":source_key}));
+    }
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("SEMANTIC_REMOVE_TRANSACTION_FAILED:{error}"))?;
+    remove_semantic_source_tx(&transaction, source_key)?;
+    transaction
+        .commit()
+        .map_err(|error| format!("SEMANTIC_REMOVE_COMMIT_FAILED:{error}"))?;
     refresh_search(database)?;
     Ok(json!({"ok":true,"removed":true,"source_key":source_key}))
 }
 
-fn remove_semantic_source_tx(connection:&Connection,source_key:&str)->Result<(),String>{
-    let nodes={let mut statement=connection.prepare("SELECT node_id FROM semantic_source_nodes WHERE source_key=?").map_err(|error|format!("SEMANTIC_REMOVE_NODE_PREPARE_FAILED:{error}"))?;let rows=statement.query_map(params![source_key],|row|row.get::<_,String>(0)).map_err(|error|format!("SEMANTIC_REMOVE_NODE_QUERY_FAILED:{error}"))?;rows.collect::<Result<Vec<_>,_>>().map_err(|error|format!("SEMANTIC_REMOVE_NODE_ROW_FAILED:{error}"))?};
-    let edges={let mut statement=connection.prepare("SELECT source,target,edge_type,evidence_ref FROM semantic_source_edges WHERE source_key=?").map_err(|error|format!("SEMANTIC_REMOVE_EDGE_PREPARE_FAILED:{error}"))?;let rows=statement.query_map(params![source_key],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,String>(3)?))).map_err(|error|format!("SEMANTIC_REMOVE_EDGE_QUERY_FAILED:{error}"))?;rows.collect::<Result<Vec<_>,_>>().map_err(|error|format!("SEMANTIC_REMOVE_EDGE_ROW_FAILED:{error}"))?};
-    for (source,target,edge_type,evidence_ref) in edges { connection.execute("DELETE FROM edges WHERE source=? AND target=? AND edge_type=? AND evidence_ref=?",params![source,target,edge_type,evidence_ref]).map_err(|error|format!("SEMANTIC_REMOVE_GRAPH_EDGE_FAILED:{error}"))?; }
-    for node in nodes { connection.execute("DELETE FROM nodes WHERE node_id=?",params![node]).map_err(|error|format!("SEMANTIC_REMOVE_GRAPH_NODE_FAILED:{error}"))?; }
-    connection.execute("DELETE FROM semantic_source_edges WHERE source_key=?",params![source_key]).map_err(|error|format!("SEMANTIC_REMOVE_OWNED_EDGES_FAILED:{error}"))?;
-    connection.execute("DELETE FROM semantic_source_nodes WHERE source_key=?",params![source_key]).map_err(|error|format!("SEMANTIC_REMOVE_OWNED_NODES_FAILED:{error}"))?;
-    connection.execute("DELETE FROM semantic_sources WHERE source_key=?",params![source_key]).map_err(|error|format!("SEMANTIC_REMOVE_SOURCE_FAILED:{error}"))?;
+fn remove_semantic_source_tx(connection: &Connection, source_key: &str) -> Result<(), String> {
+    let nodes = {
+        let mut statement = connection
+            .prepare("SELECT node_id FROM semantic_source_nodes WHERE source_key=?")
+            .map_err(|error| format!("SEMANTIC_REMOVE_NODE_PREPARE_FAILED:{error}"))?;
+        let rows = statement
+            .query_map(params![source_key], |row| row.get::<_, String>(0))
+            .map_err(|error| format!("SEMANTIC_REMOVE_NODE_QUERY_FAILED:{error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("SEMANTIC_REMOVE_NODE_ROW_FAILED:{error}"))?
+    };
+    let edges = {
+        let mut statement=connection.prepare("SELECT source,target,edge_type,evidence_ref FROM semantic_source_edges WHERE source_key=?").map_err(|error|format!("SEMANTIC_REMOVE_EDGE_PREPARE_FAILED:{error}"))?;
+        let rows = statement
+            .query_map(params![source_key], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|error| format!("SEMANTIC_REMOVE_EDGE_QUERY_FAILED:{error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("SEMANTIC_REMOVE_EDGE_ROW_FAILED:{error}"))?
+    };
+    for (source, target, edge_type, evidence_ref) in edges {
+        connection
+            .execute(
+                "DELETE FROM edges WHERE source=? AND target=? AND edge_type=? AND evidence_ref=?",
+                params![source, target, edge_type, evidence_ref],
+            )
+            .map_err(|error| format!("SEMANTIC_REMOVE_GRAPH_EDGE_FAILED:{error}"))?;
+    }
+    for node in nodes {
+        connection
+            .execute("DELETE FROM nodes WHERE node_id=?", params![node])
+            .map_err(|error| format!("SEMANTIC_REMOVE_GRAPH_NODE_FAILED:{error}"))?;
+    }
+    connection
+        .execute(
+            "DELETE FROM semantic_source_edges WHERE source_key=?",
+            params![source_key],
+        )
+        .map_err(|error| format!("SEMANTIC_REMOVE_OWNED_EDGES_FAILED:{error}"))?;
+    connection
+        .execute(
+            "DELETE FROM semantic_source_nodes WHERE source_key=?",
+            params![source_key],
+        )
+        .map_err(|error| format!("SEMANTIC_REMOVE_OWNED_NODES_FAILED:{error}"))?;
+    connection
+        .execute(
+            "DELETE FROM semantic_sources WHERE source_key=?",
+            params![source_key],
+        )
+        .map_err(|error| format!("SEMANTIC_REMOVE_SOURCE_FAILED:{error}"))?;
     Ok(())
 }
 
-fn semantic_import(arguments:&[String],project:&Path,database:&Path,unified:&Path)->Result<Value,String>{
-    let format=positional_after(arguments,"semantic-import",0)?;
-    let raw_path=positional_after(arguments,"semantic-import",1)?;
-    let path=safe_project_or_absolute(project,raw_path,true)?;
-    let repository_commit=option_value(arguments,"--repository-commit")?.unwrap_or_else(||"unknown".to_owned());
-    let allow_stale=has_flag(arguments,"--allow-stale");
+fn semantic_import(
+    arguments: &[String],
+    project: &Path,
+    database: &Path,
+    unified: &Path,
+) -> Result<Value, String> {
+    let format = positional_after(arguments, "semantic-import", 0)?;
+    let raw_path = positional_after(arguments, "semantic-import", 1)?;
+    let path = safe_project_or_absolute(project, raw_path, true)?;
+    let repository_commit =
+        option_value(arguments, "--repository-commit")?.unwrap_or_else(|| "unknown".to_owned());
+    let allow_stale = has_flag(arguments, "--allow-stale");
     match format {
-        "lsif"|"scip-json"=>semantic_index_import(database,&path,format,Some(&repository_commit),git_head(project).as_deref(),allow_stale,None),
-        "coverage"=>{let value=serde_json::from_slice::<Value>(&fs::read(&path).map_err(|error|format!("RUNTIME_EVIDENCE_COVERAGE_READ_FAILED:{error}"))?).map_err(|error|format!("RUNTIME_EVIDENCE_COVERAGE_JSON_INVALID:{error}"))?;let test_id=option_value(arguments,"--test-id")?.unwrap_or_else(||"coverage-suite".to_owned());runtime_import_coverage(unified,&value,&test_id,&repository_commit)},
-        "trace"=>{let value=serde_json::from_slice::<Value>(&fs::read(&path).map_err(|error|format!("RUNTIME_EVIDENCE_TRACE_READ_FAILED:{error}"))?).map_err(|error|format!("RUNTIME_EVIDENCE_TRACE_JSON_INVALID:{error}"))?;let spans=value.get("spans").unwrap_or(&value).as_array().ok_or_else(||"trace import requires a list or {'spans': [...]} object".to_owned())?;runtime_import_trace(unified,spans,&repository_commit)},
-        _=>Err("SEMANTIC_IMPORT_FORMAT_INVALID".to_owned()),
+        "lsif" | "scip-json" => semantic_index_import(
+            database,
+            &path,
+            format,
+            Some(&repository_commit),
+            git_head(project).as_deref(),
+            allow_stale,
+            None,
+        ),
+        "coverage" => {
+            let value = serde_json::from_slice::<Value>(
+                &fs::read(&path)
+                    .map_err(|error| format!("RUNTIME_EVIDENCE_COVERAGE_READ_FAILED:{error}"))?,
+            )
+            .map_err(|error| format!("RUNTIME_EVIDENCE_COVERAGE_JSON_INVALID:{error}"))?;
+            let test_id = option_value(arguments, "--test-id")?
+                .unwrap_or_else(|| "coverage-suite".to_owned());
+            runtime_import_coverage(unified, &value, &test_id, &repository_commit)
+        }
+        "trace" => {
+            let value = serde_json::from_slice::<Value>(
+                &fs::read(&path)
+                    .map_err(|error| format!("RUNTIME_EVIDENCE_TRACE_READ_FAILED:{error}"))?,
+            )
+            .map_err(|error| format!("RUNTIME_EVIDENCE_TRACE_JSON_INVALID:{error}"))?;
+            let spans = value
+                .get("spans")
+                .unwrap_or(&value)
+                .as_array()
+                .ok_or_else(|| {
+                    "trace import requires a list or {'spans': [...]} object".to_owned()
+                })?;
+            runtime_import_trace(unified, spans, &repository_commit)
+        }
+        _ => Err("SEMANTIC_IMPORT_FORMAT_INVALID".to_owned()),
     }
 }
 
-fn runtime_evidence_database(unified:&Path)->PathBuf{unified.join("runtime-evidence.sqlite3")}
-fn initialize_runtime_evidence(path:&Path)->Result<(),String>{let connection=Connection::open(path).map_err(|error|format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;connection.execute_batch("PRAGMA journal_mode=WAL;CREATE TABLE IF NOT EXISTS nodes(node_id TEXT PRIMARY KEY,kind TEXT NOT NULL,label TEXT NOT NULL,source TEXT NOT NULL,confidence REAL NOT NULL,repository_commit TEXT NOT NULL,metadata_json TEXT NOT NULL);CREATE TABLE IF NOT EXISTS edges(evidence TEXT PRIMARY KEY,source TEXT NOT NULL,target TEXT NOT NULL,relation TEXT NOT NULL,confidence REAL NOT NULL,repository_commit TEXT NOT NULL,observed_at TEXT NOT NULL,metadata_json TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_evidence_source ON edges(source,relation);CREATE INDEX IF NOT EXISTS idx_evidence_target ON edges(target,relation);").map_err(|error|format!("RUNTIME_EVIDENCE_INIT_FAILED:{error}"))?;Ok(())}
-fn evidence_node_id(kind:&str,label:&str,source:&str)->String{sha256_hex(format!("{kind}\0{label}\0{source}").as_bytes())}
-fn put_evidence_node(connection:&Connection,kind:&str,label:&str,source:&str,commit:&str,confidence:f64,metadata:Value)->Result<Value,String>{let id=evidence_node_id(kind,label,source);connection.execute("INSERT OR REPLACE INTO nodes(node_id,kind,label,source,confidence,repository_commit,metadata_json) VALUES(?,?,?,?,?,?,?)",params![id,kind,label,source,confidence.clamp(0.0,1.0),commit,metadata_json(metadata.clone())?]).map_err(|error|format!("RUNTIME_EVIDENCE_NODE_INSERT_FAILED:{error}"))?;Ok(json!({"node_id":id,"kind":kind,"label":label,"source":source,"confidence":confidence.clamp(0.0,1.0),"repository_commit":commit,"metadata":metadata}))}
-fn put_evidence_edge(connection:&Connection,source:&str,target:&str,relation:&str,commit:&str,confidence:f64,metadata:Value)->Result<(),String>{let body=sort_json(&json!({"source":source,"target":target,"relation":relation,"repository_commit":commit,"metadata":metadata}));let evidence=format!("sha256:{}",sha256_hex(serde_json::to_string(&body).map_err(|error|format!("RUNTIME_EVIDENCE_BODY_JSON_FAILED:{error}"))?.as_bytes()));connection.execute("INSERT OR REPLACE INTO edges(evidence,source,target,relation,confidence,repository_commit,observed_at,metadata_json) VALUES(?,?,?,?,?,?,?,?)",params![evidence,source,target,relation,confidence.clamp(0.0,1.0),commit,now_string(),metadata_json(metadata)?]).map_err(|error|format!("RUNTIME_EVIDENCE_EDGE_INSERT_FAILED:{error}"))?;Ok(())}
-fn runtime_import_coverage(unified:&Path,value:&Value,test_id:&str,commit:&str)->Result<Value,String>{let path=runtime_evidence_database(unified);initialize_runtime_evidence(&path)?;let connection=Connection::open(path).map_err(|error|format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;let files=value["files"].as_object().ok_or_else(||"coverage document must contain a files object".to_owned())?;let test=put_evidence_node(&connection,"test",test_id,"coverage",commit,1.0,json!({}))?;let test_node=test["node_id"].as_str().unwrap_or_default().to_owned();let mut imported=0;for(filename,details)in files{let Some(details)=details.as_object()else{continue};let file=put_evidence_node(&connection,"file",filename,"coverage",commit,1.0,json!({}))?;put_evidence_edge(&connection,&test_node,file["node_id"].as_str().unwrap_or_default(),"COVERS",commit,1.0,json!({"executed_lines":details.get("executed_lines").cloned().unwrap_or_else(||json!([])),"missing_lines":details.get("missing_lines").cloned().unwrap_or_else(||json!([]))}))?;imported+=1;}Ok(json!({"ok":true,"files":imported,"test":test}))}
-fn runtime_import_trace(unified:&Path,spans:&[Value],commit:&str)->Result<Value,String>{let path=runtime_evidence_database(unified);initialize_runtime_evidence(&path)?;let connection=Connection::open(path).map_err(|error|format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;let mut imported=0;for span in spans{let source=span["source"].as_str().unwrap_or("").trim();let target=span["target"].as_str().unwrap_or("").trim();if source.is_empty()||target.is_empty(){continue}let source_node=put_evidence_node(&connection,span["source_kind"].as_str().unwrap_or("runtime-symbol"),source,"trace",commit,1.0,json!({}))?;let target_node=put_evidence_node(&connection,span["target_kind"].as_str().unwrap_or("runtime-symbol"),target,"trace",commit,1.0,json!({}))?;let mut metadata=span.clone();if let Value::Object(map)=&mut metadata{map.remove("source");map.remove("target");}put_evidence_edge(&connection,source_node["node_id"].as_str().unwrap_or_default(),target_node["node_id"].as_str().unwrap_or_default(),span["relation"].as_str().unwrap_or("RUNTIME_CALL"),commit,span["confidence"].as_f64().unwrap_or(1.0),metadata)?;imported+=1;}Ok(json!({"ok":true,"spans":imported}))}
-fn runtime_evidence_stats(unified:&Path)->Result<Value,String>{let path=runtime_evidence_database(unified);initialize_runtime_evidence(&path)?;let connection=Connection::open(path).map_err(|error|format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;let nodes=scalar_i64(&connection,"SELECT COUNT(*) FROM nodes")?;let edges=scalar_i64(&connection,"SELECT COUNT(*) FROM edges")?;let relations=grouped(&connection,"SELECT relation,COUNT(*) FROM edges GROUP BY relation ORDER BY relation","relation","count")?;Ok(json!({"ok":true,"nodes":nodes,"edges":edges,"relations":relations}))}
-fn runtime_evidence_neighbors(arguments:&[String],unified:&Path)->Result<Value,String>{let node_id=positional_after(arguments,"evidence-neighbors",0)?;let relation=option_value(arguments,"--relation")?;let reverse=has_flag(arguments,"--reverse");let path=runtime_evidence_database(unified);initialize_runtime_evidence(&path)?;let connection=Connection::open(path).map_err(|error|format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;let(direction,other)=if reverse{("target","source")}else{("source","target")};let sql=if relation.is_some(){format!("SELECT evidence,source,target,relation,confidence,repository_commit,observed_at,metadata_json FROM edges WHERE {direction}=? AND relation=? ORDER BY observed_at DESC")}else{format!("SELECT evidence,source,target,relation,confidence,repository_commit,observed_at,metadata_json FROM edges WHERE {direction}=? ORDER BY observed_at DESC")};let mut statement=connection.prepare(&sql).map_err(|error|format!("RUNTIME_EVIDENCE_NEIGHBOR_PREPARE_FAILED:{error}"))?;let collect=|row:&rusqlite::Row<'_>|->rusqlite::Result<(String,String,String,String,f64,String,String,String)>{Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?,row.get(6)?,row.get(7)?))};let mut rows=Vec::new();if let Some(relation)=relation{for row in statement.query_map(params![node_id,relation],collect).map_err(|error|format!("RUNTIME_EVIDENCE_NEIGHBOR_QUERY_FAILED:{error}"))?{rows.push(row.map_err(|error|format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?);}}else{for row in statement.query_map(params![node_id],collect).map_err(|error|format!("RUNTIME_EVIDENCE_NEIGHBOR_QUERY_FAILED:{error}"))?{rows.push(row.map_err(|error|format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?);}}let mut output=Vec::new();for(evidence,source,target,relation,confidence,commit,observed,metadata_json)in rows{let linked=if other=="source"{&source}else{&target};let node=connection.query_row("SELECT node_id,kind,label,source,confidence,repository_commit,metadata_json FROM nodes WHERE node_id=?",params![linked],|row|Ok(json!({"node_id":row.get::<_,String>(0)?,"kind":row.get::<_,String>(1)?,"label":row.get::<_,String>(2)?,"source":row.get::<_,String>(3)?,"confidence":row.get::<_,f64>(4)?,"repository_commit":row.get::<_,String>(5)?,"metadata_json":row.get::<_,String>(6)?}))).optional().map_err(|error|format!("RUNTIME_EVIDENCE_LINKED_QUERY_FAILED:{error}"))?;output.push(json!({"evidence":evidence,"source":source,"target":target,"relation":relation,"confidence":confidence,"repository_commit":commit,"observed_at":observed,"metadata":serde_json::from_str::<Value>(&metadata_json).unwrap_or_else(|_|json!({})),"node":node}));}Ok(json!({"ok":true,"neighbors":output}))}
+fn runtime_evidence_database(unified: &Path) -> PathBuf {
+    unified.join("runtime-evidence.sqlite3")
+}
+fn initialize_runtime_evidence(path: &Path) -> Result<(), String> {
+    let connection =
+        Connection::open(path).map_err(|error| format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;
+    connection.execute_batch("PRAGMA journal_mode=WAL;CREATE TABLE IF NOT EXISTS nodes(node_id TEXT PRIMARY KEY,kind TEXT NOT NULL,label TEXT NOT NULL,source TEXT NOT NULL,confidence REAL NOT NULL,repository_commit TEXT NOT NULL,metadata_json TEXT NOT NULL);CREATE TABLE IF NOT EXISTS edges(evidence TEXT PRIMARY KEY,source TEXT NOT NULL,target TEXT NOT NULL,relation TEXT NOT NULL,confidence REAL NOT NULL,repository_commit TEXT NOT NULL,observed_at TEXT NOT NULL,metadata_json TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_evidence_source ON edges(source,relation);CREATE INDEX IF NOT EXISTS idx_evidence_target ON edges(target,relation);").map_err(|error|format!("RUNTIME_EVIDENCE_INIT_FAILED:{error}"))?;
+    Ok(())
+}
+fn evidence_node_id(kind: &str, label: &str, source: &str) -> String {
+    sha256_hex(format!("{kind}\0{label}\0{source}").as_bytes())
+}
+fn put_evidence_node(
+    connection: &Connection,
+    kind: &str,
+    label: &str,
+    source: &str,
+    commit: &str,
+    confidence: f64,
+    metadata: Value,
+) -> Result<Value, String> {
+    let id = evidence_node_id(kind, label, source);
+    connection.execute("INSERT OR REPLACE INTO nodes(node_id,kind,label,source,confidence,repository_commit,metadata_json) VALUES(?,?,?,?,?,?,?)",params![id,kind,label,source,confidence.clamp(0.0,1.0),commit,metadata_json(metadata.clone())?]).map_err(|error|format!("RUNTIME_EVIDENCE_NODE_INSERT_FAILED:{error}"))?;
+    Ok(
+        json!({"node_id":id,"kind":kind,"label":label,"source":source,"confidence":confidence.clamp(0.0,1.0),"repository_commit":commit,"metadata":metadata}),
+    )
+}
+fn put_evidence_edge(
+    connection: &Connection,
+    source: &str,
+    target: &str,
+    relation: &str,
+    commit: &str,
+    confidence: f64,
+    metadata: Value,
+) -> Result<(), String> {
+    let body = sort_json(
+        &json!({"source":source,"target":target,"relation":relation,"repository_commit":commit,"metadata":metadata}),
+    );
+    let evidence = format!(
+        "sha256:{}",
+        sha256_hex(
+            serde_json::to_string(&body)
+                .map_err(|error| format!("RUNTIME_EVIDENCE_BODY_JSON_FAILED:{error}"))?
+                .as_bytes()
+        )
+    );
+    connection.execute("INSERT OR REPLACE INTO edges(evidence,source,target,relation,confidence,repository_commit,observed_at,metadata_json) VALUES(?,?,?,?,?,?,?,?)",params![evidence,source,target,relation,confidence.clamp(0.0,1.0),commit,now_string(),metadata_json(metadata)?]).map_err(|error|format!("RUNTIME_EVIDENCE_EDGE_INSERT_FAILED:{error}"))?;
+    Ok(())
+}
+fn runtime_import_coverage(
+    unified: &Path,
+    value: &Value,
+    test_id: &str,
+    commit: &str,
+) -> Result<Value, String> {
+    let path = runtime_evidence_database(unified);
+    initialize_runtime_evidence(&path)?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;
+    let files = value["files"]
+        .as_object()
+        .ok_or_else(|| "coverage document must contain a files object".to_owned())?;
+    let test = put_evidence_node(
+        &connection,
+        "test",
+        test_id,
+        "coverage",
+        commit,
+        1.0,
+        json!({}),
+    )?;
+    let test_node = test["node_id"].as_str().unwrap_or_default().to_owned();
+    let mut imported = 0;
+    for (filename, details) in files {
+        let Some(details) = details.as_object() else {
+            continue;
+        };
+        let file = put_evidence_node(
+            &connection,
+            "file",
+            filename,
+            "coverage",
+            commit,
+            1.0,
+            json!({}),
+        )?;
+        put_evidence_edge(
+            &connection,
+            &test_node,
+            file["node_id"].as_str().unwrap_or_default(),
+            "COVERS",
+            commit,
+            1.0,
+            json!({"executed_lines":details.get("executed_lines").cloned().unwrap_or_else(||json!([])),"missing_lines":details.get("missing_lines").cloned().unwrap_or_else(||json!([]))}),
+        )?;
+        imported += 1;
+    }
+    Ok(json!({"ok":true,"files":imported,"test":test}))
+}
+fn runtime_import_trace(unified: &Path, spans: &[Value], commit: &str) -> Result<Value, String> {
+    let path = runtime_evidence_database(unified);
+    initialize_runtime_evidence(&path)?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;
+    let mut imported = 0;
+    for span in spans {
+        let source = span["source"].as_str().unwrap_or("").trim();
+        let target = span["target"].as_str().unwrap_or("").trim();
+        if source.is_empty() || target.is_empty() {
+            continue;
+        }
+        let source_node = put_evidence_node(
+            &connection,
+            span["source_kind"].as_str().unwrap_or("runtime-symbol"),
+            source,
+            "trace",
+            commit,
+            1.0,
+            json!({}),
+        )?;
+        let target_node = put_evidence_node(
+            &connection,
+            span["target_kind"].as_str().unwrap_or("runtime-symbol"),
+            target,
+            "trace",
+            commit,
+            1.0,
+            json!({}),
+        )?;
+        let mut metadata = span.clone();
+        if let Value::Object(map) = &mut metadata {
+            map.remove("source");
+            map.remove("target");
+        }
+        put_evidence_edge(
+            &connection,
+            source_node["node_id"].as_str().unwrap_or_default(),
+            target_node["node_id"].as_str().unwrap_or_default(),
+            span["relation"].as_str().unwrap_or("RUNTIME_CALL"),
+            commit,
+            span["confidence"].as_f64().unwrap_or(1.0),
+            metadata,
+        )?;
+        imported += 1;
+    }
+    Ok(json!({"ok":true,"spans":imported}))
+}
+fn runtime_evidence_stats(unified: &Path) -> Result<Value, String> {
+    let path = runtime_evidence_database(unified);
+    initialize_runtime_evidence(&path)?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;
+    let nodes = scalar_i64(&connection, "SELECT COUNT(*) FROM nodes")?;
+    let edges = scalar_i64(&connection, "SELECT COUNT(*) FROM edges")?;
+    let relations = grouped(
+        &connection,
+        "SELECT relation,COUNT(*) FROM edges GROUP BY relation ORDER BY relation",
+        "relation",
+        "count",
+    )?;
+    Ok(json!({"ok":true,"nodes":nodes,"edges":edges,"relations":relations}))
+}
+fn runtime_evidence_neighbors(arguments: &[String], unified: &Path) -> Result<Value, String> {
+    let node_id = positional_after(arguments, "evidence-neighbors", 0)?;
+    let relation = option_value(arguments, "--relation")?;
+    let reverse = has_flag(arguments, "--reverse");
+    let path = runtime_evidence_database(unified);
+    initialize_runtime_evidence(&path)?;
+    let connection =
+        Connection::open(path).map_err(|error| format!("RUNTIME_EVIDENCE_OPEN_FAILED:{error}"))?;
+    let (direction, other) = if reverse {
+        ("target", "source")
+    } else {
+        ("source", "target")
+    };
+    let sql = if relation.is_some() {
+        format!("SELECT evidence,source,target,relation,confidence,repository_commit,observed_at,metadata_json FROM edges WHERE {direction}=? AND relation=? ORDER BY observed_at DESC")
+    } else {
+        format!("SELECT evidence,source,target,relation,confidence,repository_commit,observed_at,metadata_json FROM edges WHERE {direction}=? ORDER BY observed_at DESC")
+    };
+    let mut statement = connection
+        .prepare(&sql)
+        .map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_PREPARE_FAILED:{error}"))?;
+    let collect = |row: &rusqlite::Row<'_>| -> rusqlite::Result<(
+        String,
+        String,
+        String,
+        String,
+        f64,
+        String,
+        String,
+        String,
+    )> {
+        Ok((
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            row.get(4)?,
+            row.get(5)?,
+            row.get(6)?,
+            row.get(7)?,
+        ))
+    };
+    let mut rows = Vec::new();
+    if let Some(relation) = relation {
+        for row in statement
+            .query_map(params![node_id, relation], collect)
+            .map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_QUERY_FAILED:{error}"))?
+        {
+            rows.push(
+                row.map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?,
+            );
+        }
+    } else {
+        for row in statement
+            .query_map(params![node_id], collect)
+            .map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_QUERY_FAILED:{error}"))?
+        {
+            rows.push(
+                row.map_err(|error| format!("RUNTIME_EVIDENCE_NEIGHBOR_ROW_FAILED:{error}"))?,
+            );
+        }
+    }
+    let mut output = Vec::new();
+    for (evidence, source, target, relation, confidence, commit, observed, metadata_json) in rows {
+        let linked = if other == "source" { &source } else { &target };
+        let node=connection.query_row("SELECT node_id,kind,label,source,confidence,repository_commit,metadata_json FROM nodes WHERE node_id=?",params![linked],|row|Ok(json!({"node_id":row.get::<_,String>(0)?,"kind":row.get::<_,String>(1)?,"label":row.get::<_,String>(2)?,"source":row.get::<_,String>(3)?,"confidence":row.get::<_,f64>(4)?,"repository_commit":row.get::<_,String>(5)?,"metadata_json":row.get::<_,String>(6)?}))).optional().map_err(|error|format!("RUNTIME_EVIDENCE_LINKED_QUERY_FAILED:{error}"))?;
+        output.push(json!({"evidence":evidence,"source":source,"target":target,"relation":relation,"confidence":confidence,"repository_commit":commit,"observed_at":observed,"metadata":serde_json::from_str::<Value>(&metadata_json).unwrap_or_else(|_|json!({})),"node":node}));
+    }
+    Ok(json!({"ok":true,"neighbors":output}))
+}
 
-fn safe_project_path(project:&Path,value:&str,must_exist:bool)->Result<PathBuf,String>{let root=fs::canonicalize(project).map_err(|error|format!("GRAPH_PROJECT_RESOLVE_FAILED:{error}"))?;let candidate=Path::new(value);let joined=if candidate.is_absolute(){candidate.to_path_buf()}else{root.join(candidate)};let resolved=if must_exist{fs::canonicalize(&joined).map_err(|error|format!("GRAPH_PATH_RESOLVE_FAILED:{error}"))?}else{joined};if !resolved.starts_with(&root){return Err("language detection path escapes project".to_owned())}Ok(resolved)}
-fn safe_project_or_absolute(project:&Path,value:&str,must_exist:bool)->Result<PathBuf,String>{let candidate=Path::new(value);if candidate.is_absolute(){return if must_exist{fs::canonicalize(candidate).map_err(|error|format!("GRAPH_PATH_RESOLVE_FAILED:{error}"))}else{Ok(candidate.to_path_buf())}}safe_project_path(project,value,must_exist)}
-fn git_head(project:&Path)->Option<String>{let output=Command::new("git").args(["-C",project.to_str()?,"rev-parse","HEAD"]).output().ok()?;if !output.status.success(){return None}let value=String::from_utf8(output.stdout).ok()?.trim().to_lowercase();(value.len()==40&&value.bytes().all(|byte|byte.is_ascii_hexdigit())).then_some(value)}
-fn has_flag(arguments:&[String],flag:&str)->bool{arguments.iter().any(|value|value==flag)}
-fn option_value(arguments:&[String],flag:&str)->Result<Option<String>,String>{let mut value=None;let mut index=0;while index<arguments.len(){let current=&arguments[index];let found=if current==flag{index+=1;Some(arguments.get(index).ok_or_else(||format!("{flag}_VALUE_MISSING"))?.clone())}else{current.strip_prefix(flag).and_then(|tail|tail.strip_prefix('=')).map(str::to_owned)};if let Some(found)=found{if value.is_some(){return Err(format!("{flag}_DUPLICATE"))}value=Some(found);}index+=1;}Ok(value)}
-fn option_i64(arguments:&[String],flag:&str,default:i64)->Result<i64,String>{option_value(arguments,flag)?.map(|value|value.parse::<i64>().map_err(|_|format!("{flag}_INVALID"))).transpose().map(|value|value.unwrap_or(default))}
-fn action_position(arguments:&[String],action:&str)->Result<usize,String>{arguments.windows(2).position(|row|row[0]=="run"&&row[1]==action).map(|index|index+2).ok_or_else(||format!("GRAPH_ACTION_NOT_FOUND:{action}"))}
-fn positional_after<'a>(arguments:&'a[String],action:&str,position:usize)->Result<&'a str,String>{let mut index=action_position(arguments,action)?;let value_flags=["--max-file-bytes","--limit","--max-depth","--format","--repository-commit","--current-commit","--source-name","--test-id","--relation"];
-let mut values=Vec::<&str>::new();while index<arguments.len(){let current=&arguments[index];if value_flags.contains(&current.as_str()){index+=2;continue}if current.starts_with("--"){index+=1;continue}values.push(current);index+=1;}values.get(position).copied().ok_or_else(||format!("GRAPH_POSITIONAL_MISSING:{action}:{position}"))}
+fn safe_project_path(project: &Path, value: &str, must_exist: bool) -> Result<PathBuf, String> {
+    let root = fs::canonicalize(project)
+        .map_err(|error| format!("GRAPH_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let candidate = Path::new(value);
+    let joined = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        root.join(candidate)
+    };
+    let resolved = if must_exist {
+        fs::canonicalize(&joined).map_err(|error| format!("GRAPH_PATH_RESOLVE_FAILED:{error}"))?
+    } else {
+        joined
+    };
+    if !resolved.starts_with(&root) {
+        return Err("language detection path escapes project".to_owned());
+    }
+    Ok(resolved)
+}
+fn safe_project_or_absolute(
+    project: &Path,
+    value: &str,
+    must_exist: bool,
+) -> Result<PathBuf, String> {
+    let candidate = Path::new(value);
+    if candidate.is_absolute() {
+        return if must_exist {
+            fs::canonicalize(candidate)
+                .map_err(|error| format!("GRAPH_PATH_RESOLVE_FAILED:{error}"))
+        } else {
+            Ok(candidate.to_path_buf())
+        };
+    }
+    safe_project_path(project, value, must_exist)
+}
+fn git_head(project: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .args(["-C", project.to_str()?, "rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(output.stdout).ok()?.trim().to_lowercase();
+    (value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(value)
+}
+fn has_flag(arguments: &[String], flag: &str) -> bool {
+    arguments.iter().any(|value| value == flag)
+}
+fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
+    let mut value = None;
+    let mut index = 0;
+    while index < arguments.len() {
+        let current = &arguments[index];
+        let found = if current == flag {
+            index += 1;
+            Some(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
+                    .clone(),
+            )
+        } else {
+            current
+                .strip_prefix(flag)
+                .and_then(|tail| tail.strip_prefix('='))
+                .map(str::to_owned)
+        };
+        if let Some(found) = found {
+            if value.is_some() {
+                return Err(format!("{flag}_DUPLICATE"));
+            }
+            value = Some(found);
+        }
+        index += 1;
+    }
+    Ok(value)
+}
+fn option_i64(arguments: &[String], flag: &str, default: i64) -> Result<i64, String> {
+    option_value(arguments, flag)?
+        .map(|value| value.parse::<i64>().map_err(|_| format!("{flag}_INVALID")))
+        .transpose()
+        .map(|value| value.unwrap_or(default))
+}
+fn action_position(arguments: &[String], action: &str) -> Result<usize, String> {
+    arguments
+        .windows(2)
+        .position(|row| row[0] == "run" && row[1] == action)
+        .map(|index| index + 2)
+        .ok_or_else(|| format!("GRAPH_ACTION_NOT_FOUND:{action}"))
+}
+fn positional_after<'a>(
+    arguments: &'a [String],
+    action: &str,
+    position: usize,
+) -> Result<&'a str, String> {
+    let mut index = action_position(arguments, action)?;
+    let value_flags = [
+        "--max-file-bytes",
+        "--limit",
+        "--max-depth",
+        "--format",
+        "--repository-commit",
+        "--current-commit",
+        "--source-name",
+        "--test-id",
+        "--relation",
+    ];
+    let mut values = Vec::<&str>::new();
+    while index < arguments.len() {
+        let current = &arguments[index];
+        if value_flags.contains(&current.as_str()) {
+            index += 2;
+            continue;
+        }
+        if current.starts_with("--") {
+            index += 1;
+            continue;
+        }
+        values.push(current);
+        index += 1;
+    }
+    values
+        .get(position)
+        .copied()
+        .ok_or_else(|| format!("GRAPH_POSITIONAL_MISSING:{action}:{position}"))
+}
