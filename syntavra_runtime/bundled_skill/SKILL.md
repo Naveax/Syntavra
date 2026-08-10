@@ -25,7 +25,9 @@ Syntavra augments the active coding agent; it is not a replacement agent. Correc
 
 ## Codex MCP-controlled execution contract
 
-Codex supports MCP and background jobs but does not provide Syntavra pre-tool hooks or host result replacement. At the start of repository work, call `syntavra.status` and compare `details.project_root` with the active workspace's canonical repository root. If they differ, fail closed and do not use Syntavra repository-retrieval or process-execution tools until the integration is repaired/restarted for the correct workspace.
+Codex supports MCP and background jobs but does not provide Syntavra pre-tool hooks or host result replacement. Repository identity must not be inherited from the MCP process working directory.
+
+At the start of repository work, call `syntavra.project.bind` with the active workspace's canonical Git root. Project-scoped installs are already bound, but the call is idempotent. Then call `syntavra.status` and require `details.project_root` to match the active workspace. On mismatch, fail closed and do not use Syntavra repository-retrieval or process-execution tools.
 
 For long-running build, test, lint or analysis commands, use `syntavra.process.submit` when the current user request authorizes command execution and include `_syntavra_authorization: {"user_authorized": true, "exact_evidence": true}`. After `JOB_ACCEPTED`, do not execute the original command again; read `syntavra.process.completions` instead of shell-polling.
 
