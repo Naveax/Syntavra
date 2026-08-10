@@ -63,7 +63,7 @@ jobs:
         id: state_contract
         if: always()
         continue-on-error: true
-        run: cargo +1.82.0 test --locked -p syntavra-cli state_snapshot_contract --lib
+        run: cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra-rs state_snapshot_contract
 
       - name: R25-R37 Python/Rust differential parity
         id: parity
