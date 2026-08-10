@@ -13,7 +13,7 @@ CODEX_CONFIG_PATH = ".codex/config.toml"
 CODEX_SKILL_PATH = ".agents/skills/syntavra"
 MANAGED_START = "# SYNTAVRA-MANAGED-MCP-START"
 MANAGED_END = "# SYNTAVRA-MANAGED-MCP-END"
-_TABLE_RE = re.compile(r"^\s*\[([^\[\]]+)\]\s*(?:#.*)?$")
+_TABLE_RE = re.compile(r"^\s*(\[\[?)(.+?)(\]\]?)\s*(?:#.*)?$")
 
 
 def _normalize_table_name(value: str) -> str:
@@ -33,7 +33,7 @@ def strip_syntavra_tables(text: str) -> str:
     for line in text.splitlines():
         match = _TABLE_RE.match(line)
         if match:
-            name = _normalize_table_name(match.group(1))
+            name = _normalize_table_name(match.group(2))
             skipping = name == "mcp_servers.syntavra" or name.startswith("mcp_servers.syntavra.")
         if not skipping:
             output.append(line)
