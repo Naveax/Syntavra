@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -16,6 +17,9 @@ from syntavra_runtime.optimization_modes import SavingsLedger, render_statusline
 from syntavra_runtime.runtime_paths import default_state_root, discover_project_root
 from syntavra_runtime.tool_registry import MINIMAL_TOOLS
 from syntavra_runtime.zero_friction import ZeroFrictionManager
+
+
+BRIDGE_ARGS = ["-m", "syntavra_runtime.codex_mcp_bridge"]
 
 
 class CodexIntegrationRegressionTests(unittest.TestCase):
@@ -89,7 +93,7 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertIn(".agents", spec.project_markers)
         self.assertIn(".agents", spec.user_markers)
 
-    def test_user_scope_codex_mcp_is_dynamic_and_uses_current_toml_and_skill_paths(self) -> None:
+    def test_user_scope_codex_mcp_is_dynamic_and_uses_workspace_bridge(self) -> None:
         codex_dir = self.home / ".codex"
         codex_dir.mkdir(parents=True)
         (codex_dir / "config.toml").write_text(
@@ -105,10 +109,10 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(config["model"], "test-model")
         self.assertEqual(config["mcp_servers"]["other"]["command"], "other")
         entry = config["mcp_servers"]["syntavra"]
+        self.assertEqual(entry["command"], sys.executable)
+        self.assertEqual(entry["args"], BRIDGE_ARGS)
         self.assertNotIn("cwd", entry)
         self.assertNotIn("SYNTAVRA_PROJECT", entry.get("env", {}))
-        self.assertNotIn(str(self.project), entry.get("args", []))
-        self.assertEqual(entry["args"][-2:], ["mcp", "serve"])
         self.assertTrue((self.home / ".agents" / "skills" / "syntavra" / "SKILL.md").is_file())
         self.assertFalse((self.home / ".codex" / "skills" / "syntavra").exists())
         self.assertFalse((self.project / ".syntavra").exists())
@@ -129,20 +133,21 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         parsed = tomllib.loads(rendered)
         self.assertEqual(parsed["mcp_servers"]["other"]["command"], "other")
         entry = parsed["mcp_servers"]["syntavra"]
+        self.assertEqual(entry["args"], BRIDGE_ARGS)
         self.assertNotEqual(entry["command"], "old")
-        self.assertNotIn("wrong", entry["args"])
         self.assertNotIn("SYNTAVRA_PROJECT", entry["env"])
         self.assertEqual(rendered.count("[mcp_servers.syntavra]"), 1)
 
-    def test_project_scope_codex_mcp_may_bind_only_to_that_project(self) -> None:
+    def test_project_scope_codex_mcp_auto_binds_only_to_that_project(self) -> None:
         with patch.dict(os.environ, {"SYNTAVRA_STATE_HOME": str(self.state_home)}, clear=False):
             installer = HostInstaller(project=self.project, skill_root=self.skill, home=self.home)
             installer.install(["codex"], scope="project", dry_run=False)
         config = tomllib.loads((self.project / ".codex" / "config.toml").read_text(encoding="utf-8"))
         entry = config["mcp_servers"]["syntavra"]
+        self.assertEqual(entry["command"], sys.executable)
+        self.assertEqual(entry["args"], BRIDGE_ARGS)
         self.assertEqual(entry["cwd"], str(self.project.resolve()))
         self.assertEqual(entry["env"]["SYNTAVRA_PROJECT"], str(self.project.resolve()))
-        self.assertIn(str(self.project.resolve()), entry["args"])
         self.assertTrue((self.project / ".agents" / "skills" / "syntavra" / "SKILL.md").is_file())
 
     def test_minimal_codex_surface_contains_zero_poll_broker_tools(self) -> None:
