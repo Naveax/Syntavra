@@ -73,7 +73,12 @@ class OptimizationModeStore:
 
 
 class SavingsLedger:
-    """Content-free, append-only savings events used by statusline/dashboard."""
+    """Content-free local context-savings events used by statusline/dashboard.
+
+    This ledger measures what Syntavra removes from the model-visible local view.
+    It is deliberately not a provider billing ledger. Provider/session superiority
+    must be established by paired provider usage receipts and the proof gate.
+    """
 
     def __init__(self, state_root: Path):
         self.path = Path(state_root) / "analytics" / "savings.jsonl"
@@ -99,6 +104,7 @@ class SavingsLedger:
             "saved_tokens": max(0, int(original_tokens) - int(visible_tokens)),
             "provider_cost_before": provider_cost_before,
             "provider_cost_after": provider_cost_after,
+            "measurement_basis": "LOCAL_MODEL_VISIBLE_ESTIMATE",
             "metadata": dict(metadata or {}),
         }
         event["event_hash"] = sha256_bytes(canonical_json(event))
@@ -120,8 +126,14 @@ class SavingsLedger:
         original = sum(int(row.get("original_tokens", 0)) for row in rows)
         visible = sum(int(row.get("visible_tokens", 0)) for row in rows)
         saved = sum(int(row.get("saved_tokens", 0)) for row in rows)
-        before = sum(float(row["provider_cost_before"]) for row in rows if row.get("provider_cost_before") is not None)
-        after = sum(float(row["provider_cost_after"]) for row in rows if row.get("provider_cost_after") is not None)
+        before_rows = [row for row in rows if row.get("provider_cost_before") is not None]
+        after_rows = [row for row in rows if row.get("provider_cost_after") is not None]
+        before = sum(float(row["provider_cost_before"]) for row in before_rows)
+        after = sum(float(row["provider_cost_after"]) for row in after_rows)
+        paired_cost_rows = sum(
+            row.get("provider_cost_before") is not None and row.get("provider_cost_after") is not None
+            for row in rows
+        )
         by_source: dict[str, int] = {}
         for row in rows:
             key = str(row.get("source") or "unknown")
@@ -132,9 +144,13 @@ class SavingsLedger:
             "visible_tokens": visible,
             "saved_tokens": saved,
             "savings_ratio": (saved / original) if original else 0.0,
+            "measurement_basis": "LOCAL_MODEL_VISIBLE_ESTIMATE",
             "provider_cost_before": before,
             "provider_cost_after": after,
             "provider_cost_saved": max(0.0, before - after),
+            "provider_cost_observations": paired_cost_rows,
+            "net_provider_savings_proven": False,
+            "claim_boundary": "paired provider-observed receipts plus verifier-success proof gate required for net token/cost/latency claims",
             "by_source": dict(sorted(by_source.items())),
         }
 
@@ -149,8 +165,11 @@ def render_statusline(state_root: Path, *, compact: bool = True) -> str:
         saved_text = f"{saved / 1_000:.1f}k"
     else:
         saved_text = str(saved)
-    cost = float(summary["provider_cost_saved"])
-    suffix = f" ${cost:.2f}" if cost > 0 else ""
+    # Never render a dollar-savings claim from the local ledger. Only the paired
+    # provider proof gate has authority to claim billed/session savings.
     if compact:
-        return f"[SYN:{mode.name.upper()}] ⇩{saved_text}{suffix}"
-    return f"Syntavra mode={mode.name} saved_tokens={saved} saved_cost={cost:.6f}"
+        return f"[SYN:{mode.name.upper()}] local⇩{saved_text}"
+    return (
+        f"Syntavra mode={mode.name} local_saved_tokens={saved} "
+        f"measurement_basis={summary['measurement_basis']} net_provider_savings_proven=false"
+    )
