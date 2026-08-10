@@ -117,6 +117,8 @@ mod native_remaining71_graph;
 mod native_remaining71_headless;
 #[path = "native_remaining71_memory.rs"]
 mod native_remaining71_memory;
+#[path = "native_remaining71_platform_misc.rs"]
+mod native_remaining71_platform_misc;
 #[path = "native_remaining71_proof.rs"]
 mod native_remaining71_proof;
 #[path = "native_remaining71_proxy.rs"]
@@ -218,6 +220,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
         || (bulk_parity_probe_enabled() && native_remaining71_memory::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_platform_misc::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_security::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command))
@@ -386,6 +389,14 @@ pub fn execute(
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
         return native_remaining71_memory::execute(command, &arguments, project_root, state_root);
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_platform_misc::supports(command) {
+        return native_remaining71_platform_misc::execute(
+            command,
+            &arguments,
+            project_root,
+            state_root,
+        );
     }
     if bulk_parity_probe_enabled() && native_remaining71_security::supports(command) {
         return native_remaining71_security::execute(command, &arguments, state_root);
