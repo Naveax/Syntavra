@@ -111,6 +111,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_remaining71_agent.rs"]
 mod native_remaining71_agent;
+#[path = "native_remaining71_competitive.rs"]
+mod native_remaining71_competitive;
 #[path = "native_remaining71_graph.rs"]
 mod native_remaining71_graph;
 #[path = "native_remaining71_headless.rs"]
@@ -227,6 +229,7 @@ pub fn supports(command: &[String]) -> bool {
         || (bulk_parity_probe_enabled() && native_remaining71_proof::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_graph::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_agent::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_headless::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
@@ -427,6 +430,14 @@ pub fn execute(
     }
     if bulk_parity_probe_enabled() && native_remaining71_agent::supports(command) {
         return native_remaining71_agent::execute(command, &arguments, project_root, state_root);
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command) {
+        return native_remaining71_competitive::execute(
+            command,
+            &arguments,
+            project_root,
+            state_root,
+        );
     }
     if bulk_parity_probe_enabled() && native_remaining71_headless::supports(command) {
         return native_remaining71_headless::execute(command, &arguments, project_root, state_root);
