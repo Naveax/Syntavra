@@ -111,6 +111,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_remaining71_memory.rs"]
 mod native_remaining71_memory;
+#[path = "native_remaining71_proxy.rs"]
+mod native_remaining71_proxy;
 #[path = "native_remaining71_sandbox.rs"]
 mod native_remaining71_sandbox;
 #[path = "native_remaining71_security.rs"]
@@ -208,6 +210,7 @@ pub fn supports(command: &[String]) -> bool {
         || (bulk_parity_probe_enabled() && native_remaining71_memory::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_security::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -382,6 +385,9 @@ pub fn execute(
             }
             return Ok(Some(decision.value));
         }
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command) {
+        return native_remaining71_proxy::execute(command, &arguments, project_root, state_root);
     }
     if native_analytics::supports(command) {
         return native_analytics::execute(&arguments, state_root).map(Some);
