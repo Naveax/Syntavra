@@ -47,8 +47,8 @@ jobs:
       - name: Install canonical Rust toolchain
         run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
 
-      - name: Apply rustfmt for compile probe
-        run: cargo +1.82.0 fmt --all
+      - name: Rustfmt check
+        run: cargo +1.82.0 fmt --all -- --check
 
       - name: Cargo check native selector
         run: cargo +1.82.0 check --locked -p syntavra-cli --bin syntavra
@@ -58,7 +58,6 @@ jobs:
 
       - name: Provider prepare differential
         id: differential
-        if: ${{ hashFiles('tools/verify_r31_provider_prepare_parity.py') != '' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -80,16 +79,14 @@ jobs:
               if not row.get('plan_equal'):
                   py = row.get('python_plan') or {}
                   rs = row.get('rust_plan') or {}
-                  keys = sorted(set(py) | set(rs))
-                  diff = [key for key in keys if py.get(key) != rs.get(key)]
+                  diff = [key for key in sorted(set(py) | set(rs)) if py.get(key) != rs.get(key)]
                   print('  plan_diff_keys=', ','.join(diff))
                   for key in diff:
                       print(f"  PLAN {key}: py={py.get(key)!r} rs={rs.get(key)!r}")
               if not row.get('state_equal'):
                   py = row.get('python_state') or {}
                   rs = row.get('rust_state') or {}
-                  sections = sorted(set(py) | set(rs))
-                  diff = [key for key in sections if py.get(key) != rs.get(key)]
+                  diff = [key for key in sorted(set(py) | set(rs)) if py.get(key) != rs.get(key)]
                   print('  state_diff_sections=', ','.join(diff))
                   for key in diff:
                       print(f"  STATE {key}: py={py.get(key)!r} rs={rs.get(key)!r}")
@@ -99,17 +96,14 @@ jobs:
               print('  PY_STATE=', rejection.get('python_state'))
               print('  RS_STATE=', rejection.get('rust_state'))
           PY
+          rm -f prepare-result.json
           exit "$code"
-
-      - name: Restore formatting-only probe changes
-        if: always()
-        shell: bash
-        run: git reset --hard HEAD
 
       - name: Working tree integrity
         if: always()
         shell: bash
         run: |
+          rm -f prepare-result.json
           git status --porcelain=v1 --untracked-files=all
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
