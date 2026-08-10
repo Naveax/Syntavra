@@ -10,6 +10,7 @@ from typing import Any, Sequence
 
 
 TARGETED_TESTS = (
+    "tests.test_platforms",
     "tests.runtime.test_codex_integration_regressions",
     "tests.runtime.test_codex_mcp_bridge_v001",
     "tests.runtime.test_codex_toml_preservation_v001",
@@ -68,7 +69,17 @@ def validate(repo: Path, *, expected_head: str = "", full_runtime: bool = False)
     before_status = _git(repo, "status", "--porcelain=v1", "--untracked-files=all")
     steps: list[dict[str, Any]] = []
 
-    steps.append(_run(repo, [sys.executable, "-m", "compileall", "-q", "syntavra_runtime", "tests/runtime"]))
+    steps.append(_run(repo, [
+        sys.executable,
+        "-m",
+        "compileall",
+        "-q",
+        "syntavra_runtime",
+        "tests/runtime",
+        "tests/test_platforms.py",
+        "tools/repair_codex_integration.py",
+        "tools/validate_codex_integration_closure.py",
+    ]))
     if steps[-1]["returncode"] != 0:
         return {
             "ok": False,
@@ -101,12 +112,15 @@ def validate(repo: Path, *, expected_head: str = "", full_runtime: bool = False)
 
     after_status = _git(repo, "status", "--porcelain=v1", "--untracked-files=all")
     clean_delta = before_status == after_status
-    syntavra_pollution = any(
-        token.startswith(".syntavra/") or "/.syntavra/" in token
+    normalized_before = before_status.replace("\\", "/")
+    new_syntavra_paths = [
+        line[3:].strip().replace("\\", "/")
         for line in after_status.splitlines()
-        for token in line[3:].replace("\\", "/").split()
-        if line
-    ) and ".syntavra/" not in before_status.replace("\\", "/")
+        if len(line) >= 4
+        and ".syntavra/" in line[3:].replace("\\", "/")
+        and line[3:].strip().replace("\\", "/") not in normalized_before
+    ]
+    syntavra_pollution = bool(new_syntavra_paths)
 
     return {
         "ok": clean_delta and not syntavra_pollution,
@@ -119,6 +133,7 @@ def validate(repo: Path, *, expected_head: str = "", full_runtime: bool = False)
         "after_status": after_status,
         "working_tree_unchanged": clean_delta,
         "new_syntavra_pollution": syntavra_pollution,
+        "new_syntavra_paths": new_syntavra_paths,
         "steps": steps,
     }
 
