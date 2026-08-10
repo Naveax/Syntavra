@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from syntavra_runtime.mcp_server import MCPServer
+from syntavra_runtime.process_broker import FINAL_STATES
 
 
 class MCPEnforcementV001Tests(unittest.TestCase):
@@ -25,6 +27,20 @@ class MCPEnforcementV001Tests(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
+        # Broker workers are deliberately detached from the submitting model process.
+        # Tests, however, own a TemporaryDirectory and must explicitly reap those
+        # workers before Windows can remove the directory and its SQLite handles.
+        jobs = self.server.broker.list_jobs(limit=100)
+        for job in jobs:
+            if job.state not in FINAL_STATES:
+                self.server.broker.cancel(job.job_id)
+        deadline = time.time() + 10.0
+        for job in jobs:
+            current = self.server.broker.show(job.job_id)
+            while current.state not in FINAL_STATES and time.time() < deadline:
+                time.sleep(0.05)
+                current = self.server.broker.show(job.job_id)
+            self.assertIn(current.state, FINAL_STATES, f"broker worker did not terminate: {job.job_id}")
         self.temp.cleanup()
 
     @staticmethod
@@ -101,6 +117,15 @@ class MCPEnforcementV001Tests(unittest.TestCase):
             response = self.server.handle(self._call("syntavra.process.submit", authorization))
         self.assertIn("result", response)
         self.assertEqual(response["result"]["_meta"]["syntavra_risk"], "unsandboxed-execute")
+
+        job_id = self.server.broker.list_jobs(limit=1)[0].job_id
+        deadline = time.time() + 10.0
+        job = self.server.broker.show(job_id)
+        while job.state not in FINAL_STATES and time.time() < deadline:
+            time.sleep(0.05)
+            job = self.server.broker.show(job_id)
+        self.assertEqual(job.state, "COMPLETED")
+        self.assertEqual(job.exit_code, 0)
 
     def test_installed_profile_file_is_runtime_default(self) -> None:
         state = self.root / "balanced-state"
