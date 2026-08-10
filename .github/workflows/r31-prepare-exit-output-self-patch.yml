@@ -1,0 +1,52 @@
+name: R31 Prepare Exit Output Patch
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-prepare-native
+    paths:
+      - "tools/apply_r31_prepare_exit_output_patch.py"
+      - ".github/workflows/r31-prepare-exit-output-self-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/r31-provider-prepare-native
+
+      - name: Install Rust 1.82.0
+        run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Apply fail-closed patch
+        run: python tools/apply_r31_prepare_exit_output_patch.py
+
+      - name: Canonical rustfmt
+        run: cargo +1.82.0 fmt --all
+
+      - name: Compile patched native selector
+        run: cargo +1.82.0 check --locked -p syntavra-cli --bin syntavra
+
+      - name: Remove one-shot patch machinery
+        shell: bash
+        run: |
+          rm tools/apply_r31_prepare_exit_output_patch.py
+          rm .github/workflows/r31-prepare-exit-output-self-patch.yml
+
+      - name: Commit patched source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && exit 0
+          git commit -m "Match provider prepare error and output semantics"
+          git push origin HEAD:agent/r31-provider-prepare-native
