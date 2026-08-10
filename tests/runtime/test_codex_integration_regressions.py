@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from syntavra_runtime.bootstrap import runtime_health
 from syntavra_runtime.engine_entry import _context
 from syntavra_runtime.host_adapters import host_spec
 from syntavra_runtime.installer import HostInstaller
@@ -67,6 +68,19 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(forwarded.count("--project"), 1)
         self.assertEqual(forwarded.count("--state-root"), 1)
         self.assertNotIn(self.project.resolve(), state.resolve().parents)
+
+    def test_runtime_status_exposes_exact_project_root_for_fail_closed_workspace_check(self) -> None:
+        state = self.state_home / "health"
+        health = runtime_health(
+            project=self.project,
+            skill_root=self.skill,
+            state_root=state,
+            codex_home=self.root / ".codex",
+            host="codex",
+        )
+        self.assertEqual(health.details["project_root"], str(self.project.resolve()))
+        self.assertEqual(health.details["project_identity"]["project_name"], self.project.name)
+        self.assertTrue(health.details["state_outside_project"])
 
     def test_codex_adapter_metadata_uses_current_official_paths(self) -> None:
         spec = host_spec("codex")
