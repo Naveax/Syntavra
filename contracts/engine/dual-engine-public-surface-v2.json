@@ -19,10 +19,10 @@
   },
   "release_channel": "pre-release",
   "rust_surface": {
-    "missing_native_public_command_count": 74,
+    "missing_native_public_command_count": 73,
     "module_count": 131,
-    "native_coverage_ppm": 697959,
-    "native_public_command_count": 171,
+    "native_coverage_ppm": 702040,
+    "native_public_command_count": 172,
     "native_public_commands": [
       "backup create",
       "backup restore",
@@ -126,6 +126,7 @@
       "prove suites",
       "provider capabilities",
       "provider stats",
+      "provider verify",
       "repair",
       "rollout-tail",
       "run adapter-certify",
