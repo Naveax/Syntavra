@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - agent/r38-parent-probe-from-codex-closure
+  pull_request:
+    branches:
+      - agent/codex-integration-savings-closure
+    paths:
+      - ".github/workflows/r38-parent-exact-head-probe.yml"
 
 permissions:
   contents: read
