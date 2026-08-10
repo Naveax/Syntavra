@@ -10,6 +10,8 @@ on:
     paths:
       - "crates/syntavra-cli/src/native_provider_gateway_read.rs"
       - "crates/syntavra-cli/src/native_product_legacy.rs"
+      - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "tools/report_missing_native_public_routes.py"
       - "tools/verify_r31_provider_replay_parity.py"
       - ".github/workflows/r31-provider-replay-parity.yml"
 
@@ -44,6 +46,9 @@ jobs:
 
       - name: Install canonical Rust toolchain
         run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Verify exact public-route inventory
+        run: python tools/report_missing_native_public_routes.py
 
       - name: Rustfmt check
         run: cargo +1.82.0 fmt --all -- --check
