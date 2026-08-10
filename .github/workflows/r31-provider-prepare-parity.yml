@@ -57,14 +57,49 @@ jobs:
         run: cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
 
       - name: Provider prepare differential
+        id: differential
         if: ${{ hashFiles('tools/verify_r31_provider_prepare_parity.py') != '' }}
+        continue-on-error: true
         shell: bash
         run: |
           selector="target/debug/syntavra"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             selector="${selector}.exe"
           fi
-          python tools/verify_r31_provider_prepare_parity.py --selector "$selector"
+          set +e
+          python tools/verify_r31_provider_prepare_parity.py --selector "$selector" > prepare-result.json
+          code=$?
+          set -e
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('prepare-result.json').read_text(encoding='utf-8'))
+          print('overall_ok=', data.get('ok'))
+          for name, row in (data.get('scenarios') or {}).items():
+              print(f"scenario={name} ok={row.get('ok')} plan_equal={row.get('plan_equal')} state_equal={row.get('state_equal')} wrapper_equal={row.get('wrapper_equal')}")
+              if not row.get('plan_equal'):
+                  py = row.get('python_plan') or {}
+                  rs = row.get('rust_plan') or {}
+                  keys = sorted(set(py) | set(rs))
+                  diff = [key for key in keys if py.get(key) != rs.get(key)]
+                  print('  plan_diff_keys=', ','.join(diff))
+                  for key in diff:
+                      print(f"  PLAN {key}: py={py.get(key)!r} rs={rs.get(key)!r}")
+              if not row.get('state_equal'):
+                  py = row.get('python_state') or {}
+                  rs = row.get('rust_state') or {}
+                  sections = sorted(set(py) | set(rs))
+                  diff = [key for key in sections if py.get(key) != rs.get(key)]
+                  print('  state_diff_sections=', ','.join(diff))
+                  for key in diff:
+                      print(f"  STATE {key}: py={py.get(key)!r} rs={rs.get(key)!r}")
+          rejection = data.get('credential_rejection') or {}
+          print(f"credential_rejection ok={rejection.get('ok')} python_exit={rejection.get('python_exit')} rust_exit={rejection.get('rust_exit')}")
+          if not rejection.get('ok'):
+              print('  PY_STATE=', rejection.get('python_state'))
+              print('  RS_STATE=', rejection.get('rust_state'))
+          PY
+          exit "$code"
 
       - name: Restore formatting-only probe changes
         if: always()
@@ -77,3 +112,10 @@ jobs:
         run: |
           git status --porcelain=v1 --untracked-files=all
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Enforce differential result
+        if: always()
+        shell: bash
+        env:
+          DIFFERENTIAL: ${{ steps.differential.outcome }}
+        run: test "$DIFFERENTIAL" = "success"
