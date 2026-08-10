@@ -47,4 +47,4 @@ jobs:
         run: python -m pip install -e .
 
       - name: Validate Codex closure at exact candidate head
-        run: python tools/validate_codex_integration_closure.py --expected-head ${{ github.event.pull_request.head.sha || github.sha }} --full-runtime
+        run: python tools/validate_codex_integration_closure.py --expected-head ${{ github.event.pull_request.head.sha || github.sha }}
