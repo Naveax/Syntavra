@@ -1,0 +1,59 @@
+name: Remaining 71 Security Probe Self Patch
+
+on:
+  pull_request:
+    branches:
+      - agent/r31-provider-prepare-native
+    paths:
+      - "tools/apply_remaining71_security_probe.py"
+      - ".github/workflows/remaining71-security-probe-self-patch.yml"
+
+concurrency:
+  group: remaining71-security-probe-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout closure branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/r31-provider-capture-native
+
+      - name: Install Rust 1.82.0
+        run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Apply probe integration
+        run: python tools/apply_remaining71_security_probe.py
+
+      - name: Canonical rustfmt
+        run: cargo +1.82.0 fmt --all
+
+      - name: Compile all Rust binaries
+        run: cargo +1.82.0 check --locked -p syntavra-cli --bins
+
+      - name: Remove one-shot machinery
+        shell: bash
+        run: |
+          rm tools/apply_remaining71_security_probe.py
+          rm .github/workflows/remaining71-security-probe-self-patch.yml
+
+      - name: Commit probe integration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && exit 0
+          git commit -m "Add native capability closure probe"
+          git fetch origin agent/r31-provider-capture-native
+          git rebase origin/agent/r31-provider-capture-native
+          git push origin HEAD:agent/r31-provider-capture-native
