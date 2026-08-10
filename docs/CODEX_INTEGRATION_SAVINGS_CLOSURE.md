@@ -8,6 +8,7 @@ Status: implementation branch for the Codex regressions observed in real 2026 ro
 2. Runtime and installer defaults could create `.syntavra/...` inside the target repository. This invalidated a clean-tree security review and forced a complete re-review.
 3. Codex can use MCP and background jobs but does not expose Syntavra pre-tool hooks or result replacement. `syntavra.fabric.route` could recommend a background replacement and the caller could still execute the original command.
 4. Local tool-output/schema reductions could be mistaken for provider-billed or whole-session savings.
+5. Older Syntavra Codex metadata targeted `.codex/mcp.json` and `.codex/skills/syntavra`. Current Codex uses TOML MCP configuration and Agent Skills under `.agents/skills`.
 
 ## Implemented design
 
@@ -25,9 +26,18 @@ Default state is keyed by `stable_project_id(project)` beneath a per-user state 
 - POSIX with XDG: `$XDG_STATE_HOME/syntavra/projects/<project-id>/...`
 - fallback: `~/.local/state/syntavra/projects/<project-id>/...`
 
-An explicit `--state-root` remains authoritative. Runtime state is therefore outside the target worktree by default without forbidding an intentional custom state path.
+An explicit `--state-root` remains authoritative. Runtime state is therefore outside the target worktree by default without forbidding an intentional custom state path. `ZeroFrictionManager` uses the same external default when called directly, so the guarantee is not limited to the CLI bootstrap path.
 
-### User/global Codex MCP install
+### Current Codex installation contract
+
+Current Codex integration uses:
+
+- user MCP configuration: `~/.codex/config.toml`,
+- trusted project MCP configuration: `.codex/config.toml`,
+- user Agent Skill: `~/.agents/skills/syntavra`,
+- repository Agent Skill: `.agents/skills/syntavra`.
+
+Both Syntavra installer implementations use this contract: the classic `HostInstaller` and the zero-friction `HostInstallationManager` used by product setup/repair flows.
 
 User-scope MCP configuration is dynamic. It no longer contains:
 
@@ -36,7 +46,7 @@ User-scope MCP configuration is dynamic. It no longer contains:
 - `SYNTAVRA_PROJECT`, or
 - `SYNTAVRA_STATE_ROOT`.
 
-Project-scope configuration may bind to that exact project because the configuration itself is project-local.
+Project-scope configuration may bind to that exact project because the configuration itself is project-local. TOML writes are fail-closed on invalid input, replace only Syntavra's MCP table, and preserve unrelated user configuration.
 
 ### Codex execution contract
 
@@ -63,10 +73,12 @@ Net token, cost or latency superiority remains gated by paired provider-observed
 
 `tools/repair_codex_integration.py` is dry-run by default. With `--apply` it:
 
-1. backs up the user Codex MCP config before mutation,
-2. removes legacy Syntavra project/state argv pins, static `cwd`, and static project/state environment values,
-3. moves only known legacy runtime directories (`pre-release`, `runtime-v3`, `install`) out of `<project>/.syntavra` into the external project state quarantine,
-4. preserves unknown/user-managed files rather than deleting the whole `.syntavra` directory blindly.
+1. validates the current `~/.codex/config.toml` and detects a static Syntavra user-scope project binding,
+2. backs up and removes the obsolete Syntavra entry from legacy `~/.codex/mcp.json` while preserving unrelated servers,
+3. moves only known legacy runtime directories (`pre-release`, `runtime-v3`, `install`) out of `<project>/.syntavra` into the external project-state quarantine,
+4. moves legacy user/project `.codex/skills/syntavra` copies into the same quarantine,
+5. preserves unknown/user-managed `.syntavra` files rather than deleting the directory blindly,
+6. installs the current dynamic user-scope TOML MCP entry and current `~/.agents/skills/syntavra` skill through the backup-first installer.
 
 Example on Windows:
 
@@ -75,21 +87,23 @@ python tools/repair_codex_integration.py --project C:\Users\navea\Desktop\NXM
 python tools/repair_codex_integration.py --project C:\Users\navea\Desktop\NXM --apply
 ```
 
-Restart Codex after an applied user MCP config repair.
+Restart Codex after an applied user MCP migration.
 
 ## Regression gates
 
 The branch must keep these invariants:
 
 - auto project discovery resolves the active worktree,
-- default state is outside the project,
+- default state is outside the project even when `ZeroFrictionManager` is called directly,
 - canonical entry injects exactly one project/state pair,
-- user-scope Codex config has no static project binding,
-- project-scope config binds only to its own project,
+- user-scope Codex TOML config has no static project binding,
+- project-scope Codex TOML config binds only to its own project,
+- unrelated TOML/MCP settings survive installation and repair,
+- current skill placement is `.agents/skills/syntavra`,
 - minimal MCP includes submit/completion broker tools,
 - an explicitly authorized broker call does not require a second environment switch,
 - local savings cannot claim net provider savings,
-- legacy repair is backup-first and leaves unrelated MCP servers/config fields untouched.
+- legacy repair is backup-first and migrates only known Syntavra-owned paths.
 
 ## Real A/B closure protocol
 
