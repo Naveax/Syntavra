@@ -21,7 +21,7 @@ _CODEX_CONFIG_PATH = ".codex/config.toml"
 _CODEX_SKILL_PATH = ".agents/skills/syntavra"
 _CODEX_MANAGED_START = "# SYNTAVRA-MANAGED-MCP-START"
 _CODEX_MANAGED_END = "# SYNTAVRA-MANAGED-MCP-END"
-_CODEX_TABLE_RE = re.compile(r"^\s*\[([^\[\]]+)\]\s*(?:#.*)?$")
+_CODEX_TABLE_RE = re.compile(r"^\s*(\[\[?)(.+?)(\]\]?)\s*(?:#.*)?$")
 
 
 @dataclass(frozen=True)
@@ -133,7 +133,7 @@ class HostInstaller:
         for line in text.splitlines():
             match = _CODEX_TABLE_RE.match(line)
             if match:
-                name = cls._normalize_codex_table_name(match.group(1))
+                name = cls._normalize_codex_table_name(match.group(2))
                 skipping = name == "mcp_servers.syntavra" or name.startswith("mcp_servers.syntavra.")
             if not skipping:
                 output.append(line)
