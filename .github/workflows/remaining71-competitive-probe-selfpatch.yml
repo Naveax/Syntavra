@@ -29,10 +29,17 @@ jobs:
       - name: Normalize competitive source
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
           path = Path('crates/syntavra-cli/src/native_remaining71_competitive.rs')
           text = path.read_text(encoding='utf-8')
-          text = text.replace("capability.replace('-', ' ')", "capability.replace('-', \" \")")
+          text, count = re.subn(
+              r"capability\.replace\(\s*'-'\s*,\s*' '\s*\)",
+              "capability.replace('-', \" \")",
+              text,
+          )
+          if count != 1:
+              raise SystemExit(f'competitive title normalization expected 1 match, found {count}')
           path.write_text(text, encoding='utf-8')
           PY
       - name: Apply probe integration
