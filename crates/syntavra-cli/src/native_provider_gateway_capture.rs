@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use base64::Engine as _;
 use regex::Regex;
@@ -122,7 +122,10 @@ fn collect_text(value: &Value, output: &mut Vec<String>, depth: usize) {
             }
             for (key, child) in map {
                 if preferred.contains(&key.as_str())
-                    || matches!(key.as_str(), "usage" | "usageMetadata" | "metadata" | "id" | "model")
+                    || matches!(
+                        key.as_str(),
+                        "usage" | "usageMetadata" | "metadata" | "id" | "model"
+                    )
                 {
                     continue;
                 }
@@ -140,7 +143,12 @@ fn collect_text(value: &Value, output: &mut Vec<String>, depth: usize) {
 
 fn normalize_text(text: &str) -> String {
     text.nfkc()
-        .filter(|character| !matches!(character, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'))
+        .filter(|character| {
+            !matches!(
+                character,
+                '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'
+            )
+        })
         .collect::<String>()
         .replace("\r\n", "\n")
         .replace('\r', "\n")
@@ -205,22 +213,32 @@ fn redact_regex(
     private_key: bool,
     payment_card: bool,
 ) -> Result<(String, bool), String> {
-    let regex = Regex::new(pattern).map_err(|error| format!("PROVIDER_SECURITY_REGEX_INVALID:{error}"))?;
+    let regex =
+        Regex::new(pattern).map_err(|error| format!("PROVIDER_SECURITY_REGEX_INVALID:{error}"))?;
     let mut found = false;
     let mut output = String::with_capacity(text.len());
     let mut cursor = 0usize;
     for captures in regex.captures_iter(text) {
-        let Some(matched) = captures.get(0) else { continue };
+        let Some(matched) = captures.get(0) else {
+            continue;
+        };
         if payment_card && !luhn(matched.as_str()) {
             continue;
         }
         output.push_str(&text[cursor..matched.start()]);
         found = true;
         if generic {
-            output.push_str(captures.get(1).map(|value| value.as_str()).unwrap_or("secret"));
+            output.push_str(
+                captures
+                    .get(1)
+                    .map(|value| value.as_str())
+                    .unwrap_or("secret"),
+            );
             output.push_str("=<redacted:generic-assignment>");
         } else if private_key {
-            output.push_str("-----BEGIN PRIVATE KEY-----<redacted:private-key>-----END PRIVATE KEY-----");
+            output.push_str(
+                "-----BEGIN PRIVATE KEY-----<redacted:private-key>-----END PRIVATE KEY-----",
+            );
         } else {
             output.push_str(&format!("<redacted:{name}>"));
         }
@@ -365,16 +383,66 @@ fn scan_text_inner(text: &str, inspect_encoded: bool) -> Result<SecurityScan, St
             false,
             false,
         ),
-        ("aws-access-key", r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", false, false, false, false),
-        ("github-token", r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", false, false, false, false),
-        ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b", false, false, false, false),
-        ("database-uri", r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s]+", false, false, false, false),
-        ("private-key", r"(?s)-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----", false, true, false, false),
-        ("payment-card", r"(?:\d[ -]*?){13,19}", false, false, true, true),
-        ("email", r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", false, false, false, true),
+        (
+            "aws-access-key",
+            r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            "github-token",
+            r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b",
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            "jwt",
+            r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b",
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            "database-uri",
+            r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s]+",
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            "private-key",
+            r"(?s)-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----",
+            false,
+            true,
+            false,
+            false,
+        ),
+        (
+            "payment-card",
+            r"(?:\d[ -]*?){13,19}",
+            false,
+            false,
+            true,
+            true,
+        ),
+        (
+            "email",
+            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+            false,
+            false,
+            false,
+            true,
+        ),
     ];
     for (name, pattern, generic, private_key, payment_card, pii) in patterns {
-        let (next, found) = redact_regex(&redacted, pattern, name, generic, private_key, payment_card)?;
+        let (next, found) =
+            redact_regex(&redacted, pattern, name, generic, private_key, payment_card)?;
         redacted = next;
         if found && !pii {
             unique_push(&mut secret_types, name);
@@ -389,7 +457,8 @@ fn scan_text_inner(text: &str, inspect_encoded: bool) -> Result<SecurityScan, St
     let skeleton = confusable_skeleton(&normalized);
     let mut injection_risk = false;
     for pattern in injection_patterns {
-        let regex = Regex::new(pattern).map_err(|error| format!("PROVIDER_INJECTION_REGEX_INVALID:{error}"))?;
+        let regex = Regex::new(pattern)
+            .map_err(|error| format!("PROVIDER_INJECTION_REGEX_INVALID:{error}"))?;
         if regex.is_match(&normalized) || (skeleton != normalized && regex.is_match(&skeleton)) {
             injection_risk = true;
         }
@@ -433,16 +502,17 @@ fn contains_tool_call(value: &Value) -> bool {
     match value {
         Value::Object(map) => map.iter().any(|(key, child)| {
             let normalized = key.to_lowercase();
-            (matches!(normalized.as_str(), "tool_calls" | "tool_call" | "function_call" | "functioncall")
-                && match child {
-                    Value::Null => false,
-                    Value::Bool(value) => *value,
-                    Value::String(value) => !value.is_empty(),
-                    Value::Array(value) => !value.is_empty(),
-                    Value::Object(value) => !value.is_empty(),
-                    Value::Number(value) => value.as_f64().is_some_and(|number| number != 0.0),
-                })
-                || contains_tool_call(child)
+            (matches!(
+                normalized.as_str(),
+                "tool_calls" | "tool_call" | "function_call" | "functioncall"
+            ) && match child {
+                Value::Null => false,
+                Value::Bool(value) => *value,
+                Value::String(value) => !value.is_empty(),
+                Value::Array(value) => !value.is_empty(),
+                Value::Object(value) => !value.is_empty(),
+                Value::Number(value) => value.as_f64().is_some_and(|number| number != 0.0),
+            }) || contains_tool_call(child)
         }),
         Value::Array(rows) => rows.iter().any(contains_tool_call),
         _ => false,
@@ -450,7 +520,7 @@ fn contains_tool_call(value: &Value) -> bool {
 }
 
 fn dig<'a>(value: &'a Map<String, Value>, path: &str) -> Option<&'a Value> {
-    let mut current: &Value = &Value::Object(value.clone());
+    let current: &Value = &Value::Object(value.clone());
     let owned;
     // Avoid holding references into a temporary map clone by walking manually.
     let parts = path.split('.').collect::<Vec<_>>();
@@ -469,7 +539,10 @@ fn dig<'a>(value: &'a Map<String, Value>, path: &str) -> Option<&'a Value> {
 
 fn int_value(value: Option<&Value>) -> i64 {
     match value {
-        Some(Value::Number(value)) => value.as_i64().or_else(|| value.as_u64().and_then(|v| i64::try_from(v).ok())).unwrap_or(0),
+        Some(Value::Number(value)) => value
+            .as_i64()
+            .or_else(|| value.as_u64().and_then(|v| i64::try_from(v).ok()))
+            .unwrap_or(0),
         Some(Value::String(value)) => value.parse::<i64>().unwrap_or(0),
         Some(Value::Bool(value)) => i64::from(*value),
         _ => 0,
@@ -507,12 +580,22 @@ fn normalize_usage(provider: &str, response: &Value) -> Option<NormalizedUsage> 
     );
     let raw_input = take_usage(
         usage,
-        &["input_tokens", "prompt_tokens", "promptTokenCount", "inputTokenCount"],
+        &[
+            "input_tokens",
+            "prompt_tokens",
+            "promptTokenCount",
+            "inputTokenCount",
+        ],
         &mut fields,
     );
     let output = take_usage(
         usage,
-        &["output_tokens", "completion_tokens", "candidatesTokenCount", "outputTokenCount"],
+        &[
+            "output_tokens",
+            "completion_tokens",
+            "candidatesTokenCount",
+            "outputTokenCount",
+        ],
         &mut fields,
     );
     let reasoning = take_usage(
@@ -582,7 +665,10 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> String {
 }
 
 fn valid_lower_sha(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn receipt_value(receipt: &Map<String, Value>, key: &str, default: &str) -> String {
@@ -697,7 +783,7 @@ fn record_usage_receipt(
     transaction
         .execute(
             "INSERT INTO usage_receipt_ledger(task_id,arm_id,repetition,cache_mode,provider,request_id_hash,provider_response_hash,fresh_input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,quota_cost,hardware_hash,receipt_hash,previous_chain_hash,chain_hash,signature_mode,signature,raw_usage_hash,raw_usage_json,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)",
-            (
+            rusqlite::params![
                 task_id,
                 arm_id,
                 repetition,
@@ -719,7 +805,7 @@ fn record_usage_receipt(
                 raw_usage_hash,
                 raw_usage_json,
                 created_at,
-            ),
+            ],
         )
         .map_err(|error| format!("PROVIDER_RECEIPT_INSERT_FAILED:{error}"))?;
     let sequence = transaction.last_insert_rowid();
@@ -784,7 +870,9 @@ fn visible_preview(redacted: &str, preview_bytes: usize) -> String {
     while end > 0 && std::str::from_utf8(&bytes[..end]).is_err() {
         end -= 1;
     }
-    let prefix = std::str::from_utf8(&bytes[..end]).unwrap_or_default().trim_end();
+    let prefix = std::str::from_utf8(&bytes[..end])
+        .unwrap_or_default()
+        .trim_end();
     format!("{prefix}{PREVIEW_MARKER}")
 }
 
@@ -829,19 +917,33 @@ pub(crate) fn capture(state_root: &Path) -> Result<Value, String> {
     }
     let security = scan_text(&deduped.join("\n"))?;
     let preview_limit = option_value(&arguments, "--preview-bytes")?
-        .map(|value| value.parse::<usize>().map_err(|_| "PROVIDER_CAPTURE_PREVIEW_INVALID".to_owned()))
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|_| "PROVIDER_CAPTURE_PREVIEW_INVALID".to_owned())
+        })
         .transpose()?
         .unwrap_or(4096);
     let visible = visible_preview(&security.redacted_text, preview_limit);
 
     let store_replay = !arguments.iter().any(|value| value == "--no-replay");
     let replay_ttl = option_value(&arguments, "--replay-ttl-seconds")?
-        .map(|value| value.parse::<i64>().map_err(|_| "PROVIDER_CAPTURE_REPLAY_TTL_INVALID".to_owned()))
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .map_err(|_| "PROVIDER_CAPTURE_REPLAY_TTL_INVALID".to_owned())
+        })
         .transpose()?
         .unwrap_or(900);
     let mut replay_stored = false;
     if store_replay && plan.replay_cacheable && !contains_tool_call(&response) {
-        replay_store(state_root, &plan, &response_handle, &response_hash, replay_ttl)?;
+        replay_store(
+            state_root,
+            &plan,
+            &response_handle,
+            &response_hash,
+            replay_ttl,
+        )?;
         replay_stored = true;
     }
 
