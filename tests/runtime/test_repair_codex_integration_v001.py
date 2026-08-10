@@ -3,11 +3,14 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND
 
 
 TOOL_PATH = Path(__file__).resolve().parents[2] / "tools" / "repair_codex_integration.py"
@@ -15,6 +18,7 @@ SPEC = importlib.util.spec_from_file_location("repair_codex_integration", TOOL_P
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+PYTHON_BRIDGE_ARGS = ["-m", "syntavra_runtime", CODEX_BRIDGE_COMMAND]
 
 
 class RepairCodexIntegrationV001Tests(unittest.TestCase):
@@ -110,10 +114,11 @@ class RepairCodexIntegrationV001Tests(unittest.TestCase):
             self.assertEqual(current["model"], "test-model")
             self.assertEqual(current["mcp_servers"]["other"]["command"], "other")
             entry = current["mcp_servers"]["syntavra"]
+            self.assertEqual(entry["command"], sys.executable)
+            self.assertEqual(entry["args"], PYTHON_BRIDGE_ARGS)
             self.assertNotIn("cwd", entry)
             self.assertNotIn("SYNTAVRA_PROJECT", entry.get("env", {}))
             self.assertNotIn(str(project), entry.get("args", []))
-            self.assertEqual(entry["args"][-2:], ["mcp", "serve"])
             self.assertTrue((home / ".agents" / "skills" / "syntavra" / "SKILL.md").is_file())
 
     def test_current_static_user_binding_is_repaired_even_without_legacy_json(self) -> None:
