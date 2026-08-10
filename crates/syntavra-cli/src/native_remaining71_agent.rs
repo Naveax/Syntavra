@@ -60,19 +60,19 @@ pub(crate) fn execute(
 }
 
 fn agent_plan(arguments: &[String], project: &Path, state_root: &Path) -> Result<Value, String> {
-    let task = positional_after(arguments, "run", "agent-plan", 0, &[
-        "--session-id", "--max-symbols"
-    ])?;
+    let task = positional_after(
+        arguments,
+        "run",
+        "agent-plan",
+        0,
+        &["--session-id", "--max-symbols"],
+    )?;
     let max_symbols = option_i64(arguments, "--max-symbols", 12)?.clamp(1, 200);
     if has_flag(arguments, "--index") {
         let command = vec!["run".to_owned(), "graph-index".to_owned()];
         let synthetic = vec!["run".to_owned(), "graph-index".to_owned()];
-        let _ = super::native_remaining71_graph::execute(
-            &command,
-            &synthetic,
-            project,
-            state_root,
-        )?;
+        let _ =
+            super::native_remaining71_graph::execute(&command, &synthetic, project, state_root)?;
     }
     let query_command = vec!["run".to_owned(), "graph-query".to_owned()];
     let query_arguments = vec![
@@ -98,9 +98,8 @@ fn agent_plan(arguments: &[String], project: &Path, state_root: &Path) -> Result
         .map(str::to_owned)
         .collect::<Vec<_>>();
 
-    let session_id = option_value(arguments, "--session-id")?.unwrap_or_else(|| {
-        format!("session-{}", random_hex(12))
-    });
+    let session_id = option_value(arguments, "--session-id")?
+        .unwrap_or_else(|| format!("session-{}", random_hex(12)));
     let open_command = vec!["run".to_owned(), "memory-open".to_owned()];
     let open_arguments = vec![
         "run".to_owned(),
@@ -116,7 +115,13 @@ fn agent_plan(arguments: &[String], project: &Path, state_root: &Path) -> Result
         project,
         state_root,
     );
-    append_memory(state_root, project, &session_id, "task", &json!({"goal":task}));
+    append_memory(
+        state_root,
+        project,
+        &session_id,
+        "task",
+        &json!({"goal":task}),
+    );
 
     let steps = vec![
         json!({"id":"understand","tool":"repo.search","arguments":{"query":task},"resource":"workspace:/","requires":[]}),
@@ -142,8 +147,11 @@ fn agent_plan(arguments: &[String], project: &Path, state_root: &Path) -> Result
         if !matches!(tool, "repo.patch" | "test.run") {
             synthetic.push("--user-authorized".to_owned());
         }
-        let decision = super::native_remaining71_security::execute(&command, &synthetic, state_root)?
-            .unwrap_or_else(|| json!({"allowed":false,"reason":"native-capability-unavailable"}));
+        let decision =
+            super::native_remaining71_security::execute(&command, &synthetic, state_root)?
+                .unwrap_or_else(
+                    || json!({"allowed":false,"reason":"native-capability-unavailable"}),
+                );
         decisions.push(decision);
     }
     let mut plan = json!({
@@ -207,8 +215,7 @@ fn execute_sequence(
     let verifier_raw = positional_after(arguments, root, action, 2, &value_flags)?;
     let patches = load_proposals(patches_raw)?;
     let verifier = load_argv(verifier_raw, "agent verifier")?;
-    let mode = option_value(arguments, "--mode")?
-        .unwrap_or_else(|| "review-required".to_owned());
+    let mode = option_value(arguments, "--mode")?.unwrap_or_else(|| "review-required".to_owned());
     if !MODES.contains(&mode.as_str()) {
         return Err(format!("AGENT_MODE_INVALID:{mode}"));
     }
@@ -218,10 +225,18 @@ fn execute_sequence(
     }
     let timeout = option_f64(arguments, "--timeout", 900.0)?.max(0.1);
     let token_budget = option_value(arguments, "--token-budget")?
-        .map(|value| value.parse::<i64>().map_err(|_| "AGENT_TOKEN_BUDGET_INVALID".to_owned()))
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .map_err(|_| "AGENT_TOKEN_BUDGET_INVALID".to_owned())
+        })
         .transpose()?;
     let cost_budget = option_value(arguments, "--cost-budget")?
-        .map(|value| value.parse::<f64>().map_err(|_| "AGENT_COST_BUDGET_INVALID".to_owned()))
+        .map(|value| {
+            value
+                .parse::<f64>()
+                .map_err(|_| "AGENT_COST_BUDGET_INVALID".to_owned())
+        })
         .transpose()?;
     let authorized = has_flag(arguments, "--authorized");
     let retain_workspace = if direct_replay {
@@ -296,19 +311,67 @@ fn run_agent(
         );
     }
     if mode == "plan-only" {
-        let rollback_complete = if retain_workspace { true } else { cleanup_workspace(project,&workspace,git_worktree) };
+        let rollback_complete = if retain_workspace {
+            true
+        } else {
+            cleanup_workspace(project, &workspace, git_worktree)
+        };
         return finish_receipt(
-            state_root, surface, &run_id, instruction, verifier, mode, max_attempts, timeout,
-            token_budget, cost_budget, retain_workspace, &started_at, started, &workspace, Vec::new(),
-            0, 0.0, Vec::new(), "", rollback_complete, "completed", "plan-only", base_context,
+            state_root,
+            surface,
+            &run_id,
+            instruction,
+            verifier,
+            mode,
+            max_attempts,
+            timeout,
+            token_budget,
+            cost_budget,
+            retain_workspace,
+            &started_at,
+            started,
+            &workspace,
+            Vec::new(),
+            0,
+            0.0,
+            Vec::new(),
+            "",
+            rollback_complete,
+            "completed",
+            "plan-only",
+            base_context,
         );
     }
     if mode == "review-required" && !authorized {
-        let rollback_complete = if retain_workspace { true } else { cleanup_workspace(project,&workspace,git_worktree) };
+        let rollback_complete = if retain_workspace {
+            true
+        } else {
+            cleanup_workspace(project, &workspace, git_worktree)
+        };
         return finish_receipt(
-            state_root, surface, &run_id, instruction, verifier, mode, max_attempts, timeout,
-            token_budget, cost_budget, retain_workspace, &started_at, started, &workspace, Vec::new(),
-            0, 0.0, Vec::new(), "", rollback_complete, "blocked", "explicit authorization required", base_context,
+            state_root,
+            surface,
+            &run_id,
+            instruction,
+            verifier,
+            mode,
+            max_attempts,
+            timeout,
+            token_budget,
+            cost_budget,
+            retain_workspace,
+            &started_at,
+            started,
+            &workspace,
+            Vec::new(),
+            0,
+            0.0,
+            Vec::new(),
+            "",
+            rollback_complete,
+            "blocked",
+            "explicit authorization required",
+            base_context,
         );
     }
 
@@ -397,7 +460,7 @@ fn run_agent(
         )
         .trim()
         .to_owned();
-        let fingerprint = sha256_hex(format!("{}\0{}",verify["exit_code"],text).as_bytes());
+        let fingerprint = sha256_hex(format!("{}\0{}", verify["exit_code"], text).as_bytes());
         previous_failure = Some(json!({
             "kind":if verify["timed_out"].as_bool().unwrap_or(false){"timeout"}else{"verifier"},
             "exit_code":verify["exit_code"],"text":text,"fingerprint":fingerprint
@@ -421,10 +484,29 @@ fn run_agent(
         }
     }
     let receipt = finish_receipt(
-        state_root, surface, &run_id, instruction, verifier, mode, max_attempts, timeout,
-        token_budget, cost_budget, retain_workspace, &started_at, started, &workspace, attempts_out,
-        total_tokens, total_cost, changed_files, &final_diff, rollback_complete, &final_state,
-        &stop_reason, context,
+        state_root,
+        surface,
+        &run_id,
+        instruction,
+        verifier,
+        mode,
+        max_attempts,
+        timeout,
+        token_budget,
+        cost_budget,
+        retain_workspace,
+        &started_at,
+        started,
+        &workspace,
+        attempts_out,
+        total_tokens,
+        total_cost,
+        changed_files,
+        &final_diff,
+        rollback_complete,
+        &final_state,
+        &stop_reason,
+        context,
     )?;
     if let Some(session) = session_id {
         append_memory(
@@ -482,80 +564,427 @@ fn finish_receipt(
     let destination = state_root
         .join("unified")
         .join("agent-receipts")
-        .join(format!("{}.json",run_id.trim_start_matches("sha256:")));
+        .join(format!("{}.json", run_id.trim_start_matches("sha256:")));
     if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|error|format!("AGENT_RECEIPT_PARENT_FAILED:{error}"))?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("AGENT_RECEIPT_PARENT_FAILED:{error}"))?;
     }
-    fs::write(&destination, serde_json::to_vec_pretty(&sort_json(&receipt)).map_err(|error|format!("AGENT_RECEIPT_JSON_FAILED:{error}"))?)
-        .map_err(|error|format!("AGENT_RECEIPT_WRITE_FAILED:{error}"))?;
+    fs::write(
+        &destination,
+        serde_json::to_vec_pretty(&sort_json(&receipt))
+            .map_err(|error| format!("AGENT_RECEIPT_JSON_FAILED:{error}"))?,
+    )
+    .map_err(|error| format!("AGENT_RECEIPT_WRITE_FAILED:{error}"))?;
     Ok(receipt)
 }
 
-fn agent_query(project: &Path,state_root:&Path,instruction:&str,limit:i64)->Result<Vec<Value>,String>{
-    let command=vec!["run".to_owned(),"graph-query".to_owned()];
-    let arguments=vec!["run".to_owned(),"graph-query".to_owned(),instruction.to_owned(),"--limit".to_owned(),limit.to_string()];
-    Ok(super::native_remaining71_graph::execute(&command,&arguments,project,state_root)?.and_then(|value|value["results"].as_array().cloned()).unwrap_or_default())
+fn agent_query(
+    project: &Path,
+    state_root: &Path,
+    instruction: &str,
+    limit: i64,
+) -> Result<Vec<Value>, String> {
+    let command = vec!["run".to_owned(), "graph-query".to_owned()];
+    let arguments = vec![
+        "run".to_owned(),
+        "graph-query".to_owned(),
+        instruction.to_owned(),
+        "--limit".to_owned(),
+        limit.to_string(),
+    ];
+    Ok(
+        super::native_remaining71_graph::execute(&command, &arguments, project, state_root)?
+            .and_then(|value| value["results"].as_array().cloned())
+            .unwrap_or_default(),
+    )
 }
 
-fn apply_patch(workspace:&Path,state_root:&Path,patch:&str,timeout:f64)->Result<Value,String>{
-    let patch_path=workspace.join(format!(".syntavra-agent-{}.diff",random_hex(8)));
-    fs::write(&patch_path,patch.as_bytes()).map_err(|error|format!("AGENT_PATCH_WRITE_FAILED:{error}"))?;
-    let command=vec!["git".to_owned(),"apply".to_owned(),"--whitespace=nowarn".to_owned(),patch_path.to_string_lossy().into_owned()];
-    let result=sandbox_run(workspace,state_root,&command,timeout.min(120.0));
-    let _=fs::remove_file(&patch_path);
+fn apply_patch(
+    workspace: &Path,
+    state_root: &Path,
+    patch: &str,
+    timeout: f64,
+) -> Result<Value, String> {
+    let patch_path = workspace.join(format!(".syntavra-agent-{}.diff", random_hex(8)));
+    fs::write(&patch_path, patch.as_bytes())
+        .map_err(|error| format!("AGENT_PATCH_WRITE_FAILED:{error}"))?;
+    let command = vec![
+        "git".to_owned(),
+        "apply".to_owned(),
+        "--whitespace=nowarn".to_owned(),
+        patch_path.to_string_lossy().into_owned(),
+    ];
+    let result = sandbox_run(workspace, state_root, &command, timeout.min(120.0));
+    let _ = fs::remove_file(&patch_path);
     result
 }
 
-fn sandbox_run(workspace:&Path,state_root:&Path,argv:&[String],timeout:f64)->Result<Value,String>{
-    let command=vec!["run".to_owned(),"sandbox-run".to_owned()];
-    let arguments=vec!["run".to_owned(),"sandbox-run".to_owned(),canonical_json(&Value::Array(argv.iter().cloned().map(Value::String).collect()))?,"--timeout".to_owned(),timeout.to_string()];
-    let execution=super::native_remaining71_sandbox::execute(&command,&arguments,workspace,state_root)?
-        .ok_or_else(||"AGENT_SANDBOX_ROUTE_UNAVAILABLE".to_owned())?;
+fn sandbox_run(
+    workspace: &Path,
+    state_root: &Path,
+    argv: &[String],
+    timeout: f64,
+) -> Result<Value, String> {
+    let command = vec!["run".to_owned(), "sandbox-run".to_owned()];
+    let arguments = vec![
+        "run".to_owned(),
+        "sandbox-run".to_owned(),
+        canonical_json(&Value::Array(
+            argv.iter().cloned().map(Value::String).collect(),
+        ))?,
+        "--timeout".to_owned(),
+        timeout.to_string(),
+    ];
+    let execution =
+        super::native_remaining71_sandbox::execute(&command, &arguments, workspace, state_root)?
+            .ok_or_else(|| "AGENT_SANDBOX_ROUTE_UNAVAILABLE".to_owned())?;
     Ok(execution.value)
 }
 
-fn create_workspace(project:&Path,state_root:&Path)->Result<(PathBuf,bool),String>{
-    let project=fs::canonicalize(project).map_err(|error|format!("AGENT_PROJECT_RESOLVE_FAILED:{error}"))?;
-    let root=state_root.join("unified").join("agent-workspaces");
-    fs::create_dir_all(&root).map_err(|error|format!("AGENT_WORKSPACE_ROOT_FAILED:{error}"))?;
-    let destination=root.join(format!("run-{}",random_hex(12)));
+fn create_workspace(project: &Path, state_root: &Path) -> Result<(PathBuf, bool), String> {
+    let project = fs::canonicalize(project)
+        .map_err(|error| format!("AGENT_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let root = state_root.join("unified").join("agent-workspaces");
+    fs::create_dir_all(&root).map_err(|error| format!("AGENT_WORKSPACE_ROOT_FAILED:{error}"))?;
+    let destination = root.join(format!("run-{}", random_hex(12)));
     if project.join(".git").exists() && command_exists("git") {
-        let output=Command::new("git").args(["-C",project.to_str().unwrap_or_default(),"worktree","add","--detach",destination.to_str().unwrap_or_default(),"HEAD"]).stdin(Stdio::null()).output();
-        if output.as_ref().is_ok_and(|value|value.status.success()) { return Ok((destination,true)); }
-        let _=fs::remove_dir_all(&destination);
+        let output = Command::new("git")
+            .args([
+                "-C",
+                project.to_str().unwrap_or_default(),
+                "worktree",
+                "add",
+                "--detach",
+                destination.to_str().unwrap_or_default(),
+                "HEAD",
+            ])
+            .stdin(Stdio::null())
+            .output();
+        if output.as_ref().is_ok_and(|value| value.status.success()) {
+            return Ok((destination, true));
+        }
+        let _ = fs::remove_dir_all(&destination);
     }
-    fs::create_dir_all(&destination).map_err(|error|format!("AGENT_WORKSPACE_CREATE_FAILED:{error}"))?;
-    copy_tree(&project,&destination)?;
-    Ok((destination,false))
+    fs::create_dir_all(&destination)
+        .map_err(|error| format!("AGENT_WORKSPACE_CREATE_FAILED:{error}"))?;
+    copy_tree(&project, &destination)?;
+    Ok((destination, false))
 }
 
-fn copy_tree(source:&Path,destination:&Path)->Result<(),String>{
-    let ignored=[".git",".syntavra",".venv","venv","node_modules","dist","build","__pycache__"];
-    let mut entries=fs::read_dir(source).map_err(|error|format!("AGENT_COPY_READ_FAILED:{}:{error}",source.display()))?.collect::<Result<Vec<_>,_>>().map_err(|error|format!("AGENT_COPY_ENTRY_FAILED:{error}"))?;
-    entries.sort_by_key(|entry|entry.file_name());
-    for entry in entries { let name=entry.file_name();let name_text=name.to_string_lossy();if ignored.contains(&name_text.as_ref()){continue}let from=entry.path();let to=destination.join(&name);let kind=entry.file_type().map_err(|error|format!("AGENT_COPY_TYPE_FAILED:{error}"))?;if kind.is_dir(){fs::create_dir_all(&to).map_err(|error|format!("AGENT_COPY_DIR_FAILED:{error}"))?;copy_tree(&from,&to)?;}else if kind.is_file(){fs::copy(&from,&to).map_err(|error|format!("AGENT_COPY_FILE_FAILED:{error}"))?;}}
+fn copy_tree(source: &Path, destination: &Path) -> Result<(), String> {
+    let ignored = [
+        ".git",
+        ".syntavra",
+        ".venv",
+        "venv",
+        "node_modules",
+        "dist",
+        "build",
+        "__pycache__",
+    ];
+    let mut entries = fs::read_dir(source)
+        .map_err(|error| format!("AGENT_COPY_READ_FAILED:{}:{error}", source.display()))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("AGENT_COPY_ENTRY_FAILED:{error}"))?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let name = entry.file_name();
+        let name_text = name.to_string_lossy();
+        if ignored.contains(&name_text.as_ref()) {
+            continue;
+        }
+        let from = entry.path();
+        let to = destination.join(&name);
+        let kind = entry
+            .file_type()
+            .map_err(|error| format!("AGENT_COPY_TYPE_FAILED:{error}"))?;
+        if kind.is_dir() {
+            fs::create_dir_all(&to).map_err(|error| format!("AGENT_COPY_DIR_FAILED:{error}"))?;
+            copy_tree(&from, &to)?;
+        } else if kind.is_file() {
+            fs::copy(&from, &to).map_err(|error| format!("AGENT_COPY_FILE_FAILED:{error}"))?;
+        }
+    }
     Ok(())
 }
 
-fn cleanup_workspace(project:&Path,workspace:&Path,git_worktree:bool)->bool{
-    if git_worktree&&command_exists("git") { let removed=Command::new("git").args(["-C",project.to_str().unwrap_or_default(),"worktree","remove","--force",workspace.to_str().unwrap_or_default()]).stdin(Stdio::null()).output().is_ok_and(|value|value.status.success());let _=Command::new("git").args(["-C",project.to_str().unwrap_or_default(),"worktree","prune"]).stdin(Stdio::null()).output();return removed; }
-    let _=fs::remove_dir_all(workspace);!workspace.exists()
+fn cleanup_workspace(project: &Path, workspace: &Path, git_worktree: bool) -> bool {
+    if git_worktree && command_exists("git") {
+        let removed = Command::new("git")
+            .args([
+                "-C",
+                project.to_str().unwrap_or_default(),
+                "worktree",
+                "remove",
+                "--force",
+                workspace.to_str().unwrap_or_default(),
+            ])
+            .stdin(Stdio::null())
+            .output()
+            .is_ok_and(|value| value.status.success());
+        let _ = Command::new("git")
+            .args([
+                "-C",
+                project.to_str().unwrap_or_default(),
+                "worktree",
+                "prune",
+            ])
+            .stdin(Stdio::null())
+            .output();
+        return removed;
+    }
+    let _ = fs::remove_dir_all(workspace);
+    !workspace.exists()
 }
 
-fn git_diff(workspace:&Path)->(String,Vec<String>){if !workspace.join(".git").exists()||!command_exists("git"){return(String::new(),Vec::new())}let diff=Command::new("git").args(["-C",workspace.to_str().unwrap_or_default(),"diff","--binary","--no-ext-diff"]).output().ok().map(|value|String::from_utf8_lossy(&value.stdout).into_owned()).unwrap_or_default();let names=Command::new("git").args(["-C",workspace.to_str().unwrap_or_default(),"diff","--name-only"]).output().ok().map(|value|String::from_utf8_lossy(&value.stdout).lines().map(str::to_owned).collect::<BTreeSet<_>>().into_iter().collect()).unwrap_or_default();(diff,names)}
-fn command_exists(name:&str)->bool{if Path::new(name).is_absolute(){return Path::new(name).is_file()}std::env::var_os("PATH").is_some_and(|path|std::env::split_paths(&path).any(|dir|{let direct=dir.join(name);if direct.is_file(){return true}if cfg!(windows){[".exe",".cmd",".bat"].iter().any(|suffix|dir.join(format!("{name}{suffix}")).is_file())}else{false}}))}
-fn tail_chars(value:&str,limit:usize)->String{if value.len()<=limit{return value.to_owned()}let mut start=value.len()-limit;while start<value.len()&&!value.is_char_boundary(start){start+=1;}value[start..].to_owned()}
+fn git_diff(workspace: &Path) -> (String, Vec<String>) {
+    if !workspace.join(".git").exists() || !command_exists("git") {
+        return (String::new(), Vec::new());
+    }
+    let diff = Command::new("git")
+        .args([
+            "-C",
+            workspace.to_str().unwrap_or_default(),
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+        ])
+        .output()
+        .ok()
+        .map(|value| String::from_utf8_lossy(&value.stdout).into_owned())
+        .unwrap_or_default();
+    let names = Command::new("git")
+        .args([
+            "-C",
+            workspace.to_str().unwrap_or_default(),
+            "diff",
+            "--name-only",
+        ])
+        .output()
+        .ok()
+        .map(|value| {
+            String::from_utf8_lossy(&value.stdout)
+                .lines()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect()
+        })
+        .unwrap_or_default();
+    (diff, names)
+}
+fn command_exists(name: &str) -> bool {
+    if Path::new(name).is_absolute() {
+        return Path::new(name).is_file();
+    }
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|dir| {
+            let direct = dir.join(name);
+            if direct.is_file() {
+                return true;
+            }
+            if cfg!(windows) {
+                [".exe", ".cmd", ".bat"]
+                    .iter()
+                    .any(|suffix| dir.join(format!("{name}{suffix}")).is_file())
+            } else {
+                false
+            }
+        })
+    })
+}
+fn tail_chars(value: &str, limit: usize) -> String {
+    if value.len() <= limit {
+        return value.to_owned();
+    }
+    let mut start = value.len() - limit;
+    while start < value.len() && !value.is_char_boundary(start) {
+        start += 1;
+    }
+    value[start..].to_owned()
+}
 
-fn load_proposals(value:&str)->Result<Vec<Proposal>,String>{let value=load_json(value)?;let rows=value.as_array().ok_or_else(||"agent patches must be a JSON list".to_owned())?;rows.iter().map(|row|{if let Some(text)=row.as_str(){Ok(Proposal{patch:text.to_owned(),rationale:String::new(),estimated_tokens:0,estimated_cost:0.0})}else if let Some(object)=row.as_object(){Ok(Proposal{patch:object.get("patch").and_then(Value::as_str).unwrap_or_default().to_owned(),rationale:object.get("rationale").and_then(Value::as_str).unwrap_or_default().to_owned(),estimated_tokens:object.get("estimated_tokens").and_then(Value::as_i64).unwrap_or(0),estimated_cost:object.get("estimated_cost").and_then(Value::as_f64).unwrap_or(0.0)})}else{Err("agent patch proposal must be a string or object".to_owned())}}).collect()}
-fn load_argv(value:&str,label:&str)->Result<Vec<String>,String>{let value=load_json(value)?;let rows=value.as_array().ok_or_else(||format!("{label} must be a non-empty JSON argv list"))?;if rows.is_empty(){return Err(format!("{label} must be a non-empty JSON argv list"))}rows.iter().map(|row|row.as_str().filter(|item|!item.contains('\0')).map(str::to_owned).ok_or_else(||format!("{label} must be a non-empty JSON argv list"))).collect()}
-fn load_json(value:&str)->Result<Value,String>{let raw=if Path::new(value).is_file(){fs::read_to_string(value).map_err(|error|format!("AGENT_JSON_READ_FAILED:{error}"))?}else{value.to_owned()};serde_json::from_str(&raw).map_err(|error|format!("AGENT_JSON_INVALID:{error}"))}
-fn random_hex(bytes:usize)->String{let mut raw=vec![0u8;bytes];OsRng.fill_bytes(&mut raw);raw.iter().map(|byte|format!("{byte:02x}")).collect()}
-fn canonical_json(value:&Value)->Result<String,String>{serde_json::to_string(&sort_json(value)).map_err(|error|format!("AGENT_JSON_SERIALIZE_FAILED:{error}"))}
-fn sort_json(value:&Value)->Value{match value{Value::Object(map)=>{let mut keys=map.keys().collect::<Vec<_>>();keys.sort_unstable();let mut output=Map::new();for key in keys{output.insert(key.clone(),sort_json(&map[key]));}Value::Object(output)},Value::Array(rows)=>Value::Array(rows.iter().map(sort_json).collect()),_=>value.clone()}}
-fn merge_object(left:&Value,right:Value)->Value{let mut value=left.clone();if let(Value::Object(target),Value::Object(source))=(&mut value,right){for(key,item)in source{target.insert(key,item);}}value}
-fn now_iso()->Result<String,String>{let duration=SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error|format!("AGENT_CLOCK_FAILED:{error}"))?;Ok(format!("{}.{:06}+00:00",duration.as_secs(),duration.subsec_micros()))}
-fn has_flag(arguments:&[String],flag:&str)->bool{arguments.iter().any(|value|value==flag)}
-fn option_value(arguments:&[String],flag:&str)->Result<Option<String>,String>{let mut output=None;let mut index=0usize;while index<arguments.len(){let current=&arguments[index];let found=if current==flag{index+=1;Some(arguments.get(index).ok_or_else(||format!("{flag}_VALUE_MISSING"))?.clone())}else{current.strip_prefix(flag).and_then(|tail|tail.strip_prefix('=')).map(str::to_owned)};if let Some(found)=found{if output.is_some(){return Err(format!("{flag}_DUPLICATE"))}output=Some(found);}index+=1;}Ok(output)}
-fn option_i64(arguments:&[String],flag:&str,default:i64)->Result<i64,String>{option_value(arguments,flag)?.map(|value|value.parse::<i64>().map_err(|_|format!("{flag}_INVALID"))).transpose().map(|value|value.unwrap_or(default))}
-fn option_f64(arguments:&[String],flag:&str,default:f64)->Result<f64,String>{option_value(arguments,flag)?.map(|value|value.parse::<f64>().map_err(|_|format!("{flag}_INVALID"))).transpose().map(|value|value.unwrap_or(default))}
-fn positional_after<'a>(arguments:&'a[String],root:&str,action:&str,position:usize,value_flags:&[&str])->Result<&'a str,String>{let start=arguments.windows(2).position(|row|row[0]==root&&row[1]==action).map(|index|index+2).ok_or_else(||format!("AGENT_ACTION_NOT_FOUND:{root}:{action}"))?;let mut values=Vec::new();let mut index=start;while index<arguments.len(){if value_flags.contains(&arguments[index].as_str()){index+=2;continue}if arguments[index].starts_with("--"){index+=1;continue}values.push(arguments[index].as_str());index+=1;}values.get(position).copied().ok_or_else(||format!("AGENT_POSITIONAL_MISSING:{root}:{action}:{position}"))}
+fn load_proposals(value: &str) -> Result<Vec<Proposal>, String> {
+    let value = load_json(value)?;
+    let rows = value
+        .as_array()
+        .ok_or_else(|| "agent patches must be a JSON list".to_owned())?;
+    rows.iter()
+        .map(|row| {
+            if let Some(text) = row.as_str() {
+                Ok(Proposal {
+                    patch: text.to_owned(),
+                    rationale: String::new(),
+                    estimated_tokens: 0,
+                    estimated_cost: 0.0,
+                })
+            } else if let Some(object) = row.as_object() {
+                Ok(Proposal {
+                    patch: object
+                        .get("patch")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    rationale: object
+                        .get("rationale")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    estimated_tokens: object
+                        .get("estimated_tokens")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0),
+                    estimated_cost: object
+                        .get("estimated_cost")
+                        .and_then(Value::as_f64)
+                        .unwrap_or(0.0),
+                })
+            } else {
+                Err("agent patch proposal must be a string or object".to_owned())
+            }
+        })
+        .collect()
+}
+fn load_argv(value: &str, label: &str) -> Result<Vec<String>, String> {
+    let value = load_json(value)?;
+    let rows = value
+        .as_array()
+        .ok_or_else(|| format!("{label} must be a non-empty JSON argv list"))?;
+    if rows.is_empty() {
+        return Err(format!("{label} must be a non-empty JSON argv list"));
+    }
+    rows.iter()
+        .map(|row| {
+            row.as_str()
+                .filter(|item| !item.contains('\0'))
+                .map(str::to_owned)
+                .ok_or_else(|| format!("{label} must be a non-empty JSON argv list"))
+        })
+        .collect()
+}
+fn load_json(value: &str) -> Result<Value, String> {
+    let raw = if Path::new(value).is_file() {
+        fs::read_to_string(value).map_err(|error| format!("AGENT_JSON_READ_FAILED:{error}"))?
+    } else {
+        value.to_owned()
+    };
+    serde_json::from_str(&raw).map_err(|error| format!("AGENT_JSON_INVALID:{error}"))
+}
+fn random_hex(bytes: usize) -> String {
+    let mut raw = vec![0u8; bytes];
+    OsRng.fill_bytes(&mut raw);
+    raw.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+fn canonical_json(value: &Value) -> Result<String, String> {
+    serde_json::to_string(&sort_json(value))
+        .map_err(|error| format!("AGENT_JSON_SERIALIZE_FAILED:{error}"))
+}
+fn sort_json(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut keys = map.keys().collect::<Vec<_>>();
+            keys.sort_unstable();
+            let mut output = Map::new();
+            for key in keys {
+                output.insert(key.clone(), sort_json(&map[key]));
+            }
+            Value::Object(output)
+        }
+        Value::Array(rows) => Value::Array(rows.iter().map(sort_json).collect()),
+        _ => value.clone(),
+    }
+}
+fn merge_object(left: &Value, right: Value) -> Value {
+    let mut value = left.clone();
+    if let (Value::Object(target), Value::Object(source)) = (&mut value, right) {
+        for (key, item) in source {
+            target.insert(key, item);
+        }
+    }
+    value
+}
+fn now_iso() -> Result<String, String> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("AGENT_CLOCK_FAILED:{error}"))?;
+    Ok(format!(
+        "{}.{:06}+00:00",
+        duration.as_secs(),
+        duration.subsec_micros()
+    ))
+}
+fn has_flag(arguments: &[String], flag: &str) -> bool {
+    arguments.iter().any(|value| value == flag)
+}
+fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
+    let mut output = None;
+    let mut index = 0usize;
+    while index < arguments.len() {
+        let current = &arguments[index];
+        let found = if current == flag {
+            index += 1;
+            Some(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
+                    .clone(),
+            )
+        } else {
+            current
+                .strip_prefix(flag)
+                .and_then(|tail| tail.strip_prefix('='))
+                .map(str::to_owned)
+        };
+        if let Some(found) = found {
+            if output.is_some() {
+                return Err(format!("{flag}_DUPLICATE"));
+            }
+            output = Some(found);
+        }
+        index += 1;
+    }
+    Ok(output)
+}
+fn option_i64(arguments: &[String], flag: &str, default: i64) -> Result<i64, String> {
+    option_value(arguments, flag)?
+        .map(|value| value.parse::<i64>().map_err(|_| format!("{flag}_INVALID")))
+        .transpose()
+        .map(|value| value.unwrap_or(default))
+}
+fn option_f64(arguments: &[String], flag: &str, default: f64) -> Result<f64, String> {
+    option_value(arguments, flag)?
+        .map(|value| value.parse::<f64>().map_err(|_| format!("{flag}_INVALID")))
+        .transpose()
+        .map(|value| value.unwrap_or(default))
+}
+fn positional_after<'a>(
+    arguments: &'a [String],
+    root: &str,
+    action: &str,
+    position: usize,
+    value_flags: &[&str],
+) -> Result<&'a str, String> {
+    let start = arguments
+        .windows(2)
+        .position(|row| row[0] == root && row[1] == action)
+        .map(|index| index + 2)
+        .ok_or_else(|| format!("AGENT_ACTION_NOT_FOUND:{root}:{action}"))?;
+    let mut values = Vec::new();
+    let mut index = start;
+    while index < arguments.len() {
+        if value_flags.contains(&arguments[index].as_str()) {
+            index += 2;
+            continue;
+        }
+        if arguments[index].starts_with("--") {
+            index += 1;
+            continue;
+        }
+        values.push(arguments[index].as_str());
+        index += 1;
+    }
+    values
+        .get(position)
+        .copied()
+        .ok_or_else(|| format!("AGENT_POSITIONAL_MISSING:{root}:{action}:{position}"))
+}
