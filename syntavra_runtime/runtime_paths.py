@@ -41,11 +41,13 @@ def state_home(*, home: Path | None = None) -> Path:
     if override:
         return Path(override).expanduser().resolve(strict=False)
 
-    # An explicit home is an isolation/testing boundary and must outrank ambient
-    # LOCALAPPDATA/XDG variables from the machine running the process.
+    # A genuinely custom home is an isolation/testing boundary. Passing the real
+    # process home, however, must not bypass the platform-native state location.
     if home is not None:
-        base = home.expanduser().resolve(strict=False)
-        return (base / ".local" / "state" / "syntavra").resolve(strict=False)
+        explicit_home = home.expanduser().resolve(strict=False)
+        process_home = Path.home().expanduser().resolve(strict=False)
+        if explicit_home != process_home:
+            return (explicit_home / ".local" / "state" / "syntavra").resolve(strict=False)
 
     if os.name == "nt":
         local = os.environ.get("LOCALAPPDATA")
