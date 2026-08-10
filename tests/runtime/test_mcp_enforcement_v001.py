@@ -43,7 +43,7 @@ class MCPEnforcementV001Tests(unittest.TestCase):
             balanced = self.server.exposed_tools()
         with patch.dict(os.environ, {"SYNTAVRA_MCP_PROFILE": "audit"}, clear=False):
             audit = self.server.exposed_tools()
-        self.assertEqual(len(minimal), 8)
+        self.assertEqual(len(minimal), 10)
         self.assertEqual(len(balanced), 36)
         self.assertEqual(len(audit), len(self.server.tools()))
         self.assertLess(len(minimal), len(balanced))
@@ -53,6 +53,8 @@ class MCPEnforcementV001Tests(unittest.TestCase):
         with patch.dict(os.environ, {"SYNTAVRA_MCP_PROFILE": "minimal"}, clear=False):
             listed = {row["name"] for row in self.server.exposed_tools()}
             self.assertIn("syntavra.status", listed)
+            self.assertIn("syntavra.process.submit", listed)
+            self.assertIn("syntavra.process.completions", listed)
             self.assertNotIn("syntavra.evidence.rotate_key", listed)
             response = self.server.handle(self._call("syntavra.evidence.rotate_key"))
         self.assertEqual(response["error"]["code"], -32001)
@@ -85,19 +87,20 @@ class MCPEnforcementV001Tests(unittest.TestCase):
             ))
         self.assertEqual(response["error"]["data"]["reason"], "exact-evidence-required")
 
-    def test_unsandboxed_process_stays_disabled_even_when_authorized(self) -> None:
+    def test_authorized_broker_process_no_longer_needs_redundant_environment_switch(self) -> None:
         authorization = {
             "_syntavra_authorization": {
                 "user_authorized": True,
                 "exact_evidence": True,
                 "sandboxed": False,
             },
-            "argv": ["python", "-c", "print('must not execute')"],
+            "argv": ["python", "-c", "print('broker route ok')"],
         }
-        with patch.dict(os.environ, {"SYNTAVRA_MCP_PROFILE": "balanced"}, clear=False):
+        with patch.dict(os.environ, {"SYNTAVRA_MCP_PROFILE": "minimal"}, clear=False):
             os.environ.pop("SYNTAVRA_ALLOW_UNSANDBOXED_PROCESS", None)
             response = self.server.handle(self._call("syntavra.process.submit", authorization))
-        self.assertEqual(response["error"]["data"]["reason"], "unsandboxed-process-disabled")
+        self.assertIn("result", response)
+        self.assertEqual(response["result"]["_meta"]["syntavra_risk"], "unsandboxed-execute")
 
     def test_installed_profile_file_is_runtime_default(self) -> None:
         state = self.root / "balanced-state"
