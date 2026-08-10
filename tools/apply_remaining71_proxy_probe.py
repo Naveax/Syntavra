@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCT = ROOT / "crates/syntavra-cli/src/native_product.rs"
+PROXY = ROOT / "crates/syntavra-cli/src/native_remaining71_proxy.rs"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -30,6 +31,13 @@ def main() -> int:
     addition = '''    if bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command) {\n        return native_remaining71_proxy::execute(command, &arguments, project_root, state_root);\n    }\n'''
     text = one(text, anchor, anchor + addition, "execute")
     PRODUCT.write_text(text, encoding="utf-8")
+
+    proxy = PROXY.read_text(encoding="utf-8")
+    malformed = "value.replace(''', \"'\\\"'\\\"'\")"
+    corrected = "value.replace('\\'', \"'\\\"'\\\"'\")"
+    proxy = one(proxy, malformed, corrected, "shell-quote")
+    PROXY.write_text(proxy, encoding="utf-8")
+
     print("proxy/gateway closure wired behind SYNTAVRA_BULK_PARITY_PROBE=1")
     return 0
 
