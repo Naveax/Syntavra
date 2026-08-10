@@ -17,7 +17,7 @@ def discover_project_root(
 ) -> Path:
     """Resolve the active project without binding global integrations to Syntavra itself.
 
-    Explicit non-auto paths remain authoritative.  The default/auto form starts at
+    Explicit non-auto paths remain authoritative. The default/auto form starts at
     the process working directory and walks upward to the nearest Git worktree.
     This is intentionally independent from the installed Syntavra package path.
     """
@@ -41,6 +41,12 @@ def state_home(*, home: Path | None = None) -> Path:
     if override:
         return Path(override).expanduser().resolve(strict=False)
 
+    # An explicit home is an isolation/testing boundary and must outrank ambient
+    # LOCALAPPDATA/XDG variables from the machine running the process.
+    if home is not None:
+        base = home.expanduser().resolve(strict=False)
+        return (base / ".local" / "state" / "syntavra").resolve(strict=False)
+
     if os.name == "nt":
         local = os.environ.get("LOCALAPPDATA")
         if local:
@@ -50,7 +56,7 @@ def state_home(*, home: Path | None = None) -> Path:
     if xdg:
         return (Path(xdg) / "syntavra").expanduser().resolve(strict=False)
 
-    base = (home or Path.home()).expanduser().resolve(strict=False)
+    base = Path.home().expanduser().resolve(strict=False)
     return (base / ".local" / "state" / "syntavra").resolve(strict=False)
 
 
