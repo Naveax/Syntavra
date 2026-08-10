@@ -111,6 +111,8 @@ mod native_read_only_product;
 mod native_redact;
 #[path = "native_remaining71_memory.rs"]
 mod native_remaining71_memory;
+#[path = "native_remaining71_sandbox.rs"]
+mod native_remaining71_sandbox;
 #[path = "native_remaining71_security.rs"]
 mod native_remaining71_security;
 #[path = "native_route.rs"]
@@ -205,6 +207,7 @@ pub fn supports(command: &[String]) -> bool {
         || native_expansion::supports(command)
         || (bulk_parity_probe_enabled() && native_remaining71_memory::supports(command))
         || (bulk_parity_probe_enabled() && native_remaining71_security::supports(command))
+        || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -369,6 +372,16 @@ pub fn execute(
     }
     if bulk_parity_probe_enabled() && native_remaining71_security::supports(command) {
         return native_remaining71_security::execute(command, &arguments, state_root);
+    }
+    if bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command) {
+        if let Some(decision) =
+            native_remaining71_sandbox::execute(command, &arguments, project_root, state_root)?
+        {
+            if decision.exit_code != 0 {
+                emit_failed_decision(&decision.value, decision.exit_code);
+            }
+            return Ok(Some(decision.value));
+        }
     }
     if native_analytics::supports(command) {
         return native_analytics::execute(&arguments, state_root).map(Some);

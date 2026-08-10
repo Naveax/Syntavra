@@ -3,8 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::Write as _;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -17,11 +16,30 @@ use sha2::{Digest as _, Sha256};
 use super::native_evidence_store::NativeEvidenceStore;
 
 const DIRECT_ENV_ALLOWLIST: &[&str] = &[
-    "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "LANG", "LC_ALL",
-    "PYTHONPATH", "VIRTUAL_ENV", "CI",
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "SYSTEMROOT",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "LC_ALL",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+    "CI",
 ];
 const PLATFORM_ENV_ALLOWLIST: &[&str] = &[
-    "PATH", "HOME", "USER", "USERNAME", "TMP", "TEMP", "TMPDIR", "LANG", "LC_ALL", "SYSTEMROOT",
+    "PATH",
+    "HOME",
+    "USER",
+    "USERNAME",
+    "TMP",
+    "TEMP",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "SYSTEMROOT",
     "COMSPEC",
 ];
 
@@ -66,7 +84,8 @@ fn now_iso() -> Result<String, String> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("SANDBOX_CLOCK_FAILED:{error}"))?;
-    let seconds = i64::try_from(duration.as_secs()).map_err(|_| "SANDBOX_CLOCK_RANGE".to_owned())?;
+    let seconds =
+        i64::try_from(duration.as_secs()).map_err(|_| "SANDBOX_CLOCK_RANGE".to_owned())?;
     let days = seconds / 86_400;
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
@@ -77,7 +96,9 @@ fn now_iso() -> Result<String, String> {
     let mp = (5 * doy + 2) / 153;
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = mp + if mp < 10 { 3 } else { -9 };
-    if month <= 2 { year += 1; }
+    if month <= 2 {
+        year += 1;
+    }
     let sod = seconds % 86_400;
     Ok(format!(
         "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:06}+00:00",
@@ -91,13 +112,20 @@ fn now_iso() -> Result<String, String> {
 fn random_sandbox_id() -> String {
     let mut raw = [0u8; 16];
     OsRng.fill_bytes(&mut raw);
-    let suffix = raw.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let suffix = raw
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     format!("sb-{suffix}")
 }
 
 fn which(name: &str) -> Option<PathBuf> {
     let path = env::var_os("PATH")?;
-    let suffixes: &[&str] = if cfg!(windows) { &[".exe", ".cmd", ".bat", ""] } else { &[""] };
+    let suffixes: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd", ".bat", ""]
+    } else {
+        &[""]
+    };
     for directory in env::split_paths(&path) {
         for suffix in suffixes {
             let candidate = directory.join(format!("{name}{suffix}"));
@@ -125,12 +153,21 @@ fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, Stri
         let item = &arguments[index];
         let found = if item == flag {
             index += 1;
-            Some(arguments.get(index).ok_or_else(|| format!("{flag}_VALUE_MISSING"))?.clone())
+            Some(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
+                    .clone(),
+            )
         } else {
-            item.strip_prefix(flag).and_then(|tail| tail.strip_prefix('=')).map(str::to_owned)
+            item.strip_prefix(flag)
+                .and_then(|tail| tail.strip_prefix('='))
+                .map(str::to_owned)
         };
         if let Some(found) = found {
-            if result.is_some() { return Err(format!("{flag}_DUPLICATE")); }
+            if result.is_some() {
+                return Err(format!("{flag}_DUPLICATE"));
+            }
             result = Some(found);
         }
         index += 1;
@@ -144,8 +181,16 @@ fn repeated_values(arguments: &[String], flag: &str) -> Result<Vec<String>, Stri
     while index < arguments.len() {
         if arguments[index] == flag {
             index += 1;
-            values.push(arguments.get(index).ok_or_else(|| format!("{flag}_VALUE_MISSING"))?.clone());
-        } else if let Some(value) = arguments[index].strip_prefix(flag).and_then(|tail| tail.strip_prefix('=')) {
+            values.push(
+                arguments
+                    .get(index)
+                    .ok_or_else(|| format!("{flag}_VALUE_MISSING"))?
+                    .clone(),
+            );
+        } else if let Some(value) = arguments[index]
+            .strip_prefix(flag)
+            .and_then(|tail| tail.strip_prefix('='))
+        {
             values.push(value.to_owned());
         }
         index += 1;
@@ -178,7 +223,9 @@ fn direct_command(arguments: &[String], action: &str) -> Result<Vec<String>, Str
     let start = action_position(arguments, "sandbox", action)?;
     if let Some(separator) = arguments[start..].iter().position(|item| item == "--") {
         let command = arguments[start + separator + 1..].to_vec();
-        if command.is_empty() { return Err("sandbox command requires argv after --".to_owned()); }
+        if command.is_empty() {
+            return Err("sandbox command requires argv after --".to_owned());
+        }
         return Ok(command);
     }
     Err("sandbox command requires argv after --".to_owned())
@@ -186,16 +233,22 @@ fn direct_command(arguments: &[String], action: &str) -> Result<Vec<String>, Str
 
 fn project_child(project: &Path, value: &str, require_exists: bool) -> Result<PathBuf, String> {
     let raw = Path::new(value);
-    let candidate = if raw.is_absolute() { raw.to_path_buf() } else { project.join(raw) };
+    let candidate = if raw.is_absolute() {
+        raw.to_path_buf()
+    } else {
+        project.join(raw)
+    };
     let normalized = if require_exists {
-        fs::canonicalize(&candidate).map_err(|error| format!("SANDBOX_PATH_RESOLVE_FAILED:{error}"))?
+        fs::canonicalize(&candidate)
+            .map_err(|error| format!("SANDBOX_PATH_RESOLVE_FAILED:{error}"))?
     } else if let Some(parent) = candidate.parent() {
         let canonical_parent = fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
         canonical_parent.join(candidate.file_name().unwrap_or_default())
     } else {
         candidate.clone()
     };
-    let project_canonical = fs::canonicalize(project).map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let project_canonical = fs::canonicalize(project)
+        .map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
     if !normalized.starts_with(&project_canonical) {
         return Err(format!("path escapes project: {value}"));
     }
@@ -204,18 +257,51 @@ fn project_child(project: &Path, value: &str, require_exists: bool) -> Result<Pa
 
 fn direct_policy(arguments: &[String], project: &Path) -> Result<Value, String> {
     let backend = option_value(arguments, "--backend")?.unwrap_or_else(|| "auto".to_owned());
-    if !matches!(backend.as_str(), "auto" | "docker" | "podman" | "bwrap" | "local-restricted") {
+    if !matches!(
+        backend.as_str(),
+        "auto" | "docker" | "podman" | "bwrap" | "local-restricted"
+    ) {
         return Err("unsupported sandbox backend".to_owned());
     }
     let network = option_value(arguments, "--network")?.unwrap_or_else(|| "none".to_owned());
-    if !matches!(network.as_str(), "none" | "inherit") { return Err("network must be none or inherit".to_owned()); }
-    let timeout = option_value(arguments, "--timeout")?.map(|v| v.parse::<f64>().map_err(|_| "SANDBOX_TIMEOUT_INVALID".to_owned())).transpose()?.unwrap_or(1200.0);
-    let memory_mb = option_value(arguments, "--memory-mb")?.map(|v| v.parse::<i64>().map_err(|_| "SANDBOX_MEMORY_INVALID".to_owned())).transpose()?.unwrap_or(2048);
-    let cpus = option_value(arguments, "--cpus")?.map(|v| v.parse::<f64>().map_err(|_| "SANDBOX_CPUS_INVALID".to_owned())).transpose()?.unwrap_or(2.0);
-    let pids = option_value(arguments, "--pids")?.map(|v| v.parse::<i64>().map_err(|_| "SANDBOX_PIDS_INVALID".to_owned())).transpose()?.unwrap_or(256);
-    if timeout <= 0.0 || memory_mb <= 0 || cpus <= 0.0 || pids <= 0 { return Err("sandbox limits must be positive".to_owned()); }
+    if !matches!(network.as_str(), "none" | "inherit") {
+        return Err("network must be none or inherit".to_owned());
+    }
+    let timeout = option_value(arguments, "--timeout")?
+        .map(|v| {
+            v.parse::<f64>()
+                .map_err(|_| "SANDBOX_TIMEOUT_INVALID".to_owned())
+        })
+        .transpose()?
+        .unwrap_or(1200.0);
+    let memory_mb = option_value(arguments, "--memory-mb")?
+        .map(|v| {
+            v.parse::<i64>()
+                .map_err(|_| "SANDBOX_MEMORY_INVALID".to_owned())
+        })
+        .transpose()?
+        .unwrap_or(2048);
+    let cpus = option_value(arguments, "--cpus")?
+        .map(|v| {
+            v.parse::<f64>()
+                .map_err(|_| "SANDBOX_CPUS_INVALID".to_owned())
+        })
+        .transpose()?
+        .unwrap_or(2.0);
+    let pids = option_value(arguments, "--pids")?
+        .map(|v| {
+            v.parse::<i64>()
+                .map_err(|_| "SANDBOX_PIDS_INVALID".to_owned())
+        })
+        .transpose()?
+        .unwrap_or(256);
+    if timeout <= 0.0 || memory_mb <= 0 || cpus <= 0.0 || pids <= 0 {
+        return Err("sandbox limits must be positive".to_owned());
+    }
     let writable = repeated_values(arguments, "--writable")?;
-    for item in &writable { let _ = project_child(project, item, false)?; }
+    for item in &writable {
+        let _ = project_child(project, item, false)?;
+    }
     Ok(json!({
         "backend": backend,
         "network": network,
@@ -235,7 +321,9 @@ fn select_direct_backend(policy: &Value) -> Result<(String, Vec<String>), String
     let requested = policy["backend"].as_str().unwrap_or("auto");
     let available = backend_map();
     let selected = if requested != "auto" {
-        if available[requested].is_null() { return Err(format!("requested backend unavailable: {requested}")); }
+        if available[requested].is_null() {
+            return Err(format!("requested backend unavailable: {requested}"));
+        }
         requested.to_owned()
     } else {
         ["docker", "podman", "bwrap"]
@@ -248,8 +336,11 @@ fn select_direct_backend(policy: &Value) -> Result<(String, Vec<String>), String
     if selected == "local-restricted" {
         reasons.push("network-isolation-unavailable".to_owned());
         reasons.push("filesystem-overlay-unavailable".to_owned());
-        if policy["strict"].as_bool().unwrap_or(true) && policy["network"].as_str() == Some("none") {
-            return Err("strict network-disabled execution requires docker, podman, or bwrap".to_owned());
+        if policy["strict"].as_bool().unwrap_or(true) && policy["network"].as_str() == Some("none")
+        {
+            return Err(
+                "strict network-disabled execution requires docker, podman, or bwrap".to_owned(),
+            );
         }
     }
     Ok((selected, reasons))
@@ -273,47 +364,118 @@ fn direct_plan(arguments: &[String], project: &Path, action: &str) -> Result<Val
     let mut wrapped = Vec::<String>::new();
     let execution_cwd: String;
     if matches!(backend.as_str(), "docker" | "podman") {
-        let executable = available[&backend].as_str().ok_or_else(|| "SANDBOX_BACKEND_PATH_INVALID".to_owned())?;
-        let project_canonical = fs::canonicalize(project).map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
-        let relative = cwd.strip_prefix(&project_canonical).unwrap_or(Path::new(""));
+        let executable = available[&backend]
+            .as_str()
+            .ok_or_else(|| "SANDBOX_BACKEND_PATH_INVALID".to_owned())?;
+        let project_canonical = fs::canonicalize(project)
+            .map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
+        let relative = cwd
+            .strip_prefix(&project_canonical)
+            .unwrap_or(Path::new(""));
         let relative = relative.to_string_lossy().replace('\\', "/");
-        let container_cwd = if relative.is_empty() { "/workspace".to_owned() } else { format!("/workspace/{relative}") };
-        let mount_mode = if policy["read_only_repository"].as_bool().unwrap_or(false) { "ro" } else { "rw" };
+        let container_cwd = if relative.is_empty() {
+            "/workspace".to_owned()
+        } else {
+            format!("/workspace/{relative}")
+        };
+        let mount_mode = if policy["read_only_repository"].as_bool().unwrap_or(false) {
+            "ro"
+        } else {
+            "rw"
+        };
         wrapped.extend([
-            executable.to_owned(), "run".to_owned(), "--rm".to_owned(), "--init".to_owned(),
-            "--network".to_owned(), if network_none { "none".to_owned() } else { "bridge".to_owned() },
-            "--memory".to_owned(), format!("{}m", policy["memory_mb"].as_i64().unwrap_or(2048)),
-            "--cpus".to_owned(), policy["cpu_count"].as_f64().unwrap_or(2.0).to_string(),
-            "--pids-limit".to_owned(), policy["process_limit"].as_i64().unwrap_or(256).to_string(),
-            "--read-only".to_owned(), "--tmpfs".to_owned(), "/tmp:rw,noexec,nosuid,size=256m".to_owned(),
-            "--mount".to_owned(), format!("type=bind,src={},dst=/workspace,{mount_mode}", project_canonical.to_string_lossy()),
-            "--workdir".to_owned(), container_cwd,
+            executable.to_owned(),
+            "run".to_owned(),
+            "--rm".to_owned(),
+            "--init".to_owned(),
+            "--network".to_owned(),
+            if network_none {
+                "none".to_owned()
+            } else {
+                "bridge".to_owned()
+            },
+            "--memory".to_owned(),
+            format!("{}m", policy["memory_mb"].as_i64().unwrap_or(2048)),
+            "--cpus".to_owned(),
+            policy["cpu_count"].as_f64().unwrap_or(2.0).to_string(),
+            "--pids-limit".to_owned(),
+            policy["process_limit"].as_i64().unwrap_or(256).to_string(),
+            "--read-only".to_owned(),
+            "--tmpfs".to_owned(),
+            "/tmp:rw,noexec,nosuid,size=256m".to_owned(),
+            "--mount".to_owned(),
+            format!(
+                "type=bind,src={},dst=/workspace,{mount_mode}",
+                project_canonical.to_string_lossy()
+            ),
+            "--workdir".to_owned(),
+            container_cwd,
         ]);
         for writable in policy["writable_paths"].as_array().into_iter().flatten() {
             let raw = writable.as_str().unwrap_or_default();
             let host = project_child(project, raw, false)?;
-            let relative = host.strip_prefix(&project_canonical).unwrap_or(Path::new("")).to_string_lossy().replace('\\', "/");
-            wrapped.extend(["--mount".to_owned(), format!("type=bind,src={},dst=/workspace/{relative},rw", host.to_string_lossy())]);
+            let relative = host
+                .strip_prefix(&project_canonical)
+                .unwrap_or(Path::new(""))
+                .to_string_lossy()
+                .replace('\\', "/");
+            wrapped.extend([
+                "--mount".to_owned(),
+                format!(
+                    "type=bind,src={},dst=/workspace/{relative},rw",
+                    host.to_string_lossy()
+                ),
+            ]);
         }
         wrapped.push("python:3.13-slim".to_owned());
         wrapped.extend(command.clone());
         execution_cwd = project_canonical.to_string_lossy().into_owned();
     } else if backend == "bwrap" {
-        let executable = available["bwrap"].as_str().ok_or_else(|| "SANDBOX_BACKEND_PATH_INVALID".to_owned())?;
-        let project_canonical = fs::canonicalize(project).map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
-        let relative = cwd.strip_prefix(&project_canonical).unwrap_or(Path::new("")).to_string_lossy().replace('\\', "/");
-        let target_cwd = if relative.is_empty() { "/workspace".to_owned() } else { format!("/workspace/{relative}") };
+        let executable = available["bwrap"]
+            .as_str()
+            .ok_or_else(|| "SANDBOX_BACKEND_PATH_INVALID".to_owned())?;
+        let project_canonical = fs::canonicalize(project)
+            .map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
+        let relative = cwd
+            .strip_prefix(&project_canonical)
+            .unwrap_or(Path::new(""))
+            .to_string_lossy()
+            .replace('\\', "/");
+        let target_cwd = if relative.is_empty() {
+            "/workspace".to_owned()
+        } else {
+            format!("/workspace/{relative}")
+        };
         wrapped.extend([
-            executable.to_owned(), "--die-with-parent".to_owned(), "--new-session".to_owned(), "--unshare-pid".to_owned(),
-            "--unshare-ipc".to_owned(), "--unshare-uts".to_owned(),
-            if policy["read_only_repository"].as_bool().unwrap_or(false) { "--ro-bind".to_owned() } else { "--bind".to_owned() },
-            project_canonical.to_string_lossy().into_owned(), "/workspace".to_owned(),
-            "--proc".to_owned(), "/proc".to_owned(), "--dev".to_owned(), "/dev".to_owned(), "--tmpfs".to_owned(), "/tmp".to_owned(),
-            "--chdir".to_owned(), target_cwd,
+            executable.to_owned(),
+            "--die-with-parent".to_owned(),
+            "--new-session".to_owned(),
+            "--unshare-pid".to_owned(),
+            "--unshare-ipc".to_owned(),
+            "--unshare-uts".to_owned(),
+            if policy["read_only_repository"].as_bool().unwrap_or(false) {
+                "--ro-bind".to_owned()
+            } else {
+                "--bind".to_owned()
+            },
+            project_canonical.to_string_lossy().into_owned(),
+            "/workspace".to_owned(),
+            "--proc".to_owned(),
+            "/proc".to_owned(),
+            "--dev".to_owned(),
+            "/dev".to_owned(),
+            "--tmpfs".to_owned(),
+            "/tmp".to_owned(),
+            "--chdir".to_owned(),
+            target_cwd,
         ]);
-        if network_none { wrapped.push("--unshare-net".to_owned()); }
+        if network_none {
+            wrapped.push("--unshare-net".to_owned());
+        }
         for system in ["/usr", "/bin", "/lib", "/lib64", "/etc"] {
-            if Path::new(system).exists() { wrapped.extend(["--ro-bind".to_owned(), system.to_owned(), system.to_owned()]); }
+            if Path::new(system).exists() {
+                wrapped.extend(["--ro-bind".to_owned(), system.to_owned(), system.to_owned()]);
+            }
         }
         wrapped.extend(command.clone());
         execution_cwd = project_canonical.to_string_lossy().into_owned();
@@ -334,23 +496,49 @@ fn direct_plan(arguments: &[String], project: &Path, action: &str) -> Result<Val
 
 fn secret_like(key: &str) -> bool {
     let upper = key.to_ascii_uppercase();
-    ["TOKEN", "SECRET", "PASSWORD", "PASSWD", "API_KEY", "PRIVATE_KEY", "CREDENTIAL"]
-        .iter().any(|marker| upper.contains(marker))
+    [
+        "TOKEN",
+        "SECRET",
+        "PASSWORD",
+        "PASSWD",
+        "API_KEY",
+        "PRIVATE_KEY",
+        "CREDENTIAL",
+    ]
+    .iter()
+    .any(|marker| upper.contains(marker))
 }
 
-fn filtered_environment(allowlist: &[&str], workspace: &Path, include_numeric_bounds: bool) -> BTreeMap<String, String> {
+fn filtered_environment(
+    allowlist: &[&str],
+    workspace: &Path,
+    include_numeric_bounds: bool,
+) -> BTreeMap<String, String> {
     let allowed = allowlist.iter().copied().collect::<BTreeSet<_>>();
     let mut output = BTreeMap::new();
     for (key, value) in env::vars() {
-        if allowed.contains(key.as_str()) && !secret_like(&key) { output.insert(key, value); }
+        if allowed.contains(key.as_str()) && !secret_like(&key) {
+            output.insert(key, value);
+        }
     }
     output.insert("SYNTAVRA_SANDBOX".to_owned(), "1".to_owned());
-    output.insert("SYNTAVRA_WORKSPACE".to_owned(), workspace.to_string_lossy().into_owned());
+    output.insert(
+        "SYNTAVRA_WORKSPACE".to_owned(),
+        workspace.to_string_lossy().into_owned(),
+    );
     if include_numeric_bounds {
-        output.entry("OPENBLAS_NUM_THREADS".to_owned()).or_insert_with(|| "1".to_owned());
-        output.entry("OMP_NUM_THREADS".to_owned()).or_insert_with(|| "1".to_owned());
-        output.entry("MKL_NUM_THREADS".to_owned()).or_insert_with(|| "1".to_owned());
-        output.entry("NUMEXPR_NUM_THREADS".to_owned()).or_insert_with(|| "1".to_owned());
+        output
+            .entry("OPENBLAS_NUM_THREADS".to_owned())
+            .or_insert_with(|| "1".to_owned());
+        output
+            .entry("OMP_NUM_THREADS".to_owned())
+            .or_insert_with(|| "1".to_owned());
+        output
+            .entry("MKL_NUM_THREADS".to_owned())
+            .or_insert_with(|| "1".to_owned());
+        output
+            .entry("NUMEXPR_NUM_THREADS".to_owned())
+            .or_insert_with(|| "1".to_owned());
     }
     output
 }
@@ -363,18 +551,40 @@ struct ProcessResult {
     stderr: Vec<u8>,
 }
 
-fn run_process(argv: &[String], cwd: &Path, timeout_seconds: f64, environment: &BTreeMap<String, String>) -> Result<ProcessResult, String> {
-    if argv.is_empty() { return Err("command must be a non-empty argv sequence".to_owned()); }
+fn run_process(
+    argv: &[String],
+    cwd: &Path,
+    timeout_seconds: f64,
+    environment: &BTreeMap<String, String>,
+) -> Result<ProcessResult, String> {
+    if argv.is_empty() {
+        return Err("command must be a non-empty argv sequence".to_owned());
+    }
     let started = Instant::now();
     let mut command = Command::new(&argv[0]);
-    command.args(&argv[1..]).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .args(&argv[1..])
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     command.env_clear();
-    for (key, value) in environment { command.env(key, value); }
-    let mut child = command.spawn().map_err(|error| format!("SANDBOX_PROCESS_SPAWN_FAILED:{error}"))?;
+    for (key, value) in environment {
+        command.env(key, value);
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("SANDBOX_PROCESS_SPAWN_FAILED:{error}"))?;
     let deadline = started + Duration::from_secs_f64(timeout_seconds.max(0.1));
     let mut timed_out = false;
     loop {
-        if child.try_wait().map_err(|error| format!("SANDBOX_PROCESS_WAIT_FAILED:{error}"))?.is_some() { break; }
+        if child
+            .try_wait()
+            .map_err(|error| format!("SANDBOX_PROCESS_WAIT_FAILED:{error}"))?
+            .is_some()
+        {
+            break;
+        }
         if Instant::now() >= deadline {
             timed_out = true;
             let _ = child.kill();
@@ -382,9 +592,15 @@ fn run_process(argv: &[String], cwd: &Path, timeout_seconds: f64, environment: &
         }
         thread::sleep(Duration::from_millis(5));
     }
-    let output = child.wait_with_output().map_err(|error| format!("SANDBOX_PROCESS_OUTPUT_FAILED:{error}"))?;
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("SANDBOX_PROCESS_OUTPUT_FAILED:{error}"))?;
     Ok(ProcessResult {
-        exit_code: if timed_out { output.status.code().unwrap_or(124) } else { output.status.code().unwrap_or(1) },
+        exit_code: if timed_out {
+            output.status.code().unwrap_or(124)
+        } else {
+            output.status.code().unwrap_or(1)
+        },
         timed_out,
         duration_ms: started.elapsed().as_secs_f64() * 1000.0,
         stdout: output.stdout,
@@ -394,44 +610,83 @@ fn run_process(argv: &[String], cwd: &Path, timeout_seconds: f64, environment: &
 
 fn stable_project_id(project: &Path) -> String {
     let raw = project.to_string_lossy();
-    let normalized = if cfg!(windows) { raw.replace('/', "\\").to_lowercase() } else { raw.into_owned() };
+    let normalized = if cfg!(windows) {
+        raw.replace('/', "\\").to_lowercase()
+    } else {
+        raw.into_owned()
+    };
     sha256(normalized.as_bytes())
 }
 
 fn firewall_summary(command: &[String], result: &ProcessResult, evidence_handle: &str) -> String {
-    let sample = if result.stdout.is_empty() { &result.stderr } else { &result.stdout };
-    let parser = if serde_json::from_slice::<Value>(sample).is_ok() { "json" } else if result.exit_code == 0 { "success" } else { "failure" };
+    let sample = if result.stdout.is_empty() {
+        &result.stderr
+    } else {
+        &result.stdout
+    };
+    let parser = if serde_json::from_slice::<Value>(sample).is_ok() {
+        "json"
+    } else if result.exit_code == 0 {
+        "success"
+    } else {
+        "failure"
+    };
     let raw_bytes = result.stdout.len() + result.stderr.len();
     let mut useful = String::from_utf8_lossy(sample).replace('\r', "");
-    if useful.len() > 4096 { useful.truncate(4096); }
+    if useful.len() > 4096 {
+        useful.truncate(4096);
+    }
     let mut value = format!(
         "Command: {}\nExit code: {}\nDuration: {:.3} seconds\nParser: {}\nScanned: {} lines / {} bytes\nSuppressed: 0 low-value lines\nFull log: {}",
         command.join(" "), result.exit_code, result.duration_ms / 1000.0, parser,
         String::from_utf8_lossy(&[result.stdout.as_slice(), result.stderr.as_slice()].concat()).lines().count(), raw_bytes, evidence_handle
     );
-    if !useful.trim().is_empty() { value.push_str("\nExcerpt:\n"); value.push_str(useful.trim()); }
+    if !useful.trim().is_empty() {
+        value.push_str("\nExcerpt:\n");
+        value.push_str(useful.trim());
+    }
     value
 }
 
-fn direct_execute(arguments: &[String], project: &Path, state_root: &Path) -> Result<(Value, u8), String> {
+fn direct_execute(
+    arguments: &[String],
+    project: &Path,
+    state_root: &Path,
+) -> Result<(Value, u8), String> {
     let plan = direct_plan(arguments, project, "execute")?;
     let sandbox_id = plan["sandbox_id"].as_str().unwrap_or_default();
     let run_root = state_root.join("sandbox").join("runs").join(sandbox_id);
     fs::create_dir_all(&run_root).map_err(|error| format!("SANDBOX_RUN_CREATE_FAILED:{error}"))?;
-    let pretty = serde_json::to_vec_pretty(&plan).map_err(|error| format!("SANDBOX_PLAN_JSON_FAILED:{error}"))?;
-    fs::write(run_root.join("plan.json"), [&pretty[..], b"\n"].concat()).map_err(|error| format!("SANDBOX_PLAN_WRITE_FAILED:{error}"))?;
-    let command = plan["command"].as_array().ok_or_else(|| "SANDBOX_PLAN_COMMAND_INVALID".to_owned())?.iter().map(|v| v.as_str().unwrap_or_default().to_owned()).collect::<Vec<_>>();
+    let pretty = serde_json::to_vec_pretty(&plan)
+        .map_err(|error| format!("SANDBOX_PLAN_JSON_FAILED:{error}"))?;
+    fs::write(run_root.join("plan.json"), [&pretty[..], b"\n"].concat())
+        .map_err(|error| format!("SANDBOX_PLAN_WRITE_FAILED:{error}"))?;
+    let command = plan["command"]
+        .as_array()
+        .ok_or_else(|| "SANDBOX_PLAN_COMMAND_INVALID".to_owned())?
+        .iter()
+        .map(|v| v.as_str().unwrap_or_default().to_owned())
+        .collect::<Vec<_>>();
     let cwd = PathBuf::from(plan["cwd"].as_str().unwrap_or_default());
     let timeout = plan["policy"]["timeout_seconds"].as_f64().unwrap_or(1200.0);
-    let env = filtered_environment(DIRECT_ENV_ALLOWLIST, project, plan["backend"].as_str() == Some("local-restricted"));
+    let env = filtered_environment(
+        DIRECT_ENV_ALLOWLIST,
+        project,
+        plan["backend"].as_str() == Some("local-restricted"),
+    );
     let started = now_seconds()?;
     let result = run_process(&command, &cwd, timeout, &env)?;
-    fs::write(run_root.join("stdout.log"), &result.stdout).map_err(|error| format!("SANDBOX_STDOUT_WRITE_FAILED:{error}"))?;
-    fs::write(run_root.join("stderr.log"), &result.stderr).map_err(|error| format!("SANDBOX_STDERR_WRITE_FAILED:{error}"))?;
-    let project_id = stable_project_id(&fs::canonicalize(project).unwrap_or_else(|_| project.to_path_buf()));
+    fs::write(run_root.join("stdout.log"), &result.stdout)
+        .map_err(|error| format!("SANDBOX_STDOUT_WRITE_FAILED:{error}"))?;
+    fs::write(run_root.join("stderr.log"), &result.stderr)
+        .map_err(|error| format!("SANDBOX_STDERR_WRITE_FAILED:{error}"))?;
+    let project_id =
+        stable_project_id(&fs::canonicalize(project).unwrap_or_else(|_| project.to_path_buf()));
     let evidence = NativeEvidenceStore::open(state_root, &project_id)?;
     let mut combined = result.stdout.clone();
-    if !combined.is_empty() && !result.stderr.is_empty() { combined.push(b'\n'); }
+    if !combined.is_empty() && !result.stderr.is_empty() {
+        combined.push(b'\n');
+    }
     combined.extend_from_slice(&result.stderr);
     let evidence_handle = evidence.put(&combined, "command-output", &json!({"command": direct_command(arguments, "execute")?, "exit_code": result.exit_code, "duration_seconds": result.duration_ms / 1000.0}))?;
     let original_command = direct_command(arguments, "execute")?;
@@ -449,36 +704,98 @@ fn direct_execute(arguments: &[String], project: &Path, state_root: &Path) -> Re
         "guarantees": plan["guarantees"].clone(),
         "degraded_reasons": plan["degraded_reasons"].clone(),
     });
-    let rendered = serde_json::to_vec_pretty(&value).map_err(|error| format!("SANDBOX_RESULT_JSON_FAILED:{error}"))?;
-    fs::write(run_root.join("result.json"), [&rendered[..], b"\n"].concat()).map_err(|error| format!("SANDBOX_RESULT_WRITE_FAILED:{error}"))?;
-    let code = if result.timed_out { 124 } else { u8::try_from(result.exit_code.clamp(0, 255)).unwrap_or(1) };
+    let rendered = serde_json::to_vec_pretty(&value)
+        .map_err(|error| format!("SANDBOX_RESULT_JSON_FAILED:{error}"))?;
+    fs::write(
+        run_root.join("result.json"),
+        [&rendered[..], b"\n"].concat(),
+    )
+    .map_err(|error| format!("SANDBOX_RESULT_WRITE_FAILED:{error}"))?;
+    let code = if result.timed_out {
+        124
+    } else {
+        u8::try_from(result.exit_code.clamp(0, 255)).unwrap_or(1)
+    };
     Ok((value, code))
 }
 
 fn probe_backend(argv: &[&str]) -> (bool, String) {
-    if argv.is_empty() { return (false, String::new()); }
-    let output = Command::new(argv[0]).args(&argv[1..]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).output();
+    if argv.is_empty() {
+        return (false, String::new());
+    }
+    let output = Command::new(argv[0])
+        .args(&argv[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output();
     match output {
         Ok(value) => {
-            let detail = if value.stderr.is_empty() { &value.stdout } else { &value.stderr };
-            (value.status.success(), String::from_utf8_lossy(detail).trim().chars().rev().take(1000).collect::<String>().chars().rev().collect())
+            let detail = if value.stderr.is_empty() {
+                &value.stdout
+            } else {
+                &value.stderr
+            };
+            (
+                value.status.success(),
+                String::from_utf8_lossy(detail)
+                    .trim()
+                    .chars()
+                    .rev()
+                    .take(1000)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect(),
+            )
         }
-        Err(error) => (false, format!("{}: {error}", std::any::type_name::<std::io::Error>())),
+        Err(error) => (
+            false,
+            format!("{}: {error}", std::any::type_name::<std::io::Error>()),
+        ),
     }
 }
 
-fn platform_backend(project: &Path, strict_native: bool, network_hosts: &[String], allow_child_processes: bool) -> Result<Value, String> {
-    let system = if cfg!(windows) { "windows" } else if cfg!(target_os = "macos") { "darwin" } else if cfg!(target_os = "linux") { "linux" } else { env::consts::OS };
+fn platform_backend(
+    project: &Path,
+    strict_native: bool,
+    network_hosts: &[String],
+    allow_child_processes: bool,
+) -> Result<Value, String> {
+    let system = if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        env::consts::OS
+    };
     let mut backend = if system == "linux" {
         if which("bwrap").is_some() {
-            let (ok, detail) = probe_backend(&["bwrap", "--die-with-parent", "--new-session", "--unshare-user", "--unshare-pid", "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev", "/bin/true"]);
+            let (ok, detail) = probe_backend(&[
+                "bwrap",
+                "--die-with-parent",
+                "--new-session",
+                "--unshare-user",
+                "--unshare-pid",
+                "--ro-bind",
+                "/",
+                "/",
+                "--proc",
+                "/proc",
+                "--dev",
+                "/dev",
+                "/bin/true",
+            ]);
             if ok {
                 json!({"name":"bubblewrap","platform":"linux","available":true,"enforced":["mount-namespace","pid-namespace","user-namespace","process-tree","filesystem-boundary"],"unsupported": if network_hosts.is_empty(){json!([])}else{json!(["domain-level-egress"])},"command_prefix":[],"detail":""})
             } else {
                 json!({"name":"portable-process-boundary","platform":"linux","available":false,"enforced":["cwd-boundary","environment-filter","timeout","process-group"],"unsupported":["mount-namespace","network-namespace","seccomp","cgroup"],"command_prefix":[],"detail":format!("bubblewrap probe failed: {}", if detail.is_empty(){"kernel rejected namespace setup"}else{&detail})})
             }
         } else if which("unshare").is_some() {
-            let (ok, detail) = probe_backend(&["unshare", "--fork", "--pid", "--mount-proc", "/bin/true"]);
+            let (ok, detail) =
+                probe_backend(&["unshare", "--fork", "--pid", "--mount-proc", "/bin/true"]);
             if ok {
                 json!({"name":"unshare","platform":"linux","available":true,"enforced":["pid-namespace","process-tree"],"unsupported":["filesystem-boundary","seccomp","cgroup","domain-level-egress"],"command_prefix":[],"detail":"partial native backend; filesystem containment relies on workspace validation"})
             } else {
@@ -489,7 +806,12 @@ fn platform_backend(project: &Path, strict_native: bool, network_hosts: &[String
         }
     } else if system == "darwin" {
         if which("sandbox-exec").is_some() {
-            let (ok, detail) = probe_backend(&["sandbox-exec", "-p", "(version 1) (allow default)", "/usr/bin/true"]);
+            let (ok, detail) = probe_backend(&[
+                "sandbox-exec",
+                "-p",
+                "(version 1) (allow default)",
+                "/usr/bin/true",
+            ]);
             if ok {
                 json!({"name":"sandbox-exec","platform":"darwin","available":true,"enforced":["filesystem-boundary","process-policy","network-policy"],"unsupported":["domain-level-egress","memory-limit"],"command_prefix":[],"detail":""})
             } else {
@@ -505,16 +827,43 @@ fn platform_backend(project: &Path, strict_native: bool, network_hosts: &[String
     };
     if !allow_child_processes {
         let enforced = backend["enforced"].as_array().cloned().unwrap_or_default();
-        if !enforced.iter().any(|value| value.as_str() == Some("child-process-blocking")) {
-            let mut unsupported = backend["unsupported"].as_array().cloned().unwrap_or_default();
-            if !unsupported.iter().any(|value| value.as_str() == Some("child-process-blocking")) { unsupported.push(Value::String("child-process-blocking".to_owned())); }
-            backend.as_object_mut().expect("object").insert("unsupported".to_owned(), Value::Array(unsupported));
-            let existing = backend["detail"].as_str().unwrap_or_default();
-            backend.as_object_mut().expect("object").insert("detail".to_owned(), Value::String(format!("{}{sep}backend cannot prove child-process prevention", existing, sep=if existing.is_empty(){""}else{"; "})));
+        if !enforced
+            .iter()
+            .any(|value| value.as_str() == Some("child-process-blocking"))
+        {
+            let mut unsupported = backend["unsupported"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            if !unsupported
+                .iter()
+                .any(|value| value.as_str() == Some("child-process-blocking"))
+            {
+                unsupported.push(Value::String("child-process-blocking".to_owned()));
+            }
+            backend
+                .as_object_mut()
+                .expect("object")
+                .insert("unsupported".to_owned(), Value::Array(unsupported));
+            let existing = backend["detail"].as_str().unwrap_or_default().to_owned();
+            backend.as_object_mut().expect("object").insert(
+                "detail".to_owned(),
+                Value::String(format!(
+                    "{}{sep}backend cannot prove child-process prevention",
+                    existing,
+                    sep = if existing.is_empty() { "" } else { "; " }
+                )),
+            );
         }
     }
-    if strict_native && (!backend["available"].as_bool().unwrap_or(false) || !backend["unsupported"].as_array().is_some_and(Vec::is_empty)) {
-        return Err(format!("required native sandbox controls unavailable: {}", backend["unsupported"]));
+    if strict_native
+        && (!backend["available"].as_bool().unwrap_or(false)
+            || !backend["unsupported"].as_array().is_some_and(Vec::is_empty))
+    {
+        return Err(format!(
+            "required native sandbox controls unavailable: {}",
+            backend["unsupported"]
+        ));
     }
     let _ = project;
     Ok(backend)
@@ -522,39 +871,94 @@ fn platform_backend(project: &Path, strict_native: bool, network_hosts: &[String
 
 fn platform_status(project: &Path) -> Result<Value, String> {
     let backend = platform_backend(project, false, &[], true)?;
-    let strict_ready = backend["available"].as_bool().unwrap_or(false) && backend["unsupported"].as_array().is_some_and(Vec::is_empty);
-    let probe_cached = matches!(backend["name"].as_str(), Some("bubblewrap" | "unshare" | "sandbox-exec"));
-    Ok(json!({"ok":true,"backend":backend,"strict_ready":strict_ready,"fail_closed":true,"probe_cached":probe_cached}))
+    let strict_ready = backend["available"].as_bool().unwrap_or(false)
+        && backend["unsupported"].as_array().is_some_and(Vec::is_empty);
+    let probe_cached = matches!(
+        backend["name"].as_str(),
+        Some("bubblewrap" | "unshare" | "sandbox-exec")
+    );
+    Ok(
+        json!({"ok":true,"backend":backend,"strict_ready":strict_ready,"fail_closed":true,"probe_cached":probe_cached}),
+    )
 }
 
 fn platform_command(arguments: &[String]) -> Result<Vec<String>, String> {
     let start = action_position(arguments, "run", "sandbox-run")?;
-    let flags_with_values = ["--cwd", "--timeout", "--network-host", "--writable-path", "--memory-bytes", "--cpu-seconds"];
+    let flags_with_values = [
+        "--cwd",
+        "--timeout",
+        "--network-host",
+        "--writable-path",
+        "--memory-bytes",
+        "--cpu-seconds",
+    ];
     let mut positional = Vec::new();
     let mut index = start;
     while index < arguments.len() {
-        if flags_with_values.contains(&arguments[index].as_str()) { index += 2; continue; }
-        if arguments[index].starts_with("--") { index += 1; continue; }
-        positional.push(arguments[index].clone()); index += 1;
+        if flags_with_values.contains(&arguments[index].as_str()) {
+            index += 2;
+            continue;
+        }
+        if arguments[index].starts_with("--") {
+            index += 1;
+            continue;
+        }
+        positional.push(arguments[index].clone());
+        index += 1;
     }
-    let raw = positional.first().ok_or_else(|| "sandbox command is required".to_owned())?;
+    let raw = positional
+        .first()
+        .ok_or_else(|| "sandbox command is required".to_owned())?;
     let value = load_json(raw)?;
-    let rows = value.as_array().ok_or_else(|| "sandbox command must be a non-empty JSON argv list".to_owned())?;
-    if rows.is_empty() || rows.iter().any(|row| row.as_str().is_none_or(|value| value.contains('\0'))) { return Err("sandbox command must be a non-empty JSON argv list".to_owned()); }
-    Ok(rows.iter().map(|row| row.as_str().unwrap_or_default().to_owned()).collect())
+    let rows = value
+        .as_array()
+        .ok_or_else(|| "sandbox command must be a non-empty JSON argv list".to_owned())?;
+    if rows.is_empty()
+        || rows
+            .iter()
+            .any(|row| row.as_str().is_none_or(|value| value.contains('\0')))
+    {
+        return Err("sandbox command must be a non-empty JSON argv list".to_owned());
+    }
+    Ok(rows
+        .iter()
+        .map(|row| row.as_str().unwrap_or_default().to_owned())
+        .collect())
 }
 
-fn platform_run(arguments: &[String], project: &Path, state_root: &Path) -> Result<(Value, u8), String> {
+fn platform_run(
+    arguments: &[String],
+    project: &Path,
+    state_root: &Path,
+) -> Result<(Value, u8), String> {
     let command = platform_command(arguments)?;
-    let project = fs::canonicalize(project).map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
+    let project = fs::canonicalize(project)
+        .map_err(|error| format!("SANDBOX_PROJECT_RESOLVE_FAILED:{error}"))?;
     let writable_raw = repeated_values(arguments, "--writable-path")?;
-    let writable = if writable_raw.is_empty() { vec![project.clone()] } else { writable_raw.iter().map(|value| project_child(&project, value, false)).collect::<Result<Vec<_>,_>>()? };
-    let timeout = option_value(arguments, "--timeout")?.map(|v| v.parse::<f64>().map_err(|_| "SANDBOX_TIMEOUT_INVALID".to_owned())).transpose()?.unwrap_or(300.0).max(0.1);
+    let writable = if writable_raw.is_empty() {
+        vec![project.clone()]
+    } else {
+        writable_raw
+            .iter()
+            .map(|value| project_child(&project, value, false))
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let timeout = option_value(arguments, "--timeout")?
+        .map(|v| {
+            v.parse::<f64>()
+                .map_err(|_| "SANDBOX_TIMEOUT_INVALID".to_owned())
+        })
+        .transpose()?
+        .unwrap_or(300.0)
+        .max(0.1);
     let strict = has_flag(arguments, "--strict-native");
     let network_hosts = repeated_values(arguments, "--network-host")?;
     let allow_children = !has_flag(arguments, "--no-child-processes");
     let backend = platform_backend(&project, strict, &network_hosts, allow_children)?;
-    let cwd = match option_value(arguments, "--cwd")? { Some(value) => project_child(&project, &value, true)?, None => project.clone() };
+    let cwd = match option_value(arguments, "--cwd")? {
+        Some(value) => project_child(&project, &value, true)?,
+        None => project.clone(),
+    };
     let environment = filtered_environment(PLATFORM_ENV_ALLOWLIST, &project, false);
     let started_at = now_iso()?;
     let result = run_process(&command, &cwd, timeout, &environment)?;
@@ -605,11 +1009,24 @@ fn platform_run(arguments: &[String], project: &Path, state_root: &Path) -> Resu
         "policy": policy,
         "ok": result.exit_code == 0 && !result.timed_out,
     });
-    let destination = state_root.join("unified").join("sandbox").join("execution-receipts").join(format!("{}.json", receipt_id.trim_start_matches("sha256:")));
-    if let Some(parent) = destination.parent() { fs::create_dir_all(parent).map_err(|error| format!("SANDBOX_RECEIPT_PARENT_FAILED:{error}"))?; }
-    let rendered = serde_json::to_vec_pretty(&value).map_err(|error| format!("SANDBOX_RECEIPT_JSON_FAILED:{error}"))?;
-    fs::write(destination, [&rendered[..], b"\n"].concat()).map_err(|error| format!("SANDBOX_RECEIPT_WRITE_FAILED:{error}"))?;
-    let exit = if result.timed_out { 124 } else { u8::try_from(result.exit_code.clamp(0,255)).unwrap_or(1) };
+    let destination = state_root
+        .join("unified")
+        .join("sandbox")
+        .join("execution-receipts")
+        .join(format!("{}.json", receipt_id.trim_start_matches("sha256:")));
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("SANDBOX_RECEIPT_PARENT_FAILED:{error}"))?;
+    }
+    let rendered = serde_json::to_vec_pretty(&value)
+        .map_err(|error| format!("SANDBOX_RECEIPT_JSON_FAILED:{error}"))?;
+    fs::write(destination, [&rendered[..], b"\n"].concat())
+        .map_err(|error| format!("SANDBOX_RECEIPT_WRITE_FAILED:{error}"))?;
+    let exit = if result.timed_out {
+        124
+    } else {
+        u8::try_from(result.exit_code.clamp(0, 255)).unwrap_or(1)
+    };
     Ok((value, exit))
 }
 
@@ -618,16 +1035,34 @@ pub(crate) struct NativeExecution {
     pub(crate) exit_code: u8,
 }
 
-pub(crate) fn execute(command: &[String], arguments: &[String], project: &Path, state_root: &Path) -> Result<Option<NativeExecution>, String> {
-    if !supports(command) { return Ok(None); }
+pub(crate) fn execute(
+    command: &[String],
+    arguments: &[String],
+    project: &Path,
+    state_root: &Path,
+) -> Result<Option<NativeExecution>, String> {
+    if !supports(command) {
+        return Ok(None);
+    }
     match command {
-        [root, action] if root == "sandbox" && action == "backends" => Ok(Some(NativeExecution { value: backend_map(), exit_code: 0 })),
-        [root, action] if root == "sandbox" && action == "plan" => Ok(Some(NativeExecution { value: direct_plan(arguments, project, "plan")?, exit_code: 0 })),
+        [root, action] if root == "sandbox" && action == "backends" => Ok(Some(NativeExecution {
+            value: backend_map(),
+            exit_code: 0,
+        })),
+        [root, action] if root == "sandbox" && action == "plan" => Ok(Some(NativeExecution {
+            value: direct_plan(arguments, project, "plan")?,
+            exit_code: 0,
+        })),
         [root, action] if root == "sandbox" && action == "execute" => {
             let (value, exit_code) = direct_execute(arguments, project, state_root)?;
             Ok(Some(NativeExecution { value, exit_code }))
         }
-        [root, action] if root == "run" && action == "sandbox-status" => Ok(Some(NativeExecution { value: platform_status(project)?, exit_code: 0 })),
+        [root, action] if root == "run" && action == "sandbox-status" => {
+            Ok(Some(NativeExecution {
+                value: platform_status(project)?,
+                exit_code: 0,
+            }))
+        }
         [root, action] if root == "run" && action == "sandbox-run" => {
             let (value, exit_code) = platform_run(arguments, project, state_root)?;
             Ok(Some(NativeExecution { value, exit_code }))
