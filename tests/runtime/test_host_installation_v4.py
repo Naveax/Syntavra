@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -31,26 +32,29 @@ class HostInstallationV4Tests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_codex_apply_preserves_config_verifies_and_rolls_back(self):
-        config = self.project / ".codex" / "mcp.json"
+    def test_codex_apply_preserves_toml_verifies_and_rolls_back(self):
+        config = self.project / ".codex" / "config.toml"
         config.parent.mkdir(parents=True)
-        original = {"mcpServers": {"existing": {"command": "existing"}}, "userSetting": 7}
-        config.write_text(json.dumps(original), encoding="utf-8")
+        original = 'model = "test-model"\n\n[mcp_servers.existing]\ncommand = "existing"\n'
+        config.write_text(original, encoding="utf-8")
 
         result = self.manager.apply("codex")
         self.assertEqual(result.status, "applied")
-        merged = json.loads(config.read_text(encoding="utf-8"))
-        self.assertEqual(merged["userSetting"], 7)
-        self.assertEqual(merged["mcpServers"]["existing"]["command"], "existing")
-        self.assertEqual(merged["mcpServers"]["syntavra"]["command"], "syntavra")
-        installed_skill = self.project / ".codex" / "skills" / "syntavra"
+        merged = tomllib.loads(config.read_text(encoding="utf-8"))
+        self.assertEqual(merged["model"], "test-model")
+        self.assertEqual(merged["mcp_servers"]["existing"]["command"], "existing")
+        syntavra = merged["mcp_servers"]["syntavra"]
+        self.assertEqual(syntavra["command"], "syntavra")
+        self.assertEqual(syntavra["cwd"], str(self.project.resolve()))
+        self.assertEqual(syntavra["env"]["SYNTAVRA_PROJECT"], str(self.project.resolve()))
+        installed_skill = self.project / ".agents" / "skills" / "syntavra"
         self.assertTrue((installed_skill / "SKILL.md").is_file())
         self.assertTrue((installed_skill / "REFERENCE.md").is_file())
         self.assertTrue(self.manager.verify("codex")["ok"])
 
         rolled = self.manager.rollback(result.transaction_id)
         self.assertEqual(rolled.status, "rolled-back")
-        self.assertEqual(json.loads(config.read_text(encoding="utf-8")), original)
+        self.assertEqual(config.read_text(encoding="utf-8"), original)
         self.assertFalse(installed_skill.exists())
 
     def test_claude_install_adds_hooks_without_deleting_user_settings(self):
@@ -80,13 +84,19 @@ class HostInstallationV4Tests(unittest.TestCase):
         self.manager.rollback(first.transaction_id)
         self.assertEqual(agents.read_text(encoding="utf-8"), "# User instructions\n\nKeep this text.\n")
 
-    def test_user_scope_and_dry_run_do_not_write(self):
+    def test_user_scope_is_dynamic_and_dry_run_does_not_write(self):
         result = self.manager.apply("codex", scope="user", dry_run=True)
         self.assertEqual(result.status, "dry-run")
         self.assertTrue(result.verification["dry_run"])
-        self.assertFalse((self.home / ".codex" / "mcp.json").exists())
+        self.assertFalse((self.home / ".codex" / "config.toml").exists())
         applied = self.manager.apply("codex", scope="user")
-        self.assertTrue((self.home / ".codex" / "mcp.json").is_file())
+        config = self.home / ".codex" / "config.toml"
+        self.assertTrue(config.is_file())
+        entry = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]["syntavra"]
+        self.assertNotIn("cwd", entry)
+        self.assertNotIn("SYNTAVRA_PROJECT", entry.get("env", {}))
+        self.assertNotIn(str(self.project.resolve()), entry.get("args", []))
+        self.assertTrue((self.home / ".agents" / "skills" / "syntavra" / "SKILL.md").is_file())
         self.assertEqual(applied.scope, "user")
 
     def test_symlink_escape_is_rejected_when_supported(self):
