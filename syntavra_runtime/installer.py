@@ -43,7 +43,7 @@ class HostInstaller:
         self.skill_root = skill_root.resolve(strict=True)
         self.home = (home or Path.home()).resolve(strict=False)
         self.executable = executable or (sys.executable, "-m", "syntavra_runtime")
-        # Installer metadata is product state, not repository content.  Keeping it
+        # Installer metadata is product state, not repository content. Keeping it
         # out of the target worktree prevents Syntavra from invalidating clean-tree
         # reviews simply by being installed or repaired.
         self.state_root = default_state_root(self.project, namespace="install", home=self.home)
@@ -74,6 +74,15 @@ class HostInstaller:
             return value if isinstance(value, dict) else {}
         except (OSError, json.JSONDecodeError):
             return {}
+
+    @staticmethod
+    def _writable_ancestor(path: Path) -> bool:
+        """Check whether a not-yet-created state path can be created safely."""
+
+        candidate = path.resolve(strict=False)
+        while not candidate.exists() and candidate.parent != candidate:
+            candidate = candidate.parent
+        return candidate.exists() and os.access(candidate, os.W_OK)
 
     def _mcp_entry(self, *, scope: str) -> dict[str, Any]:
         args = [*self.executable[1:]]
@@ -231,7 +240,7 @@ class HostInstaller:
                 row["backup"] = prior.get("backup", "")
             merged_by_path[change.path] = row
         manifest = {
-            "schema_version": 3,
+            "schema_version": 2,
             "version": VERSION,
             "release_channel": CHANNEL,
             "version_locked": True,
@@ -273,10 +282,14 @@ class HostInstaller:
     def doctor(self) -> dict[str, Any]:
         detected = self.detect()
         installed = self._load_json(self.manifest_path) if self.manifest_path.is_file() else None
+        state_writable = (
+            (self.state_root.exists() and os.access(self.state_root, os.W_OK))
+            or self._writable_ancestor(self.state_root.parent)
+        )
         checks = {
             "skill_root": self.skill_root.is_dir() and (self.skill_root / "SKILL.md").is_file(),
             "project_writable": os.access(self.project, os.W_OK),
-            "state_writable": self.state_root.exists() or os.access(self.state_root.parent, os.W_OK),
+            "state_writable": state_writable,
             "state_outside_project": self.project not in self.state_root.parents and self.state_root != self.project,
             "manifest_valid": installed is None or installed.get("version") == VERSION,
             "release_channel": installed is None or installed.get("release_channel") == CHANNEL,
