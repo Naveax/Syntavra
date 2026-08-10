@@ -1,0 +1,70 @@
+name: R31 Provider Replay Parity
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-replay-native
+  pull_request:
+    branches:
+      - agent/r31-provider-readonly-native
+    paths:
+      - "crates/syntavra-cli/src/native_provider_gateway_read.rs"
+      - "crates/syntavra-cli/src/native_product_legacy.rs"
+      - "tools/verify_r31_provider_replay_parity.py"
+      - ".github/workflows/r31-provider-replay-parity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    name: ${{ matrix.os }} / Python 3.11 / Rust 1.82.0
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Install canonical Rust toolchain
+        run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Rustfmt check
+        run: cargo +1.82.0 fmt --all -- --check
+
+      - name: Cargo check native selector
+        run: cargo +1.82.0 check --locked -p syntavra-cli --bin syntavra
+
+      - name: Build native selector
+        run: cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+
+      - name: Python/Rust provider replay differential
+        shell: bash
+        run: |
+          selector="target/debug/syntavra"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            selector="${selector}.exe"
+          fi
+          python tools/verify_r31_provider_replay_parity.py --selector "$selector"
+
+      - name: Working tree integrity
+        shell: bash
+        run: |
+          git status --porcelain=v1 --untracked-files=all
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
