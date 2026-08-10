@@ -8,11 +8,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from syntavra_runtime.engine_entry import _context
+from syntavra_runtime.host_adapters import host_spec
 from syntavra_runtime.installer import HostInstaller
 from syntavra_runtime.mcp_policy import MCPToolPolicy
 from syntavra_runtime.optimization_modes import SavingsLedger, render_statusline
 from syntavra_runtime.runtime_paths import default_state_root, discover_project_root
 from syntavra_runtime.tool_registry import MINIMAL_TOOLS
+from syntavra_runtime.zero_friction import ZeroFrictionManager
 
 
 class CodexIntegrationRegressionTests(unittest.TestCase):
@@ -45,6 +47,13 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertNotIn(self.project.resolve(), state.resolve().parents)
         self.assertFalse((self.project / ".syntavra").exists())
 
+    def test_zero_friction_direct_constructor_uses_external_state(self) -> None:
+        with patch.dict(os.environ, {"SYNTAVRA_STATE_HOME": str(self.state_home)}, clear=False):
+            manager = ZeroFrictionManager(self.project)
+        self.assertNotIn(self.project.resolve(), manager.state_root.resolve().parents)
+        self.assertFalse((self.project / ".syntavra").exists())
+        self.assertTrue(manager.state_root.is_dir())
+
     def test_engine_entry_injects_one_canonical_project_and_external_state(self) -> None:
         with patch.dict(os.environ, {"SYNTAVRA_STATE_HOME": str(self.state_home)}, clear=False):
             project, state, rest, forwarded = _context([
@@ -58,6 +67,13 @@ class CodexIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(forwarded.count("--project"), 1)
         self.assertEqual(forwarded.count("--state-root"), 1)
         self.assertNotIn(self.project.resolve(), state.resolve().parents)
+
+    def test_codex_adapter_metadata_uses_current_official_paths(self) -> None:
+        spec = host_spec("codex")
+        self.assertEqual(spec.config_path, ".codex/config.toml")
+        self.assertEqual(spec.skill_path, ".agents/skills/syntavra")
+        self.assertIn(".agents", spec.project_markers)
+        self.assertIn(".agents", spec.user_markers)
 
     def test_user_scope_codex_mcp_is_dynamic_and_uses_current_toml_and_skill_paths(self) -> None:
         codex_dir = self.home / ".codex"
