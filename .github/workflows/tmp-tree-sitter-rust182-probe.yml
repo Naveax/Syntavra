@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  probe:
+  probe-uncommon:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -25,43 +25,32 @@ jobs:
         run: |
           rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal
-      - name: Compile full grammar set on Rust 1.82
+      - name: Probe uncommon grammars against tree-sitter 0.25
         shell: bash
         run: |
-          rm -rf /tmp/ts182
-          cargo +1.82.0 new --bin --edition 2021 /tmp/ts182
-          cat >> /tmp/ts182/Cargo.toml <<'EOF'
+          set -u
+          probe() {
+            name="$1"
+            dep="$2"
+            version="$3"
+            root="/tmp/probe-${name}"
+            rm -rf "$root"
+            cargo +1.82.0 new --bin --edition 2021 "$root" >/dev/null
+            cat >> "$root/Cargo.toml" <<EOF
           indexmap = "=2.7.1"
           tree-sitter = "0.25"
-          tree-sitter-bash = "0.25.1"
-          tree-sitter-c = "0.24"
-          tree-sitter-c-sharp = "0.23.1"
-          tree-sitter-cpp = "0.23.4"
-          tree-sitter-dart-orchard = "0.3.0"
-          tree-sitter-elixir = "0.3.4"
-          tree-sitter-erlang = "0.20.0"
-          tree-sitter-fish = "3.6.0"
-          tree-sitter-fsharp = "0.3.0"
-          tree-sitter-go = "0.25.0"
-          tree-sitter-haskell = "0.23.1"
-          tree-sitter-java = "0.23.5"
-          tree-sitter-javascript = "0.25.0"
-          tree-sitter-julia = "0.23.1"
-          tree-sitter-kotlin-ng = "1.1.0"
-          tree-sitter-lua = "0.2.0"
-          tree-sitter-ocaml = "0.24.0"
-          tree-sitter-php = "0.24.0"
-          tree-sitter-powershell = "0.26.4"
-          tree-sitter-r = "1.2.0"
-          tree-sitter-ruby = "0.23.1"
-          tree-sitter-rust = "0.24.0"
-          tree-sitter-scala = "0.24.0"
-          tree-sitter-solidity = "1.2.13"
-          tree-sitter-svelte-next = "0.1.1"
-          tree-sitter-swift = "0.7.1"
-          tree-sitter-typescript = "0.23.2"
-          tree-sitter-vue-next = "0.1.0"
-          tree-sitter-zig = "1.1.2"
+          ${dep} = "${version}"
           EOF
-          cd /tmp/ts182
-          cargo +1.82.0 check
+            echo "=== PROBE ${name}: ${dep} ${version} ==="
+            (cd "$root" && cargo +1.82.0 check) && echo "RESULT ${name}=PASS" || echo "RESULT ${name}=FAIL"
+          }
+
+          probe kotlin_ng tree-sitter-kotlin-ng 1.1.0
+          probe powershell tree-sitter-powershell 0.26.4
+          probe svelte_old tree-sitter-svelte 0.10.2
+          probe svelte_ng tree-sitter-svelte-ng 1.0.2
+          probe svelte_next tree-sitter-svelte-next 0.1.1
+          probe vue_old tree-sitter-vue 0.0.3
+          probe vue_updated tree-sitter-vue-updated 0.1.0
+          probe vue_next tree-sitter-vue-next 0.1.0
+          probe vue3 tree-sitter-vue3 0.0.4
