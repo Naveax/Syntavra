@@ -1,0 +1,447 @@
+name: Temporary Agent Core Parity Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - .github/workflows/tmp-agent-core-parity-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch agent core parity
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old_lines: list[str], new_lines: list[str], label: str) -> str:
+              old = "\n".join(old_lines) + "\n"
+              new = "\n".join(new_lines) + "\n"
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one anchor, found {count}")
+              return text.replace(old, new, 1)
+
+          validator = Path("tools/validate_remaining71_agent_differential.py")
+          text = validator.read_text(encoding="utf-8")
+          text = replace_once(text, ["import os", "import shutil"], ["import os", "import re", "import shutil"], "validator import re")
+          text = replace_once(
+              text,
+              ["            issues.extend(dynamic_issues(child, engine=engine, path=child_path))"],
+              [
+                  "            elif key == \"last_hash\" and child_path in {\"blocked_memory.last_hash\", \"success_memory.last_hash\"}:",
+                  "                if not isinstance(child, str) or re.fullmatch(r\"[0-9a-f]{64}\", child) is None:",
+                  "                    issues.append(",
+                  "                        {",
+                  "                            \"path\": f\"{engine}.{child_path}.sha256\" ,",
+                  "                            \"expected\": True,",
+                  "                            \"actual\": child,",
+                  "                        }",
+                  "                    )",
+                  "            issues.extend(dynamic_issues(child, engine=engine, path=child_path))",
+              ],
+              "validator memory hash validation",
+          )
+          text = replace_once(
+              text,
+              ["def normalize(value: Any, *, project: Path, state_root: Path) -> Any:"],
+              ["def normalize(value: Any, *, project: Path, state_root: Path, path: str = \"\") -> Any:"],
+              "validator normalize signature",
+          )
+          text = replace_once(
+              text,
+              [
+                  "        for key, child in value.items():",
+                  "            if key in DYNAMIC_KEYS:",
+                  "                continue",
+              ],
+              [
+                  "        for key, child in value.items():",
+                  "            child_path = f\"{path}.{key}\" if path else key",
+                  "            if key in DYNAMIC_KEYS:",
+                  "                continue",
+                  "            if key == \"last_hash\" and child_path in {\"blocked_memory.last_hash\", \"success_memory.last_hash\"}:",
+                  "                output[key] = \"<memory-chain-hash>\"",
+                  "                continue",
+              ],
+              "validator normalize memory hashes",
+          )
+          text = replace_once(
+              text,
+              ["            output[key] = normalize(child, project=project, state_root=state_root)"],
+              ["            output[key] = normalize(child, project=project, state_root=state_root, path=child_path)"],
+              "validator normalize dict recursion",
+          )
+          text = replace_once(
+              text,
+              ["        return [normalize(child, project=project, state_root=state_root) for child in value]"],
+              ["        return [normalize(child, project=project, state_root=state_root, path=f\"{path}[{index}]\") for index, child in enumerate(value)]"],
+              "validator normalize list recursion",
+          )
+          text = replace_once(
+              text,
+              [
+                  "        if \"<state>/agent-product/agent-workspaces/run-\" in rendered:",
+                  "            prefix = \"<state>/agent-product/agent-workspaces/run-\"",
+              ],
+              [
+                  "        if \"<state>/unified/agent-product/agent-workspaces/run-\" in rendered:",
+                  "            prefix = \"<state>/unified/agent-product/agent-workspaces/run-\"",
+                  "            start = rendered.find(prefix)",
+                  "            tail = rendered[start + len(prefix):]",
+                  "            token = tail.split(\"/\", 1)[0].split(\"\\\\\", 1)[0]",
+                  "            rendered = rendered.replace(prefix + token, \"<workspace>\")",
+                  "        if \"<state>/agent-product/agent-workspaces/run-\" in rendered:",
+                  "            prefix = \"<state>/agent-product/agent-workspaces/run-\"",
+              ],
+              "validator live workspace normalization",
+          )
+          text = replace_once(
+              text,
+              ["    return rows", "", "", "def request_signature(request: dict[str, Any]) -> dict[str, Any]:"],
+              [
+                  "    def semantic_key(row: dict[str, Any]) -> tuple[str, ...]:",
+                  "        value = row.get(\"value\") if isinstance(row.get(\"value\"), dict) else {}",
+                  "        task = value.get(\"task\") if isinstance(value.get(\"task\"), dict) else {}",
+                  "        verifier = task.get(\"verifier\") if isinstance(task.get(\"verifier\"), list) else []",
+                  "        return (",
+                  "            str(task.get(\"mode\", \"\")),",
+                  "            str(task.get(\"max_attempts\", \"\")),",
+                  "            str(task.get(\"retain_workspace\", \"\")),",
+                  "            json.dumps(verifier, ensure_ascii=False, sort_keys=True, separators=(\",\", \":\")),",
+                  "            str(value.get(\"state\", \"\")),",
+                  "            str(value.get(\"total_tokens\", \"\")),",
+                  "        )",
+                  "",
+                  "    rows.sort(key=semantic_key)",
+                  "    return rows",
+                  "",
+                  "",
+                  "def request_signature(request: dict[str, Any]) -> dict[str, Any]:",
+              ],
+              "validator durable semantic ordering",
+          )
+          text = replace_once(
+              text,
+              [
+                  "        (\"python.blocked.state\", python_result[\"blocked_execute\"].get(\"state\"), \"blocked\"),",
+                  "        (\"rust.blocked.state\", rust_result[\"blocked_execute\"].get(\"state\"), \"blocked\"),",
+              ],
+              [
+                  "        (\"python.blocked.state\", python_result[\"blocked_execute\"][\"value\"].get(\"state\"), \"blocked\"),",
+                  "        (\"rust.blocked.state\", rust_result[\"blocked_execute\"][\"value\"].get(\"state\"), \"blocked\"),",
+              ],
+              "validator blocked invariant nesting",
+          )
+          text = text.replace(
+              "temporary workspace/project/state paths are validated then normalized; ",
+              "temporary workspace/project/state paths, random-run-derived memory chain hashes, and durable receipt filename order are validated then normalized; ",
+              1,
+          )
+          validator.write_text(text, encoding="utf-8")
+
+          core = Path("crates/syntavra-cli/src/native_remaining71_agent.rs")
+          text = core.read_text(encoding="utf-8")
+          text = replace_once(
+              text,
+              [
+                  "    let session_id = option_value(arguments, \"--session-id\")?;",
+                  "    run_agent(",
+                  "        project,",
+                  "        state_root,",
+                  "        task,",
+                  "        &verifier,",
+                  "        &patches,",
+                  "        &mode,",
+                  "        attempts,",
+                  "        timeout,",
+                  "        token_budget,",
+                  "        cost_budget,",
+                  "        authorized,",
+                  "        session_id.as_deref(),",
+                  "        retain_workspace,",
+                  "        surface,",
+                  "    )",
+                  "}",
+              ],
+              [
+                  "    let session_id = option_value(arguments, \"--session-id\")?;",
+                  "    let mut value = run_agent(",
+                  "        project,",
+                  "        state_root,",
+                  "        task,",
+                  "        &verifier,",
+                  "        &patches,",
+                  "        &mode,",
+                  "        attempts,",
+                  "        timeout,",
+                  "        token_budget,",
+                  "        cost_budget,",
+                  "        authorized,",
+                  "        session_id.as_deref(),",
+                  "        retain_workspace,",
+                  "        surface,",
+                  "    )?;",
+                  "    value[\"ok\"] = Value::Bool(value[\"state\"].as_str() == Some(\"completed\"));",
+                  "    if direct_replay {",
+                  "        value[\"surface\"] = Value::String(\"agent-replay\".to_owned());",
+                  "    }",
+                  "    Ok(value)",
+                  "}",
+              ],
+              "agent public receipt augmentation",
+          )
+          text = replace_once(
+              text,
+              ["    surface: &str,", "    run_id: &str,"],
+              ["    _surface: &str,", "    run_id: &str,"],
+              "agent finish surface parameter",
+          )
+          text = replace_once(
+              text,
+              [
+                  "    let mut receipt = json!({",
+                  "        \"run_id\":run_id,\"task\":task,\"state\":state,\"started_at\":started_at,\"finished_at\":now_iso()?,",
+                  "        \"duration_ms\":((started.elapsed().as_secs_f64()*1000.0)*1000.0).round()/1000.0,",
+                  "        \"workspace\":workspace.to_string_lossy(),\"attempts\":attempts,\"total_tokens\":total_tokens,",
+                  "        \"total_cost\":(total_cost*100_000_000.0).round()/100_000_000.0,\"changed_files\":changed_files,",
+                  "        \"final_diff\":final_diff,\"rollback_complete\":rollback_complete,\"stop_reason\":stop_reason,\"context\":context,",
+                  "    });",
+                  "    let ok = state == \"completed\";",
+                  "    receipt[\"ok\"] = Value::Bool(ok);",
+                  "    receipt[\"surface\"] = Value::String(surface.to_owned());",
+                  "    let destination = state_root",
+                  "        .join(\"unified\")",
+                  "        .join(\"agent-receipts\")",
+                  "        .join(format!(\"{}.json\", run_id.trim_start_matches(\"sha256:\")));",
+                  "    if let Some(parent) = destination.parent() {",
+                  "        fs::create_dir_all(parent)",
+                  "            .map_err(|error| format!(\"AGENT_RECEIPT_PARENT_FAILED:{error}\"))?;",
+                  "    }",
+                  "    fs::write(",
+                  "        &destination,",
+                  "        serde_json::to_vec_pretty(&sort_json(&receipt))",
+                  "            .map_err(|error| format!(\"AGENT_RECEIPT_JSON_FAILED:{error}\"))?,",
+                  "    )",
+                  "    .map_err(|error| format!(\"AGENT_RECEIPT_WRITE_FAILED:{error}\"))?;",
+                  "    Ok(receipt)",
+              ],
+              [
+                  "    let receipt = json!({",
+                  "        \"run_id\":run_id,\"task\":task,\"state\":state,\"started_at\":started_at,\"finished_at\":now_iso()?,",
+                  "        \"duration_ms\":((started.elapsed().as_secs_f64()*1000.0)*1000.0).round()/1000.0,",
+                  "        \"workspace\":workspace.to_string_lossy(),\"attempts\":attempts,\"total_tokens\":total_tokens,",
+                  "        \"total_cost\":(total_cost*100_000_000.0).round()/100_000_000.0,\"changed_files\":changed_files,",
+                  "        \"final_diff\":final_diff,\"rollback_complete\":rollback_complete,\"stop_reason\":stop_reason,\"context\":context,",
+                  "    });",
+                  "    if state != \"blocked\" && stop_reason != \"plan-only\" {",
+                  "        persist_receipt(state_root, &receipt)?;",
+                  "    }",
+                  "    Ok(receipt)",
+              ],
+              "agent pure durable receipt",
+          )
+          marker = "fn agent_query(\n"
+          if text.count(marker) != 1:
+              raise SystemExit(f"agent persist helper marker count drifted: {text.count(marker)}")
+          helper = "\n".join([
+              "pub(crate) fn persist_receipt(state_root: &Path, receipt: &Value) -> Result<(), String> {",
+              "    let run_id = receipt[\"run_id\"]",
+              "        .as_str()",
+              "        .ok_or_else(|| \"AGENT_RECEIPT_RUN_ID_MISSING\".to_owned())?;",
+              "    let destination = state_root",
+              "        .join(\"unified\")",
+              "        .join(\"agent-receipts\")",
+              "        .join(format!(\"{}.json\", run_id.trim_start_matches(\"sha256:\")));",
+              "    if let Some(parent) = destination.parent() {",
+              "        fs::create_dir_all(parent)",
+              "            .map_err(|error| format!(\"AGENT_RECEIPT_PARENT_FAILED:{error}\"))?;",
+              "    }",
+              "    let mut durable = receipt.clone();",
+              "    if let Some(object) = durable.as_object_mut() {",
+              "        object.remove(\"ok\");",
+              "        object.remove(\"surface\");",
+              "    }",
+              "    fs::write(",
+              "        &destination,",
+              "        serde_json::to_vec_pretty(&sort_json(&durable))",
+              "            .map_err(|error| format!(\"AGENT_RECEIPT_JSON_FAILED:{error}\"))?,",
+              "    )",
+              "    .map_err(|error| format!(\"AGENT_RECEIPT_WRITE_FAILED:{error}\"))",
+              "}",
+              "",
+          ])
+          text = text.replace(marker, helper + marker, 1)
+          if text.count('if !apply["ok"].as_bool().unwrap_or(false) {') != 1:
+              raise SystemExit("agent apply ok anchor drifted")
+          text = text.replace('if !apply["ok"].as_bool().unwrap_or(false) {', 'if !sandbox_ok(&apply) {', 1)
+          if text.count('if verify["ok"].as_bool().unwrap_or(false) {') != 1:
+              raise SystemExit("agent verify ok anchor drifted")
+          text = text.replace('if verify["ok"].as_bool().unwrap_or(false) {', 'if sandbox_ok(&verify) {', 1)
+          text = replace_once(
+              text,
+              [
+                  "    let execution =",
+                  "        super::native_remaining71_sandbox::execute(&command, &arguments, workspace, state_root)?",
+                  "            .ok_or_else(|| \"AGENT_SANDBOX_ROUTE_UNAVAILABLE\".to_owned())?;",
+                  "    Ok(execution.value)",
+                  "}",
+              ],
+              [
+                  "    let execution =",
+                  "        super::native_remaining71_sandbox::execute(&command, &arguments, workspace, state_root)?",
+                  "            .ok_or_else(|| \"AGENT_SANDBOX_ROUTE_UNAVAILABLE\".to_owned())?;",
+                  "    let mut value = execution.value;",
+                  "    if let Some(object) = value.as_object_mut() {",
+                  "        object.remove(\"ok\");",
+                  "    }",
+                  "    Ok(value)",
+                  "}",
+                  "",
+                  "fn sandbox_ok(value: &Value) -> bool {",
+                  "    value[\"exit_code\"].as_i64() == Some(0)",
+                  "        && !value[\"timed_out\"].as_bool().unwrap_or(false)",
+                  "}",
+              ],
+              "agent embedded sandbox receipt",
+          )
+          text = replace_once(
+              text,
+              [
+                  "fn now_iso() -> Result<String, String> {",
+                  "    let duration = SystemTime::now()",
+                  "        .duration_since(UNIX_EPOCH)",
+                  "        .map_err(|error| format!(\"AGENT_CLOCK_FAILED:{error}\"))?;",
+                  "    Ok(format!(",
+                  "        \"{}.{:06}+00:00\",",
+                  "        duration.as_secs(),",
+                  "        duration.subsec_micros()",
+                  "    ))",
+                  "}",
+              ],
+              [
+                  "fn now_iso() -> Result<String, String> {",
+                  "    let duration = SystemTime::now()",
+                  "        .duration_since(UNIX_EPOCH)",
+                  "        .map_err(|error| format!(\"AGENT_CLOCK_FAILED:{error}\"))?;",
+                  "    let seconds = i64::try_from(duration.as_secs())",
+                  "        .map_err(|_| \"AGENT_CLOCK_RANGE_FAILED\".to_owned())?;",
+                  "    let days = seconds / 86_400;",
+                  "    let second_of_day = seconds % 86_400;",
+                  "    let z = days + 719_468;",
+                  "    let era = z / 146_097;",
+                  "    let doe = z - era * 146_097;",
+                  "    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;",
+                  "    let mut year = yoe + era * 400;",
+                  "    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);",
+                  "    let mp = (5 * doy + 2) / 153;",
+                  "    let day = doy - (153 * mp + 2) / 5 + 1;",
+                  "    let month = mp + if mp < 10 { 3 } else { -9 };",
+                  "    if month <= 2 {",
+                  "        year += 1;",
+                  "    }",
+                  "    let hour = second_of_day / 3_600;",
+                  "    let minute = (second_of_day % 3_600) / 60;",
+                  "    let second = second_of_day % 60;",
+                  "    Ok(format!(",
+                  "        \"{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{:06}+00:00\",",
+                  "        duration.subsec_micros()",
+                  "    ))",
+                  "}",
+              ],
+              "agent iso timestamp",
+          )
+          core.write_text(text, encoding="utf-8")
+
+          selector = Path("crates/syntavra-cli/src/bin/syntavra.rs")
+          text = selector.read_text(encoding="utf-8")
+          text = replace_once(
+              text,
+              [
+                  "                    Ok(Some(value)) => {",
+                  "                        emit(&value);",
+                  "                        ExitCode::SUCCESS",
+                  "                    }",
+              ],
+              [
+                  "                    Ok(Some(value)) => {",
+                  "                        let blocked_agent = value[\"state\"].as_str() == Some(\"blocked\")",
+                  "                            && matches!(path.as_slice(), [root, action] if",
+                  "                                (root == \"run\" && action == \"agent-execute\")",
+                  "                                    || (root == \"agent\" && action == \"replay\"));",
+                  "                        emit(&value);",
+                  "                        if blocked_agent {",
+                  "                            ExitCode::from(3)",
+                  "                        } else {",
+                  "                            ExitCode::SUCCESS",
+                  "                        }",
+                  "                    }",
+              ],
+              "selector blocked agent exit",
+          )
+          selector.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Prepare exact Rust 1.82 toolchain
+        run: |
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Format and compile repair
+        run: |
+          python -m py_compile tools/validate_remaining71_agent_differential.py
+          cargo +1.82.0 fmt --all
+          cargo +1.82.0 check --locked -p syntavra-cli --bin syntavra
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+
+      - name: Require differential improvement
+        shell: bash
+        run: |
+          set +e
+          python tools/validate_remaining71_agent_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/agent-differential.json \
+            > /tmp/agent-differential.log 2>&1
+          rc=$?
+          set -e
+          test -f /tmp/agent-differential.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/agent-differential.json').read_text(encoding='utf-8'))
+          count = int((report.get('differential') or {}).get('mismatch_count', 9999))
+          print(f"patched agent mismatch_count={count}")
+          if count >= 73:
+              raise SystemExit(f"agent differential did not improve: {count}")
+          PY
+          test "$rc" -eq 0 -o "$rc" -eq 2
+
+      - name: Guard exact repair scope
+        shell: bash
+        run: |
+          git diff --check
+          git status --short
+          changed="$(git status --short | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n' \
+            crates/syntavra-cli/src/bin/syntavra.rs \
+            crates/syntavra-cli/src/native_remaining71_agent.rs \
+            tools/validate_remaining71_agent_differential.py | sort)"
+          test "$changed" = "$expected"
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "syntavra-ci"
+          git config user.email "syntavra-ci@users.noreply.github.com"
+          git add crates/syntavra-cli/src/bin/syntavra.rs crates/syntavra-cli/src/native_remaining71_agent.rs tools/validate_remaining71_agent_differential.py
+          git commit -m "fix: align agent execution receipt semantics"
+          git push origin HEAD:agent/r31-provider-capture-native
