@@ -17,11 +17,14 @@ Return exactly one JSON object and no markdown.
 Allowed actions:
 - {"action":"search","query":"..."}
 - {"action":"inspect","paths":["relative/path.py"]}
+- {"action":"diff"}
 - {"action":"impact","node_id":"..."}
 - {"action":"verifiers"}
+- {"action":"run_verifier","name":"..."}
+- {"action":"edit","edits":[{"path":"...","operation":"replace","old":"...","new":"...","count":1}],"rationale":"..."}
 - {"action":"patch","patch":"unified diff","rationale":"..."}
-Use search, inspect or impact when evidence is insufficient. Never invent file contents.
-Patch must stay inside the repository and must be suitable for git apply.
+Use search, inspect, impact or a verifier when evidence is insufficient. Never invent file contents.
+Patch or structured edits must stay inside the repository and must be suitable for git apply.
 "#;
 
 #[derive(Debug, Clone)]
@@ -266,13 +269,18 @@ fn agent_run(arguments: &[String], project: &Path, state_root: &Path) -> Result<
     if let Some(value) = session_id {
         replay_args.extend(["--session-id".to_owned(), value]);
     }
-    let run = super::native_remaining71_agent::execute(
+    let mut run = super::native_remaining71_agent::execute(
         &replay_command,
         &replay_args,
         project,
         state_root,
     )?
     .ok_or_else(|| "AGENT_REPLAY_NATIVE_UNAVAILABLE".to_owned())?;
+    run["task"]["metadata"] = json!({
+        "verifier_discovery": verifiers.iter().map(Verifier::json).collect::<Vec<_>>(),
+        "semantic_results": initial.clone(),
+    });
+    super::native_remaining71_agent::persist_receipt(state_root, &run)?;
     let workspace = PathBuf::from(run["workspace"].as_str().unwrap_or_default());
     let mut post = Vec::<Value>::new();
     let mut verification_complete = run["ok"].as_bool().unwrap_or(false);
@@ -293,11 +301,78 @@ fn agent_run(arguments: &[String], project: &Path, state_root: &Path) -> Result<
     } else {
         Vec::new()
     };
-    let ok = run["ok"].as_bool().unwrap_or(false)
+    let run_ok = run["ok"].as_bool().unwrap_or(false);
+    let ok = run_ok
         && verification_complete
         && post.iter().all(|row| row["ok"].as_bool().unwrap_or(false))
         && delivery_receipt["ok"].as_bool().unwrap_or(false);
-    let events = Vec::<Value>::new();
+    let mut events = Vec::<Value>::new();
+    push_journal_event(
+        &mut events,
+        "agent-started",
+        json!({"instruction":task,"mode":mode,"delivery":delivery}),
+    )?;
+    push_journal_event(
+        &mut events,
+        "verification-plan",
+        json!({
+            "primary": primary.json(),
+            "post": verifiers.iter().skip(1).map(Verifier::json).collect::<Vec<_>>(),
+        }),
+    )?;
+    push_journal_event(
+        &mut events,
+        "model-loop-started",
+        json!({"attempt":1,"workspace":run["workspace"]}),
+    )?;
+    for row in &trace {
+        let round = row["round"].as_i64().unwrap_or(0);
+        let action = row["action"].as_str().unwrap_or_default();
+        push_journal_event(&mut events, "model-requested", json!({"round":round}))?;
+        push_journal_event(
+            &mut events,
+            "model-action",
+            json!({"round":round,"action":action}),
+        )?;
+        if action == "patch" {
+            push_journal_event(
+                &mut events,
+                "patch-proposed",
+                json!({
+                    "round":round,
+                    "source":"unified-diff",
+                    "bytes":row["patch_bytes"],
+                }),
+            )?;
+        }
+    }
+    push_journal_event(
+        &mut events,
+        "primary-run-finished",
+        json!({"ok":run_ok,"state":run["state"],"stop_reason":run["stop_reason"]}),
+    )?;
+    for row in &post {
+        push_journal_event(
+            &mut events,
+            "post-verifier-started",
+            json!({"name":row["name"]}),
+        )?;
+        push_journal_event(&mut events, "post-verifier-finished", row.clone())?;
+    }
+    push_journal_event(
+        &mut events,
+        "delivery-finished",
+        json!({
+            "mode":delivery_receipt["mode"],
+            "ok":delivery_receipt["ok"],
+            "branch":delivery_receipt["branch"],
+            "commit":delivery_receipt["commit"],
+        }),
+    )?;
+    if let Some(object) = run.as_object_mut() {
+        object.remove("ok");
+        object.remove("surface");
+    }
     Ok(
         json!({"run":run,"provider":result_provider,"model":result_model,"verifier":primary.json(),"post_verifiers":post,"tool_trace":trace,"usage":usage,"delivery":delivery_receipt,"events":events,"verification_complete":verification_complete,"delivery_options":["diff","worktree","apply","commit","pr"],"limitations":limitations,"ok":ok}),
     )
@@ -1179,6 +1254,16 @@ fn run_command_capture_full(
     ))
 }
 
+fn push_journal_event(events: &mut Vec<Value>, event: &str, payload: Value) -> Result<(), String> {
+    let sequence = events.len() + 1;
+    events.push(json!({
+        "sequence":sequence,
+        "event_type":event,
+        "created_at":now_seconds()?,
+        "payload":payload,
+    }));
+    Ok(())
+}
 fn emit_event(arguments: &[String], event: &str, payload: Value) -> Result<(), String> {
     let Some(target) = option_value(arguments, "--events-jsonl")? else {
         return Ok(());
