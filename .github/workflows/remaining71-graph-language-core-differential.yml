@@ -1,5 +1,6 @@
 name: Remaining 71 Graph Language Core Differential
 
+# Human trigger after workflow registration.
 on:
   push:
     branches:
