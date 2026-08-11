@@ -1,5 +1,6 @@
 name: Remaining 71 Sandbox Differential
 
+# Exercises deterministic direct and platform sandbox semantics across both engines.
 on:
   push:
     branches:
