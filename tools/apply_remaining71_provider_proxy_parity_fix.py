@@ -38,7 +38,7 @@ def main() -> int:
 
     replace_once(
         RS_PROXY,
-        '''        if let Some(handle) = plan["replay_response_handle"].as_str().filter(|value| !value.is_empty()) {\n            headers.push(("X-Syntavra-Evidence".to_owned(), handle.to_owned()));\n        }\n        write_response(stream, 200, &headers, &body)?;\n''',
+        '''        if let Some(handle) = plan["replay_response_handle"]\n            .as_str()\n            .filter(|value| !value.is_empty())\n        {\n            headers.push(("X-Syntavra-Evidence".to_owned(), handle.to_owned()));\n        }\n        write_response(stream, 200, &headers, &body)?;\n''',
         '''        // Python's replay surface intentionally exposes the request/replay\n        // decision but does not label the semantic replay object as raw transport\n        // evidence. Keep the native header contract identical.\n        write_response(stream, 200, &headers, &body)?;\n''',
         "rust replay evidence header",
     )
