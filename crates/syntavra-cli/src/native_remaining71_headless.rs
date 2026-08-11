@@ -256,9 +256,13 @@ fn run_once(arguments: &[String], database: &Path, state_root: &Path) -> Result<
     let (final_state, result) = match execution {
         Ok(Some(value)) => {
             let ok = value.value["ok"].as_bool().unwrap_or(value.exit_code == 0);
+            let mut execution = value.value;
+            if let Some(object) = execution.as_object_mut() {
+                object.remove("ok");
+            }
             (
                 if ok { "completed" } else { "failed" },
-                json!({"execution": value.value}),
+                json!({"execution": execution}),
             )
         }
         Ok(None) => (
@@ -695,15 +699,50 @@ fn sort_json(value: &Value) -> Value {
     }
 }
 
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let shifted = days + 719_468;
+    let era = if shifted >= 0 {
+        shifted / 146_097
+    } else {
+        (shifted - 146_096) / 146_097
+    };
+    let day_of_era = shifted - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    (year, month, day)
+}
+
+fn format_utc_timestamp(seconds: i64, micros: u32) -> Result<String, String> {
+    if micros >= 1_000_000 {
+        return Err("HEADLESS_CLOCK_MICROS_INVALID".to_owned());
+    }
+    let days = seconds.div_euclid(86_400);
+    let seconds_of_day = seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    if !(0..=9_999).contains(&year) {
+        return Err("HEADLESS_CLOCK_YEAR_OUT_OF_RANGE".to_owned());
+    }
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    Ok(format!(
+        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{micros:06}+00:00"
+    ))
+}
+
 fn now_iso() -> Result<String, String> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("HEADLESS_CLOCK_FAILED:{error}"))?;
-    Ok(format!(
-        "{}.{:06}+00:00",
-        duration.as_secs(),
-        duration.subsec_micros()
-    ))
+    let seconds = i64::try_from(duration.as_secs())
+        .map_err(|_| "HEADLESS_CLOCK_SECONDS_OUT_OF_RANGE".to_owned())?;
+    format_utc_timestamp(seconds, duration.subsec_micros())
 }
 
 fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {

@@ -8,10 +8,11 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-DYNAMIC_TIME_KEYS = {"created_at", "updated_at", "started_at", "finished_at"}
+DYNAMIC_VALUE_KEYS = {"created_at", "updated_at", "started_at", "finished_at", "created", "duration_ms", "receipt_id"}
 
 
 def run_engine(
@@ -54,10 +55,12 @@ def run_engine(
     try:
         value = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            f"{engine} emitted non-JSON for {' '.join(args)}\n"
-            f"exit={completed.returncode}\nstdout={completed.stdout}\nstderr={completed.stderr}"
-        ) from exc
+        if completed.returncode == 0:
+            raise RuntimeError(
+                f"{engine} emitted non-JSON success for {' '.join(args)}\n"
+                f"exit={completed.returncode}\nstdout={completed.stdout}\nstderr={completed.stderr}"
+            ) from exc
+        value = None
     return {"exit": completed.returncode, "value": value, "stderr": completed.stderr}
 
 
@@ -68,6 +71,42 @@ def require_success(result: dict[str, Any], *, engine: str, label: str) -> dict[
     if not isinstance(value, dict):
         raise RuntimeError(f"{engine} {label} returned non-object JSON: {value!r}")
     return value
+
+
+def error_signature(result: dict[str, Any]) -> dict[str, Any]:
+    text = (result.get("stderr") or "") + "\n" + json.dumps(result.get("value"), ensure_ascii=False, default=str)
+    known = "job cannot be resumed from queued"
+    if known in text:
+        reason = known
+    else:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        reason = lines[-1] if lines else ""
+    return {"exit": int(result["exit"]), "reason": reason}
+
+
+def validate_dynamic_fields(value: Any, *, engine: str, path: str = "") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else key
+            if key in {"created_at", "updated_at", "started_at", "finished_at", "created"}:
+                if not isinstance(child, str):
+                    raise RuntimeError(f"{engine} dynamic timestamp is not text at {child_path}: {child!r}")
+                try:
+                    parsed = datetime.fromisoformat(child)
+                except ValueError as exc:
+                    raise RuntimeError(f"{engine} dynamic timestamp is not ISO-8601 at {child_path}: {child!r}") from exc
+                if parsed.tzinfo is None:
+                    raise RuntimeError(f"{engine} dynamic timestamp lacks timezone at {child_path}: {child!r}")
+            elif key == "duration_ms":
+                if not isinstance(child, (int, float)) or isinstance(child, bool) or child < 0:
+                    raise RuntimeError(f"{engine} duration_ms invalid at {child_path}: {child!r}")
+            elif key == "receipt_id":
+                if not isinstance(child, str) or not child.startswith("sha256:") or len(child) != 71:
+                    raise RuntimeError(f"{engine} receipt_id invalid at {child_path}: {child!r}")
+            validate_dynamic_fields(child, engine=engine, path=child_path)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            validate_dynamic_fields(child, engine=engine, path=f"{path}[{index}]")
 
 
 def canonical(value: Any) -> bytes:
@@ -94,7 +133,7 @@ def normalize(
         return {
             key: normalize(child, project=project, bundle=bundle, job_ids=job_ids)
             for key, child in value.items()
-            if key not in DYNAMIC_TIME_KEYS
+            if key not in DYNAMIC_VALUE_KEYS
         }
     if isinstance(value, list):
         return [normalize(child, project=project, bundle=bundle, job_ids=job_ids) for child in value]
@@ -195,6 +234,9 @@ def exercise(
         state_root=state,
     )
 
+    if resume_queued_error["exit"] == 0:
+        raise RuntimeError(f"{engine} unexpectedly resumed queued job: {resume_queued_error}")
+
     job_ids = {run_job_id, lifecycle_id, imported_id}
     normalized_bundle_payload = normalize(
         envelope["payload"], project=project, bundle=bundle, job_ids=job_ids
@@ -214,11 +256,10 @@ def exercise(
         "imported": imported,
         "imported_status": imported_status,
         "final_status": final_status,
-        "resume_queued_error": {
-            "exit": resume_queued_error["exit"],
-            "value": resume_queued_error["value"],
-        },
+        "resume_queued_error": error_signature(resume_queued_error),
     }
+    validate_dynamic_fields(result, engine=engine)
+    result["exported"]["sha256"] = "<bundle-sha256>"
     return normalize(result, project=project, bundle=bundle, job_ids=job_ids)
 
 
@@ -278,7 +319,7 @@ def compare(python_result: dict[str, Any], rust_result: dict[str, Any]) -> dict[
             "run headless-import",
         ],
         "claim_boundary": (
-            "timestamps, engine-specific temporary project paths, time-derived job IDs, and the raw bundle digest are normalized; "
+            "validated timestamps, engine-specific temporary project paths, time-derived job IDs, execution timing/receipt IDs, and the raw bundle digest are normalized; "
             "state transitions, event ordering/payloads, command/policy/metadata/result objects, exit codes, and normalized exported payload remain exact"
         ),
     }

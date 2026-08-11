@@ -251,7 +251,7 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
     execute.add_argument("--retain-workspace", action="store_true")
 
     submit = run_sub.add_parser("headless-submit")
-    submit.add_argument("command")
+    submit.add_argument("headless_command", metavar="command")
     submit.add_argument("--workspace", default=".")
     submit.add_argument("--workspace-type", default="local-worktree")
     submit.add_argument("--policy", default="{}")
@@ -473,7 +473,7 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
         )
         return asdict(receipt) | {"ok": receipt.ok}
     if action == "headless-submit":
-        command = _argv(args.command, "headless command")
+        command = _argv(args.headless_command, "headless command")
         workspace = _project_path(project, args.workspace).resolve(strict=True)
         return asdict(runtime.headless.submit(command, workspace=workspace, workspace_type=args.workspace_type, policy=_json_object(args.policy, "policy"), metadata=_json_object(args.metadata, "metadata")))
     if action == "headless-run":
