@@ -1,5 +1,6 @@
 name: Remaining 71 Session Memory Differential
 
+# Exercises exact event-chain, summary, checkpoint, fork and merge parity.
 on:
   push:
     branches:
