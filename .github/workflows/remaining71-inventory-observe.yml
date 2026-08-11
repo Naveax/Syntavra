@@ -18,24 +18,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/r31-provider-capture-native
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Print canonical gap inventory
+      - name: Derive canonical remaining inventory from public parser contract
         run: |
-          set +e
-          python tools/report_missing_native_public_routes.py | tee /tmp/remaining71-inventory.json
-          rc=${PIPESTATUS[0]}
-          echo "report_exit=$rc"
-          exit 0
+          python tools/report_missing_native_public_routes.py > /tmp/remaining71-inventory.json
+          cat /tmp/remaining71-inventory.json
       - name: Compile current probe surface
         run: |
+          rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal
           cargo +1.82.0 check --locked -p syntavra-cli --bins
-      - name: Prove selector ownership for canonical remaining 71
-        run: cargo +1.82.0 run --locked -p syntavra-cli --bin syntavra-remaining71-ownership
+      - name: Prove selector ownership for report-derived remaining 71
+        run: |
+          cargo +1.82.0 run --locked -p syntavra-cli --bin syntavra-remaining71-ownership -- /tmp/remaining71-inventory.json
       - name: Re-run native provider proxy unit tests
         run: cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra native_remaining71_provider_proxy -- --nocapture
-      - name: Show exact head and clean tree
+      - name: Show exact head and enforce clean tree
         run: |
           echo "head=$(git rev-parse HEAD)"
-          git status --porcelain --untracked-files=all
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
