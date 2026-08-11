@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  probe-uncommon:
+  probe-full:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -25,32 +25,61 @@ jobs:
         run: |
           rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal
-      - name: Probe uncommon grammars against tree-sitter 0.25
+      - name: Compile complete grammar pack
         shell: bash
         run: |
-          set -u
-          probe() {
-            name="$1"
-            dep="$2"
-            version="$3"
-            root="/tmp/probe-${name}"
-            rm -rf "$root"
-            cargo +1.82.0 new --bin --edition 2021 "$root" >/dev/null
-            cat >> "$root/Cargo.toml" <<EOF
+          rm -rf /tmp/ts182
+          cargo +1.82.0 new --bin --edition 2021 /tmp/ts182
+          cat >> /tmp/ts182/Cargo.toml <<'EOF'
           indexmap = "=2.7.1"
           tree-sitter = "0.25"
-          ${dep} = "${version}"
+          tree-sitter-bash = "0.25.1"
+          tree-sitter-c = "0.24"
+          tree-sitter-c-sharp = "0.23.1"
+          tree-sitter-cpp = "0.23.4"
+          tree-sitter-dart-orchard = "0.3.0"
+          tree-sitter-elixir = "0.3.4"
+          tree-sitter-erlang = "0.20.0"
+          tree-sitter-fish = "3.6.0"
+          tree-sitter-fsharp = "0.3.0"
+          tree-sitter-go = "0.25.0"
+          tree-sitter-haskell = "0.23.1"
+          tree-sitter-java = "0.23.5"
+          tree-sitter-javascript = "0.25.0"
+          tree-sitter-julia = "0.23.1"
+          tree-sitter-kotlin-ng = "1.1.0"
+          tree-sitter-lua = "0.2.0"
+          tree-sitter-ocaml = "0.24.0"
+          tree-sitter-php = "0.24.0"
+          tree-sitter-powershell = "0.26.4"
+          tree-sitter-r = "1.2.0"
+          tree-sitter-ruby = "0.23.1"
+          tree-sitter-rust = "0.24.0"
+          tree-sitter-scala = "0.24.0"
+          tree-sitter-solidity = "1.2.13"
+          tree-sitter-svelte-ng = "1.0.2"
+          tree-sitter-swift = "0.7.1"
+          tree-sitter-typescript = "0.23.2"
+          tree-sitter-vue-next = "0.1.0"
+          tree-sitter-zig = "1.1.2"
           EOF
-            echo "=== PROBE ${name}: ${dep} ${version} ==="
-            (cd "$root" && cargo +1.82.0 check) && echo "RESULT ${name}=PASS" || echo "RESULT ${name}=FAIL"
-          }
-
-          probe kotlin_ng tree-sitter-kotlin-ng 1.1.0
-          probe powershell tree-sitter-powershell 0.26.4
-          probe svelte_old tree-sitter-svelte 0.10.2
-          probe svelte_ng tree-sitter-svelte-ng 1.0.2
-          probe svelte_next tree-sitter-svelte-next 0.1.1
-          probe vue_old tree-sitter-vue 0.0.3
-          probe vue_updated tree-sitter-vue-updated 0.1.0
-          probe vue_next tree-sitter-vue-next 0.1.0
-          probe vue3 tree-sitter-vue3 0.0.4
+          cd /tmp/ts182
+          cargo +1.82.0 check
+      - name: Inspect grammar Rust exports
+        shell: bash
+        run: |
+          root="$(find "$HOME/.cargo/registry/src" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+          for pattern in \
+            tree-sitter-bash tree-sitter-c- tree-sitter-c-sharp tree-sitter-cpp \
+            tree-sitter-dart-orchard tree-sitter-elixir tree-sitter-erlang tree-sitter-fish \
+            tree-sitter-fsharp tree-sitter-go tree-sitter-haskell tree-sitter-java- \
+            tree-sitter-javascript tree-sitter-julia tree-sitter-kotlin-ng tree-sitter-lua \
+            tree-sitter-ocaml tree-sitter-php tree-sitter-powershell tree-sitter-r- \
+            tree-sitter-ruby tree-sitter-rust tree-sitter-scala tree-sitter-solidity \
+            tree-sitter-svelte-ng tree-sitter-swift tree-sitter-typescript tree-sitter-vue-next \
+            tree-sitter-zig; do
+            echo "=== ${pattern} ==="
+            find "$root" -maxdepth 1 -type d -name "${pattern}*" -print0 | while IFS= read -r -d '' dir; do
+              grep -R -E 'pub (const LANGUAGE|fn language|static LANGUAGE)' "$dir/bindings/rust" "$dir/src" 2>/dev/null | head -n 20 || true
+            done
+          done
