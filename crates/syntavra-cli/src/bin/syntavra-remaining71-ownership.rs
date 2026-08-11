@@ -34,10 +34,18 @@ fn report_u64(report: &Value, section: &str, field: &str) -> Result<u64, String>
 }
 
 fn load_report_routes(path: &Path) -> Result<Vec<String>, String> {
-    let data = fs::read(path)
-        .map_err(|error| format!("failed to read inventory report {}: {error}", path.display()))?;
-    let report: Value = serde_json::from_slice(&data)
-        .map_err(|error| format!("failed to parse inventory report {}: {error}", path.display()))?;
+    let data = fs::read(path).map_err(|error| {
+        format!(
+            "failed to read inventory report {}: {error}",
+            path.display()
+        )
+    })?;
+    let report: Value = serde_json::from_slice(&data).map_err(|error| {
+        format!(
+            "failed to parse inventory report {}: {error}",
+            path.display()
+        )
+    })?;
 
     if report.get("ok").and_then(Value::as_bool) != Some(true) {
         return Err("inventory report is not canonical (ok != true)".to_owned());
@@ -66,7 +74,9 @@ fn load_report_routes(path: &Path) -> Result<Vec<String>, String> {
                 .as_str()
                 .filter(|route| !route.trim().is_empty())
                 .map(str::to_owned)
-                .ok_or_else(|| "inventory missing_routes contains a non-string/empty route".to_owned())
+                .ok_or_else(|| {
+                    "inventory missing_routes contains a non-string/empty route".to_owned()
+                })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
