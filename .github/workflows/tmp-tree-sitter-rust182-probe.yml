@@ -1,0 +1,70 @@
+name: Temporary Rust 1.82 Tree-sitter Grammar Probe
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - .github/workflows/tmp-tree-sitter-rust182-probe.yml
+  pull_request:
+    branches:
+      - agent/r31-provider-prepare-native
+    types: [synchronize]
+    paths:
+      - .github/workflows/tmp-tree-sitter-rust182-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clean Rust 1.82
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal
+      - name: Discover uncommon grammar crates
+        shell: bash
+        run: |
+          set -x
+          cargo +1.82.0 search tree-sitter-kotlin --limit 8 || true
+          cargo +1.82.0 search tree-sitter-powershell --limit 8 || true
+          cargo +1.82.0 search tree-sitter-svelte --limit 8 || true
+          cargo +1.82.0 search tree-sitter-vue --limit 8 || true
+      - name: Compile candidate grammar set on Rust 1.82
+        shell: bash
+        run: |
+          rm -rf /tmp/ts182
+          cargo +1.82.0 new --bin --edition 2021 /tmp/ts182
+          cat >> /tmp/ts182/Cargo.toml <<'EOF'
+          tree-sitter = "0.25"
+          tree-sitter-bash = "0.25.1"
+          tree-sitter-c = "0.24"
+          tree-sitter-c-sharp = "0.23.1"
+          tree-sitter-cpp = "0.23.4"
+          tree-sitter-dart-orchard = "0.3.0"
+          tree-sitter-elixir = "0.3.4"
+          tree-sitter-erlang = "0.20.0"
+          tree-sitter-fish = "3.6.0"
+          tree-sitter-fsharp = "0.3.0"
+          tree-sitter-go = "0.25.0"
+          tree-sitter-haskell = "0.23.1"
+          tree-sitter-java = "0.23.5"
+          tree-sitter-javascript = "0.25.0"
+          tree-sitter-julia = "0.23.1"
+          tree-sitter-lua = "0.2.0"
+          tree-sitter-ocaml = "0.24.0"
+          tree-sitter-php = "0.24.0"
+          tree-sitter-r = "1.2.0"
+          tree-sitter-ruby = "0.23.1"
+          tree-sitter-rust = "0.24.0"
+          tree-sitter-scala = "0.24.0"
+          tree-sitter-solidity = "1.2.13"
+          tree-sitter-swift = "0.7.1"
+          tree-sitter-typescript = "0.23.2"
+          tree-sitter-zig = "1.1.2"
+          EOF
+          cd /tmp/ts182
+          cargo +1.82.0 check
