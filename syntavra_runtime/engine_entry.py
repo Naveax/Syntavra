@@ -230,7 +230,24 @@ def main(argv: list[str] | None = None) -> int:
 
     from .unified_cli import main as python_main
 
-    return int(python_main(values))
+    try:
+        return int(python_main(values))
+    except (ValueError, KeyError) as exc:
+        _emit(
+            {
+                "ok": False,
+                "error": {
+                    "code": "PYTHON_PUBLIC_COMMAND_FAILED",
+                    "message": "The selected Python engine failed while executing the public command.",
+                    "details": {
+                        "command": command or "<missing>",
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "fallback": "forbidden",
+                    },
+                },
+            }
+        )
+        return 4
 
 
 if __name__ == "__main__":
