@@ -36,71 +36,6 @@ jobs:
           cargo +1.82.0 check --locked -p syntavra-cli --bins
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
 
-      - name: Apply diagnostic-only Python headless-submit parser repair
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('syntavra_runtime/platform_cli.py')
-          text = path.read_text(encoding='utf-8')
-          replacements = {
-              '    submit.add_argument("command")\n': '    submit.add_argument("headless_command", metavar="command")\n',
-              '        command = _argv(args.command, "headless command")\n': '        command = _argv(args.headless_command, "headless command")\n',
-          }
-          for old, new in replacements.items():
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'diagnostic repair anchor count for {old!r}: {count}')
-              text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-          print('HEADLESS_DIAGNOSTIC_PYTHON_CLI_REPAIR=APPLIED_NOT_CERTIFIABLE')
-          PY
-
-      - name: Apply diagnostic-only negative-error harness repair
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('tools/validate_remaining71_headless_differential.py')
-          text = path.read_text(encoding='utf-8')
-
-          start_marker = '    try:\n        value = json.loads(completed.stdout)\n    except json.JSONDecodeError as exc:\n'
-          start = text.find(start_marker)
-          if start < 0:
-              raise SystemExit('run_engine JSON decode anchor not found')
-          end_marker = '    return {"exit": completed.returncode, "value": value, "stderr": completed.stderr}\n'
-          end = text.find(end_marker, start)
-          if end < 0:
-              raise SystemExit('run_engine return anchor not found')
-          replacement = '''    try:\n        value = json.loads(completed.stdout)\n    except json.JSONDecodeError as exc:\n        if completed.returncode == 0:\n            raise RuntimeError(\n                f"{engine} emitted non-JSON success for {' '.join(args)}\\n"\n                f"exit={completed.returncode}\\nstdout={completed.stdout}\\nstderr={completed.stderr}"\n            ) from exc\n        value = None\n'''
-          text = text[:start] + replacement + text[end:]
-
-          canonical_marker = 'def canonical(value: Any) -> bytes:\n'
-          if text.count(canonical_marker) != 1:
-              raise SystemExit('canonical insertion anchor drift')
-          helper = '''def error_signature(result: dict[str, Any]) -> dict[str, Any]:\n    text = (result.get("stderr") or "") + "\\n" + json.dumps(result.get("value"), ensure_ascii=False, default=str)\n    known = "job cannot be resumed from queued"\n    if known in text:\n        reason = known\n    else:\n        lines = [line.strip() for line in text.splitlines() if line.strip()]\n        reason = lines[-1] if lines else ""\n    return {"exit": int(result["exit"]), "reason": reason}\n\n\n'''
-          text = text.replace(canonical_marker, helper + canonical_marker, 1)
-
-          job_ids_marker = '    job_ids = {run_job_id, lifecycle_id, imported_id}\n'
-          if text.count(job_ids_marker) != 1:
-              raise SystemExit('negative assertion anchor drift')
-          text = text.replace(
-              job_ids_marker,
-              '    if resume_queued_error["exit"] == 0:\n        raise RuntimeError(f"{engine} unexpectedly resumed queued job: {resume_queued_error}")\n\n' + job_ids_marker,
-              1,
-          )
-
-          old_result = '''        "resume_queued_error": {\n            "exit": resume_queued_error["exit"],\n            "value": resume_queued_error["value"],\n        },\n'''
-          if text.count(old_result) != 1:
-              raise SystemExit('negative result anchor drift')
-          text = text.replace(
-              old_result,
-              '        "resume_queued_error": error_signature(resume_queued_error),\n',
-              1,
-          )
-          path.write_text(text, encoding='utf-8')
-          print('HEADLESS_DIAGNOSTIC_NEGATIVE_HARNESS_REPAIR=APPLIED_NOT_CERTIFIABLE')
-          PY
-
       - name: Run Python Rust headless differential
         run: |
           set +e
@@ -140,10 +75,6 @@ jobs:
           fi
 
           exit "$differential_exit"
-
-      - name: Restore diagnostic Python reference patches
-        if: always()
-        run: git checkout -- syntavra_runtime/platform_cli.py tools/validate_remaining71_headless_differential.py
 
       - name: Upload differential evidence
         if: always()
