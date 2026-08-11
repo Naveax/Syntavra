@@ -9,6 +9,9 @@ use std::process::Command;
 use serde_json::{json, Map, Value};
 use sha2::{Digest as _, Sha256};
 
+#[path = "native_remaining71_provider_proxy.rs"]
+mod native_remaining71_provider_proxy;
+
 const VERSION: &str = "0.0.1";
 const CHANNEL: &str = "pre-release";
 
@@ -159,8 +162,9 @@ const PRESETS: &[ProxyPreset] = &[
 
 pub(crate) fn supports(command: &[String]) -> bool {
     command.len() == 2
-        && command[0] == "run"
-        && (command[1] == "gateway-plan" || command[1] == "proxy-service")
+        && ((command[0] == "run"
+            && (command[1] == "gateway-plan" || command[1] == "proxy-service"))
+            || (command[0] == "provider" && command[1] == "proxy"))
 }
 
 fn sha256(value: &[u8]) -> String {
@@ -918,6 +922,10 @@ pub(crate) fn execute(
 ) -> Result<Option<Value>, String> {
     if !supports(command) {
         return Ok(None);
+    }
+    if command.len() == 2 && command[0] == "provider" && command[1] == "proxy" {
+        return native_remaining71_provider_proxy::execute(arguments, project, state_root)
+            .map(Some);
     }
     let value = match command[1].as_str() {
         "gateway-plan" => gateway_plan(arguments)?,

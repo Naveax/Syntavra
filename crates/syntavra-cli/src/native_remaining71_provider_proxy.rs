@@ -129,16 +129,18 @@ pub(crate) fn execute(
 fn parse_config(arguments: &[String]) -> Result<ProxyConfig, String> {
     let provider = required_option(arguments, "--provider")?;
     let upstream_base = required_option(arguments, "--upstream")?;
-    let listen_host = option_value(arguments, "--listen-host")?
-        .unwrap_or_else(|| "127.0.0.1".to_owned());
+    let listen_host =
+        option_value(arguments, "--listen-host")?.unwrap_or_else(|| "127.0.0.1".to_owned());
     let listen_port = integer_option(arguments, "--listen-port", 8787)?;
-    let listen_port = u16::try_from(listen_port).map_err(|_| "PROXY_LISTEN_PORT_INVALID".to_owned())?;
+    let listen_port =
+        u16::try_from(listen_port).map_err(|_| "PROXY_LISTEN_PORT_INVALID".to_owned())?;
     let credential_env = option_value(arguments, "--credential-env")?.unwrap_or_default();
     let credential_header = option_value(arguments, "--credential-header")?.unwrap_or_default();
     let credential_prefix = option_value(arguments, "--credential-prefix")?.unwrap_or_default();
     let control_token_env = option_value(arguments, "--control-token-env")?
         .unwrap_or_else(|| DEFAULT_CONTROL_TOKEN_ENV.to_owned());
-    let cache_policy = option_value(arguments, "--cache-policy")?.unwrap_or_else(|| "auto".to_owned());
+    let cache_policy =
+        option_value(arguments, "--cache-policy")?.unwrap_or_else(|| "auto".to_owned());
     let replay_ttl_seconds = integer_option(arguments, "--replay-ttl-seconds", 900)?;
     let prompt_cache_ttl_seconds = integer_option(arguments, "--prompt-cache-ttl-seconds", 300)?;
     let timeout_seconds = float_option(arguments, "--timeout-seconds", 180.0)?;
@@ -225,7 +227,10 @@ fn validate_config(config: &ProxyConfig) -> Result<(), String> {
     if config.control_token_env.trim().is_empty() {
         return Err("control_token_env is mandatory even for loopback bindings".to_owned());
     }
-    let loopback = matches!(config.listen_host.as_str(), "127.0.0.1" | "::1" | "localhost");
+    let loopback = matches!(
+        config.listen_host.as_str(),
+        "127.0.0.1" | "::1" | "localhost"
+    );
     if !loopback {
         if !config.allow_remote {
             return Err("non-loopback proxy binding requires allow_remote".to_owned());
@@ -247,10 +252,15 @@ fn validate_upstream(value: &str, allow_insecure: bool) -> Result<(), String> {
         .split_once("://")
         .ok_or_else(|| "upstream must be an absolute HTTP origin".to_owned())?;
     if scheme != "https" && !(allow_insecure && scheme == "http") {
-        return Err("upstream must use HTTPS unless allow_insecure_upstream is explicit".to_owned());
+        return Err(
+            "upstream must use HTTPS unless allow_insecure_upstream is explicit".to_owned(),
+        );
     }
     if rest.is_empty() || rest.starts_with('/') || rest.contains('?') || rest.contains('#') {
-        return Err("upstream_base must be an origin or fixed base path without credentials/query/fragment".to_owned());
+        return Err(
+            "upstream_base must be an origin or fixed base path without credentials/query/fragment"
+                .to_owned(),
+        );
     }
     let authority = rest.split('/').next().unwrap_or_default();
     if authority.is_empty() || authority.contains('@') {
@@ -277,7 +287,8 @@ fn run_server(config: ProxyConfig, project: &Path, state_root: &Path) -> Result<
     });
     println!(
         "{}",
-        serde_json::to_string(&ready).map_err(|error| format!("PROXY_READY_SERIALIZE_FAILED:{error}"))?
+        serde_json::to_string(&ready)
+            .map_err(|error| format!("PROXY_READY_SERIALIZE_FAILED:{error}"))?
     );
     std::io::stdout()
         .flush()
@@ -286,10 +297,13 @@ fn run_server(config: ProxyConfig, project: &Path, state_root: &Path) -> Result<
     for incoming in listener.incoming() {
         match incoming {
             Ok(mut stream) => {
-                let _ = stream.set_read_timeout(Some(Duration::from_secs_f64(config.timeout_seconds)));
-                let _ = stream.set_write_timeout(Some(Duration::from_secs_f64(config.timeout_seconds)));
+                let _ =
+                    stream.set_read_timeout(Some(Duration::from_secs_f64(config.timeout_seconds)));
+                let _ =
+                    stream.set_write_timeout(Some(Duration::from_secs_f64(config.timeout_seconds)));
                 if let Err(error) = handle_connection(&mut stream, &config, project, state_root) {
-                    let _ = write_json_error(&mut stream, 502, "proxy-request-failed", &error, None);
+                    let _ =
+                        write_json_error(&mut stream, 502, "proxy-request-failed", &error, None);
                 }
             }
             Err(error) => return Err(format!("PROXY_ACCEPT_FAILED:{error}")),
@@ -305,7 +319,12 @@ fn handle_connection(
     state_root: &Path,
 ) -> Result<(), String> {
     let request = read_request(stream, config.max_request_bytes)?;
-    if request.method == "GET" && matches!(request.target.as_str(), "/_syntavra/health" | "/_syntavra/ready") {
+    if request.method == "GET"
+        && matches!(
+            request.target.as_str(),
+            "/_syntavra/health" | "/_syntavra/ready"
+        )
+    {
         return handle_control(stream, config, &request);
     }
     if request.method != "POST" {
@@ -332,7 +351,10 @@ fn handle_connection(
             .map_err(|error| format!("PROXY_REPLAY_SERIALIZE_FAILED:{error}"))?;
         let mut headers = vec![("Content-Type".to_owned(), "application/json".to_owned())];
         headers.push(("X-Syntavra-Replay".to_owned(), "hit".to_owned()));
-        if let Some(handle) = plan["replay_response_handle"].as_str().filter(|value| !value.is_empty()) {
+        if let Some(handle) = plan["replay_response_handle"]
+            .as_str()
+            .filter(|value| !value.is_empty())
+        {
             headers.push(("X-Syntavra-Evidence".to_owned(), handle.to_owned()));
         }
         write_response(stream, 200, &headers, &body)?;
@@ -347,7 +369,10 @@ fn handle_connection(
     let body_path = temporary.push(temp_path(state_root, "upstream-request", "json")?);
     write_private(&body_path, &prepared_body)?;
     let upstream = forward_upstream(config, &request, &body_path, state_root, &mut temporary)?;
-    let streaming = prepared.get("stream").and_then(Value::as_bool).unwrap_or(false);
+    let streaming = prepared
+        .get("stream")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     if streaming {
         let project_id = stable_project_id(project)?;
@@ -382,7 +407,10 @@ fn handle_connection(
         let headers = vec![
             ("Content-Type".to_owned(), upstream.content_type),
             ("X-Syntavra-Replay".to_owned(), "miss".to_owned()),
-            ("X-Syntavra-Capture".to_owned(), "complete-before-delivery".to_owned()),
+            (
+                "X-Syntavra-Capture".to_owned(),
+                "complete-before-delivery".to_owned(),
+            ),
             ("X-Syntavra-Evidence".to_owned(), transport_handle),
         ];
         write_response(stream, upstream.status, &headers, &upstream.body)?;
@@ -395,15 +423,25 @@ fn handle_connection(
     let mut headers = vec![
         ("Content-Type".to_owned(), upstream.content_type),
         ("X-Syntavra-Replay".to_owned(), "miss".to_owned()),
-        ("X-Syntavra-Capture".to_owned(), "complete-before-delivery".to_owned()),
+        (
+            "X-Syntavra-Capture".to_owned(),
+            "complete-before-delivery".to_owned(),
+        ),
     ];
-    if let Some(handle) = capture["response_handle"].as_str().filter(|value| !value.is_empty()) {
+    if let Some(handle) = capture["response_handle"]
+        .as_str()
+        .filter(|value| !value.is_empty())
+    {
         headers.push(("X-Syntavra-Evidence".to_owned(), handle.to_owned()));
     }
     write_response(stream, upstream.status, &headers, &upstream.body)
 }
 
-fn handle_control(stream: &mut TcpStream, config: &ProxyConfig, request: &HttpRequest) -> Result<(), String> {
+fn handle_control(
+    stream: &mut TcpStream,
+    config: &ProxyConfig,
+    request: &HttpRequest,
+) -> Result<(), String> {
     let expected = env::var(&config.control_token_env).unwrap_or_default();
     let supplied = request
         .headers
@@ -457,12 +495,18 @@ fn read_request(stream: &mut TcpStream, max_body: usize) -> Result<HttpRequest, 
     let header_text = std::str::from_utf8(&buffer[..header_end - 4])
         .map_err(|_| "PROXY_HEADERS_UTF8_INVALID".to_owned())?;
     let mut lines = header_text.split("\r\n");
-    let request_line = lines.next().ok_or_else(|| "PROXY_REQUEST_LINE_MISSING".to_owned())?;
+    let request_line = lines
+        .next()
+        .ok_or_else(|| "PROXY_REQUEST_LINE_MISSING".to_owned())?;
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_owned();
     let target = parts.next().unwrap_or_default().to_owned();
     let version = parts.next().unwrap_or_default();
-    if method.is_empty() || target.is_empty() || !version.starts_with("HTTP/1.") || parts.next().is_some() {
+    if method.is_empty()
+        || target.is_empty()
+        || !version.starts_with("HTTP/1.")
+        || parts.next().is_some()
+    {
         return Err("PROXY_REQUEST_LINE_INVALID".to_owned());
     }
     let mut headers = BTreeMap::<String, String>::new();
@@ -482,7 +526,11 @@ fn read_request(stream: &mut TcpStream, max_body: usize) -> Result<HttpRequest, 
     }
     let content_length = headers
         .get("content-length")
-        .map(|value| value.parse::<usize>().map_err(|_| "PROXY_CONTENT_LENGTH_INVALID".to_owned()))
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|_| "PROXY_CONTENT_LENGTH_INVALID".to_owned())
+        })
         .transpose()?
         .unwrap_or(0);
     if content_length > max_body {
@@ -553,12 +601,16 @@ fn forward_upstream(
         .args(["--write-out", "%{http_code}", "--max-time"])
         .arg(format!("{:.3}", config.timeout_seconds));
     for (name, value) in &request.headers {
-        if SAFE_FORWARD_HEADERS.contains(&name.as_str()) && !CREDENTIAL_HEADERS.contains(&name.as_str()) {
+        if SAFE_FORWARD_HEADERS.contains(&name.as_str())
+            && !CREDENTIAL_HEADERS.contains(&name.as_str())
+        {
             command.arg("--header").arg(format!("{name}: {value}"));
         }
     }
     if !request.headers.contains_key("content-type") {
-        command.arg("--header").arg("Content-Type: application/json");
+        command
+            .arg("--header")
+            .arg("Content-Type: application/json");
     }
     copy_safe_environment(&mut command, config);
     let output = command
@@ -578,8 +630,8 @@ fn forward_upstream(
         return Err("PROXY_UPSTREAM_RESPONSE_TOO_LARGE".to_owned());
     }
     let header_bytes = fs::read(&headers_path).unwrap_or_default();
-    let content_type = response_content_type(&header_bytes)
-        .unwrap_or_else(|| "application/json".to_owned());
+    let content_type =
+        response_content_type(&header_bytes).unwrap_or_else(|| "application/json".to_owned());
     Ok(UpstreamResponse {
         status,
         content_type,
@@ -650,7 +702,8 @@ fn run_native_child(
     state_root: &Path,
     args: &mut [String],
 ) -> Result<Value, String> {
-    let executable = env::current_exe().map_err(|error| format!("PROXY_CURRENT_EXE_FAILED:{error}"))?;
+    let executable =
+        env::current_exe().map_err(|error| format!("PROXY_CURRENT_EXE_FAILED:{error}"))?;
     let mut command = Command::new(executable);
     command
         .arg("--engine")
@@ -683,8 +736,12 @@ fn provider_credential(config: &ProxyConfig) -> Result<Option<(String, String)>,
     if config.credential_env.is_empty() {
         return Ok(None);
     }
-    let secret = env::var(&config.credential_env)
-        .map_err(|_| format!("missing provider credential environment variable: {}", config.credential_env))?;
+    let secret = env::var(&config.credential_env).map_err(|_| {
+        format!(
+            "missing provider credential environment variable: {}",
+            config.credential_env
+        )
+    })?;
     validate_header_value(&secret)?;
     let (default_header, default_prefix) = match canonical_provider(&config.provider).as_str() {
         "anthropic" => ("x-api-key", ""),
@@ -767,7 +824,10 @@ fn response_content_type(headers: &[u8]) -> Option<String> {
     let text = String::from_utf8_lossy(headers);
     let mut result = None;
     for line in text.lines() {
-        if let Some(value) = line.strip_prefix("Content-Type:").or_else(|| line.strip_prefix("content-type:")) {
+        if let Some(value) = line
+            .strip_prefix("Content-Type:")
+            .or_else(|| line.strip_prefix("content-type:"))
+        {
             result = Some(value.trim().to_owned());
         }
     }
@@ -782,13 +842,23 @@ fn scan_secret_types(body: &[u8]) -> Result<Vec<String>, String> {
             r"(?i)\b(api[_-]?key|access[_-]?token|authorization|password|passwd|secret|bearer|private[_-]?key|client[_-]?secret|session[_-]?id|cookie)\b\s*[:=]\s*([^\s,;]+)",
         ),
         ("aws-access-key", r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
-        ("github-token", r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b"),
-        ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
-        ("private-key", r"(?s)-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----"),
+        (
+            "github-token",
+            r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b",
+        ),
+        (
+            "jwt",
+            r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b",
+        ),
+        (
+            "private-key",
+            r"(?s)-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----",
+        ),
     ];
     let mut found = Vec::<String>::new();
     for (name, pattern) in patterns {
-        let regex = Regex::new(pattern).map_err(|error| format!("PROXY_DLP_REGEX_INVALID:{error}"))?;
+        let regex =
+            Regex::new(pattern).map_err(|error| format!("PROXY_DLP_REGEX_INVALID:{error}"))?;
         if regex.is_match(&text) {
             found.push(name.to_owned());
         }
@@ -831,7 +901,10 @@ fn write_response(
     body: &[u8],
 ) -> Result<(), String> {
     let reason = status_reason(status);
-    let mut head = format!("HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n", body.len());
+    let mut head = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        body.len()
+    );
     for (name, value) in headers {
         validate_header_name(name)?;
         validate_header_value(value)?;
@@ -877,7 +950,23 @@ fn validate_header_name(value: &str) -> Result<(), String> {
     if value.is_empty()
         || !value.bytes().all(|byte| {
             byte.is_ascii_alphanumeric()
-                || matches!(byte, b'!' | b'#' | b'$' | b'%' | b'&' | b'\'' | b'*' | b'+' | b'-' | b'.' | b'^' | b'_' | b'`' | b'|' | b'~')
+                || matches!(
+                    byte,
+                    b'!' | b'#'
+                        | b'$'
+                        | b'%'
+                        | b'&'
+                        | b'\''
+                        | b'*'
+                        | b'+'
+                        | b'-'
+                        | b'.'
+                        | b'^'
+                        | b'_'
+                        | b'`'
+                        | b'|'
+                        | b'~'
+                )
         })
     {
         return Err("invalid HTTP header name".to_owned());
@@ -949,7 +1038,10 @@ fn temp_path(state_root: &Path, label: &str, extension: &str) -> Result<PathBuf,
     fs::create_dir_all(&root).map_err(|error| format!("PROXY_SPOOL_CREATE_FAILED:{error}"))?;
     let mut random = [0_u8; 8];
     OsRng.fill_bytes(&mut random);
-    let nonce = random.iter().map(|value| format!("{value:02x}")).collect::<String>();
+    let nonce = random
+        .iter()
+        .map(|value| format!("{value:02x}"))
+        .collect::<String>();
     let sequence = REQUEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     Ok(root.join(format!("{label}-{sequence}-{nonce}.{extension}")))
 }
@@ -973,7 +1065,8 @@ fn write_private(path: &Path, data: &[u8]) -> Result<(), String> {
 }
 
 fn write_json_private(path: &Path, value: &Value) -> Result<(), String> {
-    let data = serde_json::to_vec(value).map_err(|error| format!("PROXY_TEMP_JSON_FAILED:{error}"))?;
+    let data =
+        serde_json::to_vec(value).map_err(|error| format!("PROXY_TEMP_JSON_FAILED:{error}"))?;
     write_private(path, &data)
 }
 
@@ -1045,7 +1138,9 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
     }
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[cfg(test)]
@@ -1075,7 +1170,8 @@ mod tests {
 
     #[test]
     fn stream_dlp_detects_secret_assignments() {
-        let found = scan_secret_types(b"data: {\"delta\":\"api_key=super-secret-value\"}\n\n").unwrap();
+        let found =
+            scan_secret_types(b"data: {\"delta\":\"api_key=super-secret-value\"}\n\n").unwrap();
         assert!(found.iter().any(|value| value == "generic-assignment"));
     }
 }
