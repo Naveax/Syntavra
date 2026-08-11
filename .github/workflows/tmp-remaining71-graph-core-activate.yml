@@ -6,6 +6,13 @@ on:
       - agent/r31-provider-capture-native
     paths:
       - .github/workflows/tmp-remaining71-graph-core-activate.yml
+  pull_request:
+    branches:
+      - agent/r31-provider-prepare-native
+    types:
+      - synchronize
+    paths:
+      - .github/workflows/tmp-remaining71-graph-core-activate.yml
 
 permissions:
   contents: write
