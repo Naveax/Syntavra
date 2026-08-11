@@ -64,6 +64,7 @@ jobs:
       - name: Validate activated native core
         shell: bash
         run: |
+          rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal --component rustfmt
           cargo +1.82.0 fmt --all
           cargo +1.82.0 fmt --all -- --check
