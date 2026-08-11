@@ -66,17 +66,21 @@ jobs:
           set +e
           python tools/validate_remaining71_memory_intelligence_differential.py \
             --rust-bin target/debug/syntavra \
-            --output /tmp/memory-intelligence-differential.json
+            --output /tmp/memory-intelligence-differential.json \
+            > /tmp/memory-intelligence-differential.log 2>&1
           status=$?
+          cat /tmp/memory-intelligence-differential.log
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           exit 0
-      - name: Upload exact differential report
+      - name: Upload exact differential diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: memory-intelligence-differential
-          path: /tmp/memory-intelligence-differential.json
-          if-no-files-found: error
+          path: |
+            /tmp/memory-intelligence-differential.log
+            /tmp/memory-intelligence-differential.json
+          if-no-files-found: warn
           retention-days: 1
       - name: Fail on parity mismatch
         if: steps.differential.outputs.exit_code != '0'
