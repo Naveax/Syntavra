@@ -241,8 +241,10 @@ def run_suite(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[st
     results["rewrite_unsafe"] = run(
         "rewrite-unsafe", ["run", "rewrite", "git", "status", "&&", "echo", "unsafe"]
     )
+    transcript_path = project / "transcript.json"
+    transcript_path.write_text(fixture_transcript(), encoding="utf-8")
     results["transcript_mine"] = run(
-        "transcript-mine", ["run", "transcript-mine", fixture_transcript()]
+        "transcript-mine", ["run", "transcript-mine", str(transcript_path)]
     )
     results["cache_plan"] = run(
         "cache-plan",
