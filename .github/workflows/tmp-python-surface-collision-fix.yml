@@ -1,0 +1,103 @@
+name: Temporary Python Surface Collision Fix
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Apply exact fail-closed parser and regression patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('syntavra_runtime/competitive_cli.py')
+          source = source_path.read_text(encoding='utf-8')
+
+          old = '    configured = getattr(args, "skill_root", None)\n'
+          new = '    configured = getattr(args, "fabric_skill_root", None) or getattr(args, "skill_root", None)\n'
+          if source.count(old) != 1:
+              raise SystemExit(f'expected exactly one _skill_root source, found {source.count(old)}')
+          source = source.replace(old, new, 1)
+
+          for parser_name in ('install', 'verify_install', 'rollback_install', 'installations'):
+              old = f'    {parser_name}.add_argument("--skill-root")\n'
+              new = f'    {parser_name}.add_argument("--skill-root", dest="fabric_skill_root")\n'
+              if source.count(old) != 1:
+                  raise SystemExit(f'expected exactly one {parser_name} --skill-root action, found {source.count(old)}')
+              source = source.replace(old, new, 1)
+          source_path.write_text(source, encoding='utf-8')
+
+          test_path = Path('tests/runtime/test_host_installation_cli_v4.py')
+          test = test_path.read_text(encoding='utf-8')
+          anchor = '        self.assertTrue(skill_path.is_file())\n'
+          replacement = anchor + '        self.assertEqual(skill_path.read_text(encoding="utf-8"), "# Syntavra\\n")\n'
+          if test.count(anchor) != 1:
+              raise SystemExit(f'expected exactly one installed skill assertion anchor, found {test.count(anchor)}')
+          test = test.replace(anchor, replacement, 1)
+
+          marker = '    def test_install_dry_run_writes_nothing(self):\n'
+          extra = '''    def test_fabric_skill_root_override_wins_without_shadowing_global(self):
+        alternate = self.root / "alternate-skill"
+        alternate.mkdir()
+        (alternate / "SKILL.md").write_text("# Alternate Syntavra\\n", encoding="utf-8")
+
+        code, _ = self.run_cli(
+            "fabric", "install", "codex",
+            "--skill-root", str(alternate),
+            "--home", str(self.home),
+        )
+        self.assertEqual(code, 0)
+        installed_skill = self.project / ".agents" / "skills" / "syntavra" / "SKILL.md"
+        self.assertEqual(
+            installed_skill.read_text(encoding="utf-8"),
+            "# Alternate Syntavra\\n",
+        )
+
+'''
+          if test.count(marker) != 1:
+              raise SystemExit(f'expected exactly one dry-run test marker, found {test.count(marker)}')
+          test = test.replace(marker, extra + marker, 1)
+          test_path.write_text(test, encoding='utf-8')
+          PY
+
+      - name: Prove parser namespace and host installation semantics
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m unittest discover -s tests -p 'test_python_public_surface_audit.py' -v
+          python -m unittest discover -s tests/runtime -p 'test_host_installation_cli_v4.py' -v
+          python tools/report_missing_native_public_routes.py > /tmp/python-public-surface.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('/tmp/python-public-surface.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['python']['derived_count'] == 245
+          assert value['python']['duplicate_route_count'] == 0
+          assert value['python']['namespace_collision_count'] == 0
+          PY
+
+      - name: Commit only the proven source and regression changes
+        run: |
+          git status --short
+          git diff --check
+          git diff --exit-code -- .github/workflows/tmp-python-surface-collision-fix.yml
+          git add syntavra_runtime/competitive_cli.py tests/runtime/test_host_installation_cli_v4.py
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: isolate fabric skill-root parser namespace'
+          git push origin HEAD:agent/r31-provider-capture-native
