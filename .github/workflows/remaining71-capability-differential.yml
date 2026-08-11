@@ -47,7 +47,6 @@ jobs:
             --rust-bin target/debug/syntavra \
             --output /tmp/capability-differential.json
       - name: Commit validated capability parity repair
-        if: github.event_name == 'push'
         run: |
           if [ -f tools/apply_remaining71_capability_parity_fix.py ]; then
             rm tools/apply_remaining71_capability_parity_fix.py
