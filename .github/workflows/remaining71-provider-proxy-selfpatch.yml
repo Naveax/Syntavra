@@ -1,0 +1,45 @@
+name: Remaining 71 Provider Proxy Self Patch
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remaining71-provider-proxy
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/r31-provider-capture-native
+      - run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+      - name: Wire provider proxy probe
+        run: python tools/apply_remaining71_provider_proxy_probe.py
+      - name: Format and compile
+        run: |
+          cargo +1.82.0 fmt --all
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+      - name: Run provider proxy unit tests
+        run: cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra native_remaining71_provider_proxy -- --nocapture
+      - name: Remove one-shot machinery
+        run: |
+          rm tools/apply_remaining71_provider_proxy_probe.py
+          rm .github/workflows/remaining71-provider-proxy-selfpatch.yml
+      - name: Commit provider proxy closure
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Wire native provider proxy transport"
+          git fetch origin agent/r31-provider-capture-native
+          git rebase origin/agent/r31-provider-capture-native
+          git push origin HEAD:agent/r31-provider-capture-native
