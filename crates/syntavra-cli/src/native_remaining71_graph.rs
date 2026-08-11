@@ -11,6 +11,9 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
+#[path = "native_remaining71_graph_core.rs"]
+mod core_parity;
+
 const IGNORE_PARTS: &[&str] = &[
     ".git",
     ".hg",
@@ -86,6 +89,12 @@ pub(crate) fn execute(
 ) -> Result<Option<Value>, String> {
     if !supports(command) {
         return Ok(None);
+    }
+    if matches!(
+        command.get(1).map(String::as_str),
+        Some("graph-index" | "graph-query" | "graph-impact" | "language" | "semantic-services")
+    ) {
+        return core_parity::execute(command, arguments, project_root, state_root).map(Some);
     }
     let unified = state_root.join("unified");
     fs::create_dir_all(&unified).map_err(|error| format!("GRAPH_STATE_CREATE_FAILED:{error}"))?;

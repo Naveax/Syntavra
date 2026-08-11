@@ -12,18 +12,112 @@ use syntavra_core::sha256_hex;
 const ADAPTER_LANGUAGES: &[&str] = &[];
 
 const BUILTIN_LANGUAGES: &[&str] = &[
-    "ada", "agda", "apex", "assembly", "astro", "awk", "batch", "bazel", "c", "cairo",
-    "capnp", "clojure", "cmake", "cobol", "common-lisp", "coq", "cpp", "crystal", "csharp",
-    "css", "cuda", "cue", "d", "dart", "dockerfile", "elixir", "elm", "erlang", "fish",
-    "flatbuffers", "fortran", "fsharp", "gdscript", "go", "graphql", "groovy", "haskell",
-    "hcl", "html", "idris", "ini", "java", "javascript", "json", "julia", "kotlin", "lean",
-    "less", "llvm-ir", "lua", "luau", "make", "markdown", "matlab", "meson", "move", "nim",
-    "ninja", "nix", "nushell", "objective-c", "ocaml", "octave", "opencl", "pascal", "perl",
-    "php", "powershell", "prolog", "protobuf", "purescript", "python", "qsharp", "r", "racket",
-    "raku", "reason", "rego", "renpy", "ruby", "rust", "sass", "scala", "scheme", "scss",
-    "shell", "smalltalk", "solidity", "sql", "svelte", "swift", "systemverilog", "tcl",
-    "terraform", "thrift", "toml", "typescript", "verilog", "vhdl", "visual-basic", "vue",
-    "vyper", "webassembly-text", "xml", "yaml", "zig",
+    "ada",
+    "agda",
+    "apex",
+    "assembly",
+    "astro",
+    "awk",
+    "batch",
+    "bazel",
+    "c",
+    "cairo",
+    "capnp",
+    "clojure",
+    "cmake",
+    "cobol",
+    "common-lisp",
+    "coq",
+    "cpp",
+    "crystal",
+    "csharp",
+    "css",
+    "cuda",
+    "cue",
+    "d",
+    "dart",
+    "dockerfile",
+    "elixir",
+    "elm",
+    "erlang",
+    "fish",
+    "flatbuffers",
+    "fortran",
+    "fsharp",
+    "gdscript",
+    "go",
+    "graphql",
+    "groovy",
+    "haskell",
+    "hcl",
+    "html",
+    "idris",
+    "ini",
+    "java",
+    "javascript",
+    "json",
+    "julia",
+    "kotlin",
+    "lean",
+    "less",
+    "llvm-ir",
+    "lua",
+    "luau",
+    "make",
+    "markdown",
+    "matlab",
+    "meson",
+    "move",
+    "nim",
+    "ninja",
+    "nix",
+    "nushell",
+    "objective-c",
+    "ocaml",
+    "octave",
+    "opencl",
+    "pascal",
+    "perl",
+    "php",
+    "powershell",
+    "prolog",
+    "protobuf",
+    "purescript",
+    "python",
+    "qsharp",
+    "r",
+    "racket",
+    "raku",
+    "reason",
+    "rego",
+    "renpy",
+    "ruby",
+    "rust",
+    "sass",
+    "scala",
+    "scheme",
+    "scss",
+    "shell",
+    "smalltalk",
+    "solidity",
+    "sql",
+    "svelte",
+    "swift",
+    "systemverilog",
+    "tcl",
+    "terraform",
+    "thrift",
+    "toml",
+    "typescript",
+    "verilog",
+    "vhdl",
+    "visual-basic",
+    "vue",
+    "vyper",
+    "webassembly-text",
+    "xml",
+    "yaml",
+    "zig",
 ];
 
 #[derive(Debug, Clone)]
@@ -98,20 +192,21 @@ pub(super) fn execute(
     state_root: &Path,
 ) -> Result<Value, String> {
     let unified = state_root.join("unified");
-    fs::create_dir_all(&unified)
-        .map_err(|error| format!("GRAPH_STATE_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(&unified).map_err(|error| format!("GRAPH_STATE_CREATE_FAILED:{error}"))?;
     let database = unified.join("semantic-graph.sqlite3");
     super::initialize_graph(&database)?;
     match command.get(1).map(String::as_str) {
         Some("graph-index") => {
-            let max_file_bytes = super::option_i64(arguments, "--max-file-bytes", 2_000_000)?
-                .max(1) as u64;
+            let max_file_bytes =
+                super::option_i64(arguments, "--max-file-bytes", 2_000_000)?.max(1) as u64;
             index_repository(project_root, &unified, &database, max_file_bytes)
         }
         Some("graph-query") => {
             let query = super::positional_after(arguments, "graph-query", 0)?;
             let limit = super::option_i64(arguments, "--limit", 20)?.clamp(1, 200);
-            Ok(json!({"ok": true, "query": query, "results": query_repository(&database, query, limit)?}))
+            Ok(
+                json!({"ok": true, "query": query, "results": query_repository(&database, query, limit)?}),
+            )
         }
         Some("graph-impact") => {
             let node_id = super::positional_after(arguments, "graph-impact", 0)?;
@@ -148,7 +243,9 @@ pub(super) fn execute(
                 "query" => {
                     let query = super::positional_after(arguments, "language", 1)?;
                     let limit = super::option_i64(arguments, "--limit", 20)?.clamp(1, 200);
-                    Ok(json!({"ok": true, "query": query, "results": query_repository(&database, query, limit)?}))
+                    Ok(
+                        json!({"ok": true, "query": query, "results": query_repository(&database, query, limit)?}),
+                    )
                 }
                 _ => super::language_action(arguments, project_root, &unified, &database),
             }
@@ -167,8 +264,7 @@ fn index_repository(
     let project = fs::canonicalize(project_root)
         .map_err(|error| format!("GRAPH_PROJECT_RESOLVE_FAILED:{error}"))?;
     let scratch = unified.join("native-graph-structural");
-    fs::create_dir_all(&scratch)
-        .map_err(|error| format!("GRAPH_SCRATCH_CREATE_FAILED:{error}"))?;
+    fs::create_dir_all(&scratch).map_err(|error| format!("GRAPH_SCRATCH_CREATE_FAILED:{error}"))?;
     let inspect = vec!["inspect".to_owned(), "stats".to_owned()];
     let _ = super::super::native_structural::execute(&inspect, &inspect, &project, &scratch)?;
     let structural = Connection::open(scratch.join("structural.sqlite3"))
@@ -278,10 +374,16 @@ fn index_repository(
     object.insert("unchanged_files".to_owned(), Value::from(unchanged));
     object.insert("removed_files".to_owned(), Value::from(stale.len()));
     object.insert("binary_skipped".to_owned(), Value::from(binary_skipped));
-    object.insert("oversized_skipped".to_owned(), Value::from(oversized_skipped));
+    object.insert(
+        "oversized_skipped".to_owned(),
+        Value::from(oversized_skipped),
+    );
     object.insert("errors".to_owned(), Value::Array(errors));
     object.insert("warnings".to_owned(), Value::Array(Vec::new()));
-    object.insert("language_platform".to_owned(), language_inventory(&project)?);
+    object.insert(
+        "language_platform".to_owned(),
+        language_inventory(&project)?,
+    );
     object.insert("language_services".to_owned(), empty_service_inventory());
     object.insert("lsp_services".to_owned(), empty_service_inventory());
     object.insert(
@@ -303,8 +405,7 @@ fn load_analysis_keys(connection: &Connection) -> Result<BTreeMap<String, String
         .map_err(|error| format!("GRAPH_ANALYSIS_KEY_QUERY_FAILED:{error}"))?;
     let mut output = BTreeMap::new();
     for row in rows {
-        let (path, key) =
-            row.map_err(|error| format!("GRAPH_ANALYSIS_KEY_ROW_FAILED:{error}"))?;
+        let (path, key) = row.map_err(|error| format!("GRAPH_ANALYSIS_KEY_ROW_FAILED:{error}"))?;
         output.insert(path, key);
     }
     Ok(output)
@@ -612,7 +713,10 @@ fn query_repository(path: &Path, text: &str, limit: i64) -> Result<Vec<Value>, S
             )
             .map_err(|error| format!("GRAPH_QUERY_EXACT_PREPARE_FAILED:{error}"))?;
         let mapped = statement
-            .query_map(params![normalized, normalized, candidate_limit], node_from_row)
+            .query_map(
+                params![normalized, normalized, candidate_limit],
+                node_from_row,
+            )
             .map_err(|error| format!("GRAPH_QUERY_EXACT_FAILED:{error}"))?;
         for row in mapped {
             let value = row.map_err(|error| format!("GRAPH_QUERY_EXACT_ROW_FAILED:{error}"))?;
@@ -733,7 +837,11 @@ fn query_repository(path: &Path, text: &str, limit: i64) -> Result<Vec<Value>, S
             .partial_cmp(&left.0)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.1["path"].as_str().cmp(&right.1["path"].as_str()))
-            .then_with(|| left.1["start_line"].as_i64().cmp(&right.1["start_line"].as_i64()))
+            .then_with(|| {
+                left.1["start_line"]
+                    .as_i64()
+                    .cmp(&right.1["start_line"].as_i64())
+            })
             .then_with(|| left.1["node_id"].as_str().cmp(&right.1["node_id"].as_str()))
     });
 
@@ -831,13 +939,17 @@ fn repository_query_refresh(path: &Path) -> Result<Value, String> {
         Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
     let indexed_nodes = if fts_available(&connection) {
         connection
-            .query_row("SELECT COUNT(*) FROM node_search", [], |row| row.get::<_, i64>(0))
+            .query_row("SELECT COUNT(*) FROM node_search", [], |row| {
+                row.get::<_, i64>(0)
+            })
             .map_err(|error| format!("GRAPH_QUERY_INDEX_COUNT_FAILED:{error}"))?
     } else {
         connection
-            .query_row("SELECT COUNT(*) FROM nodes WHERE kind!='external'", [], |row| {
-                row.get::<_, i64>(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM nodes WHERE kind!='external'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
             .map_err(|error| format!("GRAPH_QUERY_NODE_COUNT_FAILED:{error}"))?
     };
     Ok(json!({
@@ -851,13 +963,17 @@ fn repository_query_stats(path: &Path) -> Result<Value, String> {
     let connection =
         Connection::open(path).map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))?;
     let graph_nodes = connection
-        .query_row("SELECT COUNT(*) FROM nodes WHERE kind!='external'", [], |row| {
-            row.get::<_, i64>(0)
-        })
+        .query_row(
+            "SELECT COUNT(*) FROM nodes WHERE kind!='external'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
         .map_err(|error| format!("GRAPH_QUERY_NODE_COUNT_FAILED:{error}"))?;
     let indexed_nodes = if fts_available(&connection) {
         connection
-            .query_row("SELECT COUNT(*) FROM node_search", [], |row| row.get::<_, i64>(0))
+            .query_row("SELECT COUNT(*) FROM node_search", [], |row| {
+                row.get::<_, i64>(0)
+            })
             .map_err(|error| format!("GRAPH_QUERY_INDEX_COUNT_FAILED:{error}"))?
     } else {
         graph_nodes
@@ -1102,7 +1218,10 @@ fn detection_from_descriptor(
     }
 }
 
-fn descriptors(project: &Path, include_manifests: bool) -> Result<BTreeMap<String, Descriptor>, String> {
+fn descriptors(
+    project: &Path,
+    include_manifests: bool,
+) -> Result<BTreeMap<String, Descriptor>, String> {
     let mut output = builtin_descriptors();
     if !include_manifests {
         return Ok(output);
@@ -1153,9 +1272,15 @@ fn descriptors(project: &Path, include_manifests: bool) -> Result<BTreeMap<Strin
             .map(|item| item.to_lowercase())
             .collect();
         let capabilities = json_strings(&value["capabilities"]);
-        let capability = if capabilities.iter().any(|value| value.eq_ignore_ascii_case("semantic")) {
+        let capability = if capabilities
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case("semantic"))
+        {
             "semantic"
-        } else if capabilities.iter().any(|value| value.eq_ignore_ascii_case("syntax")) {
+        } else if capabilities
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case("syntax"))
+        {
             "syntax"
         } else {
             "lexical"
@@ -1235,7 +1360,9 @@ fn suffixes_for(id: &str) -> &'static [&'static str] {
         "fsharp" => &[".fs", ".fsi", ".fsx"],
         "visual-basic" => &[".vb"],
         "c" => &[".c", ".h"],
-        "cpp" => &[".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".ixx", ".mpp"],
+        "cpp" => &[
+            ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".ixx", ".mpp",
+        ],
         "objective-c" => &[".m", ".mm"],
         "swift" => &[".swift"],
         "zig" => &[".zig"],
@@ -1340,7 +1467,13 @@ fn filenames_for(id: &str) -> &'static [&'static str] {
         "make" => &["makefile", "gnumakefile"],
         "cmake" => &["cmakelists.txt"],
         "meson" => &["meson.build", "meson_options.txt"],
-        "bazel" => &["build", "build.bazel", "workspace", "workspace.bazel", "module.bazel"],
+        "bazel" => &[
+            "build",
+            "build.bazel",
+            "workspace",
+            "workspace.bazel",
+            "module.bazel",
+        ],
         "dockerfile" => &["dockerfile"],
         _ => &[],
     }
