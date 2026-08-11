@@ -143,8 +143,14 @@ mod tests {
 
     #[test]
     fn selector_collapses_family_actions_after_two_components() {
-        assert_eq!(selector_path("run language inventory"), vec!["run", "language"]);
-        assert_eq!(selector_path("run proxy-service install"), vec!["run", "proxy-service"]);
+        assert_eq!(
+            selector_path("run language inventory"),
+            vec!["run", "language"]
+        );
+        assert_eq!(
+            selector_path("run proxy-service install"),
+            vec!["run", "proxy-service"]
+        );
         assert_eq!(selector_path("provider proxy"), vec!["provider", "proxy"]);
     }
 }

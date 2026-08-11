@@ -351,12 +351,9 @@ fn handle_connection(
             .map_err(|error| format!("PROXY_REPLAY_SERIALIZE_FAILED:{error}"))?;
         let mut headers = vec![("Content-Type".to_owned(), "application/json".to_owned())];
         headers.push(("X-Syntavra-Replay".to_owned(), "hit".to_owned()));
-        if let Some(handle) = plan["replay_response_handle"]
-            .as_str()
-            .filter(|value| !value.is_empty())
-        {
-            headers.push(("X-Syntavra-Evidence".to_owned(), handle.to_owned()));
-        }
+        // Python's replay surface intentionally exposes the request/replay
+        // decision but does not label the semantic replay object as raw transport
+        // evidence. Keep the native header contract identical.
         write_response(stream, 200, &headers, &body)?;
         return Ok(());
     }

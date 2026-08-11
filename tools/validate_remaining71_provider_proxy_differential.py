@@ -420,7 +420,7 @@ def compare(python_result: dict[str, Any], rust_result: dict[str, Any]) -> dict[
             "status": 200,
             "body_id": "resp-proxy",
             "replay": "hit",
-            "evidence": True,
+            "evidence": False,
             "upstream_calls": 1,
         },
         "control": {
