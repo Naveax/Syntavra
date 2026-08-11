@@ -36,6 +36,25 @@ jobs:
           cargo +1.82.0 check --locked -p syntavra-cli --bins
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
 
+      - name: Apply diagnostic-only Python headless-submit parser repair
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('syntavra_runtime/platform_cli.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              '    submit.add_argument("command")\n': '    submit.add_argument("headless_command", metavar="command")\n',
+              '        command = _argv(args.command, "headless command")\n': '        command = _argv(args.headless_command, "headless command")\n',
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'diagnostic repair anchor count for {old!r}: {count}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          print('HEADLESS_DIAGNOSTIC_PYTHON_CLI_REPAIR=APPLIED_NOT_CERTIFIABLE')
+          PY
+
       - name: Run Python Rust headless differential
         run: |
           set +e
@@ -75,6 +94,10 @@ jobs:
           fi
 
           exit "$differential_exit"
+
+      - name: Restore diagnostic Python reference patch
+        if: always()
+        run: git checkout -- syntavra_runtime/platform_cli.py
 
       - name: Upload differential evidence
         if: always()
