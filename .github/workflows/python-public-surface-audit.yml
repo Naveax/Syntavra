@@ -1,0 +1,63 @@
+name: Python Public Surface Audit
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  python-public-surface:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run canonical public-surface regression tests
+        run: python -m unittest discover -s tests -p 'test_python_public_surface_audit.py' -v
+
+      - name: Derive full parser-owned public manifest and enforce drift guards
+        run: |
+          set +e
+          python tools/report_missing_native_public_routes.py > /tmp/python-public-surface.json
+          report_exit=$?
+          set -e
+          cat /tmp/python-public-surface.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-public-surface.json').read_text(encoding='utf-8'))
+          python = value['python']
+          assert python['derived_count'] == 245, python['derived_count']
+          assert len(python['manifest']) == 245, len(python['manifest'])
+          assert python['duplicate_route_count'] == 0, python['duplicate_routes']
+          assert python['namespace_collision_count'] == 0, python['namespace_collisions']
+          PY
+          exit "$report_exit"
+
+      - name: Upload exact-head public surface evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-public-surface-audit
+          path: /tmp/python-public-surface.json
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean tree
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
