@@ -1,0 +1,45 @@
+name: Remaining 71 Session Memory Differential
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remaining71-session-memory-differential
+  cancel-in-progress: true
+
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python runtime
+        run: python -m pip install -e .
+      - name: Build Rust selector
+        run: |
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+      - name: Run session memory differential
+        run: |
+          python tools/validate_remaining71_session_memory_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/session-memory-differential.json
+      - name: Show exact head and clean tree
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git status --porcelain --untracked-files=all
