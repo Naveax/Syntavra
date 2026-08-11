@@ -72,6 +72,52 @@ fn canonical_json(value: &Value) -> Result<Vec<u8>, String> {
     serde_json::to_vec(&sorted(value)).map_err(|error| format!("MEMORY_JSON_FAILED:{error}"))
 }
 
+fn python_json_dumps_sorted(value: &Value) -> Result<String, String> {
+    fn render(value: &Value, output: &mut String) -> Result<(), String> {
+        match value {
+            Value::Null => output.push_str("null"),
+            Value::Bool(true) => output.push_str("true"),
+            Value::Bool(false) => output.push_str("false"),
+            Value::Number(number) => output.push_str(&number.to_string()),
+            Value::String(text) => output.push_str(
+                &serde_json::to_string(text)
+                    .map_err(|error| format!("MEMORY_PYTHON_JSON_STRING:{error}"))?,
+            ),
+            Value::Array(rows) => {
+                output.push('[');
+                for (index, row) in rows.iter().enumerate() {
+                    if index != 0 {
+                        output.push_str(", ");
+                    }
+                    render(row, output)?;
+                }
+                output.push(']');
+            }
+            Value::Object(map) => {
+                output.push('{');
+                for (index, (key, row)) in map.iter().enumerate() {
+                    if index != 0 {
+                        output.push_str(", ");
+                    }
+                    output.push_str(
+                        &serde_json::to_string(key)
+                            .map_err(|error| format!("MEMORY_PYTHON_JSON_KEY:{error}"))?,
+                    );
+                    output.push_str(": ");
+                    render(row, output)?;
+                }
+                output.push('}');
+            }
+        }
+        Ok(())
+    }
+
+    let value = sorted(value);
+    let mut output = String::new();
+    render(&value, &mut output)?;
+    Ok(output)
+}
+
 fn now_seconds() -> Result<f64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -860,10 +906,8 @@ fn open_session(
         }
     }
     let project_id = session_project_id(project_root);
-    let parents_json =
-        serde_json::to_string(parents).map_err(|error| format!("SESSION_PARENTS_JSON:{error}"))?;
-    let metadata_json = serde_json::to_string(&sorted(metadata))
-        .map_err(|error| format!("SESSION_METADATA_JSON:{error}"))?;
+    let parents_json = python_json_dumps_sorted(&json!(parents))?;
+    let metadata_json = python_json_dumps_sorted(metadata)?;
     db.execute(
         "INSERT INTO sessions VALUES(?1,?2,'ACTIVE',?3,?4,?5,?6)",
         params![
@@ -1052,8 +1096,7 @@ fn summary_terms(view: &str) -> &'static [&'static str] {
 fn event_summary(view: &str, events: &[Value]) -> Result<String, String> {
     let mut selected = Vec::<String>::new();
     for event in events {
-        let payload = serde_json::to_string(&sorted(&event["payload"]))
-            .map_err(|error| format!("SESSION_SUMMARY_JSON:{error}"))?;
+        let payload = python_json_dumps_sorted(&event["payload"])?;
         let corpus = format!(
             "{} {payload}",
             event["event_type"].as_str().unwrap_or_default()
@@ -1197,8 +1240,7 @@ fn retrieve_session(
     let total = events.len().max(1) as f64;
     let mut candidates = Vec::<(f64, String, Value)>::new();
     for event in &events {
-        let payload_rendered = serde_json::to_string(&sorted(&event["payload"]))
-            .map_err(|error| format!("SESSION_RETRIEVE_JSON:{error}"))?;
+        let payload_rendered = python_json_dumps_sorted(&event["payload"])?;
         let event_type = event["event_type"].as_str().unwrap_or_default();
         let corpus = format!("{event_type} {payload_rendered}");
         let terms = session_tokens(&corpus)?;
@@ -1476,6 +1518,23 @@ fn session_memory(
             )
         }
         _ => Err(format!("SESSION_MEMORY_UNSUPPORTED:{action}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn python_json_dumps_sorted_matches_python_spacing() {
+        let value = json!({
+            "z": [1, {"β": "snow"}],
+            "a": {"n": 1.0, "flag": true},
+        });
+        assert_eq!(
+            python_json_dumps_sorted(&value).expect("render"),
+            r#"{"a": {"flag": true, "n": 1.0}, "z": [1, {"β": "snow"}]}"#
+        );
     }
 }
 

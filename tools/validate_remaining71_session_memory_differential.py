@@ -93,6 +93,20 @@ def normalize_merge(value: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def normalize_generated_event(value: dict[str, Any]) -> dict[str, Any]:
+    result = strip_times(value)
+    result["session_id"] = "<generated>"
+    result["event_hash"] = "<generated-session-hash>"
+    return result
+
+
+def normalize_generated_verify(value: dict[str, Any]) -> dict[str, Any]:
+    result = strip_times(value)
+    result["session_id"] = "<generated>"
+    result["last_hash"] = "<generated-session-hash>"
+    return result
+
+
 def call_factory(engine: str, *, repo: Path, rust_bin: Path, project: Path, state: Path):
     def call(*args: str) -> dict[str, Any]:
         result = run_engine(
@@ -217,21 +231,12 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, project: Path, state: P
         "restore": strip_times(restore),
         "verified_after": strip_times(verified_after),
         "fork": normalize_fork(fork),
-        "child_append": {
-            **strip_times(child_append),
-            "session_id": "<generated>",
-        },
-        "child_verify": {
-            **strip_times(child_verify),
-            "session_id": "<generated>",
-        },
+        "child_append": normalize_generated_event(child_append),
+        "child_verify": normalize_generated_verify(child_verify),
         "session_b": normalize_open(session_b),
         "session_b_append": strip_times(session_b_append),
         "merge": normalize_merge(merge),
-        "merged_verify": {
-            **strip_times(merged_verify),
-            "session_id": "<generated>",
-        },
+        "merged_verify": normalize_generated_verify(merged_verify),
     }
 
 
@@ -245,12 +250,18 @@ def compare(python_result: dict[str, Any], rust_result: dict[str, Any]) -> dict[
             mismatches.append({"path": key, "python": py, "rust": rs})
 
     invariants: list[tuple[str, Any, Any]] = [
-        ("verified_before.ok", python_result["verified_before"].get("ok"), True),
-        ("verified_after.ok", python_result["verified_after"].get("ok"), True),
-        ("restore.exact_recovery", python_result["restore"].get("exact_recovery"), True),
-        ("child_verify.ok", python_result["child_verify"].get("ok"), True),
-        ("merged_verify.ok", python_result["merged_verify"].get("ok"), True),
-        ("compact.exact_history_preserved", python_result["compact"].get("exact_history_preserved"), True),
+        ("python.verified_before.ok", python_result["verified_before"].get("ok"), True),
+        ("python.verified_after.ok", python_result["verified_after"].get("ok"), True),
+        ("python.restore.exact_recovery", python_result["restore"].get("exact_recovery"), True),
+        ("python.child_verify.ok", python_result["child_verify"].get("ok"), True),
+        ("python.merged_verify.ok", python_result["merged_verify"].get("ok"), True),
+        ("python.compact.exact_history_preserved", python_result["compact"].get("exact_history_preserved"), True),
+        ("rust.verified_before.ok", rust_result["verified_before"].get("ok"), True),
+        ("rust.verified_after.ok", rust_result["verified_after"].get("ok"), True),
+        ("rust.restore.exact_recovery", rust_result["restore"].get("exact_recovery"), True),
+        ("rust.child_verify.ok", rust_result["child_verify"].get("ok"), True),
+        ("rust.merged_verify.ok", rust_result["merged_verify"].get("ok"), True),
+        ("rust.compact.exact_history_preserved", rust_result["compact"].get("exact_history_preserved"), True),
     ]
     for path, actual, expected in invariants:
         if actual != expected:
@@ -260,7 +271,7 @@ def compare(python_result: dict[str, Any], rust_result: dict[str, Any]) -> dict[
         "ok": not mismatches,
         "mismatch_count": len(mismatches),
         "mismatches": mismatches,
-        "claim_boundary": "deterministic local session-memory lifecycle and exact-hash parity only",
+        "claim_boundary": "exact hashes for deterministic session IDs; generated fork/merge session hashes are normalized only after each engine verifies its own chain",
     }
 
 
