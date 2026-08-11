@@ -1,6 +1,6 @@
 name: Remaining 71 Memory Intelligence Differential
 
-# Exercises memory-intelligence state, ranking, extraction and notification parity.
+# Exercises memory-intelligence state, Unicode ranking, extraction and notification parity.
 on:
   push:
     branches:
