@@ -1,0 +1,78 @@
+name: Temporary Headless Python CLI Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+
+      - name: Apply exact parser destination repair
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('syntavra_runtime/platform_cli.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              '    submit.add_argument("command")\n': '    submit.add_argument("headless_command", metavar="command")\n',
+              '        command = _argv(args.command, "headless command")\n': '        command = _argv(args.headless_command, "headless command")\n',
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'exact repair anchor count for {old!r}: {count}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Prove public Python headless-submit dispatch
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          PYTHONUTF8: "1"
+        run: |
+          rm -rf /tmp/syntavra-headless-cli-repair
+          mkdir -p /tmp/syntavra-headless-cli-repair
+          python -m syntavra_runtime.engine_entry \
+            --project "$GITHUB_WORKSPACE" \
+            --state-root /tmp/syntavra-headless-cli-repair/state \
+            --json \
+            run headless-submit \
+            '["/bin/sh","-c","printf headless-parity"]' \
+            --policy '{"timeout_seconds":10,"network_hosts":[],"writable_paths":[]}' \
+            --metadata '{"case":"parser-dest-regression"}' \
+            > /tmp/headless-submit.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('/tmp/headless-submit.json').read_text(encoding='utf-8'))
+          assert value.get('job_id'), value
+          assert value.get('state') == 'queued', value
+          assert value.get('command') == ['/bin/sh', '-c', 'printf headless-parity'], value
+          print('HEADLESS_PYTHON_PUBLIC_DISPATCH=PASS')
+          print('job_id=' + str(value['job_id']))
+          PY
+
+      - name: Python syntax compile
+        run: python -m compileall -q syntavra_runtime/platform_cli.py syntavra_runtime/prerelease_cli.py
+
+      - name: Commit proven repair
+        run: |
+          git diff --check
+          git status --short
+          test -n "$(git status --porcelain -- syntavra_runtime/platform_cli.py)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add syntavra_runtime/platform_cli.py
+          git commit -m "fix: preserve headless submit command namespace"
+          git push origin HEAD:agent/r31-provider-capture-native
