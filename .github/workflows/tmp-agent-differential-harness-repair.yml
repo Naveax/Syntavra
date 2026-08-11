@@ -1,0 +1,90 @@
+name: Temporary Agent Differential Harness Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - .github/workflows/tmp-agent-differential-harness-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch blocked execution harness
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/validate_remaining71_agent_differential.py')
+          text = path.read_text(encoding='utf-8')
+
+          anchor = '''    def call(*args: str) -> dict[str, Any]:
+        return require_success(
+            run_engine(
+                engine,
+                list(args),
+                repo=repo,
+                rust_bin=rust_bin,
+                project=project,
+                state_root=state,
+            ),
+            engine=engine,
+            label=" ".join(args),
+        )
+'''
+          replacement = anchor + '''
+    def call_raw(*args: str) -> dict[str, Any]:
+        result = run_engine(
+            engine,
+            list(args),
+            repo=repo,
+            rust_bin=rust_bin,
+            project=project,
+            state_root=state,
+        )
+        if not isinstance(result.get("value"), dict):
+            raise RuntimeError(f"{engine} {' '.join(args)} returned non-object JSON: {result}")
+        return {"exit": result["exit"], "value": result["value"]}
+'''
+          if anchor not in text:
+              raise SystemExit('call helper anchor not found exactly once')
+          if text.count(anchor) != 1:
+              raise SystemExit(f'call helper anchor count drifted: {text.count(anchor)}')
+          text = text.replace(anchor, replacement, 1)
+
+          old = '    blocked = call(\n'
+          new = '    blocked = call_raw(\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'blocked call anchor count drifted: {text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Syntax check validator
+        run: python -m py_compile tools/validate_remaining71_agent_differential.py
+
+      - name: Guard exact diff
+        shell: bash
+        run: |
+          git diff --check
+          git diff -- tools/validate_remaining71_agent_differential.py
+          test "$(git status --short | wc -l)" -eq 1
+
+      - name: Commit harness repair
+        shell: bash
+        run: |
+          git config user.name "syntavra-ci"
+          git config user.email "syntavra-ci@users.noreply.github.com"
+          git add tools/validate_remaining71_agent_differential.py
+          git commit -m "test: compare blocked agent execution exits"
+          git push origin HEAD:agent/r31-provider-capture-native
