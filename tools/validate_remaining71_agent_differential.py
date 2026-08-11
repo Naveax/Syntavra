@@ -338,6 +338,19 @@ def exercise(
             label=" ".join(args),
         )
 
+    def call_raw(*args: str) -> dict[str, Any]:
+        result = run_engine(
+            engine,
+            list(args),
+            repo=repo,
+            rust_bin=rust_bin,
+            project=project,
+            state_root=state,
+        )
+        if not isinstance(result.get("value"), dict):
+            raise RuntimeError(f"{engine} {' '.join(args)} returned non-object JSON: {result}")
+        return {"exit": result["exit"], "value": result["value"]}
+
     plan = call(
         "run",
         "agent-plan",
@@ -358,7 +371,7 @@ def exercise(
         "--metadata",
         '{"case":"blocked"}',
     )
-    blocked = call(
+    blocked = call_raw(
         "run",
         "agent-execute",
         "change VALUE to 2",
