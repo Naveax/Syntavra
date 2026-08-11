@@ -245,7 +245,7 @@ fn execute_sequence(
         has_flag(arguments, "--retain-workspace")
     };
     let session_id = option_value(arguments, "--session-id")?;
-    run_agent(
+    let mut value = run_agent(
         project,
         state_root,
         task,
@@ -260,7 +260,12 @@ fn execute_sequence(
         session_id.as_deref(),
         retain_workspace,
         surface,
-    )
+    )?;
+    value["ok"] = Value::Bool(value["state"].as_str() == Some("completed"));
+    if direct_replay {
+        value["surface"] = Value::String("agent-replay".to_owned());
+    }
+    Ok(value)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -421,7 +426,7 @@ fn run_agent(
             break;
         }
         let apply = apply_patch(&workspace, state_root, &proposal.patch, timeout)?;
-        if !apply["ok"].as_bool().unwrap_or(false) {
+        if !sandbox_ok(&apply) {
             let failure_text = format!(
                 "{}{}",
                 apply["stderr"].as_str().unwrap_or_default(),
@@ -443,7 +448,7 @@ fn run_agent(
             continue;
         }
         let verify = sandbox_run(&workspace, state_root, verifier, timeout)?;
-        if verify["ok"].as_bool().unwrap_or(false) {
+        if sandbox_ok(&verify) {
             attempts_out.push(json!({
                 "number":number,"patch_sha256":patch_hash,"patch_applied":true,
                 "verifier":verify,"failure_fingerprint":"","rationale":proposal.rationale,
@@ -523,7 +528,7 @@ fn run_agent(
 #[allow(clippy::too_many_arguments)]
 fn finish_receipt(
     state_root: &Path,
-    surface: &str,
+    _surface: &str,
     run_id: &str,
     instruction: &str,
     verifier: &[String],
@@ -551,16 +556,23 @@ fn finish_receipt(
         "timeout_seconds":timeout,"token_budget":token_budget,"cost_budget":cost_budget,
         "retain_workspace":retain_workspace,"metadata":{}
     });
-    let mut receipt = json!({
+    let receipt = json!({
         "run_id":run_id,"task":task,"state":state,"started_at":started_at,"finished_at":now_iso()?,
         "duration_ms":((started.elapsed().as_secs_f64()*1000.0)*1000.0).round()/1000.0,
         "workspace":workspace.to_string_lossy(),"attempts":attempts,"total_tokens":total_tokens,
         "total_cost":(total_cost*100_000_000.0).round()/100_000_000.0,"changed_files":changed_files,
         "final_diff":final_diff,"rollback_complete":rollback_complete,"stop_reason":stop_reason,"context":context,
     });
-    let ok = state == "completed";
-    receipt["ok"] = Value::Bool(ok);
-    receipt["surface"] = Value::String(surface.to_owned());
+    if state != "blocked" && stop_reason != "plan-only" {
+        persist_receipt(state_root, &receipt)?;
+    }
+    Ok(receipt)
+}
+
+pub(crate) fn persist_receipt(state_root: &Path, receipt: &Value) -> Result<(), String> {
+    let run_id = receipt["run_id"]
+        .as_str()
+        .ok_or_else(|| "AGENT_RECEIPT_RUN_ID_MISSING".to_owned())?;
     let destination = state_root
         .join("unified")
         .join("agent-receipts")
@@ -569,15 +581,18 @@ fn finish_receipt(
         fs::create_dir_all(parent)
             .map_err(|error| format!("AGENT_RECEIPT_PARENT_FAILED:{error}"))?;
     }
+    let mut durable = receipt.clone();
+    if let Some(object) = durable.as_object_mut() {
+        object.remove("ok");
+        object.remove("surface");
+    }
     fs::write(
         &destination,
-        serde_json::to_vec_pretty(&sort_json(&receipt))
+        serde_json::to_vec_pretty(&sort_json(&durable))
             .map_err(|error| format!("AGENT_RECEIPT_JSON_FAILED:{error}"))?,
     )
-    .map_err(|error| format!("AGENT_RECEIPT_WRITE_FAILED:{error}"))?;
-    Ok(receipt)
+    .map_err(|error| format!("AGENT_RECEIPT_WRITE_FAILED:{error}"))
 }
-
 fn agent_query(
     project: &Path,
     state_root: &Path,
@@ -638,7 +653,15 @@ fn sandbox_run(
     let execution =
         super::native_remaining71_sandbox::execute(&command, &arguments, workspace, state_root)?
             .ok_or_else(|| "AGENT_SANDBOX_ROUTE_UNAVAILABLE".to_owned())?;
-    Ok(execution.value)
+    let mut value = execution.value;
+    if let Some(object) = value.as_object_mut() {
+        object.remove("ok");
+    }
+    Ok(value)
+}
+
+fn sandbox_ok(value: &Value) -> bool {
+    value["exit_code"].as_i64() == Some(0) && !value["timed_out"].as_bool().unwrap_or(false)
 }
 
 fn create_workspace(project: &Path, state_root: &Path) -> Result<(PathBuf, bool), String> {
@@ -907,9 +930,27 @@ fn now_iso() -> Result<String, String> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("AGENT_CLOCK_FAILED:{error}"))?;
+    let seconds =
+        i64::try_from(duration.as_secs()).map_err(|_| "AGENT_CLOCK_RANGE_FAILED".to_owned())?;
+    let days = seconds / 86_400;
+    let second_of_day = seconds % 86_400;
+    let z = days + 719_468;
+    let era = z / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let mut year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    if month <= 2 {
+        year += 1;
+    }
+    let hour = second_of_day / 3_600;
+    let minute = (second_of_day % 3_600) / 60;
+    let second = second_of_day % 60;
     Ok(format!(
-        "{}.{:06}+00:00",
-        duration.as_secs(),
+        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{:06}+00:00",
         duration.subsec_micros()
     ))
 }

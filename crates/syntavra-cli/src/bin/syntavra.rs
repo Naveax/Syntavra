@@ -452,8 +452,16 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
             if native_product::supports(&path) {
                 match native_product::execute(&path, &parsed.project_root, &parsed.state_root) {
                     Ok(Some(value)) => {
+                        let blocked_agent = value["state"].as_str() == Some("blocked")
+                            && matches!(path.as_slice(), [root, action] if
+                                (root == "run" && action == "agent-execute")
+                                    || (root == "agent" && action == "replay"));
                         emit(&value);
-                        ExitCode::SUCCESS
+                        if blocked_agent {
+                            ExitCode::from(3)
+                        } else {
+                            ExitCode::SUCCESS
+                        }
                     }
                     Ok(None) => fail(
                         "RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED",

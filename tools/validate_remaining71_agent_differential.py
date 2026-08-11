@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -226,6 +227,15 @@ def dynamic_issues(value: Any, *, engine: str, path: str = "") -> list[dict[str,
                             "actual": child,
                         }
                     )
+            elif key == "last_hash" and child_path in {"blocked_memory.last_hash", "success_memory.last_hash"}:
+                if not isinstance(child, str) or re.fullmatch(r"[0-9a-f]{64}", child) is None:
+                    issues.append(
+                        {
+                            "path": f"{engine}.{child_path}.sha256" ,
+                            "expected": True,
+                            "actual": child,
+                        }
+                    )
             issues.extend(dynamic_issues(child, engine=engine, path=child_path))
     elif isinstance(value, list):
         for index, child in enumerate(value):
@@ -233,11 +243,15 @@ def dynamic_issues(value: Any, *, engine: str, path: str = "") -> list[dict[str,
     return issues
 
 
-def normalize(value: Any, *, project: Path, state_root: Path) -> Any:
+def normalize(value: Any, *, project: Path, state_root: Path, path: str = "") -> Any:
     if isinstance(value, dict):
         output: dict[str, Any] = {}
         for key, child in value.items():
+            child_path = f"{path}.{key}" if path else key
             if key in DYNAMIC_KEYS:
+                continue
+            if key == "last_hash" and child_path in {"blocked_memory.last_hash", "success_memory.last_hash"}:
+                output[key] = "<memory-chain-hash>"
                 continue
             if key == "run_id" and isinstance(child, str):
                 output[key] = "<run-id>"
@@ -245,10 +259,10 @@ def normalize(value: Any, *, project: Path, state_root: Path) -> Any:
             if key == "plan_hash" and isinstance(child, str):
                 output[key] = child
                 continue
-            output[key] = normalize(child, project=project, state_root=state_root)
+            output[key] = normalize(child, project=project, state_root=state_root, path=child_path)
         return output
     if isinstance(value, list):
-        return [normalize(child, project=project, state_root=state_root) for child in value]
+        return [normalize(child, project=project, state_root=state_root, path=f"{path}[{index}]") for index, child in enumerate(value)]
     if isinstance(value, str):
         rendered = value
         rendered = rendered.replace(str(project.resolve(strict=False)), "<project>")
@@ -256,6 +270,12 @@ def normalize(value: Any, *, project: Path, state_root: Path) -> Any:
         # Agent workspaces contain random directory names below the state root.
         if "<state>/unified/agent-workspaces/run-" in rendered:
             prefix = "<state>/unified/agent-workspaces/run-"
+            start = rendered.find(prefix)
+            tail = rendered[start + len(prefix):]
+            token = tail.split("/", 1)[0].split("\\", 1)[0]
+            rendered = rendered.replace(prefix + token, "<workspace>")
+        if "<state>/unified/agent-product/agent-workspaces/run-" in rendered:
+            prefix = "<state>/unified/agent-product/agent-workspaces/run-"
             start = rendered.find(prefix)
             tail = rendered[start + len(prefix):]
             token = tail.split("/", 1)[0].split("\\", 1)[0]
@@ -291,6 +311,20 @@ def durable_receipts(state_root: Path) -> list[dict[str, Any]]:
             except (OSError, json.JSONDecodeError) as exc:
                 value = {"read_error": str(exc)}
             rows.append({"name": "<run-id>.json", "value": value})
+    def semantic_key(row: dict[str, Any]) -> tuple[str, ...]:
+        value = row.get("value") if isinstance(row.get("value"), dict) else {}
+        task = value.get("task") if isinstance(value.get("task"), dict) else {}
+        verifier = task.get("verifier") if isinstance(task.get("verifier"), list) else []
+        return (
+            str(task.get("mode", "")),
+            str(task.get("max_attempts", "")),
+            str(task.get("retain_workspace", "")),
+            json.dumps(verifier, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            str(value.get("state", "")),
+            str(value.get("total_tokens", "")),
+        )
+
+    rows.sort(key=semantic_key)
     return rows
 
 
@@ -502,8 +536,8 @@ def compare(
     invariants = [
         ("python.plan.execution_mode", python_result["plan"].get("execution_mode"), "plan-only-until-authorized"),
         ("rust.plan.execution_mode", rust_result["plan"].get("execution_mode"), "plan-only-until-authorized"),
-        ("python.blocked.state", python_result["blocked_execute"].get("state"), "blocked"),
-        ("rust.blocked.state", rust_result["blocked_execute"].get("state"), "blocked"),
+        ("python.blocked.state", python_result["blocked_execute"]["value"].get("state"), "blocked"),
+        ("rust.blocked.state", rust_result["blocked_execute"]["value"].get("state"), "blocked"),
         ("python.success.ok", python_result["successful_execute"].get("ok"), True),
         ("rust.success.ok", rust_result["successful_execute"].get("ok"), True),
         ("python.replay.ok", python_result["replay"].get("ok"), True),
@@ -527,7 +561,7 @@ def compare(
             "agent run",
         ],
         "claim_boundary": (
-            "timestamps, execution durations, cryptographic receipt IDs, random run IDs, and temporary workspace/project/state paths are validated then normalized; "
+            "timestamps, execution durations, cryptographic receipt IDs, random run IDs, and temporary workspace/project/state paths, random-run-derived memory chain hashes, and durable receipt filename order are validated then normalized; "
             "plan structure/hash, authorization behavior, patch/verifier receipts, memory verification, durable receipt shape, live model request contract, tool trace, usage, delivery result, exit-success semantics, and all other public fields remain exact"
         ),
     }
