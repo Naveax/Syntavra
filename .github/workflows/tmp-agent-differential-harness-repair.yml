@@ -23,51 +23,33 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
-          path = Path('tools/validate_remaining71_agent_differential.py')
-          text = path.read_text(encoding='utf-8')
-
-          anchor = '''    def call(*args: str) -> dict[str, Any]:
-        return require_success(
-            run_engine(
-                engine,
-                list(args),
-                repo=repo,
-                rust_bin=rust_bin,
-                project=project,
-                state_root=state,
-            ),
-            engine=engine,
-            label=" ".join(args),
-        )
-'''
-          replacement = anchor + '''
-    def call_raw(*args: str) -> dict[str, Any]:
-        result = run_engine(
-            engine,
-            list(args),
-            repo=repo,
-            rust_bin=rust_bin,
-            project=project,
-            state_root=state,
-        )
-        if not isinstance(result.get("value"), dict):
-            raise RuntimeError(f"{engine} {' '.join(args)} returned non-object JSON: {result}")
-        return {"exit": result["exit"], "value": result["value"]}
-'''
-          if anchor not in text:
-              raise SystemExit('call helper anchor not found exactly once')
-          if text.count(anchor) != 1:
-              raise SystemExit(f'call helper anchor count drifted: {text.count(anchor)}')
-          text = text.replace(anchor, replacement, 1)
-
-          old = '    blocked = call(\n'
-          new = '    blocked = call_raw(\n'
-          if text.count(old) != 1:
-              raise SystemExit(f'blocked call anchor count drifted: {text.count(old)}')
-          text = text.replace(old, new, 1)
-
-          path.write_text(text, encoding='utf-8')
+          path = Path("tools/validate_remaining71_agent_differential.py")
+          lines = path.read_text(encoding="utf-8").splitlines()
+          plan_anchor = "    plan = call("
+          if lines.count(plan_anchor) != 1:
+              raise SystemExit(f"plan anchor count drifted: {lines.count(plan_anchor)}")
+          helper = [
+              "    def call_raw(*args: str) -> dict[str, Any]:",
+              "        result = run_engine(",
+              "            engine,",
+              "            list(args),",
+              "            repo=repo,",
+              "            rust_bin=rust_bin,",
+              "            project=project,",
+              "            state_root=state,",
+              "        )",
+              "        if not isinstance(result.get(\"value\"), dict):",
+              "            raise RuntimeError(f\"{engine} {' '.join(args)} returned non-object JSON: {result}\")",
+              "        return {\"exit\": result[\"exit\"], \"value\": result[\"value\"]}",
+              "",
+          ]
+          insert_at = lines.index(plan_anchor)
+          lines[insert_at:insert_at] = helper
+          blocked_anchor = "    blocked = call("
+          if lines.count(blocked_anchor) != 1:
+              raise SystemExit(f"blocked anchor count drifted: {lines.count(blocked_anchor)}")
+          lines[lines.index(blocked_anchor)] = "    blocked = call_raw("
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
 
       - name: Syntax check validator
