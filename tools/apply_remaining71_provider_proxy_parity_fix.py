@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# One-shot parity repair. The workflow deletes this helper after all Python,
+# Rust, and cross-engine transport gates pass on the same checkout.
 ROOT = Path(__file__).resolve().parents[1]
 PY_PROXY = ROOT / "syntavra_runtime/provider_proxy.py"
 RS_PROXY = ROOT / "crates/syntavra-cli/src/native_remaining71_provider_proxy.rs"
