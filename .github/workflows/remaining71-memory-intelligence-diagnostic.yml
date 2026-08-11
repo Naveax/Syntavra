@@ -51,6 +51,32 @@ jobs:
           script = Path('/tmp/apply-memory-intelligence-repair.py')
           script.write_text('\n'.join(body) + '\n', encoding='utf-8')
           subprocess.run(['python', str(script)], check=True)
+      - name: Repair validator external-extractor fixture in workspace
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('tools/validate_remaining71_memory_intelligence_differential.py')
+          source = path.read_text(encoding='utf-8')
+          start = source.index('def create_external_extractor(root: Path) -> tuple[Path, str]:')
+          end = source.index('\n\ndef seed_missing_embedding', start)
+          replacement = '''def create_external_extractor(root: Path) -> tuple[Path, str]:
+              helper = root / "memory_extractor_fixture.py"
+              helper.write_text(
+                  "#!/usr/bin/env python3\\n"
+                  "import json, sys\\n"
+                  "request = json.load(open(sys.argv[1], encoding='utf-8'))\\n"
+                  "assert 'transcript' in request\\n"
+                  "payload = {'observations': [{'text': 'external extractor observation', 'kind': 'decision', 'importance': 0.61, 'confidence': 0.73, 'validity': 1.0, 'metadata': {'source': 'fixture'}}]}\\n"
+                  "with open(sys.argv[2], 'w', encoding='utf-8') as handle: json.dump(payload, handle, ensure_ascii=False, sort_keys=True)\\n",
+                  encoding="utf-8",
+              )
+              command = json.dumps([sys.executable, str(helper), "{request}", "{output}"])
+              return helper, command
+          '''
+          source = source[:start] + replacement + source[end:]
+          path.write_text(source, encoding='utf-8')
+          compile(source, str(path), 'exec')
       - name: Build repaired Rust selector
         run: |
           rustup toolchain install 1.82.0 --profile minimal --component rustfmt
