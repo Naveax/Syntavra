@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  probe-full:
+  certify-parsers:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
         run: |
           rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal
-      - name: Compile complete grammar pack
+      - name: Build and initialize complete grammar pack
         shell: bash
         run: |
           rm -rf /tmp/ts182
@@ -63,23 +63,47 @@ jobs:
           tree-sitter-vue-next = "0.1.0"
           tree-sitter-zig = "1.1.2"
           EOF
+          cat > /tmp/ts182/src/main.rs <<'EOF'
+          use tree_sitter::{Language, Parser};
+
+          fn probe(name: &str, language: Language) {
+              let mut parser = Parser::new();
+              parser.set_language(&language).unwrap_or_else(|error| panic!("{name}: set_language failed: {error}"));
+              assert!(parser.parse("\n", None).is_some(), "{name}: parse returned None");
+              println!("PARSER {name}=PASS");
+          }
+
+          fn main() {
+              probe("bash", tree_sitter_bash::LANGUAGE.into());
+              probe("c", tree_sitter_c::LANGUAGE.into());
+              probe("c_sharp", tree_sitter_c_sharp::LANGUAGE.into());
+              probe("cpp", tree_sitter_cpp::LANGUAGE.into());
+              probe("dart", tree_sitter_dart_orchard::LANGUAGE.into());
+              probe("elixir", tree_sitter_elixir::LANGUAGE.into());
+              probe("erlang", tree_sitter_erlang::LANGUAGE.into());
+              probe("fish", tree_sitter_fish::language());
+              probe("fsharp", tree_sitter_fsharp::LANGUAGE_FSHARP.into());
+              probe("go", tree_sitter_go::LANGUAGE.into());
+              probe("haskell", tree_sitter_haskell::LANGUAGE.into());
+              probe("java", tree_sitter_java::LANGUAGE.into());
+              probe("javascript", tree_sitter_javascript::LANGUAGE.into());
+              probe("julia", tree_sitter_julia::LANGUAGE.into());
+              probe("kotlin", tree_sitter_kotlin_ng::LANGUAGE.into());
+              probe("lua", tree_sitter_lua::LANGUAGE.into());
+              probe("ocaml", tree_sitter_ocaml::LANGUAGE_OCAML.into());
+              probe("php", tree_sitter_php::LANGUAGE_PHP.into());
+              probe("powershell", tree_sitter_powershell::LANGUAGE.into());
+              probe("r", tree_sitter_r::LANGUAGE.into());
+              probe("ruby", tree_sitter_ruby::LANGUAGE.into());
+              probe("rust", tree_sitter_rust::LANGUAGE.into());
+              probe("scala", tree_sitter_scala::LANGUAGE.into());
+              probe("solidity", tree_sitter_solidity::LANGUAGE.into());
+              probe("svelte", tree_sitter_svelte_ng::LANGUAGE.into());
+              probe("swift", tree_sitter_swift::LANGUAGE.into());
+              probe("typescript", tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into());
+              probe("vue", tree_sitter_vue_next::LANGUAGE.into());
+              probe("zig", tree_sitter_zig::LANGUAGE.into());
+          }
+          EOF
           cd /tmp/ts182
-          cargo +1.82.0 check
-      - name: Inspect grammar Rust exports
-        shell: bash
-        run: |
-          root="$(find "$HOME/.cargo/registry/src" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-          for pattern in \
-            tree-sitter-bash tree-sitter-c- tree-sitter-c-sharp tree-sitter-cpp \
-            tree-sitter-dart-orchard tree-sitter-elixir tree-sitter-erlang tree-sitter-fish \
-            tree-sitter-fsharp tree-sitter-go tree-sitter-haskell tree-sitter-java- \
-            tree-sitter-javascript tree-sitter-julia tree-sitter-kotlin-ng tree-sitter-lua \
-            tree-sitter-ocaml tree-sitter-php tree-sitter-powershell tree-sitter-r- \
-            tree-sitter-ruby tree-sitter-rust tree-sitter-scala tree-sitter-solidity \
-            tree-sitter-svelte-ng tree-sitter-swift tree-sitter-typescript tree-sitter-vue-next \
-            tree-sitter-zig; do
-            echo "=== ${pattern} ==="
-            find "$root" -maxdepth 1 -type d -name "${pattern}*" -print0 | while IFS= read -r -d '' dir; do
-              grep -R -E 'pub (const LANGUAGE|fn language|static LANGUAGE)' "$dir/bindings/rust" "$dir/src" 2>/dev/null | head -n 20 || true
-            done
-          done
+          cargo +1.82.0 run
