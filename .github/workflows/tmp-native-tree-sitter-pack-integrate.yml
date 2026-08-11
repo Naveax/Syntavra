@@ -1,0 +1,290 @@
+name: Temporary Native Tree-sitter Pack Integrate
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - .github/workflows/tmp-native-tree-sitter-pack-integrate.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-native-tree-sitter-pack-integrate
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+      - name: Apply native parser pack candidate
+        shell: bash
+        run: |
+          cat > crates/syntavra-cli/src/native_tree_sitter_language_pack.rs <<'RS'
+          #![forbid(unsafe_code)]
+
+          use std::sync::OnceLock;
+
+          use tree_sitter::{Language, Parser};
+
+          /// Native Rust implementation of Syntavra's public
+          /// `tree-sitter-language-pack` adapter contract. The implementation
+          /// deliberately aggregates Rust grammar crates instead of importing
+          /// the Python package or executing Python at runtime.
+          pub(super) const ADAPTER_LANGUAGES: &[&str] = &[
+              "bash",
+              "c",
+              "c_sharp",
+              "cpp",
+              "csharp",
+              "dart",
+              "elixir",
+              "erlang",
+              "fish",
+              "fsharp",
+              "go",
+              "haskell",
+              "java",
+              "javascript",
+              "julia",
+              "kotlin",
+              "lua",
+              "ocaml",
+              "php",
+              "powershell",
+              "r",
+              "ruby",
+              "rust",
+              "scala",
+              "solidity",
+              "svelte",
+              "swift",
+              "typescript",
+              "vue",
+              "zig",
+          ];
+
+          static AVAILABLE_LANGUAGES: OnceLock<Vec<&'static str>> = OnceLock::new();
+
+          fn parser_ready(language: Language) -> bool {
+              let mut parser = Parser::new();
+              parser.set_language(&language).is_ok() && parser.parse("\n", None).is_some()
+          }
+
+          fn probe_languages() -> Vec<&'static str> {
+              let mut available = Vec::with_capacity(ADAPTER_LANGUAGES.len());
+              if parser_ready(tree_sitter_bash::LANGUAGE.into()) {
+                  available.push("bash");
+              }
+              if parser_ready(tree_sitter_c::LANGUAGE.into()) {
+                  available.push("c");
+              }
+              let csharp_ready = parser_ready(tree_sitter_c_sharp::LANGUAGE.into());
+              if csharp_ready {
+                  available.push("c_sharp");
+              }
+              if parser_ready(tree_sitter_cpp::LANGUAGE.into()) {
+                  available.push("cpp");
+              }
+              if csharp_ready {
+                  available.push("csharp");
+              }
+              if parser_ready(tree_sitter_dart_orchard::LANGUAGE.into()) {
+                  available.push("dart");
+              }
+              if parser_ready(tree_sitter_elixir::LANGUAGE.into()) {
+                  available.push("elixir");
+              }
+              if parser_ready(tree_sitter_erlang::LANGUAGE.into()) {
+                  available.push("erlang");
+              }
+              if parser_ready(tree_sitter_fish::language()) {
+                  available.push("fish");
+              }
+              if parser_ready(tree_sitter_fsharp::LANGUAGE_FSHARP.into()) {
+                  available.push("fsharp");
+              }
+              if parser_ready(tree_sitter_go::LANGUAGE.into()) {
+                  available.push("go");
+              }
+              if parser_ready(tree_sitter_haskell::LANGUAGE.into()) {
+                  available.push("haskell");
+              }
+              if parser_ready(tree_sitter_java::LANGUAGE.into()) {
+                  available.push("java");
+              }
+              if parser_ready(tree_sitter_javascript::LANGUAGE.into()) {
+                  available.push("javascript");
+              }
+              if parser_ready(tree_sitter_julia::LANGUAGE.into()) {
+                  available.push("julia");
+              }
+              if parser_ready(tree_sitter_kotlin_ng::LANGUAGE.into()) {
+                  available.push("kotlin");
+              }
+              if parser_ready(tree_sitter_lua::LANGUAGE.into()) {
+                  available.push("lua");
+              }
+              if parser_ready(tree_sitter_ocaml::LANGUAGE_OCAML.into()) {
+                  available.push("ocaml");
+              }
+              if parser_ready(tree_sitter_php::LANGUAGE_PHP.into()) {
+                  available.push("php");
+              }
+              if parser_ready(tree_sitter_powershell::LANGUAGE.into()) {
+                  available.push("powershell");
+              }
+              if parser_ready(tree_sitter_r::LANGUAGE.into()) {
+                  available.push("r");
+              }
+              if parser_ready(tree_sitter_ruby::LANGUAGE.into()) {
+                  available.push("ruby");
+              }
+              if parser_ready(tree_sitter_rust::LANGUAGE.into()) {
+                  available.push("rust");
+              }
+              if parser_ready(tree_sitter_scala::LANGUAGE.into()) {
+                  available.push("scala");
+              }
+              if parser_ready(tree_sitter_solidity::LANGUAGE.into()) {
+                  available.push("solidity");
+              }
+              if parser_ready(tree_sitter_svelte_ng::LANGUAGE.into()) {
+                  available.push("svelte");
+              }
+              if parser_ready(tree_sitter_swift::LANGUAGE.into()) {
+                  available.push("swift");
+              }
+              if parser_ready(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()) {
+                  available.push("typescript");
+              }
+              if parser_ready(tree_sitter_vue_next::LANGUAGE.into()) {
+                  available.push("vue");
+              }
+              if parser_ready(tree_sitter_zig::LANGUAGE.into()) {
+                  available.push("zig");
+              }
+              available
+          }
+
+          pub(super) fn available_languages() -> &'static [&'static str] {
+              AVAILABLE_LANGUAGES.get_or_init(probe_languages).as_slice()
+          }
+
+          pub(super) fn installed() -> bool {
+              available_languages() == ADAPTER_LANGUAGES
+          }
+
+          pub(super) fn manifest_languages(include_c_sharp_alias: bool) -> Vec<&'static str> {
+              available_languages()
+                  .iter()
+                  .copied()
+                  .filter(|language| include_c_sharp_alias || *language != "c_sharp")
+                  .collect()
+          }
+          RS
+
+          python - <<'PY'
+          from pathlib import Path
+
+          cargo = Path('crates/syntavra-cli/Cargo.toml')
+          text = cargo.read_text(encoding='utf-8')
+          marker = '[dependencies]\n'
+          deps = '''# Keep the native syntax pack resolvable on the workspace MSRV (Rust/Cargo 1.82).\nindexmap = "=2.7.1"\ntree-sitter = "=0.25.10"\ntree-sitter-bash = "=0.25.1"\ntree-sitter-c = "=0.24.2"\ntree-sitter-c-sharp = "=0.23.5"\ntree-sitter-cpp = "=0.23.4"\ntree-sitter-dart-orchard = "=0.3.2"\ntree-sitter-elixir = "=0.3.5"\ntree-sitter-erlang = "=0.20.0"\ntree-sitter-fish = "=3.6.0"\ntree-sitter-fsharp = "=0.3.11"\ntree-sitter-go = "=0.25.0"\ntree-sitter-haskell = "=0.23.1"\ntree-sitter-java = "=0.23.5"\ntree-sitter-javascript = "=0.25.0"\ntree-sitter-julia = "=0.23.1"\ntree-sitter-kotlin-ng = "=1.1.0"\ntree-sitter-lua = "=0.2.0"\ntree-sitter-ocaml = "=0.24.2"\ntree-sitter-php = "=0.24.2"\ntree-sitter-powershell = "=0.26.4"\ntree-sitter-r = "=1.3.0"\ntree-sitter-ruby = "=0.23.1"\ntree-sitter-rust = "=0.24.2"\ntree-sitter-scala = "=0.24.1"\ntree-sitter-solidity = "=1.2.13"\ntree-sitter-svelte-ng = "=1.0.2"\ntree-sitter-swift = "=0.7.3"\ntree-sitter-typescript = "=0.23.2"\ntree-sitter-vue-next = "=0.1.0"\ntree-sitter-zig = "=1.1.2"\n'''
+          if 'tree-sitter = "=0.25.10"' not in text:
+              if marker not in text:
+                  raise SystemExit('Cargo dependency marker missing')
+              text = text.replace(marker, marker + deps, 1)
+          cargo.write_text(text, encoding='utf-8')
+
+          core = Path('crates/syntavra-cli/src/native_remaining71_graph_core.rs')
+          text = core.read_text(encoding='utf-8')
+          old_const = 'const ADAPTER_LANGUAGES: &[&str] = &[];'
+          new_const = '#[path = "native_tree_sitter_language_pack.rs"]\nmod tree_sitter_pack;\n\nconst ADAPTER_LANGUAGES: &[&str] = tree_sitter_pack::ADAPTER_LANGUAGES;'
+          if old_const in text:
+              text = text.replace(old_const, new_const, 1)
+          elif new_const not in text:
+              raise SystemExit('adapter constant anchor missing')
+
+          old_route = '                "inventory" | "doctor" => language_status(project_root, &database),'
+          new_route = '                "inventory" => language_status(project_root, &database, false),\n                "doctor" => language_status(project_root, &database, true),'
+          if old_route in text:
+              text = text.replace(old_route, new_route, 1)
+          elif new_route not in text:
+              raise SystemExit('language route anchor missing')
+
+          old_semantic = '        Some("semantic-services") => language_status(project_root, &database),'
+          new_semantic = '        Some("semantic-services") => language_status(project_root, &database, true),'
+          if old_semantic in text:
+              text = text.replace(old_semantic, new_semantic, 1)
+          elif new_semantic not in text:
+              raise SystemExit('semantic route anchor missing')
+
+          old_signature = 'fn language_status(project: &Path, database: &Path) -> Result<Value, String> {'
+          new_signature = 'fn language_status(\n    project: &Path,\n    database: &Path,\n    include_c_sharp_alias: bool,\n) -> Result<Value, String> {'
+          if old_signature in text:
+              text = text.replace(old_signature, new_signature, 1)
+          elif new_signature not in text:
+              raise SystemExit('language_status signature anchor missing')
+
+          replacements = {
+              '    let available = i64::try_from(ADAPTER_LANGUAGES.len()).unwrap_or(i64::MAX);': '    let available = i64::try_from(tree_sitter_pack::available_languages().len()).unwrap_or(i64::MAX);',
+              '            "adapter": "native-structural",': '            "adapter": "tree-sitter-language-pack",',
+              '            "installed": false,': '            "installed": tree_sitter_pack::installed(),',
+              '            "available_languages": ADAPTER_LANGUAGES,': '            "available_languages": tree_sitter_pack::manifest_languages(include_c_sharp_alias),',
+          }
+          for old, new in replacements.items():
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f'core anchor missing: {old}')
+          core.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate candidate on exact workspace MSRV
+        shell: bash
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all
+          cargo +1.82.0 check -p syntavra-cli --bins
+          cargo +1.82.0 build -p syntavra-cli --bin syntavra
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          git diff --check
+
+      - name: Validate Python Rust graph language parity before commit
+        shell: bash
+        run: |
+          python -m pip install -e .
+          python tools/validate_remaining71_graph_language_core_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/graph-language-core-differential.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/graph-language-core-differential.json', encoding='utf-8'))
+          diff = data['differential']
+          print('mismatch_count=', diff['mismatch_count'])
+          if diff['mismatch_count'] != 0 or not diff['ok']:
+              raise SystemExit('graph/language differential is not clean')
+          PY
+
+      - name: Commit certified native parser pack
+        shell: bash
+        run: |
+          git config user.name 'syntavra-ci'
+          git config user.email 'syntavra-ci@users.noreply.github.com'
+          git add \
+            Cargo.lock \
+            crates/syntavra-cli/Cargo.toml \
+            crates/syntavra-cli/src/native_remaining71_graph_core.rs \
+            crates/syntavra-cli/src/native_tree_sitter_language_pack.rs
+          git diff --cached --check
+          git commit -m 'fix(runtime): certify native tree-sitter language pack'
+          git push origin HEAD:agent/r31-provider-capture-native
