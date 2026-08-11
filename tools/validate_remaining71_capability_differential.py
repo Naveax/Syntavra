@@ -113,7 +113,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
     changed_token_args = json.dumps({"path": "b.txt", "content": "x"}, separators=(",", ":"))
 
     decisions = {
-        "read": norm_decision(call("run", "capability-decide", "read_file", read_args)),
+        "read": norm_decision(call("run", "capability-decide", "workspace.read", read_args)),
         "execute_authorization_required": norm_decision(
             call("run", "capability-decide", "shell_run", exec_args, "--sandboxed")
         ),
@@ -144,7 +144,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
             call(
                 "run",
                 "capability-decide",
-                "write_file",
+                "workspace.write",
                 token_args,
                 "--resource",
                 "file:/tmp/outside",
@@ -168,7 +168,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
         "run",
         "capability-issue",
         "session-1",
-        "write_file",
+        "workspace.write",
         token_args,
         "--resource",
         "workspace:/",
@@ -187,7 +187,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
             "run",
             "capability-verify",
             token,
-            "write_file",
+            "workspace.write",
             token_args,
             "--resource",
             "workspace:/",
@@ -198,7 +198,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
             "run",
             "capability-verify",
             token,
-            "write_file",
+            "workspace.write",
             token_args,
             "--resource",
             "workspace:/",
@@ -209,7 +209,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
         "run",
         "capability-issue",
         "session-2",
-        "write_file",
+        "workspace.write",
         token_args,
         "--resource",
         "workspace:/",
@@ -222,7 +222,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
             "run",
             "capability-verify",
             binding_token,
-            "write_file",
+            "workspace.write",
             changed_token_args,
             "--resource",
             "workspace:/",
@@ -233,7 +233,7 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
             "run",
             "capability-verify",
             "not-a-token",
-            "write_file",
+            "workspace.write",
             token_args,
             "--resource",
             "workspace:/",
@@ -270,9 +270,9 @@ def expected_contract() -> dict[str, Any]:
         },
         "issue": {"exit": 0, "ok": True, "single_use": True, "token_shape": True},
         "first_verify": {"exit": 0, "ok": True, "reason": "verified"},
-        "consumed_verify": {"exit": 0, "ok": False, "reason": "already-consumed"},
-        "binding_mismatch": {"exit": 0, "ok": False, "reason": "binding-mismatch"},
-        "malformed": {"exit": 0, "ok": False, "reason": "malformed-token"},
+        "consumed_verify": {"exit": 3, "ok": False, "reason": "already-consumed"},
+        "binding_mismatch": {"exit": 3, "ok": False, "reason": "binding-mismatch"},
+        "malformed": {"exit": 3, "ok": False, "reason": "malformed-token"},
     }
 
 

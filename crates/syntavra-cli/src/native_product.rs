@@ -408,7 +408,18 @@ pub fn execute(
         );
     }
     if bulk_parity_probe_enabled() && native_remaining71_security::supports(command) {
-        return native_remaining71_security::execute(command, &arguments, state_root);
+        if let Some(value) = native_remaining71_security::execute(command, &arguments, state_root)?
+        {
+            if command.len() == 2
+                && command[0] == "run"
+                && command[1] == "capability-verify"
+                && value["ok"].as_bool() == Some(false)
+            {
+                emit_failed_decision(&value, 3);
+            }
+            return Ok(Some(value));
+        }
+        return Ok(None);
     }
     if bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command) {
         if let Some(decision) =
