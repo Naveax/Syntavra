@@ -9,7 +9,10 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use syntavra_core::sha256_hex;
 
-const ADAPTER_LANGUAGES: &[&str] = &[];
+#[path = "native_tree_sitter_language_pack.rs"]
+mod tree_sitter_pack;
+
+const ADAPTER_LANGUAGES: &[&str] = tree_sitter_pack::ADAPTER_LANGUAGES;
 
 const BUILTIN_LANGUAGES: &[&str] = &[
     "ada",
@@ -216,7 +219,8 @@ pub(super) fn execute(
         Some("language") => {
             let operation = super::positional_after(arguments, "language", 0)?;
             match operation {
-                "inventory" | "doctor" => language_status(project_root, &database),
+                "inventory" => language_status(project_root, &database, false),
+                "doctor" => language_status(project_root, &database, true),
                 "detect" => {
                     let raw = super::positional_after(arguments, "language", 1)?;
                     let source = super::safe_project_path(project_root, raw, true)?;
@@ -250,7 +254,7 @@ pub(super) fn execute(
                 _ => super::language_action(arguments, project_root, &unified, &database),
             }
         }
-        Some("semantic-services") => language_status(project_root, &database),
+        Some("semantic-services") => language_status(project_root, &database, true),
         _ => Err("GRAPH_CORE_ROUTE_UNSUPPORTED".to_owned()),
     }
 }
@@ -985,13 +989,18 @@ fn repository_query_stats(path: &Path) -> Result<Value, String> {
     }))
 }
 
-fn language_status(project: &Path, database: &Path) -> Result<Value, String> {
+fn language_status(
+    project: &Path,
+    database: &Path,
+    include_c_sharp_alias: bool,
+) -> Result<Value, String> {
     let registry = language_inventory(project)?;
     let semantic = Connection::open(database)
         .map_err(|error| format!("GRAPH_DATABASE_OPEN_FAILED:{error}"))
         .and_then(|connection| super::semantic_stats(&connection))?;
     let declared = registry["registered_languages"].as_i64().unwrap_or(0);
-    let available = i64::try_from(ADAPTER_LANGUAGES.len()).unwrap_or(i64::MAX);
+    let available =
+        i64::try_from(tree_sitter_pack::available_languages().len()).unwrap_or(i64::MAX);
     Ok(json!({
         "ok": true,
         "universal_text_fallback": true,
@@ -1003,9 +1012,9 @@ fn language_status(project: &Path, database: &Path) -> Result<Value, String> {
         "claim_boundary": "declared support is not live certification; unknown and future text languages remain navigable, while exact semantic claims require validated parser, analyzer, LSP, LSIF or SCIP evidence",
         "universal_claim_boundary": "unknown and future text languages remain navigable; exact type, call, implementation and override claims require validated parser, analyzer, LSP, LSIF or SCIP evidence",
         "tree_sitter": {
-            "adapter": "native-structural",
-            "installed": false,
-            "available_languages": ADAPTER_LANGUAGES,
+            "adapter": "tree-sitter-language-pack",
+            "installed": tree_sitter_pack::installed(),
+            "available_languages": tree_sitter_pack::manifest_languages(include_c_sharp_alias),
             "capability_level": "syntax",
             "claim_boundary": "cross-file semantic identity requires LSP, LSIF or SCIP confirmation",
         },
