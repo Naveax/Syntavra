@@ -154,7 +154,7 @@ def _namespace_dest_collisions(
     local: list[tuple[str, str, str]] = []
     for action in parser._actions:
         dest = str(action.dest)
-        if dest == argparse.SUPPRESS:
+        if dest == argparse.SUPPRESS or isinstance(action, argparse._HelpAction):
             continue
         action_name = _action_name(action)
         route_path = " ".join(prefix) if prefix else "<root>"
