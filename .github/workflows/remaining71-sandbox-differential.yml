@@ -32,7 +32,7 @@ jobs:
         run: python -m pip install -e .
       - name: Build Rust selector
         run: |
-          rustup toolchain install 1.82.0 --profile minimal
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
       - name: Run sandbox differential
         run: |
