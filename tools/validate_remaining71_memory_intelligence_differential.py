@@ -105,13 +105,12 @@ def sha256_file(path: Path) -> str:
 def create_external_extractor(root: Path) -> tuple[Path, str]:
     helper = root / "memory_extractor_fixture.py"
     helper.write_text(
-        """#!/usr/bin/env python3\n"
+        "#!/usr/bin/env python3\n"
         "import json, sys\n"
         "request = json.load(open(sys.argv[1], encoding='utf-8'))\n"
         "assert 'transcript' in request\n"
         "payload = {'observations': [{'text': 'external extractor observation', 'kind': 'decision', 'importance': 0.61, 'confidence': 0.73, 'validity': 1.0, 'metadata': {'source': 'fixture'}}]}\n"
-        "with open(sys.argv[2], 'w', encoding='utf-8') as handle: json.dump(payload, handle, ensure_ascii=False, sort_keys=True)\n"
-        """,
+        "with open(sys.argv[2], 'w', encoding='utf-8') as handle: json.dump(payload, handle, ensure_ascii=False, sort_keys=True)\n",
         encoding="utf-8",
     )
     command = json.dumps([sys.executable, str(helper), "{request}", "{output}"])
