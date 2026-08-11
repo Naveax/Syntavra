@@ -21,10 +21,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Run canonical public-surface regression tests
         run: python -m unittest discover -s tests -p 'test_python_public_surface_audit.py' -v
 
