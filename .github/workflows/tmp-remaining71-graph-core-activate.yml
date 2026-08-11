@@ -1,0 +1,83 @@
+name: Temporary Remaining71 Graph Core Activate
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - .github/workflows/tmp-remaining71-graph-core-activate.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-remaining71-graph-core-activate
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+      - name: Activate exact native graph core
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/syntavra-cli/src/native_remaining71_graph.rs')
+          text = path.read_text(encoding='utf-8')
+
+          module_line = '#[path = "native_remaining71_graph_core.rs"]\nmod core_parity;\n\n'
+          module_anchor = 'const IGNORE_PARTS: &[&str] = &[\n'
+          if module_line not in text:
+              if module_anchor not in text:
+                  raise SystemExit('module anchor not found')
+              text = text.replace(module_anchor, module_line + module_anchor, 1)
+
+          old = '''    if !supports(command) {
+              return Ok(None);
+          }
+          let unified = state_root.join("unified");
+          '''
+          new = '''    if !supports(command) {
+              return Ok(None);
+          }
+          if matches!(
+              command.get(1).map(String::as_str),
+              Some("graph-index" | "graph-query" | "graph-impact" | "language" | "semantic-services")
+          ) {
+              return core_parity::execute(command, arguments, project_root, state_root).map(Some);
+          }
+          let unified = state_root.join("unified");
+          '''
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('execute delegation anchor not found')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Validate activated native core
+        shell: bash
+        run: |
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all
+          cargo +1.82.0 fmt --all -- --check
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          git diff --check
+      - name: Commit activated core
+        shell: bash
+        run: |
+          git config user.name 'syntavra-ci'
+          git config user.email 'syntavra-ci@users.noreply.github.com'
+          git add crates/syntavra-cli/src/native_remaining71_graph.rs crates/syntavra-cli/src/native_remaining71_graph_core.rs
+          if git diff --cached --quiet; then
+            echo 'No activation changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix(runtime): align native graph language core contract'
+          git push origin HEAD:agent/r31-provider-capture-native
