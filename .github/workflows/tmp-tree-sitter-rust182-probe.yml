@@ -67,4 +67,22 @@ jobs:
           tree-sitter-zig = "1.1.2"
           EOF
           cd /tmp/ts182
+          set +e
           cargo +1.82.0 check
+          status=$?
+          set -e
+          python - <<'PY'
+          import pathlib, tomllib
+          p = pathlib.Path('Cargo.lock')
+          if not p.exists():
+              raise SystemExit(0)
+          data = tomllib.loads(p.read_text())
+          packages = data.get('package', [])
+          for target in ('hashbrown 0.17.1', 'hashbrown'):
+              print(f'--- reverse dependencies for {target} ---')
+              for pkg in packages:
+                  deps = pkg.get('dependencies', [])
+                  if any(dep == target or (target == 'hashbrown' and dep.startswith('hashbrown')) for dep in deps):
+                      print(pkg['name'], pkg['version'], deps)
+          PY
+          exit "$status"
