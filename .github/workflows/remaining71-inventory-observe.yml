@@ -31,6 +31,10 @@ jobs:
         run: |
           rustup toolchain install 1.82.0 --profile minimal
           cargo +1.82.0 check --locked -p syntavra-cli --bins
+      - name: Prove selector ownership for canonical remaining 71
+        run: cargo +1.82.0 run --locked -p syntavra-cli --bin syntavra-remaining71-ownership
+      - name: Re-run native provider proxy unit tests
+        run: cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra native_remaining71_provider_proxy -- --nocapture
       - name: Show exact head and clean tree
         run: |
           echo "head=$(git rev-parse HEAD)"
