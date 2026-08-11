@@ -49,7 +49,6 @@ jobs:
             --rust-bin target/debug/syntavra \
             --output /tmp/session-memory-differential.json
       - name: Persist validated repair
-        if: github.event_name == 'push'
         run: |
           rm -f tools/patch_remaining71_session_memory_parity.py
           git add crates/syntavra-cli/src/native_remaining71_memory.rs \
