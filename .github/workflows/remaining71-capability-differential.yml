@@ -1,5 +1,6 @@
 name: Remaining 71 Capability Differential
 
+# Compares public Python and Rust capability-security behavior on one exact head.
 on:
   push:
     branches:
