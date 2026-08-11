@@ -34,7 +34,7 @@ jobs:
             python tools/apply_remaining71_sandbox_parity_fix.py
           fi
       - name: Install Python runtime and test dependencies
-        run: python -m pip install -e '.[dev]'
+        run: python -m pip install -e . pytest
       - name: Run Python unified platform sandbox tests
         run: python -m unittest discover -s tests/runtime -p 'test_syntavra_unified_platform.py' -v
       - name: Build full Rust CLI probe surface
