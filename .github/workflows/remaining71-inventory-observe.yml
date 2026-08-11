@@ -22,8 +22,12 @@ jobs:
           fetch-depth: 0
       - name: Derive canonical remaining inventory from public parser contract
         run: |
+          set +e
           python tools/report_missing_native_public_routes.py > /tmp/remaining71-inventory.json
+          report_exit=$?
+          set -e
           cat /tmp/remaining71-inventory.json
+          exit "$report_exit"
       - name: Compile current probe surface
         run: |
           rustup toolchain uninstall 1.82.0 || true
