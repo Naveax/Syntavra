@@ -869,6 +869,84 @@ fn platform_backend(
     Ok(backend)
 }
 
+fn sandbox_profile_escape(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn platform_wrapped_command(
+    backend: &Value,
+    command: &[String],
+    project: &Path,
+    writable: &[PathBuf],
+    network_hosts: &[String],
+) -> Result<Vec<String>, String> {
+    let name = backend["name"]
+        .as_str()
+        .unwrap_or("portable-process-boundary");
+    let mut wrapped = Vec::<String>::new();
+    match name {
+        "bubblewrap" => {
+            wrapped.extend([
+                "bwrap".to_owned(),
+                "--die-with-parent".to_owned(),
+                "--new-session".to_owned(),
+                "--unshare-user".to_owned(),
+                "--unshare-pid".to_owned(),
+                "--unshare-uts".to_owned(),
+                "--unshare-ipc".to_owned(),
+                "--ro-bind".to_owned(),
+                "/".to_owned(),
+                "/".to_owned(),
+                "--proc".to_owned(),
+                "/proc".to_owned(),
+                "--dev".to_owned(),
+                "/dev".to_owned(),
+                "--chdir".to_owned(),
+                project.to_string_lossy().into_owned(),
+            ]);
+            for path in writable {
+                let value = path.to_string_lossy().into_owned();
+                wrapped.extend(["--bind".to_owned(), value.clone(), value]);
+            }
+            if network_hosts.is_empty() {
+                wrapped.push("--unshare-net".to_owned());
+            }
+        }
+        "unshare" => {
+            wrapped.extend([
+                "unshare".to_owned(),
+                "--fork".to_owned(),
+                "--pid".to_owned(),
+                "--mount-proc".to_owned(),
+            ]);
+            if network_hosts.is_empty() {
+                wrapped.push("--net".to_owned());
+            }
+        }
+        "sandbox-exec" => {
+            let mut profile =
+                "(version 1) (deny default) (import \"system.sb\") (allow file-read*)".to_owned();
+            for path in writable {
+                profile.push_str(&format!(
+                    " (allow file-write* (subpath \"{}\"))",
+                    sandbox_profile_escape(&path.to_string_lossy())
+                ));
+            }
+            profile.push_str(" (allow process-exec)");
+            if !network_hosts.is_empty() {
+                profile.push_str(" (allow network*)");
+            }
+            wrapped.extend(["sandbox-exec".to_owned(), "-p".to_owned(), profile]);
+        }
+        _ => {}
+    }
+    wrapped.extend(command.iter().cloned());
+    if wrapped.is_empty() {
+        return Err("sandbox command must be a non-empty argv list".to_owned());
+    }
+    Ok(wrapped)
+}
+
 fn platform_status(project: &Path) -> Result<Value, String> {
     let backend = platform_backend(project, false, &[], true)?;
     let strict_ready = backend["available"].as_bool().unwrap_or(false)
@@ -960,8 +1038,10 @@ fn platform_run(
         None => project.clone(),
     };
     let environment = filtered_environment(PLATFORM_ENV_ALLOWLIST, &project, false);
+    let execution_command =
+        platform_wrapped_command(&backend, &command, &project, &writable, &network_hosts)?;
     let started_at = now_iso()?;
-    let result = run_process(&command, &cwd, timeout, &environment)?;
+    let result = run_process(&execution_command, &cwd, timeout, &environment)?;
     let policy = json!({
         "workspace": project.to_string_lossy(),
         "writable_paths": writable.iter().map(|value| value.to_string_lossy().into_owned()).collect::<Vec<_>>(),
@@ -1022,12 +1102,89 @@ fn platform_run(
         .map_err(|error| format!("SANDBOX_RECEIPT_JSON_FAILED:{error}"))?;
     fs::write(destination, [&rendered[..], b"\n"].concat())
         .map_err(|error| format!("SANDBOX_RECEIPT_WRITE_FAILED:{error}"))?;
-    let exit = if result.timed_out {
-        124
+    // The Python platform CLI returns 3 whenever the structured receipt
+    // reports ok=false, including timeout. Keep direct `sandbox execute`'s 124
+    // convention separate from the `run sandbox-run` public surface.
+    let exit = if result.exit_code == 0 && !result.timed_out {
+        0
     } else {
-        u8::try_from(result.exit_code.clamp(0, 255)).unwrap_or(1)
+        3
     };
     Ok((value, exit))
+}
+
+#[cfg(test)]
+mod platform_wrapper_tests {
+    use super::platform_wrapped_command;
+    use serde_json::json;
+    use std::path::{Path, PathBuf};
+
+    fn command() -> Vec<String> {
+        vec!["tool".to_owned(), "arg".to_owned()]
+    }
+
+    #[test]
+    fn portable_backend_executes_original_command() {
+        let value = platform_wrapped_command(
+            &json!({"name":"portable-process-boundary"}),
+            &command(),
+            Path::new("/workspace"),
+            &[PathBuf::from("/workspace")],
+            &[],
+        )
+        .expect("portable command");
+        assert_eq!(value, command());
+    }
+
+    #[test]
+    fn bubblewrap_backend_enforces_namespace_wrapper() {
+        let value = platform_wrapped_command(
+            &json!({"name":"bubblewrap"}),
+            &command(),
+            Path::new("/workspace"),
+            &[PathBuf::from("/workspace/write")],
+            &[],
+        )
+        .expect("bubblewrap command");
+        assert_eq!(value.first().map(String::as_str), Some("bwrap"));
+        assert!(value.iter().any(|item| item == "--unshare-user"));
+        assert!(value.iter().any(|item| item == "--unshare-net"));
+        assert!(value
+            .windows(3)
+            .any(|row| row == ["--bind", "/workspace/write", "/workspace/write"]));
+        assert_eq!(&value[value.len() - 2..], ["tool", "arg"]);
+    }
+
+    #[test]
+    fn unshare_backend_enforces_pid_and_network_namespaces() {
+        let value = platform_wrapped_command(
+            &json!({"name":"unshare"}),
+            &command(),
+            Path::new("/workspace"),
+            &[PathBuf::from("/workspace")],
+            &[],
+        )
+        .expect("unshare command");
+        assert_eq!(value.first().map(String::as_str), Some("unshare"));
+        assert!(value.iter().any(|item| item == "--pid"));
+        assert!(value.iter().any(|item| item == "--net"));
+    }
+
+    #[test]
+    fn sandbox_exec_profile_contains_write_boundary() {
+        let value = platform_wrapped_command(
+            &json!({"name":"sandbox-exec"}),
+            &command(),
+            Path::new("/workspace"),
+            &[PathBuf::from("/workspace/write")],
+            &["example.com".to_owned()],
+        )
+        .expect("sandbox-exec command");
+        assert_eq!(value.first().map(String::as_str), Some("sandbox-exec"));
+        let profile = value.get(2).expect("profile");
+        assert!(profile.contains("/workspace/write"));
+        assert!(profile.contains("allow network"));
+    }
 }
 
 pub(crate) struct NativeExecution {

@@ -204,7 +204,7 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
 
     run_sub.add_parser("sandbox-status")
     sandbox_run = run_sub.add_parser("sandbox-run")
-    sandbox_run.add_argument("command", help="JSON argv or path")
+    sandbox_run.add_argument("sandbox_command", help="JSON argv or path")
     sandbox_run.add_argument("--cwd")
     sandbox_run.add_argument("--timeout", type=float, default=300.0)
     sandbox_run.add_argument("--strict-native", action="store_true")
@@ -420,7 +420,7 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
     if action == "sandbox-status":
         return runtime.sandbox.health(project)
     if action == "sandbox-run":
-        command = _argv(args.command, "sandbox command")
+        command = _argv(args.sandbox_command, "sandbox command")
         writable = tuple(_project_path(project, value) for value in args.writable_path) or (project,)
         receipt = runtime.sandbox.run(
             command,
