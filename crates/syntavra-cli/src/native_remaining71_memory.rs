@@ -4,7 +4,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+include!("native_python_casefold.rs");
 
 use rand::{rngs::OsRng, RngCore as _};
 use regex::Regex;
@@ -385,7 +389,7 @@ fn tokens(text: &str) -> Result<Vec<String>, String> {
     let regex = token_regex()?;
     Ok(regex
         .find_iter(text)
-        .map(|item| item.as_str().to_lowercase())
+        .map(|item| python_casefold(item.as_str()))
         .collect())
 }
 
@@ -414,6 +418,137 @@ fn embedding_json(text: &str) -> Result<String, String> {
 fn metadata_json(value: &Value) -> Result<String, String> {
     serde_json::to_string(&sorted(value))
         .map_err(|error| format!("MEMORY_METADATA_SERIALIZE_FAILED:{error}"))
+}
+
+fn record_memory_notification(state_root: &Path, kind: &str, text: &str) -> Result<(), String> {
+    let path = state_root.join("notifications").join("events.jsonl");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("MEMORY_NOTIFICATION_PARENT_FAILED:{error}"))?;
+    }
+    let created_at = now_seconds()?;
+    let base = json!({
+        "channel": "memory",
+        "severity": "critical",
+        "title": format!("Critical {kind}"),
+        "body": text.chars().take(1000).collect::<String>(),
+        "created_at": created_at,
+    });
+    let event_hash = sha256_bytes(&canonical_json(&base)?);
+    let mut item = base;
+    item.as_object_mut()
+        .expect("notification object")
+        .insert("event_hash".to_owned(), Value::String(event_hash));
+    let mut line = canonical_json(&item)?;
+    line.push(b'\n');
+    let mut output = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|error| format!("MEMORY_NOTIFICATION_OPEN_FAILED:{error}"))?;
+    output
+        .write_all(&line)
+        .map_err(|error| format!("MEMORY_NOTIFICATION_WRITE_FAILED:{error}"))?;
+    output
+        .flush()
+        .map_err(|error| format!("MEMORY_NOTIFICATION_FLUSH_FAILED:{error}"))?;
+    Ok(())
+}
+
+fn external_extract_rows(transcript: &str) -> Result<Option<Vec<Value>>, String> {
+    let raw = std::env::var("SYNTAVRA_MEMORY_EXTRACTOR_COMMAND_JSON").unwrap_or_default();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    let parsed: Value = serde_json::from_str(&raw).map_err(|error| {
+        format!("memory extractor command must be a non-empty JSON argv array: {error}")
+    })?;
+    let argv = parsed
+        .as_array()
+        .ok_or_else(|| "memory extractor command must be a non-empty JSON argv array".to_owned())?;
+    if argv.is_empty()
+        || argv
+            .iter()
+            .any(|item| item.as_str().is_none_or(str::is_empty))
+    {
+        return Err("memory extractor command must be a non-empty JSON argv array".to_owned());
+    }
+    let argv = argv
+        .iter()
+        .map(|item| item.as_str().expect("validated string").to_owned())
+        .collect::<Vec<_>>();
+
+    let mut random = [0u8; 12];
+    OsRng.fill_bytes(&mut random);
+    let suffix = random
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let root = std::env::temp_dir().join(format!("syntavra-memory-{suffix}"));
+    fs::create_dir_all(&root).map_err(|error| format!("MEMORY_EXTRACTOR_TEMP_FAILED:{error}"))?;
+    let request = root.join("request.json");
+    let output = root.join("result.json");
+    fs::write(
+        &request,
+        serde_json::to_vec(&json!({"transcript": transcript}))
+            .map_err(|error| format!("MEMORY_EXTRACTOR_REQUEST_JSON:{error}"))?,
+    )
+    .map_err(|error| format!("MEMORY_EXTRACTOR_REQUEST_WRITE:{error}"))?;
+
+    let request_text = request.to_string_lossy().into_owned();
+    let output_text = output.to_string_lossy().into_owned();
+    let command = argv
+        .iter()
+        .map(|item| {
+            item.replace("{request}", &request_text)
+                .replace("{output}", &output_text)
+        })
+        .collect::<Vec<_>>();
+    let mut child = Command::new(&command[0])
+        .args(&command[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("MEMORY_EXTRACTOR_SPAWN_FAILED:{error}"))?;
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| format!("MEMORY_EXTRACTOR_WAIT_FAILED:{error}"))?
+        {
+            break status;
+        }
+        if started.elapsed() >= Duration::from_secs(120) {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_dir_all(&root);
+            return Err("memory extractor failed: timeout".to_owned());
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+    if !status.success() {
+        let code = status.code().unwrap_or(-1);
+        let _ = fs::remove_dir_all(&root);
+        return Err(format!("memory extractor failed: {code}"));
+    }
+    let raw_output = fs::read_to_string(&output)
+        .map_err(|error| format!("MEMORY_EXTRACTOR_OUTPUT_READ:{error}"))?;
+    let value: Value = serde_json::from_str(&raw_output)
+        .map_err(|error| format!("MEMORY_EXTRACTOR_OUTPUT_JSON:{error}"))?;
+    let rows = match value {
+        Value::Object(mut map) => map.remove("observations").unwrap_or(Value::Object(map)),
+        other => other,
+    };
+    let rows = rows
+        .as_array()
+        .ok_or_else(|| "memory extractor result must be a list".to_owned())?
+        .iter()
+        .filter(|row| row.is_object())
+        .cloned()
+        .collect::<Vec<_>>();
+    let _ = fs::remove_dir_all(&root);
+    Ok(Some(rows))
 }
 
 fn add_observation(
@@ -472,12 +607,19 @@ fn add_observation(
         ],
     )
     .map_err(|error| format!("MEMORY_INTELLIGENCE_ADD_FAILED:{error}"))?;
-    db.query_row(
-        "SELECT * FROM observations WHERE observation_id=?1",
-        [observation_id],
-        observation_from_row,
-    )
-    .map_err(|error| format!("MEMORY_INTELLIGENCE_READ_FAILED:{error}"))
+    let item = db
+        .query_row(
+            "SELECT * FROM observations WHERE observation_id=?1",
+            [observation_id],
+            observation_from_row,
+        )
+        .map_err(|error| format!("MEMORY_INTELLIGENCE_READ_FAILED:{error}"))?;
+    if item.importance >= 0.9 {
+        if let Some(state_root) = path.parent() {
+            record_memory_notification(state_root, kind, text)?;
+        }
+    }
+    Ok(item)
 }
 
 fn all_observations(path: &Path) -> Result<Vec<(Observation, Option<String>)>, String> {
@@ -667,53 +809,84 @@ fn memory_intelligence(
                 .first()
                 .ok_or_else(|| "MEMORY_SOURCE_REQUIRED".to_owned())?;
             let text = read_text_or_path(source)?;
-            let patterns = [
-                (
-                    "decision",
-                    r"(?im)^\s*(?:decision|decided|we will|keep|use)\s*[:-]?\s*(.+)$",
-                    0.8,
-                ),
-                (
-                    "failure",
-                    r"(?im)^\s*(?:root cause|failure|error cause)\s*[:-]?\s*(.+)$",
-                    0.75,
-                ),
-                (
-                    "constraint",
-                    r"(?im)^\s*(?:constraint|must|never)\s*[:-]?\s*(.+)$",
-                    0.85,
-                ),
-                (
-                    "preference",
-                    r"(?im)^\s*(?:preference|prefer)\s*[:-]?\s*(.+)$",
-                    0.65,
-                ),
-            ];
             let mut observations = Vec::new();
-            for (kind, pattern, importance) in patterns {
-                let regex =
-                    Regex::new(pattern).map_err(|error| format!("MEMORY_EXTRACT_REGEX:{error}"))?;
-                for capture in regex.captures_iter(&text) {
-                    let Some(found) = capture.get(1) else {
+            if let Some(rows) = external_extract_rows(&text)? {
+                for row in rows {
+                    let Some(map) = row.as_object() else {
                         continue;
                     };
-                    let value = found.as_str().trim();
+                    let value = map.get("text").and_then(Value::as_str).unwrap_or("").trim();
                     if value.is_empty() {
                         continue;
                     }
+                    let kind = map
+                        .get("kind")
+                        .and_then(Value::as_str)
+                        .unwrap_or("observation");
+                    let importance = map.get("importance").and_then(Value::as_f64).unwrap_or(0.5);
+                    let confidence = map.get("confidence").and_then(Value::as_f64).unwrap_or(0.7);
+                    let validity = map.get("validity").and_then(Value::as_f64).unwrap_or(1.0);
+                    let metadata = map
+                        .get("metadata")
+                        .filter(|value| value.is_object())
+                        .cloned()
+                        .unwrap_or_else(|| json!({}));
                     observations.push(
                         add_observation(
-                            &db_path,
-                            value,
-                            kind,
-                            importance,
-                            0.65,
-                            1.0,
-                            &json!({"extraction": "heuristic"}),
+                            &db_path, value, kind, importance, confidence, validity, &metadata,
                             true,
                         )?
                         .value(false),
                     );
+                }
+            } else {
+                let patterns = [
+                    (
+                        "decision",
+                        r"(?im)^\s*(?:decision|decided|we will|keep|use)\s*[:-]?\s*(.+)$",
+                        0.8,
+                    ),
+                    (
+                        "failure",
+                        r"(?im)^\s*(?:root cause|failure|error cause)\s*[:-]?\s*(.+)$",
+                        0.75,
+                    ),
+                    (
+                        "constraint",
+                        r"(?im)^\s*(?:constraint|must|never)\s*[:-]?\s*(.+)$",
+                        0.85,
+                    ),
+                    (
+                        "preference",
+                        r"(?im)^\s*(?:preference|prefer)\s*[:-]?\s*(.+)$",
+                        0.65,
+                    ),
+                ];
+                for (kind, pattern, importance) in patterns {
+                    let regex = Regex::new(pattern)
+                        .map_err(|error| format!("MEMORY_EXTRACT_REGEX:{error}"))?;
+                    for capture in regex.captures_iter(&text) {
+                        let Some(found) = capture.get(1) else {
+                            continue;
+                        };
+                        let value = found.as_str().trim();
+                        if value.is_empty() {
+                            continue;
+                        }
+                        observations.push(
+                            add_observation(
+                                &db_path,
+                                value,
+                                kind,
+                                importance,
+                                0.65,
+                                1.0,
+                                &json!({"extraction": "heuristic"}),
+                                true,
+                            )?
+                            .value(false),
+                        );
+                    }
                 }
             }
             Ok(json!({"observations": observations}))
@@ -1524,6 +1697,12 @@ fn session_memory(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn python_casefold_matches_sharp_s_expansion() {
+        assert_eq!(python_casefold("Straße"), "strasse");
+        assert_eq!(python_casefold("STRASSE"), "strasse");
+    }
 
     #[test]
     fn python_json_dumps_sorted_matches_python_spacing() {
