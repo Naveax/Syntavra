@@ -45,26 +45,20 @@ jobs:
                   raise SystemExit('module anchor not found')
               text = text.replace(module_anchor, module_line + module_anchor, 1)
 
-          old = '''    if !supports(command) {
-              return Ok(None);
-          }
-          let unified = state_root.join("unified");
-          '''
-          new = '''    if !supports(command) {
-              return Ok(None);
-          }
-          if matches!(
-              command.get(1).map(String::as_str),
-              Some("graph-index" | "graph-query" | "graph-impact" | "language" | "semantic-services")
-          ) {
-              return core_parity::execute(command, arguments, project_root, state_root).map(Some);
-          }
-          let unified = state_root.join("unified");
-          '''
-          if new not in text:
-              if old not in text:
-                  raise SystemExit('execute delegation anchor not found')
-              text = text.replace(old, new, 1)
+          guard = '    if !supports(command) {\n        return Ok(None);\n    }\n'
+          delegation = (
+              guard
+              + '    if matches!(\n'
+              + '        command.get(1).map(String::as_str),\n'
+              + '        Some("graph-index" | "graph-query" | "graph-impact" | "language" | "semantic-services")\n'
+              + '    ) {\n'
+              + '        return core_parity::execute(command, arguments, project_root, state_root).map(Some);\n'
+              + '    }\n'
+          )
+          if delegation not in text:
+              if guard not in text:
+                  raise SystemExit('execute guard anchor not found')
+              text = text.replace(guard, delegation, 1)
 
           path.write_text(text, encoding='utf-8')
           PY
