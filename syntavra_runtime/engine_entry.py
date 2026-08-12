@@ -23,6 +23,12 @@ READ_ONLY_COMMANDS = {
     ("pipeline", "describe"): "pipeline.describe",
     ("plugins", "list"): "plugins.list",
 }
+BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES = frozenset(
+    {
+        ("prove", "provider-billed"),
+        ("prove", "external-suite"),
+    }
+)
 
 
 def _configure_utf8_stdio() -> None:
@@ -34,6 +40,23 @@ def _configure_utf8_stdio() -> None:
 
 def _emit(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=str))
+
+
+def _emit_public_command_failure(command: str, exc: Exception) -> None:
+    _emit(
+        {
+            "ok": False,
+            "error": {
+                "code": "PYTHON_PUBLIC_COMMAND_FAILED",
+                "message": "The selected Python engine failed while executing the public command.",
+                "details": {
+                    "command": command or "<missing>",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "fallback": "forbidden",
+                },
+            },
+        }
+    )
 
 
 def _extract_engine_override(argv: list[str]) -> tuple[str | None, list[str]]:
@@ -236,20 +259,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return int(python_main(values))
     except (ValueError, KeyError, GatewayError, FileNotFoundError, PermissionError, SandboxError, EvidenceError) as exc:
-        _emit(
-            {
-                "ok": False,
-                "error": {
-                    "code": "PYTHON_PUBLIC_COMMAND_FAILED",
-                    "message": "The selected Python engine failed while executing the public command.",
-                    "details": {
-                        "command": command or "<missing>",
-                        "error": f"{type(exc).__name__}: {exc}",
-                        "fallback": "forbidden",
-                    },
-                },
-            }
-        )
+        _emit_public_command_failure(command, exc)
+        return 4
+    except TypeError as exc:
+        # Receipt row deserialization in these two proof routes historically leaked
+        # constructor/coercion TypeErrors as tracebacks. Keep the normalization
+        # deliberately route-scoped so unrelated programming TypeErrors stay loud.
+        if tuple(rest[:2]) not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES:
+            raise
+        _emit_public_command_failure(command, exc)
         return 4
 
 
