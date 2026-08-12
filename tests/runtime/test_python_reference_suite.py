@@ -22,8 +22,8 @@ class PythonReferenceSuiteArchitectureTests(unittest.TestCase):
         cls.contract, cls.catalog, cls.plan = load_plan(cls.repo)
 
     def test_plan_is_derived_from_q_catalog_and_has_one_meta_certifier(self) -> None:
-        self.assertEqual(len(self.catalog["families"]), 13)
-        self.assertEqual(len(self.plan), 14)
+        self.assertEqual(len(self.catalog["families"]), 14)
+        self.assertEqual(len(self.plan), 15)
         self.assertEqual(
             [row["family"] for row in self.plan[:-1]],
             [row["family"] for row in self.catalog["families"]],
@@ -31,6 +31,8 @@ class PythonReferenceSuiteArchitectureTests(unittest.TestCase):
         self.assertEqual(self.plan[-1]["family"], "fixture-golden-catalog")
         self.assertTrue(self.plan[-1]["meta"])
         self.assertTrue(all(not row["meta"] for row in self.plan[:-1]))
+        self.assertEqual(self.plan[-2]["family"], "core-legacy-route-reference")
+        self.assertEqual(self.plan[-2]["section"], "T")
 
     def test_every_planned_certifier_exists(self) -> None:
         for row in self.plan:
@@ -57,6 +59,21 @@ class PythonReferenceSuiteArchitectureTests(unittest.TestCase):
                 expected_nondeterministic=["timestamp", "temporary fixture path"],
                 meta=False,
             )
+
+    def test_family_report_validation_accepts_explicit_normalization_projection(self) -> None:
+        _validate_family_report(
+            report={
+                "ok": True,
+                "family": "core-legacy-route-reference",
+                "normalization": {
+                    "explicit_nondeterministic_fields": ["temporary fixture path"]
+                },
+            },
+            expected_family="core-legacy-route-reference",
+            expected_head="head",
+            expected_nondeterministic=["temporary fixture path"],
+            meta=False,
+        )
 
     def test_family_report_validation_rejects_duplicate_nondeterminism_declarations(self) -> None:
         with self.assertRaisesRegex(AssertionError, "duplicate nondeterministic field declaration"):
@@ -158,7 +175,8 @@ class PythonReferenceSuiteArchitectureTests(unittest.TestCase):
         self.assertTrue(execution["unexpected_nondeterminism_forbidden"])
         self.assertTrue(execution["missing_fixture_forbidden"])
         self.assertTrue(execution["contract_drift_forbidden"])
-        self.assertEqual(self.contract["expected_total_certifiers"], 14)
+        self.assertEqual(self.contract["expected_behavior_family_count"], 14)
+        self.assertEqual(self.contract["expected_total_certifiers"], 15)
         self.assertEqual(self.contract["expected_skipped"], 0)
 
 
