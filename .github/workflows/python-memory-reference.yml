@@ -37,6 +37,7 @@ jobs:
         run: python -m unittest tests.runtime.test_python_memory_reference -v
 
       - name: Generate exact-head Python memory reference evidence
+        if: always()
         run: |
           set +e
           python tools/certify_python_memory_reference.py \
@@ -58,9 +59,12 @@ jobs:
           assert value['family'] == 'memory-intelligence'
           assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
           assert len(value['routes']) == 15, value['routes']
-          assert value['exit_policy']['success'] == 0
-          assert value['exit_policy']['application_error'] == 4
-          assert value['exit_policy']['argument_parser_error'] == 2
+          assert value['exit_policy'] == {
+              'success': 0,
+              'integrity_failure': 3,
+              'application_error': 4,
+              'argument_parser_error': 2,
+          }
 
           session = value['session_memory']
           assert session['verified_before']['ok'] is True
