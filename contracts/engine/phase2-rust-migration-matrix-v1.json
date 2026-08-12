@@ -15,6 +15,7 @@
     "surface_contract": "contracts/engine/dual-engine-public-surface-v2.json",
     "remaining_authority": "tools/report_missing_native_public_routes.py",
     "ownership_probe_binary": "syntavra-remaining71-ownership",
+    "expected_rust_module_count": 150,
     "expected_promoted_native": 174,
     "expected_remaining": 71,
     "expected_remaining_owned": 71,
@@ -24,6 +25,7 @@
   "policy": {
     "hardcoded_remaining_route_list_forbidden": true,
     "route_identity_authority_single_source": true,
+    "combined_selector_and_lower_module_ownership_probe": true,
     "selector_ownership_is_not_behavioral_parity": true,
     "lower_rust_owner_module_must_be_resolved_before_section_a_closure": true,
     "old_family_certifications_are_not_final_head_certifications": true,
