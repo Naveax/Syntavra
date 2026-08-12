@@ -69,8 +69,8 @@
     }
   },
   "frozen_snapshots": {
-    "release_metadata_sha256": null,
-    "schema_registry_sha256": null
+    "release_metadata_sha256": "305ac3fe93935f740a7c28bdd775adf94d54346328cea2680cafa102c53a6f89",
+    "schema_registry_sha256": "9d8a6184762918ec5eb0c7898c8d76bf3e455f6fd80f00501be0f84b04487aa0"
   },
   "network_boundary": "offline repository metadata and temporary local registry fixtures only; no PyPI, npm, VS Code Marketplace, package registry, signing service, or credential use",
   "ownership_notes": {
