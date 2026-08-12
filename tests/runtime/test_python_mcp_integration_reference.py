@@ -37,7 +37,7 @@ class PythonMCPIntegrationReferenceTests(unittest.TestCase):
         self.assertEqual(stdio["ping_result"], {})
         self.assertEqual(stdio["tools_list"]["count"], 10)
         self.assertEqual(stdio["status_call"]["profile"], "minimal")
-        self.assertEqual(stdio["status_call"]["risk"], "low")
+        self.assertEqual(stdio["status_call"]["risk"], "read-or-plan")
         self.assertTrue(stdio["status_call"]["route_receipt_shape"])
         self.assertEqual(stdio["denied_call"], {"code": -32001, "reason": "tool-not-exposed"})
         self.assertEqual(stdio["unknown_method"], {"code": -32601, "message": "Method not found"})
