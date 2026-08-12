@@ -23,10 +23,14 @@ jobs:
           fetch-depth: 0
 
       - name: Run Python headless reference regression tests
-        run: python -m unittest tests.runtime.test_python_headless_reference -v
+        run: |
+          export GITHUB_SHA="$(git rev-parse HEAD)"
+          python -m unittest tests.runtime.test_python_headless_reference -v
 
       - name: Generate exact-head Python headless reference evidence
         run: |
+          checkout_head="$(git rev-parse HEAD)"
+          export GITHUB_SHA="$checkout_head"
           set +e
           python tools/certify_python_headless_reference.py \
             --output /tmp/python-headless-reference.json \
@@ -37,14 +41,15 @@ jobs:
           test -f /tmp/python-headless-reference.json
           python - <<'PY'
           import json
-          import os
+          import subprocess
           from pathlib import Path
 
           value = json.loads(Path('/tmp/python-headless-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           assert value['ok'] is True, value
           assert value['engine'] == 'python'
           assert value['family'] == 'headless'
-          assert value['exact_head'] == os.environ['GITHUB_SHA'], (value['exact_head'], os.environ['GITHUB_SHA'])
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
           assert len(value['routes']) == 8, value['routes']
           assert value['exit_policy'] == {
               'success': 0,
