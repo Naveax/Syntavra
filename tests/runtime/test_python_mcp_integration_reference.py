@@ -30,7 +30,7 @@ class PythonMCPIntegrationReferenceTests(unittest.TestCase):
     def test_stdio_jsonrpc_lifecycle_and_errors_are_frozen(self) -> None:
         stdio = self.report["stdio"]
         self.assertEqual(stdio["exit"], 0)
-        self.assertEqual(stdio["response_count"], 7)
+        self.assertEqual(stdio["response_count"], 10)
         self.assertEqual(stdio["notification_response_count"], 0)
         self.assertEqual(stdio["initialize"]["protocol_version"], "2025-06-18")
         self.assertEqual(stdio["initialize"]["server_info"], {"name": "syntavra", "version": "0.0.1"})
@@ -39,9 +39,15 @@ class PythonMCPIntegrationReferenceTests(unittest.TestCase):
         self.assertEqual(stdio["status_call"]["profile"], "minimal")
         self.assertEqual(stdio["status_call"]["risk"], "read-or-plan")
         self.assertTrue(stdio["status_call"]["route_receipt_shape"])
-        self.assertEqual(stdio["denied_call"], {"code": -32001, "reason": "tool-not-exposed"})
+        self.assertEqual(
+            stdio["denied_call"],
+            {"code": -32001, "reason": "tool-not-exposed-by-active-profile"},
+        )
         self.assertEqual(stdio["unknown_method"], {"code": -32601, "message": "Method not found"})
-        self.assertEqual(stdio["parse_error"]["code"], -32700)
+        self.assertEqual(stdio["parse_error"], {"code": -32700, "message": "Parse error"})
+        self.assertEqual(stdio["invalid_request"], {"code": -32600, "message": "Invalid Request"})
+        self.assertEqual(stdio["invalid_parameters"], {"code": -32602, "message": "Invalid params"})
+        self.assertEqual(stdio["post_error_ping_result"], {})
 
     def test_integration_registry_and_family_filters_are_deterministic(self) -> None:
         integrations = self.report["integrations"]
@@ -71,7 +77,9 @@ class PythonMCPIntegrationReferenceTests(unittest.TestCase):
             "offline stdio JSON-RPC and local registry fixtures only; no MCP socket/network transport or external service",
         )
         self.assertEqual(self.report["jsonrpc_errors"]["parse_error"], -32700)
+        self.assertEqual(self.report["jsonrpc_errors"]["invalid_request"], -32600)
         self.assertEqual(self.report["jsonrpc_errors"]["method_not_found"], -32601)
+        self.assertEqual(self.report["jsonrpc_errors"]["invalid_parameters"], -32602)
         self.assertEqual(self.report["jsonrpc_errors"]["policy_denied"], -32001)
         self.assertEqual(self.report["exit_policy"]["success"], 0)
         self.assertEqual(self.report["exit_policy"]["argparse_error"], 2)
