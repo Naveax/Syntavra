@@ -233,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return int(python_main(values))
-    except (ValueError, KeyError, GatewayError) as exc:
+    except (ValueError, KeyError, GatewayError, FileNotFoundError, PermissionError) as exc:
         _emit(
             {
                 "ok": False,
