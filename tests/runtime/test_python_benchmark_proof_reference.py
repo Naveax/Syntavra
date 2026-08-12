@@ -29,15 +29,36 @@ class PythonBenchmarkProofReferenceTests(unittest.TestCase):
 
     def test_signalbench_plan_gate_and_empty_state_are_deterministic(self) -> None:
         signalbench = self.report["signalbench"]
-        self.assertEqual(signalbench["plan"]["tasks"], 150)
-        self.assertEqual(signalbench["plan"]["required_pairs"], 4500)
+        plan = signalbench["plan"]
+        self.assertEqual(plan["corpus"], {"tasks": 150, "live": False})
+        self.assertEqual(plan["schedule"], {"runs": 27000, "repetitions": 30})
+        self.assertEqual(plan["manifest"]["task_count"], 150)
+        self.assertEqual(
+            plan["manifest"]["arm_ids"],
+            ["plain-baseline", "syntavra", "token-savior", "context-mode", "headroom", "volt-lcm"],
+        )
+        self.assertEqual(signalbench["pair_count"], 4500)
         self.assertEqual(signalbench["fixture_rows"], 9000)
         self.assertTrue(signalbench["gate"]["ok"])
-        self.assertEqual(signalbench["gate"]["metrics"]["pairs"], 4500)
+        self.assertEqual(signalbench["gate"]["claim"], "SUPERIORITY_PROVEN")
+        self.assertEqual(signalbench["gate"]["metrics"]["tasks"], 150)
+        self.assertEqual(signalbench["gate"]["metrics"]["repetitions"], 30)
+        self.assertEqual(signalbench["gate"]["metrics"]["success"], 1.0)
         self.assertEqual(signalbench["gate"]["metrics"]["token_ratio"], 0.1)
         self.assertEqual(signalbench["gate"]["metrics"]["wall_ratio"], 0.1)
         self.assertFalse(signalbench["empty"]["ok"])
-        self.assertIn("empty-results", signalbench["empty"]["reasons"])
+        self.assertEqual(
+            signalbench["empty"]["reasons"],
+            [
+                "insufficient-tasks",
+                "insufficient-repetitions",
+                "missing-required-arm",
+                "success-floor-missed",
+                "token-target-missed",
+                "wall-target-missed",
+                "paired-coverage-incomplete",
+            ],
+        )
 
     def test_proof_gate_statistics_and_ordering_are_frozen(self) -> None:
         proof = self.report["proof"]
@@ -59,12 +80,14 @@ class PythonBenchmarkProofReferenceTests(unittest.TestCase):
         self.assertFalse(empty["measured"]["ok"])
         self.assertFalse(empty["external"]["ok"])
         self.assertFalse(empty["integration"]["ok"])
-        self.assertEqual(self.report["proof"]["malformed_provider_raw"]["exit"], 4)
-        self.assertFalse(self.report["proof"]["malformed_provider_raw"]["stderr_nonempty"])
-        self.assertTrue(self.report["proof"]["malformed_provider_raw"]["json_object"])
-        self.assertEqual(self.report["proof"]["malformed_external_raw"]["exit"], 4)
-        self.assertFalse(self.report["proof"]["malformed_external_raw"]["stderr_nonempty"])
-        self.assertTrue(self.report["proof"]["malformed_external_raw"]["json_object"])
+        self.assertEqual(
+            self.report["proof"]["malformed_provider_raw"],
+            {"exit": 4, "stderr_nonempty": False, "json_object": True},
+        )
+        self.assertEqual(
+            self.report["proof"]["malformed_external_raw"],
+            {"exit": 4, "stderr_nonempty": False, "json_object": True},
+        )
 
     def test_claim_and_network_boundaries_are_not_overstated(self) -> None:
         self.assertEqual(
