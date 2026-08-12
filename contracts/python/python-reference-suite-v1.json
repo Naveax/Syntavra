@@ -8,8 +8,8 @@
       "path": "tools/certify_python_fixture_golden_catalog.py"
     }
   ],
-  "expected_behavior_family_count": 13,
-  "expected_total_certifiers": 14,
+  "expected_behavior_family_count": 14,
+  "expected_total_certifiers": 15,
   "expected_skipped": 0,
   "execution": {
     "python_only": true,
