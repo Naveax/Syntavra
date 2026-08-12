@@ -7,7 +7,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -22,37 +21,16 @@ from tools import report_python_public_execution_contract as execution_contract
 
 CONTRACT_RELATIVE = Path("contracts/python/core-legacy-route-reference-v1.json")
 CREDENTIAL_ENV = {
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "GOOGLE_API_KEY",
-    "GEMINI_API_KEY",
-    "AZURE_OPENAI_API_KEY",
-    "MISTRAL_API_KEY",
-    "COHERE_API_KEY",
-    "GROQ_API_KEY",
-    "TOGETHER_API_KEY",
-    "OPENROUTER_API_KEY",
-    "HF_TOKEN",
-    "HUGGING_FACE_HUB_TOKEN",
-    "NPM_TOKEN",
-    "NODE_AUTH_TOKEN",
-    "PYPI_TOKEN",
-    "TWINE_PASSWORD",
-    "TWINE_USERNAME",
-    "GITHUB_TOKEN",
-    "GH_TOKEN",
+    "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY",
+    "AZURE_OPENAI_API_KEY", "MISTRAL_API_KEY", "COHERE_API_KEY", "GROQ_API_KEY",
+    "TOGETHER_API_KEY", "OPENROUTER_API_KEY", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN",
+    "NPM_TOKEN", "NODE_AUTH_TOKEN", "PYPI_TOKEN", "TWINE_PASSWORD", "TWINE_USERNAME",
+    "GITHUB_TOKEN", "GH_TOKEN",
 }
-SAFE_BOOLEAN_DESTS = {"once", "dry_run", "no_wait", "non_interactive"}
+SAFE_BOOLEAN_DESTS = {"once", "dry_run", "no_wait", "non_interactive", "snapshot"}
 SAFE_BOUNDED_VALUE_DESTS = {
-    "limit",
-    "timeout",
-    "timeout_seconds",
-    "max_events",
-    "max_items",
-    "max_results",
-    "max_iterations",
-    "iterations",
-    "count",
+    "limit", "timeout", "timeout_seconds", "max_events", "max_items", "max_results",
+    "max_iterations", "iterations", "count",
 }
 DYNAMIC_PATH_PART = re.compile(
     r"(?:[0-9a-f]{64}|[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f-]{27,}|\d{10,})",
@@ -62,24 +40,16 @@ DYNAMIC_PATH_PART = re.compile(
 
 def _head(repo: Path) -> str:
     proc = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
     )
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
 
 def _git_status(repo: Path) -> str:
     proc = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all"],
-        cwd=repo,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
+        ["git", "status", "--porcelain", "--untracked-files=all"], cwd=repo,
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"git status failed: {proc.stderr.strip()}")
@@ -129,21 +99,17 @@ def _route_literals_from_certifier(path: Path, canonical: set[str]) -> set[str]:
         names = [target.id for target in targets if isinstance(target, ast.Name)]
         if not any("ROUTE" in name.upper() for name in names):
             continue
-        value = node.value
-        literals = _literal_string_collection(value) if value is not None else None
-        if literals is None:
-            continue
-        routes.update(item for item in literals if item in canonical)
+        literals = _literal_string_collection(node.value) if node.value is not None else None
+        if literals is not None:
+            routes.update(item for item in literals if item in canonical)
     return routes
 
 
 def _dp_explicit_routes(repo: Path, canonical: set[str]) -> tuple[set[str], list[dict[str, Any]]]:
-    catalog_path = repo / "contracts/python/fixture-golden-catalog-v1.json"
-    catalog = _read_json(catalog_path)
-    families = list(catalog.get("families") or [])
+    catalog = _read_json(repo / "contracts/python/fixture-golden-catalog-v1.json")
     routes: set[str] = set()
     rows: list[dict[str, Any]] = []
-    for row in families:
+    for row in list(catalog.get("families") or []):
         if not isinstance(row, dict):
             raise AssertionError(f"invalid fixture catalog family row: {row!r}")
         family = str(row.get("family") or "")
@@ -152,9 +118,8 @@ def _dp_explicit_routes(repo: Path, canonical: set[str]) -> tuple[set[str], list
             raise AssertionError(f"invalid fixture catalog certifier row: {row!r}")
         found = {item for item in _all_strings(row) if item in canonical}
         found.update(_route_literals_from_certifier(certifier, canonical))
-        contract_path = row.get("contract")
-        if contract_path:
-            static_contract = _read_json(repo / str(contract_path))
+        if row.get("contract"):
+            static_contract = _read_json(repo / str(row["contract"]))
             found.update(item for item in _all_strings(static_contract) if item in canonical)
         routes.update(found)
         rows.append({"family": family, "route_count": len(found), "routes": sorted(found)})
@@ -187,10 +152,7 @@ def _parser_leaf_index() -> dict[tuple[str, str], tuple[argparse.ArgumentParser,
                 if not prefix and name in skip_top_level:
                     continue
                 visit(
-                    source,
-                    child,
-                    prefix=(*prefix, name),
-                    lineage=active_lineage,
+                    source, child, prefix=(*prefix, name), lineage=active_lineage,
                     skip_top_level=skip_top_level,
                 )
 
@@ -208,8 +170,7 @@ def _seed_fixture(project: Path, state: Path, home: Path) -> dict[str, Path]:
     syntavra.mkdir(exist_ok=True)
     (project / "README.md").write_text("# fixture\n", encoding="utf-8")
     (project / "sample.py").write_text(
-        "def fixture(value: int = 1) -> int:\n    return value + 1\n",
-        encoding="utf-8",
+        "def fixture(value: int = 1) -> int:\n    return value + 1\n", encoding="utf-8"
     )
     (project / "input.txt").write_text("fixture input\n", encoding="utf-8")
     (project / "payload.json").write_text("{}\n", encoding="utf-8")
@@ -219,14 +180,9 @@ def _seed_fixture(project: Path, state: Path, home: Path) -> dict[str, Path]:
         connection.execute("CREATE TABLE IF NOT EXISTS fixture (id INTEGER PRIMARY KEY, value TEXT)")
         connection.commit()
     return {
-        "project": project,
-        "state": state,
-        "home": home,
-        "database": database,
-        "sample": project / "sample.py",
-        "input": project / "input.txt",
-        "payload": project / "payload.json",
-        "output": project / "output.json",
+        "project": project, "state": state, "home": home, "database": database,
+        "sample": project / "sample.py", "input": project / "input.txt",
+        "payload": project / "payload.json", "output": project / "output.json",
         "config": syntavra / "config.toml",
     }
 
@@ -236,9 +192,7 @@ def _first_choice(action: argparse.Action) -> str | None:
     if choices is None:
         return None
     values = list(choices)
-    if not values:
-        return None
-    return str(values[0])
+    return str(values[0]) if values else None
 
 
 def _placeholder(action: argparse.Action, fixture: dict[str, Path]) -> str:
@@ -277,11 +231,7 @@ def _placeholder(action: argparse.Action, fixture: dict[str, Path]) -> str:
         return '["python","-c","print(1)"]'
     if dest in {"command", "cmd"}:
         return "true"
-    if "query" in dest:
-        return "fixture"
-    if "symbol" in dest:
-        return "fixture"
-    if "pattern" in dest or "regex" in dest:
+    if "query" in dest or "symbol" in dest or "pattern" in dest or "regex" in dest:
         return "fixture"
     if "host" in dest:
         return "codex"
@@ -310,19 +260,15 @@ def _minimum_extra_args(
     lineage: tuple[argparse.ArgumentParser, ...], fixture: dict[str, Path]
 ) -> tuple[list[str], list[dict[str, Any]]]:
     selected_group_actions: set[int] = set()
-    required_group_actions: list[argparse.Action] = []
     for parser in lineage:
         for group in parser._mutually_exclusive_groups:
             if not group.required:
                 continue
             candidates = [
-                action
-                for action in group._group_actions
-                if not isinstance(action, argparse._SubParsersAction)
-                and not isinstance(action, argparse._HelpAction)
+                action for action in group._group_actions
+                if not isinstance(action, (argparse._SubParsersAction, argparse._HelpAction))
             ]
             if candidates:
-                required_group_actions.append(candidates[0])
                 selected_group_actions.add(id(candidates[0]))
 
     actions: list[argparse.Action] = []
@@ -347,17 +293,15 @@ def _minimum_extra_args(
         )
         if not required and not safe_optional:
             continue
-
-        row = {
-            "dest": str(action.dest),
-            "option_strings": list(action.option_strings),
-            "required": required,
-            "safe_optional": safe_optional,
-            "nargs": getattr(action, "nargs", None),
-            "choices": [str(item) for item in list(action.choices)] if getattr(action, "choices", None) is not None else None,
-        }
-        metadata.append(row)
-
+        metadata.append(
+            {
+                "dest": str(action.dest), "option_strings": list(action.option_strings),
+                "required": required, "safe_optional": safe_optional,
+                "nargs": getattr(action, "nargs", None),
+                "choices": [str(item) for item in list(action.choices)]
+                if getattr(action, "choices", None) is not None else None,
+            }
+        )
         if isinstance(action, argparse._StoreTrueAction):
             if action.option_strings:
                 extras.append(action.option_strings[0])
@@ -374,15 +318,6 @@ def _minimum_extra_args(
             extras.extend(values or [_placeholder(action, fixture)])
         else:
             extras.extend(values)
-
-    for action in required_group_actions:
-        if id(action) in {id(item) for item in actions}:
-            continue
-        # Defensive only; group actions normally appear in parser._actions.
-        if action.option_strings:
-            extras.append(action.option_strings[0])
-            if not isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction)):
-                extras.append(_placeholder(action, fixture))
     return extras, metadata
 
 
@@ -393,34 +328,20 @@ def _isolated_env(repo: Path, fixture: dict[str, Path], contract: dict[str, Any]
     env.pop("GITHUB_SHA", None)
     home = fixture["home"]
     xdg = home / ".xdg"
-    cache = xdg / "cache"
-    config = xdg / "config"
-    data = xdg / "data"
-    for path in (cache, config, data):
+    for path in (xdg / "cache", xdg / "config", xdg / "data"):
         path.mkdir(parents=True, exist_ok=True)
     sink = str(contract["execution"]["external_http_proxy_sink"])
     no_proxy = str(contract["execution"]["localhost_no_proxy"])
     env.update(
         {
-            "PYTHONPATH": str(repo),
-            "PYTHONIOENCODING": "utf-8",
-            "PYTHONUTF8": "1",
-            "HOME": str(home),
-            "USERPROFILE": str(home),
-            "XDG_CACHE_HOME": str(cache),
-            "XDG_CONFIG_HOME": str(config),
-            "XDG_DATA_HOME": str(data),
-            "HTTP_PROXY": sink,
-            "HTTPS_PROXY": sink,
-            "ALL_PROXY": sink,
-            "http_proxy": sink,
-            "https_proxy": sink,
-            "all_proxy": sink,
-            "NO_PROXY": no_proxy,
-            "no_proxy": no_proxy,
-            "PIP_NO_INDEX": "1",
-            "UV_OFFLINE": "1",
-            "npm_config_offline": "true",
+            "PYTHONPATH": str(repo), "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+            "HOME": str(home), "USERPROFILE": str(home),
+            "XDG_CACHE_HOME": str(xdg / "cache"), "XDG_CONFIG_HOME": str(xdg / "config"),
+            "XDG_DATA_HOME": str(xdg / "data"),
+            "HTTP_PROXY": sink, "HTTPS_PROXY": sink, "ALL_PROXY": sink,
+            "http_proxy": sink, "https_proxy": sink, "all_proxy": sink,
+            "NO_PROXY": no_proxy, "no_proxy": no_proxy,
+            "PIP_NO_INDEX": "1", "UV_OFFLINE": "1", "npm_config_offline": "true",
         }
     )
     return env
@@ -445,29 +366,19 @@ def _snapshot_files(fixture: dict[str, Path]) -> dict[str, str]:
 
 
 def _normalize_effect_path(value: str) -> str:
-    parts = value.split("/")
-    return "/".join(DYNAMIC_PATH_PART.sub("<dynamic>", part) for part in parts)
+    return "/".join(DYNAMIC_PATH_PART.sub("<dynamic>", part) for part in value.split("/"))
 
 
 def _filesystem_delta(before: dict[str, str], after: dict[str, str]) -> dict[str, Any]:
-    before_keys = set(before)
-    after_keys = set(after)
+    before_keys, after_keys = set(before), set(after)
     created = sorted({_normalize_effect_path(item) for item in after_keys - before_keys})
     deleted = sorted({_normalize_effect_path(item) for item in before_keys - after_keys})
-    modified = sorted(
-        {
-            _normalize_effect_path(item)
-            for item in before_keys & after_keys
-            if before[item] != after[item]
-        }
-    )
+    modified = sorted({
+        _normalize_effect_path(item) for item in before_keys & after_keys if before[item] != after[item]
+    })
     return {
-        "created": created,
-        "modified": modified,
-        "deleted": deleted,
-        "created_count": len(created),
-        "modified_count": len(modified),
-        "deleted_count": len(deleted),
+        "created": created, "modified": modified, "deleted": deleted,
+        "created_count": len(created), "modified_count": len(modified), "deleted_count": len(deleted),
     }
 
 
@@ -497,66 +408,38 @@ def _output_projection(stdout: str, stderr: str, exit_code: int | None, timed_ou
     if isinstance(stdout_value, dict):
         error = stdout_value.get("error")
         if isinstance(error, dict):
-            if isinstance(error.get("code"), str):
-                error_code = error["code"]
-            if isinstance(error.get("type"), str):
-                error_type = error["type"]
+            error_code = error.get("code") if isinstance(error.get("code"), str) else None
+            error_type = error.get("type") if isinstance(error.get("type"), str) else None
             details = error.get("details")
             if error_type is None and isinstance(details, dict) and isinstance(details.get("type"), str):
                 error_type = details["type"]
     traceback_present = "traceback (most recent call last)" in (stdout + "\n" + stderr).casefold()
     return {
-        "exit": exit_code,
-        "timed_out": timed_out,
-        "stdout_format": stdout_format,
-        "stderr_format": stderr_format,
-        "stdout_top_level_keys": top_keys,
-        "ok": ok_value,
-        "error_code": error_code,
-        "error_type": error_type,
+        "exit": exit_code, "timed_out": timed_out, "stdout_format": stdout_format,
+        "stderr_format": stderr_format, "stdout_top_level_keys": top_keys,
+        "ok": ok_value, "error_code": error_code, "error_type": error_type,
         "traceback_present": traceback_present,
     }
 
 
 def _invoke(
-    repo: Path,
-    fixture: dict[str, Path],
-    argv: list[str],
-    contract: dict[str, Any],
+    repo: Path, fixture: dict[str, Path], argv: list[str], contract: dict[str, Any]
 ) -> tuple[dict[str, Any], str, str]:
     command = [
-        sys.executable,
-        "-m",
-        "syntavra_runtime.engine_entry",
-        "--engine",
-        "python",
-        "--project",
-        str(fixture["project"]),
-        "--state-root",
-        str(fixture["state"]),
-        *argv,
+        sys.executable, "-m", "syntavra_runtime.engine_entry", "--engine", "python",
+        "--project", str(fixture["project"]), "--state-root", str(fixture["state"]), *argv,
     ]
     try:
         proc = subprocess.run(
-            command,
-            cwd=repo,
-            env=_isolated_env(repo, fixture, contract),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=float(contract["execution"]["per_invocation_timeout_seconds"]),
-            check=False,
+            command, cwd=repo, env=_isolated_env(repo, fixture, contract), stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+            timeout=float(contract["execution"]["per_invocation_timeout_seconds"]), check=False,
         )
-        projection = _output_projection(proc.stdout, proc.stderr, proc.returncode, False)
-        return projection, proc.stdout, proc.stderr
+        return _output_projection(proc.stdout, proc.stderr, proc.returncode, False), proc.stdout, proc.stderr
     except subprocess.TimeoutExpired as exc:
         stdout = exc.stdout if isinstance(exc.stdout, str) else ""
         stderr = exc.stderr if isinstance(exc.stderr, str) else ""
-        projection = _output_projection(stdout, stderr, None, True)
-        return projection, stdout, stderr
+        return _output_projection(stdout, stderr, None, True), stdout, stderr
 
 
 def _route_contract_row(
@@ -572,7 +455,6 @@ def _route_contract_row(
     parser_owned = bool(execution_row.get("parser_owned"))
     route_root = root / hashlib.sha256(route.encode("utf-8")).hexdigest()[:16]
     fixture = _seed_fixture(route_root / "project", route_root / "state", route_root / "home")
-
     extras: list[str] = []
     parser_metadata: list[dict[str, Any]] = []
     if parser_owned:
@@ -596,41 +478,29 @@ def _route_contract_row(
         errors.append("minimum execution timed out")
     if first["traceback_present"] or second["traceback_present"]:
         errors.append("minimum execution exposed a Python traceback")
-    if parser_owned and (first["exit"] == 2 or second["exit"] == 2):
-        errors.append("synthesized parser-valid minimum invocation exited argparse code 2")
+    if parser_owned and (
+        (first["exit"] == 2 and first["stderr_format"] == "argparse-usage-error")
+        or (second["exit"] == 2 and second["stderr_format"] == "argparse-usage-error")
+    ):
+        errors.append("synthesized parser-valid minimum invocation reached argparse error exit 2")
 
     repeat_same_shape = {
         key: first.get(key) == second.get(key)
         for key in (
-            "exit",
-            "stdout_format",
-            "stderr_format",
-            "stdout_top_level_keys",
-            "ok",
-            "error_code",
-            "error_type",
+            "exit", "stdout_format", "stderr_format", "stdout_top_level_keys",
+            "ok", "error_code", "error_type",
         )
     }
-    return (
-        {
-            "route": route,
-            "source": source,
-            "entrypoint": execution_row.get("entrypoint"),
-            "parser_owned": parser_owned,
-            "success_exit_contract": execution_row.get("success_exit"),
-            "parser_error_exit_contract": execution_row.get("parser_error_exit"),
-            "minimum_argv": argv,
-            "synthesized_actions": parser_metadata,
-            "first": first,
-            "second": second,
-            "first_filesystem_delta": first_delta,
-            "second_filesystem_delta": second_delta,
-            "repeat_same_shape": repeat_same_shape,
-            "stdout_bytes": [len(first_stdout.encode("utf-8")), len(second_stdout.encode("utf-8"))],
-            "stderr_bytes": [len(first_stderr.encode("utf-8")), len(second_stderr.encode("utf-8"))],
-        },
-        errors,
-    )
+    return ({
+        "route": route, "source": source, "entrypoint": execution_row.get("entrypoint"),
+        "parser_owned": parser_owned, "success_exit_contract": execution_row.get("success_exit"),
+        "parser_error_exit_contract": execution_row.get("parser_error_exit"), "minimum_argv": argv,
+        "synthesized_actions": parser_metadata, "first": first, "second": second,
+        "first_filesystem_delta": first_delta, "second_filesystem_delta": second_delta,
+        "repeat_same_shape": repeat_same_shape,
+        "stdout_bytes": [len(first_stdout.encode("utf-8")), len(second_stdout.encode("utf-8"))],
+        "stderr_bytes": [len(first_stderr.encode("utf-8")), len(second_stderr.encode("utf-8"))],
+    }, errors)
 
 
 def _strict_hash(contract: dict[str, Any], key: str, observed: str) -> None:
@@ -676,8 +546,7 @@ def certify(repo: Path) -> dict[str, Any]:
     execution_by_route = {row["route"]: row for row in execution["python"]["manifest"]}
     source_counts: dict[str, int] = {}
     for route in targets:
-        row = execution_by_route[route]
-        sources = list(row.get("sources") or [])
+        sources = list(execution_by_route[route].get("sources") or [])
         if len(sources) != 1:
             raise AssertionError(f"target route does not have one source: {route} -> {sources}")
         source = str(sources[0])
@@ -693,12 +562,7 @@ def certify(repo: Path) -> dict[str, Any]:
         root = Path(temp_name)
         for route in targets:
             row, errors = _route_contract_row(
-                repo,
-                route,
-                execution_by_route[route],
-                parser_index,
-                root,
-                contract,
+                repo, route, execution_by_route[route], parser_index, root, contract
             )
             rows.append(row)
             if errors:
@@ -708,37 +572,21 @@ def certify(repo: Path) -> dict[str, Any]:
     if not repository_status_preserved:
         failures.append({"route": "<repository>", "errors": ["repository status changed during certification"]})
 
-    route_contract_projection = [
-        {
-            "route": row["route"],
-            "source": row["source"],
-            "parser_owned": row["parser_owned"],
-            "success_exit_contract": row["success_exit_contract"],
-            "parser_error_exit_contract": row["parser_error_exit_contract"],
-            "synthesized_actions": row["synthesized_actions"],
-            "first": row["first"],
-            "second": row["second"],
-            "repeat_same_shape": row["repeat_same_shape"],
-        }
-        for row in rows
-    ]
-    side_effect_projection = [
-        {
-            "route": row["route"],
-            "first": row["first_filesystem_delta"],
-            "second": row["second_filesystem_delta"],
-        }
-        for row in rows
-    ]
-    idempotency_projection = [
-        {
-            "route": row["route"],
-            "repeat_same_shape": row["repeat_same_shape"],
-            "first_exit": row["first"]["exit"],
-            "second_exit": row["second"]["exit"],
-        }
-        for row in rows
-    ]
+    route_contract_projection = [{
+        "route": row["route"], "source": row["source"], "parser_owned": row["parser_owned"],
+        "success_exit_contract": row["success_exit_contract"],
+        "parser_error_exit_contract": row["parser_error_exit_contract"],
+        "synthesized_actions": row["synthesized_actions"], "first": row["first"],
+        "second": row["second"], "repeat_same_shape": row["repeat_same_shape"],
+    } for row in rows]
+    side_effect_projection = [{
+        "route": row["route"], "first": row["first_filesystem_delta"],
+        "second": row["second_filesystem_delta"],
+    } for row in rows]
+    idempotency_projection = [{
+        "route": row["route"], "repeat_same_shape": row["repeat_same_shape"],
+        "first_exit": row["first"]["exit"], "second_exit": row["second"]["exit"],
+    } for row in rows]
     route_contract_sha = _semantic_sha(route_contract_projection)
     side_effect_sha = _semantic_sha(side_effect_projection)
     idempotency_sha = _semantic_sha(idempotency_projection)
@@ -746,29 +594,17 @@ def certify(repo: Path) -> dict[str, Any]:
     _strict_hash(contract, "expected_side_effect_sha256", side_effect_sha)
     _strict_hash(contract, "expected_idempotency_sha256", idempotency_sha)
 
-    ok = not failures
     return {
-        "ok": ok,
-        "schema_version": 1,
-        "family": "core-legacy-route-reference",
-        "engine": "python",
-        "phase": "T",
-        "claim": contract["claim"],
-        "strict": bool(contract["strict"]),
-        "exact_head": exact_head,
-        "canonical_route_count": len(canonical),
-        "dp_explicit_route_count": len(dp_routes),
-        "target_route_count": len(targets),
-        "source_counts": source_counts,
-        "dp_family_route_coverage": dp_rows,
-        "target_routes": targets,
-        "normalization": contract["normalization"],
-        "routes": rows,
-        "failure_count": len(failures),
-        "failures": failures,
+        "ok": not failures, "schema_version": 1, "family": "core-legacy-route-reference",
+        "engine": "python", "phase": "T", "claim": contract["claim"],
+        "strict": bool(contract["strict"]), "exact_head": exact_head,
+        "canonical_route_count": len(canonical), "dp_explicit_route_count": len(dp_routes),
+        "target_route_count": len(targets), "source_counts": source_counts,
+        "dp_family_route_coverage": dp_rows, "target_routes": targets,
+        "normalization": contract["normalization"], "routes": rows,
+        "failure_count": len(failures), "failures": failures,
         "repository_status_preserved": repository_status_preserved,
-        "repository_clean_before": pre_status == "",
-        "repository_clean_after": post_status == "",
+        "repository_clean_before": pre_status == "", "repository_clean_after": post_status == "",
         "derived_hashes": {
             "route_contract_sha256": route_contract_sha,
             "side_effect_sha256": side_effect_sha,
@@ -789,14 +625,9 @@ def main() -> int:
         result = certify(repo)
     except Exception as exc:
         result = {
-            "ok": False,
-            "schema_version": 1,
-            "family": "core-legacy-route-reference",
-            "engine": "python",
-            "phase": "T",
-            "exact_head": _head(repo),
-            "error": f"{type(exc).__name__}: {exc}",
-            "traceback": traceback.format_exc(),
+            "ok": False, "schema_version": 1, "family": "core-legacy-route-reference",
+            "engine": "python", "phase": "T", "exact_head": _head(repo),
+            "error": f"{type(exc).__name__}: {exc}", "traceback": traceback.format_exc(),
         }
     rendered = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)
     if args.output:
