@@ -283,6 +283,7 @@ def run_suite(repo: Path, artifact_dir: Path) -> dict[str, Any]:
             status = "passed"
             passed += 1
         except subprocess.TimeoutExpired as exc:
+            timed_out = True
             reason = f"TimeoutExpired: certifier exceeded {timeout_seconds}s"
             exit_code = None
             stdout_path.write_text((exc.stdout or "") if isinstance(exc.stdout, str) else "", encoding="utf-8")
@@ -310,7 +311,7 @@ def run_suite(repo: Path, artifact_dir: Path) -> dict[str, Any]:
             "status": status,
             "certifier": row["certifier"],
             "exit_code": exit_code,
-            "timed_out": False,
+            "timed_out": timed_out,
             "artifact_sha256": hashlib.sha256(json_path.read_bytes()).hexdigest() if json_exists else None,
             "reason": reason,
         }
