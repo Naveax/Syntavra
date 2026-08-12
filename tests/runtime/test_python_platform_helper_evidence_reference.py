@@ -21,7 +21,14 @@ class PythonPlatformHelperEvidenceReferenceTests(unittest.TestCase):
 
     def test_platform_compatibility_identity_and_manifest_are_frozen(self) -> None:
         platform = self.report["platform"]
-        self.assertTrue(platform["compatibility_exact"])
+        self.assertTrue(platform["compatibility_stable_projection_exact"])
+        self.assertEqual(
+            platform["compatibility_normalization"],
+            [
+                "c_sharp/csharp tree-sitter alias canonicalization delegated to F",
+                "sandbox backend detail/command-prefix/probe-cache delegated to J",
+            ],
+        )
         self.assertEqual(platform["product"], "Syntavra")
         self.assertEqual(platform["version"], "0.0.1")
         self.assertEqual(platform["channel"], "pre-release")
@@ -31,7 +38,7 @@ class PythonPlatformHelperEvidenceReferenceTests(unittest.TestCase):
 
     def test_output_artifact_exact_recovery_and_durable_state_are_frozen(self) -> None:
         artifacts = self.report["artifacts"]
-        self.assertEqual(artifacts["capture_kind"], "test")
+        self.assertEqual(artifacts["capture_kind"], "terminal")
         self.assertTrue(artifacts["capture_exact_recovery"])
         self.assertEqual(artifacts["errors_matched"], 1)
         self.assertEqual(artifacts["artifact_stats"]["artifacts"], 2)
