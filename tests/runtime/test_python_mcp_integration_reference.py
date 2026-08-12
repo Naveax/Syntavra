@@ -61,15 +61,17 @@ class PythonMCPIntegrationReferenceTests(unittest.TestCase):
 
     def test_route_policy_freezes_profile_authorization_and_unknown_tool_behavior(self) -> None:
         route = self.report["route_policy"]
-        self.assertTrue(route["minimal_status"]["allowed"])
-        self.assertEqual(route["minimal_status"]["reason"], "policy-allowed")
-        self.assertFalse(route["minimal_execute_denied"]["allowed"])
-        self.assertEqual(route["minimal_execute_denied"]["reason"], "tool-not-in-active-profile")
+        self.assertTrue(route["minimal_read"]["allowed"])
+        self.assertEqual(route["minimal_read"]["reason"], "policy-allowed")
+        self.assertEqual(route["minimal_read"]["category"], "read")
+        self.assertFalse(route["unsafe_execute_denied"]["allowed"])
+        self.assertEqual(route["unsafe_execute_denied"]["reason"], "sandbox-required")
         self.assertFalse(route["balanced_execute_no_auth"]["allowed"])
         self.assertEqual(route["balanced_execute_no_auth"]["reason"], "explicit-user-authorization-required")
         self.assertTrue(route["balanced_execute_allowed"]["allowed"])
         self.assertEqual(route["balanced_execute_allowed"]["category"], "execute")
         self.assertFalse(route["unknown_tool"]["allowed"])
+        self.assertEqual(route["unknown_tool"]["reason"], "unknown-tool-fail-closed")
 
     def test_certification_is_offline_and_error_codes_are_explicit(self) -> None:
         self.assertEqual(
