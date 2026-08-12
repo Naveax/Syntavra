@@ -23,8 +23,9 @@ class Phase2RustMigrationMatrixTests(unittest.TestCase):
             "tools/report_missing_native_public_routes.py",
         )
 
-    def test_frozen_entry_counts_are_245_174_71(self) -> None:
+    def test_frozen_entry_counts_are_245_174_71_with_150_rust_modules(self) -> None:
         self.assertEqual(self.contract["python_reference"]["expected_public_route_count"], 245)
+        self.assertEqual(self.contract["rust_baseline"]["expected_rust_module_count"], 150)
         self.assertEqual(self.contract["rust_baseline"]["expected_promoted_native"], 174)
         self.assertEqual(self.contract["rust_baseline"]["expected_remaining"], 71)
         self.assertEqual(self.contract["rust_baseline"]["expected_remaining_owned"], 71)
@@ -35,6 +36,9 @@ class Phase2RustMigrationMatrixTests(unittest.TestCase):
         rust = self.contract["rust_baseline"]
         self.assertEqual(rust["ownership_probe_binary"], "syntavra-remaining71-ownership")
         self.assertNotIn("module_ownership_probe_binary", rust)
+        self.assertTrue(
+            self.contract["policy"]["combined_selector_and_lower_module_ownership_probe"]
+        )
         self.assertTrue(
             self.contract["policy"]["lower_rust_owner_module_must_be_resolved_before_section_a_closure"]
         )
