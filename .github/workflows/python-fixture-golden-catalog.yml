@@ -1,0 +1,91 @@
+name: Python Fixture Golden Catalog
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-fixture-golden-catalog
+  cancel-in-progress: true
+
+jobs:
+  python-fixture-golden-catalog:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run fixture/golden catalog regression
+        run: python -m unittest tests.runtime.test_python_fixture_golden_catalog -v
+
+      - name: Generate exact-head fixture/golden catalog evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_fixture_golden_catalog.py \
+            --output /tmp/python-fixture-golden-catalog.json \
+            > /tmp/python-fixture-golden-catalog.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-fixture-golden-catalog.log
+          test -f /tmp/python-fixture-golden-catalog.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-fixture-golden-catalog.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'fixture-golden-catalog'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['canonical_public_route_count'] == 245
+          assert value['family_count'] == 13
+          assert value['fixture_case_count'] == 65
+          assert value['coverage'] == {'covered': 59, 'not_applicable': 6, 'missing': 0}
+          assert value['deterministic_snapshot_count'] == 13
+          assert value['static_contract_count'] == 9
+          assert value['inline_static_family_count'] == 4
+          assert value['rust_python_required'] is False
+          assert len(value['catalog_file_sha256']) == 64
+          assert len(value['catalog_semantic_sha256']) == 64
+          assert all(row['python_required_by_rust'] is False for row in value['family_summaries'])
+          PY
+          exit "$report_exit"
+
+      - name: Upload fixture/golden catalog evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-fixture-golden-catalog
+          path: |
+            /tmp/python-fixture-golden-catalog.json
+            /tmp/python-fixture-golden-catalog.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
