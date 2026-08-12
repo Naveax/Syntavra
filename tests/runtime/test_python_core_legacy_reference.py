@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,7 @@ from tools.certify_python_core_legacy_reference import (
     _dp_explicit_routes,
     _parser_leaf_index,
     _read_json,
+    _strict_hash,
 )
 
 
@@ -72,16 +74,39 @@ class PythonCoreLegacyReferenceArchitectureTests(unittest.TestCase):
             with self.assertRaisesRegex(BackupError, "invalid encrypted backup"):
                 manager.verify(source, encrypted=True)
 
-    def test_bootstrap_hash_policy_is_fail_closed_when_promoted(self) -> None:
-        self.assertFalse(self.contract["strict"])
-        self.assertEqual(
-            self.contract["derived_freeze"],
-            {
-                "expected_route_contract_sha256": None,
-                "expected_side_effect_sha256": None,
-                "expected_idempotency_sha256": None,
-            },
-        )
+    def test_bootstrap_hash_policy_allows_discovery_but_strict_requires_hashes(self) -> None:
+        bootstrap = copy.deepcopy(self.contract)
+        bootstrap["strict"] = False
+        for key in bootstrap["derived_freeze"]:
+            bootstrap["derived_freeze"][key] = None
+            _strict_hash(bootstrap, key, "0" * 64)
+
+        strict = copy.deepcopy(bootstrap)
+        strict["strict"] = True
+        for key in strict["derived_freeze"]:
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(AssertionError, "strict core/legacy reference missing hash"):
+                    _strict_hash(strict, key, "0" * 64)
+
+    def test_current_strict_contract_is_complete_when_promoted(self) -> None:
+        if not self.contract["strict"]:
+            self.skipTest("core/legacy reference remains in bootstrap mode")
+        self.assertEqual(self.contract["claim"], "CORE_LEGACY_ROUTE_REFERENCE_FROZEN")
+        for key, value in self.contract["derived_freeze"].items():
+            with self.subTest(key=key):
+                self.assertIsInstance(value, str)
+                self.assertEqual(len(value), 64)
+                _strict_hash(self.contract, key, value)
+
+    def test_strict_hash_mismatch_fails_closed(self) -> None:
+        strict = copy.deepcopy(self.contract)
+        strict["strict"] = True
+        key = "expected_route_contract_sha256"
+        strict["derived_freeze"][key] = "1" * 64
+        with self.assertRaisesRegex(AssertionError, "core/legacy reference drift"):
+            _strict_hash(strict, key, "2" * 64)
+
+    def test_rust_promotion_remains_blocked(self) -> None:
         self.assertFalse(self.contract["rust_native_promotion_credit"])
         self.assertEqual(self.contract["frozen_rust_native_count"], 174)
 
