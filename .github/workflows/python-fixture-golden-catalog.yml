@@ -58,11 +58,11 @@ jobs:
           assert value['family'] == 'fixture-golden-catalog'
           assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
           assert value['canonical_public_route_count'] == 245
-          assert value['family_count'] == 13
-          assert value['fixture_case_count'] == 65
-          assert value['coverage'] == {'covered': 59, 'not_applicable': 6, 'missing': 0}
-          assert value['deterministic_snapshot_count'] == 13
-          assert value['static_contract_count'] == 9
+          assert value['family_count'] == 14
+          assert value['fixture_case_count'] == 70
+          assert value['coverage'] == {'covered': 64, 'not_applicable': 6, 'missing': 0}
+          assert value['deterministic_snapshot_count'] == 14
+          assert value['static_contract_count'] == 10
           assert value['inline_static_family_count'] == 4
           assert value['rust_python_required'] is False
           assert len(value['catalog_file_sha256']) == 64
