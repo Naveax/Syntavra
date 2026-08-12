@@ -14,31 +14,17 @@ mod native_product;
 // Remaining-71 family modules' supports() predicates. These support modules do
 // not define route identity; route identities still come only from the
 // parser-derived inventory report supplied at runtime.
-#[path = "../state_snapshot_contract.rs"]
-mod state_snapshot_contract;
+#[path = "../native_artifact_store.rs"]
+mod native_artifact_store;
 #[path = "../native_backup.rs"]
 mod native_backup;
 #[path = "../native_evidence_store.rs"]
 mod native_evidence_store;
-#[path = "../native_artifact_store.rs"]
-mod native_artifact_store;
 #[path = "../native_structural.rs"]
 mod native_structural;
+#[path = "../state_snapshot_contract.rs"]
+mod state_snapshot_contract;
 
-#[path = "../native_remaining71_memory.rs"]
-mod native_remaining71_memory;
-#[path = "../native_remaining71_platform_misc.rs"]
-mod native_remaining71_platform_misc;
-#[path = "../native_remaining71_security.rs"]
-mod native_remaining71_security;
-#[path = "../native_remaining71_sandbox.rs"]
-mod native_remaining71_sandbox;
-#[path = "../native_remaining71_proxy.rs"]
-mod native_remaining71_proxy;
-#[path = "../native_remaining71_proof.rs"]
-mod native_remaining71_proof;
-#[path = "../native_remaining71_graph.rs"]
-mod native_remaining71_graph;
 #[path = "../native_remaining71_agent.rs"]
 mod native_remaining71_agent;
 #[path = "../native_remaining71_agent_live.rs"]
@@ -47,8 +33,22 @@ mod native_remaining71_agent_live;
 mod native_remaining71_competitive;
 #[path = "../native_remaining71_context.rs"]
 mod native_remaining71_context;
+#[path = "../native_remaining71_graph.rs"]
+mod native_remaining71_graph;
 #[path = "../native_remaining71_headless.rs"]
 mod native_remaining71_headless;
+#[path = "../native_remaining71_memory.rs"]
+mod native_remaining71_memory;
+#[path = "../native_remaining71_platform_misc.rs"]
+mod native_remaining71_platform_misc;
+#[path = "../native_remaining71_proof.rs"]
+mod native_remaining71_proof;
+#[path = "../native_remaining71_proxy.rs"]
+mod native_remaining71_proxy;
+#[path = "../native_remaining71_sandbox.rs"]
+mod native_remaining71_sandbox;
+#[path = "../native_remaining71_security.rs"]
+mod native_remaining71_security;
 
 const EXPECTED_PUBLIC_ROUTE_COUNT: u64 = 245;
 const EXPECTED_NATIVE_ROUTE_COUNT: u64 = 174;
@@ -67,7 +67,10 @@ fn selector_path(route: &str) -> Vec<String> {
 
 fn remaining71_owner_modules(command: &[String]) -> Vec<&'static str> {
     let candidates: [(&str, fn(&[String]) -> bool); 12] = [
-        ("native_remaining71_memory", native_remaining71_memory::supports),
+        (
+            "native_remaining71_memory",
+            native_remaining71_memory::supports,
+        ),
         (
             "native_remaining71_platform_misc",
             native_remaining71_platform_misc::supports,
@@ -80,10 +83,22 @@ fn remaining71_owner_modules(command: &[String]) -> Vec<&'static str> {
             "native_remaining71_sandbox",
             native_remaining71_sandbox::supports,
         ),
-        ("native_remaining71_proxy", native_remaining71_proxy::supports),
-        ("native_remaining71_proof", native_remaining71_proof::supports),
-        ("native_remaining71_graph", native_remaining71_graph::supports),
-        ("native_remaining71_agent", native_remaining71_agent::supports),
+        (
+            "native_remaining71_proxy",
+            native_remaining71_proxy::supports,
+        ),
+        (
+            "native_remaining71_proof",
+            native_remaining71_proof::supports,
+        ),
+        (
+            "native_remaining71_graph",
+            native_remaining71_graph::supports,
+        ),
+        (
+            "native_remaining71_agent",
+            native_remaining71_agent::supports,
+        ),
         (
             "native_remaining71_agent_live",
             native_remaining71_agent_live::supports,
