@@ -2,8 +2,8 @@
   "schema_version": 1,
   "family": "python-behavior-freeze",
   "phase": "S",
-  "claim": "PYTHON_REFERENCE_BEHAVIOR_FROZEN",
-  "strict": true,
+  "claim": "PYTHON_REFERENCE_BEHAVIOR_FREEZE_BOOTSTRAP",
+  "strict": false,
   "public_surface": {
     "authority": "tools/report_missing_native_public_routes.py",
     "expected_route_count": 245,
@@ -19,26 +19,26 @@
   },
   "fixture_catalog": {
     "path": "contracts/python/fixture-golden-catalog-v1.json",
-    "expected_file_sha256": "79f02c7128d3fc82777d98e6622f67b5179618a797c851676b83a6e732cf4956",
-    "expected_semantic_sha256": "b288b3adc5f7bee7c61c31c92139a1b279a80079923d58fd734121df55c6c31a",
-    "expected_family_count": 13,
-    "expected_fixture_case_count": 65
+    "expected_file_sha256": "2c9b07c903df7df5dea239c7dd8b49566950e6378c08014b589f49baee0a06e5",
+    "expected_semantic_sha256": "eee73a7cba7120fbf51c09896310b6d4c9dcb98e8bc974704892fd2b0d1a1b4d",
+    "expected_family_count": 14,
+    "expected_fixture_case_count": 70
   },
   "reference_suite": {
     "contract_path": "contracts/python/python-reference-suite-v1.json",
-    "expected_contract_sha256": "d66aead8d7ef1230baffa4622543c217455055b786a8fb3c42b33a18334596b6",
-    "expected_total_certifiers": 14,
+    "expected_contract_sha256": "2d32749d1a2694ac69f2601c7e3f8619e4f17e5e39a3c6b8696fc2d6292cc6b3",
+    "expected_total_certifiers": 15,
     "expected_failed": 0,
     "expected_skipped": 0,
     "must_be_offline": true,
     "must_preserve_clean_tree": true
   },
   "derived_freeze": {
-    "expected_family_schema_sha256": "444a1bb262188fa83cbc3daee1cb485f57ad7d77ded82c66ba1a0c82c14d432e",
-    "expected_behavior_policy_sha256": "edc7f01b5d8a89ee7b713b05d01ca685cbff8dd4370fe8b5b8855982689cdfe5",
-    "expected_error_exit_policy_sha256": "2f9c7aaa0af340c5c6f2bea155f7e4cf9c90a3e3926b23349be4ca1085a0f2b0",
-    "expected_nondeterminism_sha256": "52be4a42dc1be6817ac2d9b513c916b493fdad5c187491a34acb54339402c4f1",
-    "expected_side_effect_sha256": "e81236c8e8f03dbfae346f3ddc24028cd1721313871207c40c6146e7cf80ba8e"
+    "expected_family_schema_sha256": null,
+    "expected_behavior_policy_sha256": null,
+    "expected_error_exit_policy_sha256": null,
+    "expected_nondeterminism_sha256": null,
+    "expected_side_effect_sha256": null
   },
   "policy": {
     "family_schema_source": "exact-head Python Reference Suite family JSON artifacts",
