@@ -32,6 +32,7 @@
     "verification_reason_vocabulary": [
       "already-consumed",
       "binding-mismatch",
+      "expired",
       "invalid-signature",
       "malformed-token",
       "verified"
