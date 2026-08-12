@@ -24,8 +24,9 @@
     "minimal_exposed_tools": 10,
     "balanced_exposed_tools": 36,
     "legacy_alias": {
-      "audit": "balanced",
-      "read-only": "minimal"
+      "tiny": "minimal",
+      "optimized": "balanced",
+      "full": "audit"
     }
   },
   "tool_inventory": {
