@@ -109,8 +109,9 @@ def _catalog_snapshot(repo: Path, project: Path, state: Path, fixture: dict[str,
         }
     if len(MINIMAL_TOOLS) != fixture["profiles"]["minimal_exposed_tools"] or len(BALANCED_TOOLS) != fixture["profiles"]["balanced_exposed_tools"]:
         raise AssertionError("MCP profile tool-count drift")
-    if normalize_profile("read-only") != fixture["profiles"]["legacy_alias"]["read-only"] or normalize_profile("audit") != fixture["profiles"]["legacy_alias"]["audit"]:
-        raise AssertionError("MCP legacy profile alias drift")
+    for alias, canonical in fixture["profiles"]["legacy_alias"].items():
+        if normalize_profile(alias) != canonical:
+            raise AssertionError(f"MCP legacy profile alias drift: {alias} -> {normalize_profile(alias)} != {canonical}")
     return {
         "count": len(catalog),
         "sha256": full_sha,
