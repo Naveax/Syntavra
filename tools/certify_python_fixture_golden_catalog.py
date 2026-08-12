@@ -27,6 +27,7 @@ EXPECTED_FAMILIES = [
     ("N", "setup-host"),
     ("O", "mcp-integration"),
     ("P", "publication-registry"),
+    ("T", "core-legacy-route-reference"),
 ]
 
 
@@ -59,7 +60,7 @@ def certify(repo: Path) -> dict[str, Any]:
 
     if catalog.get("schema_version") != 1 or catalog.get("family") != "fixture-golden-catalog":
         raise AssertionError("fixture catalog identity drift")
-    if catalog.get("phase_scope") != "D-P":
+    if catalog.get("phase_scope") != "D-P,T":
         raise AssertionError("fixture catalog phase scope drift")
     if catalog.get("family_count") != len(EXPECTED_FAMILIES):
         raise AssertionError("fixture catalog family count drift")
@@ -172,9 +173,9 @@ def certify(repo: Path) -> dict[str, Any]:
             }
         )
 
-    if counts != {"covered": 59, "not_applicable": 6, "missing": 0}:
+    if counts != {"covered": 64, "not_applicable": 6, "missing": 0}:
         raise AssertionError(f"fixture coverage count drift: {counts}")
-    if contract_count != 9 or inline_only_count != 4:
+    if contract_count != 10 or inline_only_count != 4:
         raise AssertionError(
             f"fixture source layout drift: contracts={contract_count}, inline={inline_only_count}"
         )
