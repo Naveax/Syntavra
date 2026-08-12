@@ -81,30 +81,79 @@ jobs:
       - name: Compile Rust ownership probes
         run: cargo +1.82.0 check --locked -p syntavra-cli --bins
 
-      - name: Prove report-derived Remaining-71 selector and lower-module ownership
+      - name: Prove report-derived Remaining-71 selector ownership
         run: |
           cargo +1.82.0 run --locked -p syntavra-cli \
             --bin syntavra-remaining71-ownership \
             -- /tmp/remaining71-inventory.json \
-            > /tmp/remaining71-ownership.json
+            > /tmp/remaining71-selector-ownership.json
           python - <<'PY'
           import json
           from pathlib import Path
 
-          value = json.loads(Path('/tmp/remaining71-ownership.json').read_text(encoding='utf-8'))
+          value = json.loads(Path('/tmp/remaining71-selector-ownership.json').read_text(encoding='utf-8'))
           assert value['ok'] is True, value
           assert value['report_derived_remaining_count'] == 71
           assert value['owned_count'] == 71
           assert value['unowned_count'] == 0
           assert len(value['selector_paths']) == 71
+          PY
+
+      - name: Prove report-derived Remaining-71 lower-module ownership
+        run: |
+          cargo +1.82.0 run --locked -p syntavra-cli \
+            --bin syntavra-remaining71-module-ownership \
+            -- /tmp/remaining71-inventory.json \
+            > /tmp/remaining71-module-ownership.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/remaining71-module-ownership.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['report_derived_remaining_count'] == 71
           assert value['owner_module_count'] == 71
           assert len(value['owner_modules']) == 71
           assert value['module_unowned_count'] == 0
           assert value['module_unowned_routes'] == []
           assert value['duplicate_owner_count'] == 0
           assert value['duplicate_owner_routes'] == []
-          assert set(value['selector_paths']) == set(value['owner_modules']) == set(value['owner_candidates'])
+          assert set(value['owner_modules']) == set(value['owner_candidates'])
           assert all(value['owner_candidates'][route] == [owner] for route, owner in value['owner_modules'].items())
+          PY
+
+      - name: Compose selector and lower-module ownership evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          selector = json.loads(Path('/tmp/remaining71-selector-ownership.json').read_text(encoding='utf-8'))
+          module = json.loads(Path('/tmp/remaining71-module-ownership.json').read_text(encoding='utf-8'))
+          selector_routes = set(selector['selector_paths'])
+          module_routes = set(module['owner_modules'])
+          assert selector_routes == module_routes
+          combined = dict(selector)
+          for key in [
+              'module_authority',
+              'owner_module_count',
+              'owner_modules',
+              'owner_candidates',
+              'module_unowned_count',
+              'module_unowned_routes',
+              'duplicate_owner_count',
+              'duplicate_owner_routes',
+          ]:
+              combined[key] = module[key]
+          combined['ok'] = selector['ok'] is True and module['ok'] is True
+          combined['claim_boundary'] = (
+              'composite selector and lower Rust family-module ownership only; '
+              'behavioral parity still requires differential execution'
+          )
+          Path('/tmp/remaining71-ownership.json').write_text(
+              json.dumps(combined, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
           PY
 
       - name: Generate exact-head Phase 2 Rust migration matrix
@@ -157,6 +206,8 @@ jobs:
             /tmp/phase2-rust-migration-matrix.log
             /tmp/python-phase1-acceptance.json
             /tmp/remaining71-inventory.json
+            /tmp/remaining71-selector-ownership.json
+            /tmp/remaining71-module-ownership.json
             /tmp/remaining71-ownership.json
           if-no-files-found: error
 
