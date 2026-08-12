@@ -52,7 +52,9 @@ class PythonCapabilityInventoryReferenceTests(unittest.TestCase):
         self.assertTrue(decisions["read"]["allowed"])
         self.assertEqual(decisions["read"]["category"], "read")
         self.assertEqual(decisions["write_authorization_required"]["reason"], "authorization-required")
-        self.assertEqual(decisions["write_sandbox_required"]["reason"], "sandbox-required")
+        self.assertTrue(decisions["write_allowed"]["allowed"])
+        self.assertEqual(decisions["write_allowed"]["category"], "write")
+        self.assertEqual(decisions["execute_sandbox_required"]["reason"], "sandbox-required")
         self.assertTrue(decisions["execute_allowed"]["allowed"])
         self.assertEqual(decisions["execute_allowed"]["category"], "execute")
         self.assertEqual(decisions["destructive_denied"]["reason"], "destructive-command-denied")
@@ -83,26 +85,50 @@ class PythonCapabilityInventoryReferenceTests(unittest.TestCase):
         )
         self.assertEqual(
             capability["verify"]["reason_vocabulary"],
-            ["already-consumed", "binding-mismatch", "invalid-signature", "malformed-token", "verified"],
+            ["already-consumed", "binding-mismatch", "expired", "invalid-signature", "malformed-token", "verified"],
         )
 
-    def test_single_use_token_binding_and_durable_consumption_are_frozen(self) -> None:
+    def test_single_use_token_binding_expiry_and_durable_consumption_are_frozen(self) -> None:
         capability = self.report["capability"]
         self.assertTrue(capability["issue"]["single_use"])
         self.assertEqual(capability["issue"]["token_shape"], "base64url-json.hmac-sha256")
+        self.assertEqual(capability["issue"]["top_level_keys"], ["ok", "single_use", "token"])
+        self.assertEqual(capability["issue"]["capability"]["ttl_seconds"], 300)
+        self.assertEqual(capability["issue"]["capability"]["permissions"], ["evidence", "write"])
+
         self.assertTrue(capability["verify"]["first"]["ok"])
         self.assertEqual(capability["verify"]["first"]["reason"], "verified")
-        self.assertEqual(capability["verify"]["replay"], {"ok": False, "reason": "already-consumed"})
-        self.assertEqual(capability["verify"]["binding_mismatch"], {"ok": False, "reason": "binding-mismatch"})
-        self.assertEqual(capability["verify"]["malformed"], {"ok": False, "reason": "malformed-token"})
-        self.assertEqual(capability["verify"]["invalid_signature"], {"ok": False, "reason": "invalid-signature"})
+        self.assertEqual(capability["verify"]["first"]["exit"], 0)
+        self.assertEqual(capability["verify"]["replay"]["reason"], "already-consumed")
+        self.assertEqual(capability["verify"]["binding_mismatch"]["reason"], "binding-mismatch")
+        self.assertEqual(capability["verify"]["expired"]["reason"], "expired")
+        self.assertEqual(capability["verify"]["malformed"], {
+            "exit": 3,
+            "ok": False,
+            "reason": "malformed-token",
+            "top_level_keys": ["ok", "reason"],
+        })
+        self.assertEqual(capability["verify"]["invalid_signature"], {
+            "exit": 3,
+            "ok": False,
+            "reason": "invalid-signature",
+            "top_level_keys": ["ok", "reason"],
+        })
         self.assertEqual(
             capability["durable_side_effects"],
-            {"signing_key_bytes": 32, "consumed_rows": 1, "consumed_token_hash_matches_issue": True},
+            {
+                "signing_key_bytes": 32,
+                "consumed_rows": 1,
+                "consumed_nonce_matches_issued_token": True,
+                "store": "sqlite",
+            },
         )
 
-    def test_argument_parser_error_is_explicit(self) -> None:
-        self.assertEqual(self.report["exit_policy"], {"success": 0, "argument_parser_error": 2})
+    def test_exit_policy_and_argument_parser_error_are_explicit(self) -> None:
+        self.assertEqual(
+            self.report["exit_policy"],
+            {"success": 0, "verification_failure": 3, "argument_parser_error": 2},
+        )
         self.assertEqual(self.report["capability"]["parser_error"]["exit"], 2)
 
 
