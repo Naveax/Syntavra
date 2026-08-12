@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
+import hmac
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -12,6 +15,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+from syntavra_runtime.platform_common import canonical_json
 from tools import report_missing_native_public_routes as public_surface
 from tools import report_python_public_execution_contract as execution_contract
 
@@ -25,12 +29,8 @@ def _canonical(value: Any) -> bytes:
 
 def _head(repo: Path) -> str:
     completed = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
+        ["git", "rev-parse", "HEAD"], cwd=repo, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True, check=False,
     )
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
@@ -40,27 +40,10 @@ def _run(repo: Path, project: Path, state: Path, args: list[str]) -> dict[str, A
     env.update({"PYTHONPATH": str(repo), "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"})
     env.pop("SYNTAVRA_BULK_PARITY_PROBE", None)
     completed = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "syntavra_runtime.engine_entry",
-            "--engine",
-            "python",
-            "--project",
-            str(project),
-            "--state-root",
-            str(state),
-            *args,
-        ],
-        cwd=repo,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=30,
-        check=False,
+        [sys.executable, "-m", "syntavra_runtime.engine_entry", "--engine", "python",
+         "--project", str(project), "--state-root", str(state), *args],
+        cwd=repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", errors="replace", timeout=30, check=False,
     )
     try:
         value = json.loads(completed.stdout) if completed.stdout.strip() else None
@@ -69,13 +52,21 @@ def _run(repo: Path, project: Path, state: Path, args: list[str]) -> dict[str, A
     return {"exit": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr, "value": value}
 
 
-def _ok(label: str, result: dict[str, Any]) -> dict[str, Any]:
-    if result["exit"] != 0 or result["stderr"]:
-        raise AssertionError(f"{label}: expected clean exit 0, got {result}")
+def _json_result(label: str, result: dict[str, Any], *, expected_exit: int) -> dict[str, Any]:
+    if result["exit"] != expected_exit or result["stderr"]:
+        raise AssertionError(f"{label}: expected clean exit {expected_exit}, got {result}")
     value = result.get("value")
     if not isinstance(value, dict):
         raise AssertionError(f"{label}: expected JSON object stdout, got {result}")
     return value
+
+
+def _ok(label: str, result: dict[str, Any]) -> dict[str, Any]:
+    return _json_result(label, result, expected_exit=0)
+
+
+def _verification_failure(label: str, result: dict[str, Any]) -> dict[str, Any]:
+    return _json_result(label, result, expected_exit=3)
 
 
 def _argparse_error(label: str, result: dict[str, Any]) -> dict[str, Any]:
@@ -85,16 +76,9 @@ def _argparse_error(label: str, result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _decision(
-    repo: Path,
-    project: Path,
-    state: Path,
-    tool: str,
-    arguments: dict[str, Any],
-    *,
-    resource: str = "workspace:/",
-    sandboxed: bool = False,
-    user_authorized: bool = False,
-    network_hosts: tuple[str, ...] = (),
+    repo: Path, project: Path, state: Path, tool: str, arguments: dict[str, Any], *,
+    resource: str = "workspace:/", sandboxed: bool = False,
+    user_authorized: bool = False, network_hosts: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     args = ["run", "capability-decide", tool, json.dumps(arguments, separators=(",", ":")), "--resource", resource]
     if sandboxed:
@@ -107,17 +91,13 @@ def _decision(
 
 
 def _expected_decision(
-    value: dict[str, Any],
-    *,
-    allowed: bool,
-    category: str,
-    reason: str,
-    requirements: list[str],
+    value: dict[str, Any], *, allowed: bool, category: str, reason: str,
+    requirements: list[str], resource: str,
 ) -> None:
-    expected_keys = {"allowed", "arguments_hash", "category", "reason", "requirements", "resource", "tool"}
+    expected_keys = {"allowed", "arguments_hash", "category", "reason", "requirements", "resource"}
     if set(value) != expected_keys:
         raise AssertionError(f"capability decision schema drift: {sorted(value)}")
-    if value.get("allowed") is not allowed or value.get("category") != category or value.get("reason") != reason:
+    if value.get("allowed") is not allowed or value.get("category") != category or value.get("reason") != reason or value.get("resource") != resource:
         raise AssertionError(f"capability decision drift: {value}")
     if value.get("requirements") != requirements:
         raise AssertionError(f"capability requirements drift: {value}")
@@ -127,45 +107,41 @@ def _expected_decision(
 
 
 def _inventory_contract(repo: Path, fixture: dict[str, Any]) -> dict[str, Any]:
-    surface_contract_path = repo / str(fixture["canonical_surface_contract"])
-    surface_contract = json.loads(surface_contract_path.read_text(encoding="utf-8"))
+    surface_contract = json.loads((repo / str(fixture["canonical_surface_contract"])).read_text(encoding="utf-8"))
     expected_surface = surface_contract["python_surface"]
-
     route_sources = public_surface.python_public_route_sources()
-    manifest = public_surface.python_public_manifest()
+    paths = list(route_sources)
+    route_count = len(paths)
+    route_digest = public_surface._digest(paths)
+    duplicates = {route: sources for route, sources in route_sources.items() if len(sources) > 1}
+    namespace_collisions = public_surface.python_public_namespace_collisions()
     execution = execution_contract.route_execution_manifest()
 
-    if manifest["route_count"] != expected_surface["route_count"] or manifest["route_count"] != 245:
-        raise AssertionError(f"canonical Python public route count drift: {manifest['route_count']}")
-    if manifest["digest_sha256"] != expected_surface["command_paths_sha256"]:
+    if route_count != int(expected_surface["public_command_count"]) or route_count != 245:
+        raise AssertionError(f"canonical Python public route count drift: {route_count}")
+    if route_digest != str(expected_surface["command_paths_sha256"]):
         raise AssertionError("canonical Python public route digest drift")
-    if manifest["duplicate_routes"]:
-        raise AssertionError(f"duplicate canonical public routes: {manifest['duplicate_routes']}")
-    if manifest["namespace_dest_collisions"]:
-        raise AssertionError(f"argparse namespace collisions returned: {manifest['namespace_dest_collisions']}")
-    if manifest["paths"] != list(route_sources):
-        raise AssertionError("manifest path order no longer follows the parser-derived route authority")
+    if duplicates:
+        raise AssertionError(f"duplicate canonical public routes: {duplicates}")
+    if namespace_collisions:
+        raise AssertionError(f"argparse namespace collisions returned: {namespace_collisions}")
 
-    manifest_records = [
-        {"route": route, "sources": list(route_sources[route])}
-        for route in manifest["paths"]
-    ]
+    manifest_records = [{"route": route, "sources": list(route_sources[route])} for route in paths]
     manifest_record_keys = sorted(manifest_records[0]) if manifest_records else []
     if manifest_record_keys != fixture["inventory"]["manifest_record_keys"]:
         raise AssertionError(f"manifest metadata schema drift: {manifest_record_keys}")
-
-    if len(execution) != 245:
+    if len(execution) != route_count:
         raise AssertionError(f"execution ownership row count drift: {len(execution)}")
     execution_record_keys = sorted(execution[0]) if execution else []
     if execution_record_keys != fixture["inventory"]["execution_record_keys"]:
         raise AssertionError(f"execution ownership schema drift: {execution_record_keys}")
-    if [row["route"] for row in execution] != manifest["paths"]:
-        raise AssertionError("execution ownership rows no longer align with the canonical parser route order")
+    if [row["route"] for row in execution] != paths:
+        raise AssertionError("execution ownership rows no longer align with canonical parser route order")
     if any(row["unknown_sources"] for row in execution):
         raise AssertionError("execution ownership contains unknown parser source labels")
-    if any(row["success_exit"] != 0 for row in execution):
-        raise AssertionError("success exit policy drifted away from 0")
     for row in execution:
+        if row["success_exit"] != 0:
+            raise AssertionError(f"success exit drift for {row['route']}: {row}")
         expected_parser_error = 2 if row["parser_owned"] else None
         if row["parser_error_exit"] != expected_parser_error:
             raise AssertionError(f"parser error exit drift for {row['route']}: {row}")
@@ -173,37 +149,28 @@ def _inventory_contract(repo: Path, fixture: dict[str, Any]) -> dict[str, Any]:
             raise AssertionError(f"route no longer has exactly one Python entrypoint: {row}")
 
     source_vocabulary = sorted({source for row in execution for source in row["sources"]})
+    entrypoint_vocabulary = sorted({str(row["entrypoint"]) for row in execution})
     if source_vocabulary != fixture["inventory"]["source_vocabulary"]:
         raise AssertionError(f"public source vocabulary drift: {source_vocabulary}")
-    entrypoint_vocabulary = sorted({str(row["entrypoint"]) for row in execution})
     if entrypoint_vocabulary != fixture["inventory"]["entrypoint_vocabulary"]:
         raise AssertionError(f"public entrypoint vocabulary drift: {entrypoint_vocabulary}")
 
-    capability_routes = sorted(route for route in manifest["paths"] if "capability-" in route)
+    capability_routes = sorted(route for route in paths if "capability-" in route)
     if capability_routes != fixture["capability"]["public_routes"]:
         raise AssertionError(f"capability public route inventory drift: {capability_routes}")
-    capability_owners = {
-        row["route"]: row["entrypoint"]
-        for row in execution
-        if row["route"] in capability_routes
-    }
+    capability_owners = {row["route"]: row["entrypoint"] for row in execution if row["route"] in capability_routes}
     if set(capability_owners.values()) != {"syntavra_runtime.prerelease_cli.main"}:
         raise AssertionError(f"capability route ownership drift: {capability_owners}")
 
     ownership_projection = [
-        {
-            "route": row["route"],
-            "sources": row["sources"],
-            "entrypoint": row["entrypoint"],
-            "parser_owned": row["parser_owned"],
-            "parser_error_exit": row["parser_error_exit"],
-            "success_exit": row["success_exit"],
-        }
+        {"route": row["route"], "sources": row["sources"], "entrypoint": row["entrypoint"],
+         "parser_owned": row["parser_owned"], "parser_error_exit": row["parser_error_exit"],
+         "success_exit": row["success_exit"]}
         for row in execution
     ]
     return {
-        "route_count": 245,
-        "command_paths_sha256": manifest["digest_sha256"],
+        "route_count": route_count,
+        "command_paths_sha256": route_digest,
         "manifest_record_keys": manifest_record_keys,
         "execution_record_keys": execution_record_keys,
         "source_vocabulary": source_vocabulary,
@@ -211,75 +178,100 @@ def _inventory_contract(repo: Path, fixture: dict[str, Any]) -> dict[str, Any]:
         "ownership_sha256": hashlib.sha256(_canonical(ownership_projection)).hexdigest(),
         "capability_routes": capability_routes,
         "capability_owners": capability_owners,
-        "duplicate_routes": 0,
-        "namespace_dest_collisions": 0,
-        "unknown_source_rows": 0,
-        "unowned_routes": 0,
+        "duplicate_routes": len(duplicates),
+        "namespace_dest_collisions": len(namespace_collisions),
+        "unknown_source_rows": sum(bool(row["unknown_sources"]) for row in execution),
+        "unowned_routes": sum(len(row["entrypoints"]) != 1 for row in execution),
     }
 
 
+def _decode_token(token: str) -> dict[str, Any]:
+    payload_text, _ = token.split(".", 1)
+    payload = base64.urlsafe_b64decode(payload_text + "=" * (-len(payload_text) % 4))
+    value = json.loads(payload)
+    if not isinstance(value, dict):
+        raise AssertionError("capability token payload is not an object")
+    return value
+
+
+def _expired_token(token: str, *, signing_key: bytes) -> str:
+    body = _decode_token(token)
+    body["expires_at"] = 0
+    payload = base64.urlsafe_b64encode(canonical_json(body)).rstrip(b"=")
+    signature = hmac.new(signing_key, payload, hashlib.sha256).digest()
+    return payload.decode("ascii") + "." + base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+
+
+def _invalid_signature_token(token: str) -> str:
+    body, signature = token.split(".", 1)
+    first = "A" if signature[0] != "A" else "B"
+    return f"{body}.{first}{signature[1:]}"
+
+
+def _capability_shape(capability: dict[str, Any]) -> dict[str, Any]:
+    expected_keys = ["arguments_hash", "channel", "expires_at", "issued_at", "nonce", "permissions", "resource", "session_id", "single_use", "tool", "version"]
+    if sorted(capability) != expected_keys:
+        raise AssertionError(f"capability claim schema drift: {sorted(capability)}")
+    issued_at = capability.get("issued_at")
+    expires_at = capability.get("expires_at")
+    return {
+        "keys": expected_keys,
+        "version": capability.get("version"),
+        "channel": capability.get("channel"),
+        "session_id": capability.get("session_id"),
+        "tool": capability.get("tool"),
+        "arguments_hash": capability.get("arguments_hash"),
+        "resource": capability.get("resource"),
+        "permissions": list(capability.get("permissions") or []),
+        "single_use": capability.get("single_use"),
+        "nonce_present": bool(capability.get("nonce")),
+        "issued_at_is_int": isinstance(issued_at, int),
+        "expires_at_is_int": isinstance(expires_at, int),
+        "ttl_seconds": expires_at - issued_at if isinstance(issued_at, int) and isinstance(expires_at, int) else None,
+    }
+
+
+def _verify_summary(*, exit_code: int, value: dict[str, Any]) -> dict[str, Any]:
+    expected_keys = {"ok", "reason"}
+    capability = value.get("capability")
+    if capability is not None:
+        expected_keys.add("capability")
+    if set(value) != expected_keys:
+        raise AssertionError(f"capability verify schema drift: {sorted(value)}")
+    summary: dict[str, Any] = {"exit": exit_code, "ok": value.get("ok"), "reason": value.get("reason"), "top_level_keys": sorted(value)}
+    if isinstance(capability, dict):
+        summary["capability"] = _capability_shape(capability)
+    return summary
+
+
 def _capability_contract(repo: Path, fixture: dict[str, Any], project: Path, state: Path) -> dict[str, Any]:
-    base_requirements = ["signed-capability", "exact-evidence"]
-    elevated_requirements = ["signed-capability", "exact-evidence", "explicit-user-authorization", "sandbox"]
+    base = ["signed-capability", "exact-evidence"]
+    authorized = [*base, "explicit-user-authorization"]
+    execute_requirements = [*authorized, "sandbox"]
 
     read = _decision(repo, project, state, "repo.read", {"path": "module.py"}, resource="workspace:/module.py")
-    _expected_decision(read, allowed=True, category="read", reason="policy-allowed", requirements=base_requirements)
-
+    _expected_decision(read, allowed=True, category="read", reason="policy-allowed", requirements=base, resource="workspace:/module.py")
     write_auth = _decision(repo, project, state, "repo.patch", {"path": "module.py"}, resource="workspace:/module.py")
-    _expected_decision(write_auth, allowed=False, category="write", reason="authorization-required", requirements=elevated_requirements)
-
-    write_sandbox = _decision(
-        repo,
-        project,
-        state,
-        "repo.patch",
-        {"path": "module.py"},
-        resource="workspace:/module.py",
-        user_authorized=True,
-    )
-    _expected_decision(write_sandbox, allowed=False, category="write", reason="sandbox-required", requirements=elevated_requirements)
-
-    execute = _decision(
-        repo,
-        project,
-        state,
-        "test.run",
-        {"command": ["python", "-m", "unittest"]},
-        user_authorized=True,
-        sandboxed=True,
-    )
-    _expected_decision(execute, allowed=True, category="execute", reason="policy-allowed", requirements=elevated_requirements)
-
-    destructive = _decision(
-        repo,
-        project,
-        state,
-        "shell_run",
-        {"command": ["rm", "-rf", "/"]},
-        user_authorized=True,
-        sandboxed=True,
-    )
-    _expected_decision(destructive, allowed=False, category="execute", reason="destructive-command-denied", requirements=elevated_requirements)
-
-    outside = _decision(repo, project, state, "repo.read", {"path": "../secret"}, resource="host:/etc/passwd")
-    _expected_decision(outside, allowed=False, category="read", reason="resource-outside-workspace", requirements=base_requirements)
-
-    network = _decision(
-        repo,
-        project,
-        state,
-        "http_request",
-        {"url": "https://example.invalid"},
-        network_hosts=("api.example.invalid",),
-    )
-    _expected_decision(network, allowed=False, category="network", reason="network-host-not-allowlisted", requirements=base_requirements)
-
+    _expected_decision(write_auth, allowed=False, category="write", reason="authorization-required", requirements=authorized, resource="workspace:/module.py")
+    write_allowed = _decision(repo, project, state, "repo.patch", {"path": "module.py"}, resource="workspace:/module.py", user_authorized=True)
+    _expected_decision(write_allowed, allowed=True, category="write", reason="policy-allowed", requirements=authorized, resource="workspace:/module.py")
+    execute_sandbox = _decision(repo, project, state, "test.run", {"argv": ["python", "-m", "unittest"]}, user_authorized=True)
+    _expected_decision(execute_sandbox, allowed=False, category="execute", reason="sandbox-required", requirements=execute_requirements, resource="workspace:/")
+    execute_allowed = _decision(repo, project, state, "test.run", {"argv": ["python", "-m", "unittest"]}, user_authorized=True, sandboxed=True)
+    _expected_decision(execute_allowed, allowed=True, category="execute", reason="policy-allowed", requirements=execute_requirements, resource="workspace:/")
+    destructive = _decision(repo, project, state, "shell_run", {"argv": ["git", "reset", "--hard"]}, user_authorized=True, sandboxed=True)
+    _expected_decision(destructive, allowed=False, category="execute", reason="destructive-command-denied", requirements=execute_requirements, resource="workspace:/")
+    outside = _decision(repo, project, state, "repo.patch", {"path": "../secret"}, resource="file:/tmp/outside", user_authorized=True)
+    _expected_decision(outside, allowed=False, category="write", reason="resource-outside-workspace", requirements=authorized, resource="file:/tmp/outside")
+    network = _decision(repo, project, state, "http_request", {"host": "blocked.example"}, user_authorized=True, network_hosts=("allowed.example",))
+    _expected_decision(network, allowed=False, category="network", reason="network-host-not-allowlisted", requirements=authorized, resource="workspace:/")
     unknown = _decision(repo, project, state, "totally.unknown.tool", {"x": 1})
-    _expected_decision(unknown, allowed=False, category="unknown", reason="unknown-tool-fail-closed", requirements=base_requirements)
+    _expected_decision(unknown, allowed=False, category="unknown", reason="unknown-tool-fail-closed", requirements=base, resource="workspace:/")
 
-    observed_categories = sorted({row["category"] for row in (read, write_auth, write_sandbox, execute, destructive, outside, network, unknown)})
-    observed_reasons = sorted({row["reason"] for row in (read, write_auth, write_sandbox, execute, destructive, outside, network, unknown)})
-    observed_requirements = sorted({item for row in (read, write_auth, write_sandbox, execute, destructive, outside, network, unknown) for item in row["requirements"]})
+    decisions = (read, write_auth, write_allowed, execute_sandbox, execute_allowed, destructive, outside, network, unknown)
+    observed_categories = sorted({row["category"] for row in decisions})
+    observed_reasons = sorted({row["reason"] for row in decisions})
+    observed_requirements = sorted({item for row in decisions for item in row["requirements"]})
     if observed_categories != fixture["capability"]["category_vocabulary"]:
         raise AssertionError(f"capability category vocabulary drift: {observed_categories}")
     if observed_reasons != fixture["capability"]["decision_reason_vocabulary"]:
@@ -288,85 +280,91 @@ def _capability_contract(repo: Path, fixture: dict[str, Any], project: Path, sta
         raise AssertionError(f"capability requirement vocabulary drift: {observed_requirements}")
 
     arguments = {"path": "module.py", "patch": "fixture"}
-    issue_args = [
-        "run", "capability-issue", "session-capability", "repo.patch", json.dumps(arguments, separators=(",", ":")),
-        "--resource", "workspace:/module.py", "--permission", "write", "--ttl", "300",
-    ]
+    encoded_arguments = json.dumps(arguments, separators=(",", ":"))
+    issue_args = ["run", "capability-issue", "session-capability", "repo.patch", encoded_arguments,
+                  "--resource", "workspace:/module.py", "--permission", "write", "--permission", "evidence", "--ttl", "300"]
     issued = _ok("capability issue", _run(repo, project, state, issue_args))
-    if set(issued) != {"expires_at", "single_use", "token", "token_hash"} or issued.get("single_use") is not True:
+    if set(issued) != {"ok", "token", "single_use"} or issued.get("ok") is not True or issued.get("single_use") is not True:
         raise AssertionError(f"capability issue schema drift: {issued}")
     token = str(issued["token"])
-    if token.count(".") != 1 or len(str(issued["token_hash"])) != 64:
+    if token.count(".") != 1:
         raise AssertionError(f"capability token shape drift: {issued}")
+    issued_capability = _decode_token(token)
+    issued_shape = _capability_shape(issued_capability)
+    if issued_shape["ttl_seconds"] != 300 or issued_shape["permissions"] != ["evidence", "write"]:
+        raise AssertionError(f"capability issue claims drift: {issued_shape}")
 
     second_issue = _ok("second capability issue", _run(repo, project, state, issue_args))
     second_token = str(second_issue["token"])
-    mismatch = _ok(
+
+    mismatch = _verify_summary(exit_code=3, value=_verification_failure(
         "capability binding mismatch",
-        _run(
-            repo,
-            project,
-            state,
-            ["run", "capability-verify", second_token, "repo.patch", '{"path":"different.py"}', "--resource", "workspace:/module.py", "--no-consume"],
-        ),
-    )
-    if mismatch != {"ok": False, "reason": "binding-mismatch"}:
+        _run(repo, project, state, ["run", "capability-verify", second_token, "repo.patch", '{"path":"different.py"}', "--resource", "workspace:/module.py", "--no-consume"]),
+    ))
+    if mismatch["reason"] != "binding-mismatch":
         raise AssertionError(f"capability binding mismatch drift: {mismatch}")
 
-    verified = _ok(
+    verified = _verify_summary(exit_code=0, value=_ok(
         "capability verify",
-        _run(repo, project, state, ["run", "capability-verify", token, "repo.patch", json.dumps(arguments, separators=(",", ":")), "--resource", "workspace:/module.py"]),
-    )
-    if verified.get("ok") is not True or verified.get("reason") != "verified" or not isinstance(verified.get("claims"), dict):
-        raise AssertionError(f"capability verification schema drift: {verified}")
-    replay = _ok(
+        _run(repo, project, state, ["run", "capability-verify", token, "repo.patch", encoded_arguments, "--resource", "workspace:/module.py"]),
+    ))
+    if verified["ok"] is not True or verified["reason"] != "verified":
+        raise AssertionError(f"capability verification drift: {verified}")
+
+    replay = _verify_summary(exit_code=3, value=_verification_failure(
         "capability replay",
-        _run(repo, project, state, ["run", "capability-verify", token, "repo.patch", json.dumps(arguments, separators=(",", ":")), "--resource", "workspace:/module.py"]),
-    )
-    if replay != {"ok": False, "reason": "already-consumed"}:
+        _run(repo, project, state, ["run", "capability-verify", token, "repo.patch", encoded_arguments, "--resource", "workspace:/module.py"]),
+    ))
+    if replay["reason"] != "already-consumed":
         raise AssertionError(f"single-use capability replay drift: {replay}")
 
-    malformed = _ok(
+    malformed = _verify_summary(exit_code=3, value=_verification_failure(
         "malformed capability token",
-        _run(repo, project, state, ["run", "capability-verify", "not-a-token", "repo.patch", json.dumps(arguments, separators=(",", ":")), "--resource", "workspace:/module.py"]),
-    )
-    if malformed != {"ok": False, "reason": "malformed-token"}:
+        _run(repo, project, state, ["run", "capability-verify", "not-a-token", "repo.patch", encoded_arguments, "--resource", "workspace:/module.py"]),
+    ))
+    if malformed != {"exit": 3, "ok": False, "reason": "malformed-token", "top_level_keys": ["ok", "reason"]}:
         raise AssertionError(f"malformed capability token drift: {malformed}")
-    body, signature = second_token.split(".", 1)
-    replacement = "0" if signature[-1] != "0" else "1"
-    invalid_token = f"{body}.{signature[:-1]}{replacement}"
-    invalid_signature = _ok(
+
+    invalid_signature = _verify_summary(exit_code=3, value=_verification_failure(
         "invalid capability signature",
-        _run(repo, project, state, ["run", "capability-verify", invalid_token, "repo.patch", json.dumps(arguments, separators=(",", ":")), "--resource", "workspace:/module.py", "--no-consume"]),
-    )
-    if invalid_signature != {"ok": False, "reason": "invalid-signature"}:
+        _run(repo, project, state, ["run", "capability-verify", _invalid_signature_token(second_token), "repo.patch", encoded_arguments, "--resource", "workspace:/module.py", "--no-consume"]),
+    ))
+    if invalid_signature != {"exit": 3, "ok": False, "reason": "invalid-signature", "top_level_keys": ["ok", "reason"]}:
         raise AssertionError(f"invalid capability signature drift: {invalid_signature}")
 
-    observed_verify_reasons = sorted({str(item["reason"]) for item in (mismatch, verified, replay, malformed, invalid_signature)})
+    key_files = list(state.rglob("capability.key"))
+    db_files = list(state.rglob("capability.sqlite3"))
+    if len(key_files) != 1 or len(db_files) != 1:
+        raise AssertionError(f"capability durable side-effect paths drift: keys={key_files} db={db_files}")
+    signing_key = key_files[0].read_bytes()
+    if len(signing_key) != 32:
+        raise AssertionError("capability signing key is no longer 32 bytes")
+
+    expired = _verify_summary(exit_code=3, value=_verification_failure(
+        "expired capability",
+        _run(repo, project, state, ["run", "capability-verify", _expired_token(second_token, signing_key=signing_key),
+                                    "repo.patch", encoded_arguments, "--resource", "workspace:/module.py", "--no-consume"]),
+    ))
+    if expired["reason"] != "expired":
+        raise AssertionError(f"expired capability drift: {expired}")
+
+    observed_verify_reasons = sorted({str(item["reason"]) for item in (mismatch, verified, replay, malformed, invalid_signature, expired)})
     if observed_verify_reasons != fixture["capability"]["verification_reason_vocabulary"]:
         raise AssertionError(f"capability verification reason vocabulary drift: {observed_verify_reasons}")
 
-    parser_error = _argparse_error(
-        "missing capability decide arguments",
-        _run(repo, project, state, ["run", "capability-decide", "repo.read"]),
-    )
-
-    secret_files = list(state.rglob("secret.key"))
-    consumed_files = list(state.rglob("consumed.jsonl"))
-    if len(secret_files) != 1 or len(consumed_files) != 1:
-        raise AssertionError(f"capability durable side-effect paths drift: secrets={secret_files} consumed={consumed_files}")
-    if len(secret_files[0].read_bytes()) != 32:
-        raise AssertionError("capability signing key is no longer 32 bytes")
-    consumed_rows = [json.loads(line) for line in consumed_files[0].read_text(encoding="utf-8").splitlines() if line.strip()]
-    if len(consumed_rows) != 1 or consumed_rows[0].get("token_hash") != issued["token_hash"]:
+    parser_error = _argparse_error("missing capability decide arguments", _run(repo, project, state, ["run", "capability-decide", "repo.read"]))
+    with sqlite3.connect(db_files[0]) as db:
+        consumed_rows = db.execute("SELECT nonce, consumed_at FROM consumed ORDER BY nonce").fetchall()
+    if len(consumed_rows) != 1 or consumed_rows[0][0] != issued_capability["nonce"] or not consumed_rows[0][1]:
         raise AssertionError(f"single-use consumption journal drift: {consumed_rows}")
 
     return {
         "decisions": {
             "read": read,
             "write_authorization_required": write_auth,
-            "write_sandbox_required": write_sandbox,
-            "execute_allowed": execute,
+            "write_allowed": write_allowed,
+            "execute_sandbox_required": execute_sandbox,
+            "execute_allowed": execute_allowed,
             "destructive_denied": destructive,
             "outside_workspace_denied": outside,
             "network_denied": network,
@@ -376,30 +374,33 @@ def _capability_contract(repo: Path, fixture: dict[str, Any], project: Path, sta
         "decision_reason_vocabulary": observed_reasons,
         "requirement_vocabulary": observed_requirements,
         "issue": {
-            "keys": sorted(issued),
+            "top_level_keys": sorted(issued),
             "single_use": True,
             "token_shape": "base64url-json.hmac-sha256",
-            "token_hash_shape": "sha256-hex",
+            "capability": issued_shape,
         },
         "verify": {
-            "first": {"ok": verified["ok"], "reason": verified["reason"], "claim_keys": sorted(verified["claims"])},
+            "first": verified,
             "replay": replay,
             "binding_mismatch": mismatch,
             "malformed": malformed,
             "invalid_signature": invalid_signature,
+            "expired": expired,
             "reason_vocabulary": observed_verify_reasons,
         },
         "parser_error": parser_error,
         "durable_side_effects": {
             "signing_key_bytes": 32,
             "consumed_rows": 1,
-            "consumed_token_hash_matches_issue": True,
+            "consumed_nonce_matches_issued_token": True,
+            "store": "sqlite",
         },
     }
 
 
 def certify(repo: Path) -> dict[str, Any]:
-    fixture = json.loads((repo / FIXTURE_RELATIVE).read_text(encoding="utf-8"))
+    fixture_path = repo / FIXTURE_RELATIVE
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory(prefix="syntavra-python-capability-inventory-") as directory:
         root = Path(directory)
         project = root / "project"
@@ -408,7 +409,6 @@ def certify(repo: Path) -> dict[str, Any]:
         (project / ".git").mkdir()
         inventory = _inventory_contract(repo, fixture)
         capability = _capability_contract(repo, fixture, project, state)
-
     return {
         "ok": True,
         "schema_version": 1,
@@ -416,15 +416,16 @@ def certify(repo: Path) -> dict[str, Any]:
         "engine": "python",
         "exact_head": _head(repo),
         "fixture": str(FIXTURE_RELATIVE).replace("\\", "/"),
-        "fixture_sha256": hashlib.sha256((repo / FIXTURE_RELATIVE).read_bytes()).hexdigest(),
-        "exit_policy": {"success": 0, "argument_parser_error": 2},
+        "fixture_sha256": hashlib.sha256(fixture_path.read_bytes()).hexdigest(),
+        "exit_policy": {"success": 0, "verification_failure": 3, "argument_parser_error": 2},
         "inventory": inventory,
         "capability": capability,
         "nondeterministic_fields": [
             "capability token nonce",
             "capability token issued_at/expires_at",
             "capability signing key bytes",
-            "token and token_hash derived from nonce/time/key",
+            "HMAC signature bytes",
+            "consumed_at timestamp",
         ],
     }
 
