@@ -29,6 +29,8 @@ BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES = frozenset(
         ("prove", "external-suite"),
     }
 )
+CONTEXT_COMPACTION_TYPE_ERROR_ROUTES = frozenset({("context", "pack")})
+CONTEXT_COMPACTION_INDEX_ERROR_ROUTES = frozenset({("compress", "get")})
 
 
 def _configure_utf8_stdio() -> None:
@@ -262,10 +264,13 @@ def main(argv: list[str] | None = None) -> int:
         _emit_public_command_failure(command, exc)
         return 4
     except TypeError as exc:
-        # Receipt row deserialization in these two proof routes historically leaked
-        # constructor/coercion TypeErrors as tracebacks. Keep the normalization
-        # deliberately route-scoped so unrelated programming TypeErrors stay loud.
-        if tuple(rest[:2]) not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES:
+        route = tuple(rest[:2])
+        if route not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES and route not in CONTEXT_COMPACTION_TYPE_ERROR_ROUTES:
+            raise
+        _emit_public_command_failure(command, exc)
+        return 4
+    except IndexError as exc:
+        if tuple(rest[:2]) not in CONTEXT_COMPACTION_INDEX_ERROR_ROUTES:
             raise
         _emit_public_command_failure(command, exc)
         return 4
