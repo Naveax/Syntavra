@@ -14,6 +14,8 @@ mod native_product;
 // Remaining-71 family modules' supports() predicates. These support modules do
 // not define route identity; route identities still come only from the
 // parser-derived inventory report supplied at runtime.
+#[path = "../state_snapshot_contract.rs"]
+mod state_snapshot_contract;
 #[path = "../native_backup.rs"]
 mod native_backup;
 #[path = "../native_evidence_store.rs"]
