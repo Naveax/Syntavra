@@ -231,8 +231,7 @@ def _mcp_stdio(repo: Path, project: Path, state: Path, fixture: dict[str, Any]) 
 
 
 def _integrations(repo: Path, project: Path, state: Path, fixture: dict[str, Any]) -> dict[str, Any]:
-    records = IntegrationMatrix.records()
-    public_records = _public_json(records)
+    public_records = _public_json(IntegrationMatrix.records())
     family_counts = dict(sorted(Counter(str(row["family"]) for row in public_records).items()))
     digest = hashlib.sha256(canonical_json(public_records)).hexdigest()
     frozen = fixture["integration_inventory"]
@@ -270,24 +269,29 @@ def _integrations(repo: Path, project: Path, state: Path, fixture: dict[str, Any
 
 
 def _route_policy(repo: Path, project: Path, state: Path) -> dict[str, Any]:
-    status = _json("route minimal status", _run(repo, project, state, ["run", "route", "syntavra.status", "--profile", "minimal"]))
-    if status.get("allowed") is not True or status.get("reason") != "policy-allowed" or status.get("category") != "read":
-        raise AssertionError(f"run route status drift: {status}")
-    hidden = _json("route minimal execute", _run(repo, project, state, ["run", "route", "syntavra.sandbox.execute", "--profile", "minimal"]))
-    if hidden.get("allowed") is not False or hidden.get("reason") != "tool-not-in-active-profile":
-        raise AssertionError(f"run route profile denial drift: {hidden}")
-    no_auth = _json("route balanced no auth", _run(repo, project, state, ["run", "route", "syntavra.sandbox.execute", "--profile", "balanced", "--sandboxed"]))
+    read = _json("route minimal read", _run(repo, project, state, ["run", "route", "repo.search", "--profile", "minimal"]))
+    if read.get("allowed") is not True or read.get("reason") != "policy-allowed" or read.get("category") != "read":
+        raise AssertionError(f"run route read drift: {read}")
+
+    unsafe = _json("route unsafe execute", _run(repo, project, state, ["run", "route", "terminal.exec", "--profile", "minimal"]), 5)
+    if unsafe.get("allowed") is not False or unsafe.get("reason") != "sandbox-required" or unsafe.get("category") != "execute":
+        raise AssertionError(f"run route unsafe execute drift: {unsafe}")
+
+    no_auth = _json("route balanced no auth", _run(repo, project, state, ["run", "route", "terminal.exec", "--profile", "balanced", "--sandboxed"]), 5)
     if no_auth.get("allowed") is not False or no_auth.get("reason") != "explicit-user-authorization-required":
         raise AssertionError(f"run route authorization denial drift: {no_auth}")
-    allowed = _json("route balanced allowed", _run(repo, project, state, ["run", "route", "syntavra.sandbox.execute", "--profile", "balanced", "--sandboxed", "--user-authorized"]))
+
+    allowed = _json("route balanced allowed", _run(repo, project, state, ["run", "route", "terminal.exec", "--profile", "balanced", "--sandboxed", "--user-authorized"]))
     if allowed.get("allowed") is not True or allowed.get("reason") != "policy-allowed" or allowed.get("category") != "execute":
         raise AssertionError(f"run route allowed execute drift: {allowed}")
-    unknown = _json("route unknown tool", _run(repo, project, state, ["run", "route", "mystery.tool", "--profile", "balanced"]))
-    if unknown.get("allowed") is not False:
+
+    unknown = _json("route unknown tool", _run(repo, project, state, ["run", "route", "mystery.magic", "--profile", "minimal"]), 5)
+    if unknown.get("allowed") is not False or unknown.get("reason") != "unknown-tool-fail-closed" or unknown.get("category") != "unknown":
         raise AssertionError(f"run route unknown-tool drift: {unknown}")
+
     return {
-        "minimal_status": status,
-        "minimal_execute_denied": hidden,
+        "minimal_read": read,
+        "unsafe_execute_denied": unsafe,
         "balanced_execute_no_auth": no_auth,
         "balanced_execute_allowed": allowed,
         "unknown_tool": unknown,
