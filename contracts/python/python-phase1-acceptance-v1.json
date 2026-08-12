@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "family": "python-phase1-acceptance",
+  "phase": "final-python-phase1",
+  "claim": "PYTHON_PHASE1_ACCEPTANCE_BOOTSTRAP",
+  "strict": false,
+  "behavior_freeze": {
+    "path": "contracts/python/python-behavior-freeze-v1.json",
+    "expected_sha256": "015ecbf39c12608f4553481ff8ad50b6c922c051991b97ecc9df833051b621c1",
+    "expected_claim": "PYTHON_REFERENCE_BEHAVIOR_FROZEN",
+    "expected_family_count": 14,
+    "expected_suite_certifiers": 15
+  },
+  "route_binding": {
+    "authority": "tools/report_missing_native_public_routes.py",
+    "expected_route_count": 245,
+    "expected_family_explicit_route_count": 147,
+    "expected_core_legacy_route_count": 98,
+    "core_legacy_family": "core-legacy-route-reference",
+    "duplicate_route_list_forbidden": true,
+    "unbound_routes_forbidden": true,
+    "overlapping_primary_family_routes_forbidden": true
+  },
+  "required_route_semantics": [
+    "success_exit_code",
+    "domain_application_error_policy",
+    "argument_parser_error_policy",
+    "stdout_format_policy",
+    "stderr_format_policy",
+    "json_envelope_schema_policy",
+    "ordering_guarantee",
+    "filesystem_state_side_effect_policy",
+    "idempotency_behavior",
+    "missing_input_behavior",
+    "malformed_input_behavior",
+    "unsupported_operation_behavior"
+  ],
+  "policy": {
+    "route_behavior_inheritance": "route -> frozen S family behavior contract; T owns only the canonical routes not explicitly named by D-O family reports",
+    "no_implicit_ordering": true,
+    "no_implicit_idempotency": true,
+    "unknown_public_selector_exit": 2,
+    "parser_valid_route_owner_count": 1,
+    "generic_runtime_fallthrough_reachable": false,
+    "public_application_failure_default_exit": 4,
+    "rust_native_promotion_credit": false,
+    "frozen_rust_native_count": 174
+  },
+  "derived_freeze": {
+    "expected_route_semantics_sha256": null
+  }
+}
