@@ -2,8 +2,8 @@
   "schema_version": 1,
   "family": "python-behavior-freeze",
   "phase": "S",
-  "claim": "PYTHON_REFERENCE_BEHAVIOR_FREEZE_BOOTSTRAP",
-  "strict": false,
+  "claim": "PYTHON_REFERENCE_BEHAVIOR_FROZEN",
+  "strict": true,
   "public_surface": {
     "authority": "tools/report_missing_native_public_routes.py",
     "expected_route_count": 245,
@@ -34,11 +34,11 @@
     "must_preserve_clean_tree": true
   },
   "derived_freeze": {
-    "expected_family_schema_sha256": null,
-    "expected_behavior_policy_sha256": null,
-    "expected_error_exit_policy_sha256": null,
-    "expected_nondeterminism_sha256": null,
-    "expected_side_effect_sha256": null
+    "expected_family_schema_sha256": "93d07d59de8f30794cbd96b1a95ca3f11b14da9480538a50615ef10cf2e37088",
+    "expected_behavior_policy_sha256": "eae1c1601656e1874138541420ca718c3f97fff5176fff117e593cbf2a7f5538",
+    "expected_error_exit_policy_sha256": "c85f15172c16803c3e42d101c4d80b5f270558c2340e962e8e958893104a7628",
+    "expected_nondeterminism_sha256": "d2ffbab872ce4f880504ebb5666b9bd45efb88ab4540640b91b0f6e5cf0f3e8f",
+    "expected_side_effect_sha256": "1534dd516d939b205021bc488b0e522d44d7cb125050d4fa773d3e18e937965e"
   },
   "policy": {
     "family_schema_source": "exact-head Python Reference Suite family JSON artifacts",
