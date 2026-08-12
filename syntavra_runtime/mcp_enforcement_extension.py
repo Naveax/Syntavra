@@ -32,8 +32,71 @@ def _sanitized_call_message(message: dict[str, Any], arguments: dict[str, Any]) 
     return sanitized
 
 
+def _install_jsonrpc_transport_hardening(server_cls: Any) -> None:
+    if getattr(server_cls, "_syntavra_jsonrpc_transport_hardened", False):
+        return
+
+    original_handle = server_cls.handle
+
+    def hardened_handle(self: Any, message: Any) -> dict[str, Any] | None:
+        if not isinstance(message, dict):
+            return {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32600, "message": "Invalid Request"},
+            }
+
+        request_id = message.get("id")
+        if message.get("jsonrpc") != "2.0" or not isinstance(message.get("method"), str):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32600, "message": "Invalid Request"},
+            }
+
+        if message.get("method") == "initialize":
+            params = message.get("params", {})
+            if not isinstance(params, dict):
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32602, "message": "Invalid params"},
+                }
+
+        return original_handle(self, message)
+
+    def hardened_serve(self: Any, input_stream: Any, output_stream: Any) -> int:
+        for line in input_stream:
+            if not line.strip():
+                continue
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32700, "message": "Parse error"},
+                }
+            else:
+                response = self.handle(message)
+            if response is not None:
+                output_stream.write(json.dumps(response, ensure_ascii=False, default=str) + "\n")
+                output_stream.flush()
+        return 0
+
+    server_cls.handle = hardened_handle
+    server_cls.serve = hardened_serve
+    server_cls._syntavra_jsonrpc_transport_hardened = True
+
+
 def install() -> None:
     from .mcp_server import MCPServer
+
+    # The native MCP application pipeline already owns authorization and schema
+    # enforcement, but the stdio JSON-RPC boundary still needs request-shape
+    # validation and stable protocol errors. Install that independently so a bad
+    # frame cannot terminate the long-lived server process.
+    _install_jsonrpc_transport_hardening(MCPServer)
 
     if getattr(MCPServer, "_syntavra_native_mcp_pipeline", False):
         return
