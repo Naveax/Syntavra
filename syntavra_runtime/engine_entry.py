@@ -31,6 +31,7 @@ BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES = frozenset(
 )
 CONTEXT_COMPACTION_TYPE_ERROR_ROUTES = frozenset({("context", "pack")})
 CONTEXT_COMPACTION_INDEX_ERROR_ROUTES = frozenset({("compress", "get")})
+SETUP_HOST_TYPE_ERROR_ROUTES = frozenset({("run", "update-install")})
 
 
 def _configure_utf8_stdio() -> None:
@@ -265,7 +266,11 @@ def main(argv: list[str] | None = None) -> int:
         return 4
     except TypeError as exc:
         route = tuple(rest[:2])
-        if route not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES and route not in CONTEXT_COMPACTION_TYPE_ERROR_ROUTES:
+        if (
+            route not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES
+            and route not in CONTEXT_COMPACTION_TYPE_ERROR_ROUTES
+            and route not in SETUP_HOST_TYPE_ERROR_ROUTES
+        ):
             raise
         _emit_public_command_failure(command, exc)
         return 4
