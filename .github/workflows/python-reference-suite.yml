@@ -1,0 +1,134 @@
+name: Python Reference Suite
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-reference-suite
+  cancel-in-progress: true
+
+jobs:
+  python-reference-suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python reference suite architecture regression
+        run: python -m unittest tests.runtime.test_python_reference_suite -v
+
+      - name: Run complete frozen Python reference suite
+        if: always()
+        run: |
+          mkdir -p /tmp/python-reference-suite/artifacts
+          set +e
+          python tools/certify_python_reference_suite.py \
+            --artifact-dir /tmp/python-reference-suite/artifacts \
+            --output /tmp/python-reference-suite/python-reference-suite.json \
+            > /tmp/python-reference-suite/python-reference-suite.log 2>&1
+          suite_exit=$?
+          set -e
+          cat /tmp/python-reference-suite/python-reference-suite.log
+          test -f /tmp/python-reference-suite/python-reference-suite.json
+          python - <<'PY'
+          import hashlib
+          import json
+          import subprocess
+          from pathlib import Path
+
+          root = Path('/tmp/python-reference-suite')
+          artifact_root = root / 'artifacts'
+          value = json.loads((root / 'python-reference-suite.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+
+          assert value['ok'] is True, value
+          assert value['family'] == 'python-reference-suite'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['total'] == 14
+          assert value['passed'] == 14
+          assert value['failed'] == 0
+          assert value['skipped'] == 0
+          assert len(value['by_family']) == 14
+          assert value['repository_status_preserved'] is True
+          assert value['repository_clean_before'] is True
+          assert value['repository_clean_after'] is True
+          assert value['suite_errors'] == []
+          assert len(value['catalog_semantic_sha256']) == 64
+          assert len(value['contract_sha256']) == 64
+
+          expected_families = [
+              'agent',
+              'headless',
+              'graph-language-semantic',
+              'memory-intelligence',
+              'capability-inventory',
+              'provider-proxy',
+              'sandbox-security',
+              'platform-helper-evidence',
+              'benchmark-proof',
+              'context-compaction',
+              'setup-host',
+              'mcp-integration',
+              'publication-registry',
+              'fixture-golden-catalog',
+          ]
+          assert list(value['by_family']) == expected_families
+          assert list(value['artifact_paths']) == expected_families
+          for family in expected_families:
+              row = value['by_family'][family]
+              assert row['status'] == 'passed', row
+              assert row['exit_code'] == 0, row
+              assert row['timed_out'] is False, row
+              assert row['reason'] is None, row
+              assert len(row['artifact_sha256']) == 64, row
+              paths = value['artifact_paths'][family]
+              assert paths['json'] is not None
+              json_path = artifact_root / paths['json']
+              stdout_path = artifact_root / paths['stdout']
+              stderr_path = artifact_root / paths['stderr']
+              assert json_path.is_file(), json_path
+              assert stdout_path.is_file(), stdout_path
+              assert stderr_path.is_file(), stderr_path
+              assert hashlib.sha256(json_path.read_bytes()).hexdigest() == row['artifact_sha256']
+              family_report = json.loads(json_path.read_text(encoding='utf-8'))
+              assert family_report['ok'] is True, family_report
+          PY
+          exit "$suite_exit"
+
+      - name: Upload complete Python reference suite evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-reference-suite
+          path: /tmp/python-reference-suite
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
