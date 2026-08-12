@@ -157,9 +157,11 @@ def _updates(repo: Path, root: Path) -> dict[str, Any]:
     if rolled.get("ok") is not True or rolled.get("sha256")!=h1 or not target.is_file() or target.read_bytes()!=b1: raise AssertionError(f"update rollback drift: {rolled}")
     no_backup=_json("update no backup",_run(repo,project,state,["run","update-rollback","--name","missing-tool"],home=home),3)
     if no_backup!={"ok":False,"reason":"no matching backup"}: raise AssertionError(f"update missing-backup drift: {no_backup}")
-    malformed=_error4("update malformed",_run(repo,project,state,["run","update-install",p1.name,"{}","--name","bad-tool"],home=home));bad=_json("update bad checksum",_run(repo,project,state,["run","update-install",p1.name,artifact(p1,"0"*64),"--name","bad-checksum"],home=home),3)
-    if bad.get("ok") is not False or bad.get("status") not in {"failed","rolled-back"} or "checksum mismatch" not in str(bad.get("detail")): raise AssertionError(f"update checksum drift: {bad}")
-    return {"first":{"ok":first["ok"],"status":first["status"],"installed_sha256":first["installed_sha256"],"previous":first["previous"]},"second":{"ok":second["ok"],"status":second["status"],"installed_sha256":second["installed_sha256"],"previous":second["previous"]},"rollback":{"ok":rolled["ok"],"sha256":rolled["sha256"],"exact_restore":target.read_bytes()==b1},"missing_backup":{"exit":3,"value":no_backup},"malformed_artifact":{"exit":4,"error_type":malformed["error"]["details"]["error"].split(":",1)[0]},"bad_checksum":{"exit":3,"ok":bad["ok"],"status":bad["status"],"detail_has_checksum_mismatch":"checksum mismatch" in bad["detail"]},"target_under_temp_root":str(target).startswith(str(root))}
+    malformed=_error4("update malformed",_run(repo,project,state,["run","update-install",p1.name,"{}","--name","bad-tool"],home=home))
+    bad_checksum=_error4("update bad checksum",_run(repo,project,state,["run","update-install",p1.name,artifact(p1,"0"*64),"--name","bad-checksum"],home=home))
+    bad_checksum_error=str(bad_checksum["error"]["details"]["error"])
+    if not bad_checksum_error.startswith("ValueError:") or "checksum mismatch" not in bad_checksum_error: raise AssertionError(f"update checksum drift: {bad_checksum}")
+    return {"first":{"ok":first["ok"],"status":first["status"],"installed_sha256":first["installed_sha256"],"previous":first["previous"]},"second":{"ok":second["ok"],"status":second["status"],"installed_sha256":second["installed_sha256"],"previous":second["previous"]},"rollback":{"ok":rolled["ok"],"sha256":rolled["sha256"],"exact_restore":target.read_bytes()==b1},"missing_backup":{"exit":3,"value":no_backup},"malformed_artifact":{"exit":4,"error_type":malformed["error"]["details"]["error"].split(":",1)[0]},"bad_checksum":{"exit":4,"error_type":bad_checksum_error.split(":",1)[0],"detail_has_checksum_mismatch":"checksum mismatch" in bad_checksum_error},"target_under_temp_root":str(target).startswith(str(root))}
 
 
 def certify(repo: Path) -> dict[str, Any]:
