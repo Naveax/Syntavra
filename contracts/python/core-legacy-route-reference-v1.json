@@ -2,8 +2,8 @@
   "schema_version": 1,
   "family": "core-legacy-route-reference",
   "phase": "T",
-  "strict": false,
-  "claim": "CORE_LEGACY_ROUTE_REFERENCE_BOOTSTRAP",
+  "strict": true,
+  "claim": "CORE_LEGACY_ROUTE_REFERENCE_FROZEN",
   "selection": {
     "canonical_authority": "tools/report_missing_native_public_routes.py",
     "execution_authority": "tools/report_python_public_execution_contract.py",
@@ -52,9 +52,9 @@
     ]
   },
   "derived_freeze": {
-    "expected_route_contract_sha256": null,
-    "expected_side_effect_sha256": null,
-    "expected_idempotency_sha256": null
+    "expected_route_contract_sha256": "30c80601d447accf23772c33fc1f376279b2a7c13875f06ba29cb5e31dcad3d8",
+    "expected_side_effect_sha256": "40b3a28c7aa24233662735c5d096a762d55f5bfa4fdfda3d18cc835da506f0af",
+    "expected_idempotency_sha256": "3e8fb30a0282e182595adb49c9f8bde96425d4cfed531cdf5eb9ac268569d721"
   },
   "rust_native_promotion_credit": false,
   "frozen_rust_native_count": 174
