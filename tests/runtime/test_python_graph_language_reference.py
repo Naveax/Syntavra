@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from syntavra_runtime.language_parsers import TreeSitterLanguageBackend
 from tools.certify_python_graph_language_reference import certify
 
 
@@ -49,6 +51,18 @@ class PythonGraphLanguageReferenceTests(unittest.TestCase):
         self.assertIn("c_sharp", tree["language_ids"])
         self.assertIn("csharp", tree["language_ids"])
         self.assertEqual(self.report["cases"]["csharp_detect"]["detection"]["language_id"], "csharp")
+
+    def test_packaged_csharp_parser_does_not_require_language_pack_fetch(self) -> None:
+        backend = TreeSitterLanguageBackend()
+        self.assertIsNotNone(backend._csharp_binding, "packaged tree-sitter-c-sharp binding is required")
+        backend._get_parser = mock.Mock(side_effect=AssertionError("language-pack path must not be used for C#"))
+        source = "public class Program { public static void Main() { Helper(); } static void Helper() {} }"
+        for language in ("c_sharp", "csharp"):
+            with self.subTest(language=language):
+                declarations = backend.parse(source, language)
+                self.assertIsNotNone(declarations)
+                self.assertTrue(any(item.name == "Program" for item in declarations or ()))
+        backend._get_parser.assert_not_called()
 
     def test_graph_materialization_query_and_impact(self) -> None:
         index = self.report["cases"]["graph_index"]
