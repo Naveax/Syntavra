@@ -10,6 +10,7 @@ from typing import Any
 from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
+from .model_gateway import GatewayError
 from .runtime_paths import discover_project_root, resolve_state_root
 
 SELECTOR_COMMANDS = frozenset({"engine"})
@@ -232,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return int(python_main(values))
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, GatewayError) as exc:
         _emit(
             {
                 "ok": False,
