@@ -52,7 +52,14 @@ class PythonSetupHostReferenceTests(unittest.TestCase):
         self.assertEqual(hosts["claude_code"]["host"], "claude-code")
         self.assertTrue(hosts["detected_selected"]["codex_project_markers"])
         self.assertTrue(hosts["detected_selected"]["claude_user_markers"])
-        self.assertIn("executables", hosts["environment_schema_keys"])
+        self.assertEqual(hosts["capability_schema_keys"], ["coverage", "hosts", "platform"])
+        self.assertEqual(hosts["capability_registry"]["host_count"], hosts["known_host_count"])
+        self.assertEqual(
+            hosts["capability_registry"]["claim_boundary"],
+            "registry coverage is implementation coverage, not live host certification",
+        )
+        self.assertGreater(hosts["capability_registry"]["controlled_hosts"], 0)
+        self.assertGreater(hosts["capability_registry"]["verified_hosts"], 0)
 
     def test_competitive_host_install_verify_and_rollback_are_reversible(self) -> None:
         fabric = self.report["fabric_install"]
