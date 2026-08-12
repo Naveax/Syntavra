@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 import traceback
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -300,7 +299,7 @@ def _platform_contract(repo: Path, project: Path, state: Path, fixture: dict[str
 
     cwd_denial = _public_failure(
         "platform cwd escape",
-        _run(repo, project, state, ["run", "sandbox-run", command, "--cwd", "../outside", "--timeout", "5"]),
+        _run(repo, project, state, ["run", "sandbox-run", command, "--cwd", "..", "--timeout", "5"]),
         contains="working directory escapes workspace",
     )
     writable_denial = _public_failure(
