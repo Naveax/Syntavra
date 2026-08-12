@@ -1,0 +1,62 @@
+name: Python Agent Reference
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  python-agent-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Run Python agent reference regression tests
+        run: python -m unittest tests.runtime.test_python_agent_reference -v
+
+      - name: Generate exact-head Python agent reference evidence
+        run: |
+          set +e
+          python tools/validate_python_agent_reference.py > /tmp/python-agent-reference.json
+          report_exit=$?
+          set -e
+          cat /tmp/python-agent-reference.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-agent-reference.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['failed_checks'] == [], value['failed_checks']
+          assert value['surface'] == ['agent run', 'agent replay'], value['surface']
+          assert value['network_boundary'] == 'localhost-only deterministic OpenAI-compatible fixture'
+          assert value['run']['ok'] is True
+          assert value['replay']['ok'] is True
+          assert value['events']['contiguous'] is True
+          assert value['durable_receipt']['count'] == 1
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python agent reference evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-agent-reference
+          path: /tmp/python-agent-reference.json
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
