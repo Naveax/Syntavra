@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import argparse
+import tempfile
 import unittest
 from pathlib import Path
 
+from syntavra_runtime.backup import BackupError, StateBackupManager
 from tools import report_missing_native_public_routes as public_surface
 from tools import report_python_public_execution_contract as execution_contract
 from tools.certify_python_core_legacy_reference import (
@@ -60,6 +61,16 @@ class PythonCoreLegacyReferenceArchitectureTests(unittest.TestCase):
         self.assertEqual(len(installed), 17)
         self.assertTrue(all(not by_route[route]["parser_owned"] for route in installed))
         self.assertTrue(all(route.startswith("engine route ") for route in installed))
+
+    def test_invalid_encrypted_backup_is_owned_by_backup_domain(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="syntavra-backup-domain-") as directory:
+            root = Path(directory)
+            state = root / "state"
+            source = root / "not-a-backup.scbackup"
+            source.write_text("not a sealed backup", encoding="utf-8")
+            manager = StateBackupManager(state, project_id="fixture-project")
+            with self.assertRaisesRegex(BackupError, "invalid encrypted backup"):
+                manager.verify(source, encrypted=True)
 
     def test_bootstrap_hash_policy_is_fail_closed_when_promoted(self) -> None:
         self.assertFalse(self.contract["strict"])
