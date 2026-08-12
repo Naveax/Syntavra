@@ -85,8 +85,7 @@ class PythonSetupHostReferenceTests(unittest.TestCase):
         self.assertTrue(updates["target_under_temp_root"])
         self.assertEqual(updates["missing_backup"]["exit"], 3)
         self.assertEqual(updates["malformed_artifact"], {"exit": 4, "error_type": "TypeError"})
-        self.assertEqual(updates["bad_checksum"]["exit"], 3)
-        self.assertTrue(updates["bad_checksum"]["detail_has_checksum_mismatch"])
+        self.assertEqual(updates["bad_checksum"], {"exit": 4, "error_type": "ValueError", "detail_has_checksum_mismatch": True})
 
     def test_certification_never_targets_developer_machine(self) -> None:
         safety = self.report["safety"]
