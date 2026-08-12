@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "family": "python-reference-suite",
+  "catalog": "contracts/python/fixture-golden-catalog-v1.json",
+  "meta_certifiers": [
+    {
+      "family": "fixture-golden-catalog",
+      "path": "tools/certify_python_fixture_golden_catalog.py"
+    }
+  ],
+  "expected_behavior_family_count": 13,
+  "expected_total_certifiers": 14,
+  "expected_skipped": 0,
+  "execution": {
+    "python_only": true,
+    "continue_after_failure": true,
+    "per_family_timeout_seconds": 300,
+    "isolated_temp": true,
+    "isolated_home": true,
+    "repository_status_must_be_preserved": true,
+    "external_credentials_removed": true,
+    "external_http_proxy_sink": "http://127.0.0.1:9",
+    "localhost_no_proxy": "127.0.0.1,localhost,::1",
+    "family_json_artifact_required": true,
+    "stdout_log_required": true,
+    "stderr_log_required": true,
+    "unexpected_nondeterminism_forbidden": true,
+    "missing_fixture_forbidden": true,
+    "contract_drift_forbidden": true
+  },
+  "required_summary_fields": [
+    "ok",
+    "schema_version",
+    "family",
+    "engine",
+    "exact_head",
+    "total",
+    "passed",
+    "failed",
+    "skipped",
+    "by_family",
+    "artifact_paths",
+    "repository_status_preserved",
+    "offline_policy",
+    "catalog_semantic_sha256"
+  ],
+  "offline_policy": "family certifiers execute with live provider/package credentials removed, external HTTP(S)/ALL proxy variables pointed at a local closed sink, localhost explicitly exempted for deterministic local fixtures, and per-family HOME/TMP isolation; no live SaaS evidence is required or claimed"
+}
