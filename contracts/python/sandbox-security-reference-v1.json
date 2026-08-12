@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "public_routes": [
+    "run sandbox-run",
+    "run sandbox-status",
+    "sandbox backends",
+    "sandbox execute",
+    "sandbox plan"
+  ],
+  "direct": {
+    "degraded_backend": "local-restricted",
+    "degraded_reasons": [
+      "network-isolation-unavailable",
+      "filesystem-overlay-unavailable"
+    ],
+    "guarantee_keys": [
+      "filesystem_isolated",
+      "network_isolated",
+      "process_tree_controlled",
+      "resource_limited",
+      "secret_filtered"
+    ],
+    "policy_denials": [
+      "strict network-disabled execution requires docker, podman, or bwrap",
+      "path escapes project",
+      "path is not writable by policy"
+    ]
+  },
+  "platform": {
+    "receipt_keys": [
+      "backend",
+      "command",
+      "cwd",
+      "duration_ms",
+      "environment_keys",
+      "exit_code",
+      "output_limit_exceeded",
+      "policy",
+      "receipt_id",
+      "started_at",
+      "stderr",
+      "stderr_bytes_seen",
+      "stderr_sha256",
+      "stdout",
+      "stdout_bytes_seen",
+      "stdout_sha256",
+      "timed_out"
+    ],
+    "policy_keys": [
+      "allow_child_processes",
+      "cpu_seconds",
+      "max_stderr_bytes",
+      "max_stdout_bytes",
+      "memory_bytes",
+      "network_hosts",
+      "strict_native",
+      "timeout_seconds",
+      "writable_paths",
+      "workspace"
+    ],
+    "environment_markers": [
+      "SYNTAVRA_SANDBOX",
+      "SYNTAVRA_WORKSPACE"
+    ],
+    "application_denials": [
+      "working directory escapes workspace",
+      "writable path escapes workspace",
+      "sandbox command must be a non-empty JSON argv list"
+    ]
+  },
+  "command_policy": {
+    "classification": "content-agnostic",
+    "allowed_behavior": "valid argv executes subject to sandbox policy and available enforcement",
+    "forbidden_behavior": "malformed argv or policy/backend/resource request is rejected fail-closed; command names are not a sandbox authorization list",
+    "authorization_boundary": "capability authorization is a separate contract frozen in H"
+  },
+  "exit_policy": {
+    "direct_success": 0,
+    "direct_child_exit": "passthrough",
+    "direct_timeout": 124,
+    "direct_application_error": 4,
+    "platform_success": 0,
+    "platform_receipt_failure": 3,
+    "platform_application_error": 4,
+    "argparse_error": 2
+  }
+}
