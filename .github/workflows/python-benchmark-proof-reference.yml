@@ -59,8 +59,17 @@ jobs:
           assert value['engine'] == 'python'
           assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
           assert value['routes']['route_count'] == 20
+          assert value['signalbench']['plan']['corpus'] == {'tasks': 150, 'live': False}
+          assert value['signalbench']['plan']['schedule'] == {'runs': 27000, 'repetitions': 30}
+          assert value['signalbench']['pair_count'] == 4500
+          assert value['signalbench']['fixture_rows'] == 9000
           assert value['signalbench']['gate']['ok'] is True
-          assert value['signalbench']['gate']['metrics']['pairs'] == 4500
+          assert value['signalbench']['gate']['claim'] == 'SUPERIORITY_PROVEN'
+          assert value['signalbench']['gate']['metrics']['tasks'] == 150
+          assert value['signalbench']['gate']['metrics']['repetitions'] == 30
+          assert value['signalbench']['gate']['metrics']['success'] == 1.0
+          assert value['signalbench']['gate']['metrics']['token_ratio'] == 0.1
+          assert value['signalbench']['gate']['metrics']['wall_ratio'] == 0.1
           assert value['proof']['measured_benchmark']['ok'] is True
           assert value['proof']['provider_billed']['claimable_superiority'] is True
           assert value['proof']['external_suite']['ok'] is True
