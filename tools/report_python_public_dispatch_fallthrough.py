@@ -14,7 +14,7 @@ from tools import report_missing_native_public_routes as public_surface
 from tools import report_python_public_execution_contract as execution_contract
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 EXPECTED_PUBLIC_ROUTES = 245
 
 
@@ -112,8 +112,8 @@ def exact_leaf_handler_manifest() -> list[dict[str, Any]]:
 
     Legacy argparse routes expose their concrete ``func`` defaults. Manual-dispatch
     surfaces intentionally retain their real public dispatcher entrypoint; the
-    separate dispatcher audit below proves that parser selector values cannot drift
-    into a generic runtime fallthrough.
+    dispatcher audits below prove that parser selector values cannot drift into a
+    generic runtime fallthrough.
     """
 
     legacy_handlers = legacy_leaf_handlers()
@@ -171,37 +171,52 @@ def _literal_strings(node: ast.AST) -> set[str]:
     return set()
 
 
-def _compared_selector_values(
-    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
-    selector: str,
-) -> set[str]:
-    values: set[str] = set()
-    for node in ast.walk(function_node):
-        if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+def _selector_aliases(node: ast.AST, selector: str) -> set[str]:
+    aliases: set[str] = set()
+    for candidate in ast.walk(node):
+        if not isinstance(candidate, (ast.Assign, ast.AnnAssign)):
             continue
-        operator = node.ops[0]
-        comparator = node.comparators[0]
-        if _args_selector(node.left, selector):
+        value = candidate.value
+        if value is None or not _args_selector(value, selector):
+            continue
+        targets = candidate.targets if isinstance(candidate, ast.Assign) else [candidate.target]
+        for target in targets:
+            if isinstance(target, ast.Name):
+                aliases.add(target.id)
+    return aliases
+
+
+def _selector_reference(node: ast.AST, selector: str, aliases: set[str]) -> bool:
+    return _args_selector(node, selector) or (isinstance(node, ast.Name) and node.id in aliases)
+
+
+def _compared_selector_values(node: ast.AST, selector: str) -> set[str]:
+    aliases = _selector_aliases(node, selector)
+    values: set[str] = set()
+    for candidate in ast.walk(node):
+        if not isinstance(candidate, ast.Compare) or len(candidate.ops) != 1:
+            continue
+        operator = candidate.ops[0]
+        comparator = candidate.comparators[0]
+        if _selector_reference(candidate.left, selector, aliases):
             if isinstance(operator, (ast.Eq, ast.In)):
                 values.update(_literal_strings(comparator))
             continue
-        if isinstance(operator, ast.Eq) and _args_selector(comparator, selector):
-            values.update(_literal_strings(node.left))
+        if isinstance(operator, ast.Eq) and _selector_reference(comparator, selector, aliases):
+            values.update(_literal_strings(candidate.left))
     return values
 
 
-def _generic_runtime_fallthrough_count(
-    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
-    selector: str,
-) -> int:
+def _generic_runtime_fallthrough_count(node: ast.AST, selector: str) -> int:
+    aliases = _selector_aliases(node, selector)
     count = 0
-    for node in ast.walk(function_node):
-        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+    for candidate in ast.walk(node):
+        if not isinstance(candidate, ast.Raise) or not isinstance(candidate.exc, ast.Call):
             continue
-        call = node.exc
+        call = candidate.exc
         if not isinstance(call.func, ast.Name) or call.func.id != "RuntimeError":
             continue
-        if len(call.args) == 1 and _args_selector(call.args[0], selector):
+        if len(call.args) == 1 and _selector_reference(call.args[0], selector, aliases):
             count += 1
     return count
 
@@ -211,6 +226,19 @@ def _surface_parser(source: str) -> tuple[argparse.ArgumentParser, frozenset[str
         if candidate == source:
             return parser, skip_top_level
     raise KeyError(source)
+
+
+def _selector_branch(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    selector: str,
+    value: str,
+) -> ast.If:
+    for candidate in ast.walk(function_node):
+        if not isinstance(candidate, ast.If):
+            continue
+        if value in _compared_selector_values(candidate.test, selector):
+            return candidate
+    raise RuntimeError(f"cannot locate {selector}={value!r} branch")
 
 
 def dispatcher_audit(spec: DispatcherSpec) -> dict[str, Any]:
@@ -277,6 +305,87 @@ def dispatcher_audit(spec: DispatcherSpec) -> dict[str, Any]:
     }
 
 
+def prerelease_run_action_audit() -> dict[str, Any]:
+    """Prove every parser-valid ``run <action>`` has exactly one dispatch owner.
+
+    ``prerelease_cli.main`` deliberately chains three owners before its final
+    ``RuntimeError(args.action)`` guard: platform actions, competitive actions, and
+    prerelease-local actions. The parser is the route authority; owner sets are
+    taken from the real platform registry or derived from the live Python function
+    AST rather than repeated as another hardcoded route list.
+    """
+
+    parser, skip_top_level = _surface_parser("prerelease")
+    paths = sorted(public_surface._parser_paths(parser, skip_top_level=skip_top_level))
+    run_paths = [route for route in paths if route == "run" or route.startswith("run ")]
+    expected_actions = {route.split()[1] for route in run_paths if len(route.split()) >= 2}
+
+    prerelease = importlib.import_module("syntavra_runtime.prerelease_cli")
+    platform_cli = importlib.import_module("syntavra_runtime.platform_cli")
+    main_node = _function_node(prerelease.main)
+    run_branch = _selector_branch(main_node, "command", "run")
+    local_actions = _compared_selector_values(run_branch, "action")
+    competitive_node = _function_node(prerelease._handle_competitive_run)
+    competitive_actions = _compared_selector_values(competitive_node, "action")
+    platform_actions = set(platform_cli.ACTIONS)
+
+    owner_sets = {
+        "platform": platform_actions,
+        "competitive": competitive_actions,
+        "prerelease-local": local_actions,
+    }
+    ownership: list[dict[str, Any]] = []
+    missing_actions: list[str] = []
+    multiple_owner_actions: list[dict[str, Any]] = []
+    for action in sorted(expected_actions):
+        owners = sorted(name for name, values in owner_sets.items() if action in values)
+        row = {"action": action, "owners": owners, "owner_count": len(owners)}
+        ownership.append(row)
+        if not owners:
+            missing_actions.append(action)
+        elif len(owners) != 1:
+            multiple_owner_actions.append(row)
+
+    stale_by_owner = {
+        name: sorted(values - expected_actions)
+        for name, values in owner_sets.items()
+        if values - expected_actions
+    }
+    generic_count = _generic_runtime_fallthrough_count(run_branch, "action")
+    failures: list[str] = []
+    if not run_paths:
+        failures.append("prerelease parser exposes no run routes")
+    if missing_actions:
+        failures.append("run actions without a dispatch owner: " + ", ".join(missing_actions))
+    if multiple_owner_actions:
+        failures.append(
+            "run actions with multiple dispatch owners: "
+            + ", ".join(row["action"] for row in multiple_owner_actions)
+        )
+    if stale_by_owner:
+        failures.append(f"dispatch owners contain parser-stale run actions: {stale_by_owner!r}")
+    if generic_count != 1:
+        failures.append(f"expected one guarded RuntimeError(args.action), found {generic_count}")
+
+    return {
+        "source": "prerelease-run",
+        "selector": "action",
+        "parser_route_count": len(run_paths),
+        "parser_action_count": len(expected_actions),
+        "expected_actions": sorted(expected_actions),
+        "owner_sets": {name: sorted(values) for name, values in owner_sets.items()},
+        "ownership": ownership,
+        "missing_action_count": len(missing_actions),
+        "missing_actions": missing_actions,
+        "multiple_owner_action_count": len(multiple_owner_actions),
+        "multiple_owner_actions": multiple_owner_actions,
+        "stale_by_owner": stale_by_owner,
+        "generic_runtime_fallthrough_count": generic_count,
+        "generic_runtime_fallthrough_reachable_from_parser": bool(missing_actions),
+        "failures": failures,
+    }
+
+
 def report() -> dict[str, Any]:
     base = execution_contract.report()
     manifest = exact_leaf_handler_manifest()
@@ -292,12 +401,14 @@ def report() -> dict[str, Any]:
         for row in dispatcher_rows
         if row["failures"]
     ]
+    nested_run = prerelease_run_action_audit()
 
     ok = (
         bool(base["ok"])
         and len(manifest) == EXPECTED_PUBLIC_ROUTES
         and not handler_failures
         and not dispatcher_failures
+        and not nested_run["failures"]
     )
     return {
         "ok": ok,
@@ -313,6 +424,7 @@ def report() -> dict[str, Any]:
             "dispatcher_failure_count": len(dispatcher_failures),
             "dispatcher_failures": dispatcher_failures,
             "dispatchers": dispatcher_rows,
+            "nested_run_dispatch": nested_run,
             "manifest": manifest,
         },
     }
