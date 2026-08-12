@@ -1,4 +1,4 @@
-name: Python Agent Reference
+name: Python Agent Reference Contract
 
 on:
   push:
@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,34 +28,66 @@ jobs:
       - name: Generate exact-head Python agent reference evidence
         run: |
           set +e
-          python tools/validate_python_agent_reference.py > /tmp/python-agent-reference.json
+          python tools/certify_python_agent_reference.py \
+            --output /tmp/python-agent-reference.json \
+            > /tmp/python-agent-reference.log 2>&1
           report_exit=$?
           set -e
-          cat /tmp/python-agent-reference.json
+          cat /tmp/python-agent-reference.log
+          test -f /tmp/python-agent-reference.json
           python - <<'PY'
           import json
           from pathlib import Path
 
           value = json.loads(Path('/tmp/python-agent-reference.json').read_text(encoding='utf-8'))
           assert value['ok'] is True, value
-          assert value['failed_checks'] == [], value['failed_checks']
-          assert value['surface'] == ['agent run', 'agent replay'], value['surface']
-          assert value['network_boundary'] == 'localhost-only deterministic OpenAI-compatible fixture'
-          assert value['run']['ok'] is True
-          assert value['replay']['ok'] is True
-          assert value['events']['contiguous'] is True
-          assert value['durable_receipt']['count'] == 1
+          assert value['engine'] == 'python'
+          assert value['routes'] == ['agent run', 'agent replay']
+          assert value['transport_protocol'] == 'openai-compatible-chat-json-action'
+          assert value['exit_policy'] == {
+              'success': 0,
+              'application_or_gateway_error': 4,
+              'argument_parser_error': 2,
+          }
+          assert value['api_tool_calling'] == {
+              'tools_present': False,
+              'tool_choice_present': False,
+              'tool_result_transport': 'assistant-action-then-user-tool-result-message',
+          }
+          run = value['cases']['agent_run_happy']
+          assert run['request_rounds'] == 2
+          assert run['tool_trace_actions'] == ['search', 'patch']
+          assert run['first_message_roles'] == ['system', 'user']
+          assert run['second_message_roles'] == ['system', 'user', 'assistant', 'user']
+          for name in (
+              'replay_malformed_json',
+              'model_response_not_json_action',
+              'model_unknown_action',
+              'model_malformed_action_arguments',
+              'model_empty_chat_output',
+              'model_http_500',
+              'model_invalid_http_json',
+              'model_endpoint_unavailable',
+              'model_endpoint_timeout',
+          ):
+              assert value['cases'][name]['exit'] == 4, (name, value['cases'][name])
+              assert value['cases'][name]['error_code'] == 'PYTHON_PUBLIC_COMMAND_FAILED', (name, value['cases'][name])
+          assert value['cases']['replay_missing_required_arguments']['exit'] == 2
           PY
           exit "$report_exit"
 
       - name: Upload Python agent reference evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: python-agent-reference
-          path: /tmp/python-agent-reference.json
+          path: |
+            /tmp/python-agent-reference.json
+            /tmp/python-agent-reference.log
           if-no-files-found: error
 
       - name: Show exact head and enforce clean repository tree
+        if: always()
         run: |
           echo "head=$(git rev-parse HEAD)"
           status="$(git status --porcelain --untracked-files=all)"
