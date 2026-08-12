@@ -16,6 +16,15 @@ class PythonMemoryReferenceTests(unittest.TestCase):
         self.assertEqual(self.report["engine"], "python")
         self.assertEqual(self.report["family"], "memory-intelligence")
         self.assertEqual(len(self.report["routes"]), 15)
+        self.assertEqual(
+            self.report["exit_policy"],
+            {
+                "success": 0,
+                "integrity_failure": 3,
+                "application_error": 4,
+                "argument_parser_error": 2,
+            },
+        )
 
     def test_session_chain_checkpoint_fork_merge_and_restore(self) -> None:
         session = self.report["session_memory"]
