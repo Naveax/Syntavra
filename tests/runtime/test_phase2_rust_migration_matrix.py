@@ -31,16 +31,12 @@ class Phase2RustMigrationMatrixTests(unittest.TestCase):
         self.assertEqual(self.contract["rust_baseline"]["expected_unowned"], 0)
         self.assertEqual(self.contract["rust_baseline"]["atomic_promotion_target"], 245)
 
-    def test_selector_and_lower_module_probes_are_separate(self) -> None:
+    def test_single_ownership_probe_covers_selector_and_lower_module_policy(self) -> None:
         rust = self.contract["rust_baseline"]
         self.assertEqual(rust["ownership_probe_binary"], "syntavra-remaining71-ownership")
-        self.assertEqual(
-            rust["module_ownership_probe_binary"],
-            "syntavra-remaining71-module-ownership",
-        )
-        self.assertNotEqual(
-            rust["ownership_probe_binary"],
-            rust["module_ownership_probe_binary"],
+        self.assertNotIn("module_ownership_probe_binary", rust)
+        self.assertTrue(
+            self.contract["policy"]["lower_rust_owner_module_must_be_resolved_before_section_a_closure"]
         )
 
     def test_family_program_catalog_is_unique_and_explicit(self) -> None:
