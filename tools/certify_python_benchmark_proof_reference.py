@@ -255,7 +255,12 @@ def _integration_receipts() -> list[dict[str, Any]]:
 def _proof(repo: Path, project: Path, state: Path, root: Path) -> dict[str, Any]:
     status = _json("proof status", _run(repo, project, state, ["proof", "status"]), 0)
     plan = _json("prove plan", _run(repo, project, state, ["prove", "plan"]), 0)
-    if status.get("claim") != "NOT_PROVEN_WITHOUT_LIVE_EVIDENCE" or plan.get("claim") != "EXTERNAL_SUPERIORITY_NOT_PROVEN":
+    if (
+        status.get("maturity") != "PUBLIC_PRODUCT_MATURITY_NOT_PROVEN"
+        or status.get("release", {}).get("ok") is not False
+        or status.get("workloads", {}).get("workload_count") != 12
+        or plan.get("claim") != "EXTERNAL_SUPERIORITY_NOT_PROVEN"
+    ):
         raise AssertionError(f"proof claim boundary drift: {status} / {plan}")
 
     receipts_path = root / "provider-receipts.json"
