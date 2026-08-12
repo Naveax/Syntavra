@@ -81,7 +81,7 @@ jobs:
       - name: Compile Rust ownership probes
         run: cargo +1.82.0 check --locked -p syntavra-cli --bins
 
-      - name: Prove report-derived Remaining-71 selector ownership
+      - name: Prove report-derived Remaining-71 selector and lower-module ownership
         run: |
           cargo +1.82.0 run --locked -p syntavra-cli \
             --bin syntavra-remaining71-ownership \
@@ -97,6 +97,14 @@ jobs:
           assert value['owned_count'] == 71
           assert value['unowned_count'] == 0
           assert len(value['selector_paths']) == 71
+          assert value['owner_module_count'] == 71
+          assert len(value['owner_modules']) == 71
+          assert value['module_unowned_count'] == 0
+          assert value['module_unowned_routes'] == []
+          assert value['duplicate_owner_count'] == 0
+          assert value['duplicate_owner_routes'] == []
+          assert set(value['selector_paths']) == set(value['owner_modules']) == set(value['owner_candidates'])
+          assert all(value['owner_candidates'][route] == [owner] for route, owner in value['owner_modules'].items())
           PY
 
       - name: Generate exact-head Phase 2 Rust migration matrix
@@ -123,13 +131,20 @@ jobs:
           assert summary['promoted_native'] == 174
           assert summary['remaining'] == 71
           assert summary['remaining_selector_owned'] == 71
+          assert summary['remaining_owner_module_owned'] == 71
           assert summary['remaining_unowned'] == 0
           assert summary['duplicate_routes'] == 0
+          assert summary['duplicate_lower_owner_routes'] == 0
           assert summary['stale_remaining_selector_routes'] == 0
           assert summary['missing_remaining_selector_routes'] == 0
-          assert summary['remaining_owner_module_unresolved'] == 71
+          assert summary['remaining_owner_module_unresolved'] == 0
           assert len(value['matrix']) == 245
           assert len({row['route'] for row in value['matrix']}) == 245
+          remaining = [row for row in value['matrix'] if not row['production_native']]
+          assert len(remaining) == 71
+          assert all(row['rust_selector_owned'] is True for row in remaining)
+          assert all(row['rust_owner_module_owned'] is True for row in remaining)
+          assert all(isinstance(row['rust_owner_module'], str) and row['rust_owner_module'].startswith('native_remaining71_') for row in remaining)
           PY
 
       - name: Upload Phase 2 Rust migration matrix evidence
