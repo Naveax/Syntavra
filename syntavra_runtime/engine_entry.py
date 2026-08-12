@@ -12,6 +12,7 @@ from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 from .model_gateway import GatewayError
 from .runtime_paths import discover_project_root, resolve_state_root
+from .sandbox import SandboxError
 
 SELECTOR_COMMANDS = frozenset({"engine"})
 CODEX_BRIDGE_COMMAND = "codex-mcp-bridge"
@@ -233,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return int(python_main(values))
-    except (ValueError, KeyError, GatewayError, FileNotFoundError, PermissionError) as exc:
+    except (ValueError, KeyError, GatewayError, FileNotFoundError, PermissionError, SandboxError) as exc:
         _emit(
             {
                 "ok": False,
