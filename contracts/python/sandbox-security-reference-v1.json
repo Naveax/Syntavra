@@ -55,8 +55,8 @@
       "network_hosts",
       "strict_native",
       "timeout_seconds",
-      "writable_paths",
-      "workspace"
+      "workspace",
+      "writable_paths"
     ],
     "environment_markers": [
       "SYNTAVRA_SANDBOX",
