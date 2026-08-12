@@ -1,0 +1,101 @@
+name: Python Setup Host Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-setup-host-reference
+  cancel-in-progress: true
+
+jobs:
+  python-setup-host-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python setup/host regression tests
+        run: python -m unittest tests.runtime.test_python_setup_host_reference -v
+
+      - name: Generate exact-head Python setup/host evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_setup_host_reference.py \
+            --output /tmp/python-setup-host-reference.json \
+            > /tmp/python-setup-host-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-setup-host-reference.log
+          test -f /tmp/python-setup-host-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-setup-host-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'setup-host'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['routes']['route_count'] == 21
+          assert len(value['routes']['ownership']) == 21
+          assert value['bootstrap_setup']['dry_run']['mutated_target'] is False
+          assert value['bootstrap_setup']['dry_run']['detected_hosts'] == ['codex']
+          assert value['bootstrap_setup']['applied']['host_transaction_count'] == 1
+          assert value['bootstrap_setup']['doctor']['runtime_state'] == 'PRE_RELEASE_INSTALLED'
+          assert value['bootstrap_setup']['repair']['apply_ok'] is True
+          assert value['host_detection']['implicit_codex_equal'] is True
+          assert value['host_detection']['detected_selected']['codex_project_markers']
+          assert value['host_detection']['detected_selected']['claude_user_markers']
+          assert value['fabric_install']['dry_run']['mutated_target'] is False
+          assert value['fabric_install']['apply']['status'] == 'applied'
+          assert value['fabric_install']['rollback']['status'] == 'rolled-back'
+          assert value['fabric_install']['rollback']['durable_status'] == 'rolled-back'
+          assert value['updates']['rollback']['exact_restore'] is True
+          assert value['updates']['target_under_temp_root'] is True
+          assert value['updates']['malformed_artifact'] == {'exit': 4, 'error_type': 'TypeError'}
+          assert value['updates']['bad_checksum']['exit'] == 3
+          assert value['safety']['developer_home_mutation'] is False
+          assert value['safety']['external_network'] is False
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python setup/host reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-setup-host-reference
+          path: |
+            /tmp/python-setup-host-reference.json
+            /tmp/python-setup-host-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
