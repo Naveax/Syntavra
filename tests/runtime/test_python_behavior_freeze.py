@@ -29,7 +29,7 @@ class PythonBehaviorFreezeArchitectureTests(unittest.TestCase):
             self.repo,
             self.contract,
         )
-        self.assertEqual(len(catalog["families"]), 13)
+        self.assertEqual(len(catalog["families"]), 14)
         self.assertEqual(catalog_file_sha, self.contract["fixture_catalog"]["expected_file_sha256"])
         self.assertEqual(
             suite_contract_sha,
