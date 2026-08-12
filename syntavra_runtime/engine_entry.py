@@ -7,10 +7,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .backup import BackupError
 from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
 from .evidence import EvidenceError
+from .migrations import MigrationError
 from .model_gateway import GatewayError
 from .runtime_paths import discover_project_root, resolve_state_root
 from .sandbox import SandboxError
@@ -32,6 +34,7 @@ BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES = frozenset(
 CONTEXT_COMPACTION_TYPE_ERROR_ROUTES = frozenset({("context", "pack")})
 CONTEXT_COMPACTION_INDEX_ERROR_ROUTES = frozenset({("compress", "get")})
 SETUP_HOST_TYPE_ERROR_ROUTES = frozenset({("run", "update-install")})
+CORE_LEGACY_TYPE_ERROR_ROUTES = frozenset({("fabric", "cache-align")})
 
 
 def _configure_utf8_stdio() -> None:
@@ -261,7 +264,17 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return int(python_main(values))
-    except (ValueError, KeyError, GatewayError, FileNotFoundError, PermissionError, SandboxError, EvidenceError) as exc:
+    except (
+        ValueError,
+        KeyError,
+        GatewayError,
+        FileNotFoundError,
+        PermissionError,
+        SandboxError,
+        EvidenceError,
+        BackupError,
+        MigrationError,
+    ) as exc:
         _emit_public_command_failure(command, exc)
         return 4
     except TypeError as exc:
@@ -270,6 +283,7 @@ def main(argv: list[str] | None = None) -> int:
             route not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES
             and route not in CONTEXT_COMPACTION_TYPE_ERROR_ROUTES
             and route not in SETUP_HOST_TYPE_ERROR_ROUTES
+            and route not in CORE_LEGACY_TYPE_ERROR_ROUTES
         ):
             raise
         _emit_public_command_failure(command, exc)
