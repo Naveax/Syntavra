@@ -1,0 +1,154 @@
+name: Phase 2 Rust Migration Matrix
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase2-rust-migration-matrix
+  cancel-in-progress: true
+
+jobs:
+  phase2-rust-migration-matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run migration-matrix architecture regression
+        run: python -m unittest tests.runtime.test_phase2_rust_migration_matrix -v
+
+      - name: Re-certify frozen Python Phase 1 on this exact head
+        run: |
+          python tools/certify_python_phase1_acceptance.py \
+            --output /tmp/python-phase1-acceptance.json \
+            > /tmp/python-phase1-acceptance.log
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-phase1-acceptance.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['claim'] == 'PYTHON_PHASE1_ACCEPTED'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert len(value['route_semantics']) == 245
+          PY
+
+      - name: Derive canonical 245/174/71 inventory
+        run: |
+          python tools/report_missing_native_public_routes.py \
+            > /tmp/remaining71-inventory.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/remaining71-inventory.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['python']['derived_count'] == 245
+          assert value['rust']['native_count'] == 174
+          assert value['rust']['missing_count'] == 71
+          assert len(value['missing_routes']) == 71
+          PY
+
+      - name: Install pinned Rust 1.82
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal
+          rustc +1.82.0 --version
+          cargo +1.82.0 --version
+
+      - name: Compile Rust ownership probes
+        run: cargo +1.82.0 check --locked -p syntavra-cli --bins
+
+      - name: Prove report-derived Remaining-71 selector ownership
+        run: |
+          cargo +1.82.0 run --locked -p syntavra-cli \
+            --bin syntavra-remaining71-ownership \
+            -- /tmp/remaining71-inventory.json \
+            > /tmp/remaining71-ownership.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/remaining71-ownership.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['report_derived_remaining_count'] == 71
+          assert value['owned_count'] == 71
+          assert value['unowned_count'] == 0
+          assert len(value['selector_paths']) == 71
+          PY
+
+      - name: Generate exact-head Phase 2 Rust migration matrix
+        run: |
+          python tools/report_phase2_rust_migration_matrix.py \
+            --phase1-acceptance /tmp/python-phase1-acceptance.json \
+            --inventory /tmp/remaining71-inventory.json \
+            --ownership /tmp/remaining71-ownership.json \
+            --output /tmp/phase2-rust-migration-matrix.json \
+            > /tmp/phase2-rust-migration-matrix.log
+          cat /tmp/phase2-rust-migration-matrix.log
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/phase2-rust-migration-matrix.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['claim'] == 'PHASE2_RUST_MIGRATION_MATRIX_BASELINE'
+          assert value['exact_head'] == checkout_head
+          summary = value['summary']
+          assert summary['public_routes'] == 245
+          assert summary['promoted_native'] == 174
+          assert summary['remaining'] == 71
+          assert summary['remaining_selector_owned'] == 71
+          assert summary['remaining_unowned'] == 0
+          assert summary['duplicate_routes'] == 0
+          assert summary['stale_remaining_selector_routes'] == 0
+          assert summary['missing_remaining_selector_routes'] == 0
+          assert summary['remaining_owner_module_unresolved'] == 71
+          assert len(value['matrix']) == 245
+          assert len({row['route'] for row in value['matrix']}) == 245
+          PY
+
+      - name: Upload Phase 2 Rust migration matrix evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-rust-migration-matrix
+          path: |
+            /tmp/phase2-rust-migration-matrix.json
+            /tmp/phase2-rust-migration-matrix.log
+            /tmp/python-phase1-acceptance.json
+            /tmp/remaining71-inventory.json
+            /tmp/remaining71-ownership.json
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
