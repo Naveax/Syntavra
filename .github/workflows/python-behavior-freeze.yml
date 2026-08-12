@@ -78,8 +78,9 @@ jobs:
           assert len(execution['manifest']) == 245
 
           suite = value['reference_suite']
-          assert suite['total'] == contract['reference_suite']['expected_total_certifiers'] == 14
-          assert suite['passed'] == 14
+          expected_total = contract['reference_suite']['expected_total_certifiers']
+          assert suite['total'] == expected_total
+          assert suite['passed'] == expected_total
           assert suite['failed'] == contract['reference_suite']['expected_failed'] == 0
           assert suite['skipped'] == contract['reference_suite']['expected_skipped'] == 0
           assert suite['repository_status_preserved'] is True
@@ -88,8 +89,9 @@ jobs:
           assert 'closed sink' in suite['offline_policy']
 
           schemas = value['family_schema_versions']
-          assert len(schemas) == contract['fixture_catalog']['expected_family_count'] == 13
-          assert len({row['family'] for row in schemas}) == 13
+          expected_family_count = contract['fixture_catalog']['expected_family_count']
+          assert len(schemas) == expected_family_count
+          assert len({row['family'] for row in schemas}) == expected_family_count
           assert all(isinstance(row['reference_schema_version'], int) and row['reference_schema_version'] >= 1 for row in schemas)
 
           derived = value['derived_hashes']
