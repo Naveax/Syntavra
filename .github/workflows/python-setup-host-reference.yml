@@ -66,6 +66,7 @@ jobs:
           assert value['bootstrap_setup']['doctor']['runtime_state'] == 'PRE_RELEASE_INSTALLED'
           assert value['bootstrap_setup']['repair']['apply_ok'] is True
           assert value['host_detection']['implicit_codex_equal'] is True
+          assert value['host_detection']['capability_schema_keys'] == ['coverage', 'hosts', 'platform']
           assert value['host_detection']['detected_selected']['codex_project_markers']
           assert value['host_detection']['detected_selected']['claude_user_markers']
           assert value['fabric_install']['dry_run']['mutated_target'] is False
@@ -75,7 +76,7 @@ jobs:
           assert value['updates']['rollback']['exact_restore'] is True
           assert value['updates']['target_under_temp_root'] is True
           assert value['updates']['malformed_artifact'] == {'exit': 4, 'error_type': 'TypeError'}
-          assert value['updates']['bad_checksum']['exit'] == 3
+          assert value['updates']['bad_checksum'] == {'exit': 4, 'error_type': 'ValueError', 'detail_has_checksum_mismatch': True}
           assert value['safety']['developer_home_mutation'] is False
           assert value['safety']['external_network'] is False
           PY
