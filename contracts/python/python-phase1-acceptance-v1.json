@@ -2,8 +2,8 @@
   "schema_version": 1,
   "family": "python-phase1-acceptance",
   "phase": "final-python-phase1",
-  "claim": "PYTHON_PHASE1_ACCEPTANCE_BOOTSTRAP",
-  "strict": false,
+  "claim": "PYTHON_PHASE1_ACCEPTED",
+  "strict": true,
   "behavior_freeze": {
     "path": "contracts/python/python-behavior-freeze-v1.json",
     "expected_sha256": "015ecbf39c12608f4553481ff8ad50b6c922c051991b97ecc9df833051b621c1",
@@ -47,6 +47,6 @@
     "frozen_rust_native_count": 174
   },
   "derived_freeze": {
-    "expected_route_semantics_sha256": null
+    "expected_route_semantics_sha256": "58c76de4e61cad06557a11f987deb8fc516e6f0bc7e357bd8664dab9889fcabc"
   }
 }
