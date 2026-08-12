@@ -15,6 +15,7 @@
   ],
   "jsonrpc_errors": {
     "parse_error": -32700,
+    "invalid_request": -32600,
     "method_not_found": -32601,
     "invalid_parameters": -32602,
     "policy_denied": -32001,
