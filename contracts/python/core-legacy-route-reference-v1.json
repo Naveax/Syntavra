@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "family": "core-legacy-route-reference",
+  "phase": "T",
+  "strict": false,
+  "claim": "CORE_LEGACY_ROUTE_REFERENCE_BOOTSTRAP",
+  "selection": {
+    "canonical_authority": "tools/report_missing_native_public_routes.py",
+    "execution_authority": "tools/report_python_public_execution_contract.py",
+    "family_catalog": "contracts/python/fixture-golden-catalog-v1.json",
+    "expected_canonical_route_count": 245,
+    "expected_canonical_route_sha256": "7bd02c46ba9209504c4b1842c9ad30e28151ce14a0f5c5d545daff960f9899aa",
+    "expected_dp_explicit_route_count": 147,
+    "expected_target_route_count": 98,
+    "expected_source_counts": {
+      "core": 17,
+      "legacy": 26,
+      "prerelease": 33,
+      "engine": 5,
+      "engine-installed-read-only": 17
+    },
+    "hardcoded_target_route_list_forbidden": true
+  },
+  "execution": {
+    "per_invocation_timeout_seconds": 8,
+    "repeat_on_same_state": true,
+    "external_credentials_removed": true,
+    "external_http_proxy_sink": "http://127.0.0.1:9",
+    "localhost_no_proxy": "127.0.0.1,localhost,::1",
+    "isolated_home": true,
+    "isolated_xdg": true,
+    "stdin_devnull": true,
+    "traceback_forbidden": true,
+    "timeout_forbidden": true,
+    "parser_synthesis_exit_two_forbidden": true,
+    "repository_status_must_be_preserved": true
+  },
+  "normalization": {
+    "freeze_raw_stdout_values": false,
+    "freeze_stdout_shape": true,
+    "freeze_stderr_shape": true,
+    "freeze_top_level_json_keys": true,
+    "freeze_public_error_code": true,
+    "freeze_filesystem_delta": true,
+    "freeze_repeat_shape": true,
+    "explicit_nondeterministic_fields": [
+      "temporary project/state/home paths",
+      "timestamps and durations",
+      "generated identifiers/nonces/receipt IDs",
+      "hashes whose material includes temporary paths or generated IDs",
+      "raw human-readable text beyond frozen output shape/top-level schema"
+    ]
+  },
+  "derived_freeze": {
+    "expected_route_contract_sha256": null,
+    "expected_side_effect_sha256": null,
+    "expected_idempotency_sha256": null
+  },
+  "rust_native_promotion_credit": false,
+  "frozen_rust_native_count": 174
+}
