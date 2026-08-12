@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from typing import Any
 
 from .mcp_policy import MCPToolPolicy
@@ -65,8 +66,14 @@ def _install_jsonrpc_transport_hardening(server_cls: Any) -> None:
 
         return original_handle(self, message)
 
-    def hardened_serve(self: Any, input_stream: Any, output_stream: Any) -> int:
-        for line in input_stream:
+    def hardened_serve(
+        self: Any,
+        input_stream: Any = None,
+        output_stream: Any = None,
+    ) -> int:
+        active_input = sys.stdin if input_stream is None else input_stream
+        active_output = sys.stdout if output_stream is None else output_stream
+        for line in active_input:
             if not line.strip():
                 continue
             try:
@@ -80,8 +87,8 @@ def _install_jsonrpc_transport_hardening(server_cls: Any) -> None:
             else:
                 response = self.handle(message)
             if response is not None:
-                output_stream.write(json.dumps(response, ensure_ascii=False, default=str) + "\n")
-                output_stream.flush()
+                active_output.write(json.dumps(response, ensure_ascii=False, default=str) + "\n")
+                active_output.flush()
         return 0
 
     server_cls.handle = hardened_handle
