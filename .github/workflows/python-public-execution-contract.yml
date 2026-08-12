@@ -1,0 +1,64 @@
+name: Python Public Execution Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  python-public-execution-contract:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Run Python public execution contract tests
+        run: python -m unittest discover -s tests -p 'test_python_public_execution_contract.py' -v
+
+      - name: Derive exact-head execution ownership contract
+        run: |
+          set +e
+          python tools/report_python_public_execution_contract.py > /tmp/python-public-execution-contract.json
+          report_exit=$?
+          set -e
+          cat /tmp/python-public-execution-contract.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-public-execution-contract.json').read_text(encoding='utf-8'))
+          python = value['python']
+          assert value['ok'] is True, value
+          assert python['route_count'] == 245, python['route_count']
+          assert python['unique_execution_owner_count'] == 245, python['owner_failures']
+          assert python['duplicate_route_count'] == 0, python['duplicate_routes']
+          assert python['namespace_collision_count'] == 0, python['namespace_collisions']
+          assert python['alias_conflict_count'] == 0, python['alias_conflicts']
+          assert python['shadow_failure_count'] == 0, python['shadow_failures']
+          assert python['parser_leaf_reachability_failures'] == [], python['parser_leaf_reachability_failures']
+          assert python['parser_error_failures'] == [], python['parser_error_failures']
+          PY
+          exit "$report_exit"
+
+      - name: Upload exact-head Python execution contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-public-execution-contract
+          path: /tmp/python-public-execution-contract.json
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean tree
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
