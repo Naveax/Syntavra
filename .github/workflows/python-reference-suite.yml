@@ -60,41 +60,32 @@ jobs:
           artifact_root = root / 'artifacts'
           value = json.loads((root / 'python-reference-suite.json').read_text(encoding='utf-8'))
           checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          contract = json.loads(Path('contracts/python/python-reference-suite-v1.json').read_text(encoding='utf-8'))
+          catalog = json.loads(Path(contract['catalog']).read_text(encoding='utf-8'))
+          expected_families = [row['family'] for row in catalog['families']]
+          expected_families.extend(row['family'] for row in contract['meta_certifiers'])
 
           assert value['ok'] is True, value
           assert value['family'] == 'python-reference-suite'
           assert value['engine'] == 'python'
           assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
-          assert value['total'] == 14
-          assert value['passed'] == 14
+          assert value['total'] == contract['expected_total_certifiers'] == len(expected_families)
+          assert value['passed'] == value['total']
           assert value['failed'] == 0
-          assert value['skipped'] == 0
-          assert len(value['by_family']) == 14
+          assert value['skipped'] == contract['expected_skipped'] == 0
+          assert len(value['by_family']) == value['total']
           assert value['repository_status_preserved'] is True
           assert value['repository_clean_before'] is True
           assert value['repository_clean_after'] is True
           assert value['suite_errors'] == []
           assert len(value['catalog_semantic_sha256']) == 64
           assert len(value['contract_sha256']) == 64
-
-          expected_families = [
-              'agent',
-              'headless',
-              'graph-language-semantic',
-              'memory-intelligence',
-              'capability-inventory',
-              'provider-proxy',
-              'sandbox-security',
-              'platform-helper-evidence',
-              'benchmark-proof',
-              'context-compaction',
-              'setup-host',
-              'mcp-integration',
-              'publication-registry',
-              'fixture-golden-catalog',
-          ]
+          assert value['ci_head_env_removed'] == ['GITHUB_SHA']
+          assert value['runtime_home_preserved'] is True
+          assert value['runtime_xdg_preserved'] is True
           assert list(value['by_family']) == expected_families
           assert list(value['artifact_paths']) == expected_families
+
           for family in expected_families:
               row = value['by_family'][family]
               assert row['status'] == 'passed', row
