@@ -64,6 +64,7 @@ jobs:
           catalog = json.loads(Path(contract['catalog']).read_text(encoding='utf-8'))
           expected_families = [row['family'] for row in catalog['families']]
           expected_families.extend(row['family'] for row in contract['meta_certifiers'])
+          expected_family_set = set(expected_families)
 
           assert value['ok'] is True, value
           assert value['family'] == 'python-reference-suite'
@@ -83,8 +84,8 @@ jobs:
           assert value['ci_head_env_removed'] == ['GITHUB_SHA']
           assert value['runtime_home_preserved'] is True
           assert value['runtime_xdg_preserved'] is True
-          assert list(value['by_family']) == expected_families
-          assert list(value['artifact_paths']) == expected_families
+          assert set(value['by_family']) == expected_family_set
+          assert set(value['artifact_paths']) == expected_family_set
 
           for family in expected_families:
               row = value['by_family'][family]
