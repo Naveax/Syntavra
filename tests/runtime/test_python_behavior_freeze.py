@@ -18,7 +18,7 @@ class PythonBehaviorFreezeArchitectureTests(unittest.TestCase):
         cls.repo = Path(__file__).resolve().parents[2]
         cls.contract, cls.freeze_sha = _load_and_verify_freeze(cls.repo)
 
-    def test_bootstrap_identity_and_companion_hash_are_valid(self) -> None:
+    def test_identity_and_companion_hash_are_valid(self) -> None:
         self.assertEqual(self.contract["schema_version"], 1)
         self.assertEqual(self.contract["family"], "python-behavior-freeze")
         self.assertEqual(self.contract["phase"], "S")
@@ -48,15 +48,28 @@ class PythonBehaviorFreezeArchitectureTests(unittest.TestCase):
         self.assertTrue(self.contract["policy"]["full_route_manifest_in_certification_artifact"])
 
     def test_bootstrap_allows_null_derived_hashes_but_strict_mode_does_not(self) -> None:
-        for key in self.contract["derived_freeze"]:
-            _expected_hash(self.contract, key, "0" * 64)
+        bootstrap = copy.deepcopy(self.contract)
+        bootstrap["strict"] = False
+        for key in bootstrap["derived_freeze"]:
+            bootstrap["derived_freeze"][key] = None
+            _expected_hash(bootstrap, key, "0" * 64)
 
-        strict = copy.deepcopy(self.contract)
+        strict = copy.deepcopy(bootstrap)
         strict["strict"] = True
         for key in strict["derived_freeze"]:
             with self.subTest(key=key):
                 with self.assertRaisesRegex(AssertionError, "strict behavior freeze is missing derived hash"):
                     _expected_hash(strict, key, "0" * 64)
+
+    def test_current_strict_contract_has_complete_derived_hashes(self) -> None:
+        if not self.contract["strict"]:
+            self.skipTest("bootstrap freeze has not been promoted to strict yet")
+        self.assertEqual(self.contract["claim"], "PYTHON_REFERENCE_BEHAVIOR_FROZEN")
+        for key, value in self.contract["derived_freeze"].items():
+            with self.subTest(key=key):
+                self.assertIsInstance(value, str)
+                self.assertEqual(len(value), 64)
+                _expected_hash(self.contract, key, value)
 
     def test_strict_hash_mismatch_fails_closed(self) -> None:
         strict = copy.deepcopy(self.contract)
