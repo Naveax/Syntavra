@@ -16,7 +16,10 @@
     "continue_after_failure": true,
     "per_family_timeout_seconds": 300,
     "isolated_temp": true,
-    "isolated_home": true,
+    "isolated_home": false,
+    "preserve_runtime_home": true,
+    "isolated_xdg": true,
+    "sanitize_ci_head_environment": true,
     "repository_status_must_be_preserved": true,
     "external_credentials_removed": true,
     "external_http_proxy_sink": "http://127.0.0.1:9",
@@ -44,5 +47,5 @@
     "offline_policy",
     "catalog_semantic_sha256"
   ],
-  "offline_policy": "family certifiers execute with live provider/package credentials removed, external HTTP(S)/ALL proxy variables pointed at a local closed sink, localhost explicitly exempted for deterministic local fixtures, and per-family HOME/TMP isolation; no live SaaS evidence is required or claimed"
+  "offline_policy": "family certifiers execute with live provider/package credentials removed, external HTTP(S)/ALL proxy variables pointed at a local closed sink, localhost explicitly exempted for deterministic local fixtures, per-family TMP/XDG isolation, installed-runtime HOME preserved, and merge-SHA CI environment removed so exact-head evidence comes from the checked-out repository; no live SaaS evidence is required or claimed"
 }
