@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "family": "python-behavior-freeze",
+  "phase": "S",
+  "claim": "PYTHON_REFERENCE_BEHAVIOR_FREEZE_BOOTSTRAP",
+  "strict": false,
+  "public_surface": {
+    "authority": "tools/report_missing_native_public_routes.py",
+    "expected_route_count": 245,
+    "expected_route_sha256": "7bd02c46ba9209504c4b1842c9ad30e28151ce14a0f5c5d545daff960f9899aa",
+    "duplicate_route_list_forbidden": true
+  },
+  "execution_contract": {
+    "authority": "tools/report_python_public_execution_contract.py",
+    "expected_schema_version": 2,
+    "expected_unique_owner_count": 245,
+    "expected_success_exit": 0,
+    "expected_parser_error_exit": 2
+  },
+  "fixture_catalog": {
+    "path": "contracts/python/fixture-golden-catalog-v1.json",
+    "expected_file_sha256": "79f02c7128d3fc82777d98e6622f67b5179618a797c851676b83a6e732cf4956",
+    "expected_semantic_sha256": "b288b3adc5f7bee7c61c31c92139a1b279a80079923d58fd734121df55c6c31a",
+    "expected_family_count": 13,
+    "expected_fixture_case_count": 65
+  },
+  "reference_suite": {
+    "contract_path": "contracts/python/python-reference-suite-v1.json",
+    "expected_contract_sha256": "d66aead8d7ef1230baffa4622543c217455055b786a8fb3c42b33a18334596b6",
+    "expected_total_certifiers": 14,
+    "expected_failed": 0,
+    "expected_skipped": 0,
+    "must_be_offline": true,
+    "must_preserve_clean_tree": true
+  },
+  "derived_freeze": {
+    "expected_family_schema_sha256": null,
+    "expected_behavior_policy_sha256": null,
+    "expected_error_exit_policy_sha256": null,
+    "expected_nondeterminism_sha256": null,
+    "expected_side_effect_sha256": null
+  },
+  "policy": {
+    "family_schema_source": "exact-head Python Reference Suite family JSON artifacts",
+    "behavior_policy_source": "Q fixture/golden catalog plus exact-head family reports",
+    "error_exit_policy_source": "245-route execution manifest plus family exit policies and Q malformed/domain fixtures",
+    "nondeterminism_source": "Q per-family nondeterministic_fields only",
+    "side_effect_source": "Q per-family side_effect fixture",
+    "full_route_manifest_in_certification_artifact": true,
+    "static_route_manifest_copy": false,
+    "rust_python_required_for_fixture_consumption": false,
+    "rust_native_promotion_credit": false,
+    "frozen_rust_native_count": 174
+  }
+}
