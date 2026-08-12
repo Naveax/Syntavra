@@ -198,6 +198,13 @@ def _validate_family_report(
     if not meta:
         observed = report.get("nondeterministic_fields")
         if not isinstance(observed, list):
+            normalization = report.get("normalization")
+            observed = (
+                normalization.get("explicit_nondeterministic_fields")
+                if isinstance(normalization, dict)
+                else None
+            )
+        if not isinstance(observed, list):
             raise AssertionError("family certifier must expose nondeterministic_fields")
         expected = list(expected_nondeterministic or [])
         if len(expected) != len(set(expected)) or len(observed) != len(set(observed)):
