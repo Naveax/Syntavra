@@ -55,7 +55,10 @@ class PythonMCPIntegrationReferenceTests(unittest.TestCase):
         self.assertEqual(sum(integrations["family_counts"].values()), integrations["count"])
         self.assertEqual(integrations["family_filters"], integrations["family_counts"])
         self.assertEqual(len(integrations["sha256"]), 64)
-        self.assertIn("total", integrations["coverage"])
+        self.assertTrue(integrations["coverage"]["ok"])
+        self.assertEqual(integrations["coverage"]["providers"], integrations["family_counts"]["provider"])
+        self.assertEqual(integrations["coverage"]["frameworks"], integrations["family_counts"]["framework"])
+        self.assertEqual(integrations["coverage"]["hosts"], integrations["family_counts"]["host"])
         self.assertIn("ok", integrations["platform_adapters"])
         self.assertIn("ok", integrations["proxy_presets"])
 
