@@ -58,7 +58,11 @@ jobs:
           assert value['family'] == 'capability-inventory'
           assert value['engine'] == 'python'
           assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
-          assert value['exit_policy'] == {'success': 0, 'argument_parser_error': 2}
+          assert value['exit_policy'] == {
+              'success': 0,
+              'verification_failure': 3,
+              'argument_parser_error': 2,
+          }
 
           inventory = value['inventory']
           assert inventory['route_count'] == 245, inventory
@@ -77,29 +81,52 @@ jobs:
           capability = value['capability']
           assert capability['decisions']['read']['allowed'] is True
           assert capability['decisions']['write_authorization_required']['reason'] == 'authorization-required'
-          assert capability['decisions']['write_sandbox_required']['reason'] == 'sandbox-required'
+          assert capability['decisions']['write_allowed']['allowed'] is True
+          assert capability['decisions']['execute_sandbox_required']['reason'] == 'sandbox-required'
           assert capability['decisions']['execute_allowed']['category'] == 'execute'
           assert capability['decisions']['destructive_denied']['reason'] == 'destructive-command-denied'
           assert capability['decisions']['outside_workspace_denied']['reason'] == 'resource-outside-workspace'
           assert capability['decisions']['network_denied']['reason'] == 'network-host-not-allowlisted'
-          assert capability['decisions']['unknown_tool_denied'] == {
-              'allowed': False,
-              'arguments_hash': capability['decisions']['unknown_tool_denied']['arguments_hash'],
-              'category': 'unknown',
-              'reason': 'unknown-tool-fail-closed',
-              'requirements': ['signed-capability', 'exact-evidence'],
-              'resource': 'workspace:/',
-              'tool': 'totally.unknown.tool',
-          }
+          assert capability['decisions']['unknown_tool_denied']['allowed'] is False
+          assert capability['decisions']['unknown_tool_denied']['category'] == 'unknown'
+          assert capability['decisions']['unknown_tool_denied']['reason'] == 'unknown-tool-fail-closed'
+
+          assert capability['issue']['top_level_keys'] == ['ok', 'single_use', 'token']
+          assert capability['issue']['capability']['ttl_seconds'] == 300
+          assert capability['issue']['capability']['permissions'] == ['evidence', 'write']
           assert capability['verify']['first']['reason'] == 'verified'
-          assert capability['verify']['replay'] == {'ok': False, 'reason': 'already-consumed'}
-          assert capability['verify']['binding_mismatch'] == {'ok': False, 'reason': 'binding-mismatch'}
-          assert capability['verify']['malformed'] == {'ok': False, 'reason': 'malformed-token'}
-          assert capability['verify']['invalid_signature'] == {'ok': False, 'reason': 'invalid-signature'}
+          assert capability['verify']['first']['exit'] == 0
+          assert capability['verify']['replay']['reason'] == 'already-consumed'
+          assert capability['verify']['replay']['exit'] == 3
+          assert capability['verify']['binding_mismatch']['reason'] == 'binding-mismatch'
+          assert capability['verify']['binding_mismatch']['exit'] == 3
+          assert capability['verify']['expired']['reason'] == 'expired'
+          assert capability['verify']['expired']['exit'] == 3
+          assert capability['verify']['malformed'] == {
+              'exit': 3,
+              'ok': False,
+              'reason': 'malformed-token',
+              'top_level_keys': ['ok', 'reason'],
+          }
+          assert capability['verify']['invalid_signature'] == {
+              'exit': 3,
+              'ok': False,
+              'reason': 'invalid-signature',
+              'top_level_keys': ['ok', 'reason'],
+          }
+          assert capability['verify']['reason_vocabulary'] == [
+              'already-consumed',
+              'binding-mismatch',
+              'expired',
+              'invalid-signature',
+              'malformed-token',
+              'verified',
+          ]
           assert capability['durable_side_effects'] == {
               'signing_key_bytes': 32,
               'consumed_rows': 1,
-              'consumed_token_hash_matches_issue': True,
+              'consumed_nonce_matches_issued_token': True,
+              'store': 'sqlite',
           }
           assert capability['parser_error']['exit'] == 2
           PY
