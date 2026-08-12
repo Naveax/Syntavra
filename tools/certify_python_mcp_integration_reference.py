@@ -24,18 +24,43 @@ FIXTURE_RELATIVE = Path("contracts/python/mcp-integration-reference-v1.json")
 
 
 def _head(repo: Path) -> str:
-    proc = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    proc = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
 
-def _run(repo: Path, project: Path, state: Path, argv: list[str], *, env_extra: dict[str, str] | None = None) -> dict[str, Any]:
+def _run(
+    repo: Path,
+    project: Path,
+    state: Path,
+    argv: list[str],
+    *,
+    env_extra: dict[str, str] | None = None,
+) -> dict[str, Any]:
     env = os.environ.copy()
     env.update({"PYTHONPATH": str(repo), "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"})
     if env_extra:
         env.update(env_extra)
     env.pop("SYNTAVRA_BULK_PARITY_PROBE", None)
     proc = subprocess.run(
-        [sys.executable, "-m", "syntavra_runtime.engine_entry", "--engine", "python", "--project", str(project), "--state-root", str(state), *argv],
+        [
+            sys.executable,
+            "-m",
+            "syntavra_runtime.engine_entry",
+            "--engine",
+            "python",
+            "--project",
+            str(project),
+            "--state-root",
+            str(state),
+            *argv,
+        ],
         cwd=repo,
         env=env,
         text=True,
@@ -63,9 +88,11 @@ def _json(label: str, result: dict[str, Any], exit_code: int = 0) -> dict[str, A
 
 def _routes(fixture: dict[str, Any]) -> dict[str, Any]:
     expected = fixture["public_routes"]
-    observed = sorted(route for route in public_surface.python_public_route_sources() if route in set(expected))
+    expected_set = set(expected)
+    observed = sorted(route for route in public_surface.python_public_route_sources() if route in expected_set)
     if observed != expected:
         raise AssertionError(f"MCP/integration route inventory drift: observed={observed}, expected={expected}")
+
     execution = {row["route"]: row for row in execution_contract.route_execution_manifest()}
     owners: dict[str, str] = {}
     for route in expected:
@@ -73,7 +100,12 @@ def _routes(fixture: dict[str, Any]) -> dict[str, Any]:
         if not row or len(row["entrypoints"]) != 1 or row["unknown_sources"]:
             raise AssertionError(f"MCP/integration execution ownership drift: {row}")
         owners[route] = row["entrypoint"]
-    return {"routes": expected, "route_count": len(expected), "route_sha256": public_surface._digest(expected), "ownership": owners}
+    return {
+        "routes": expected,
+        "route_count": len(expected),
+        "route_sha256": public_surface._digest(expected),
+        "ownership": owners,
+    }
 
 
 def _catalog_snapshot(repo: Path, project: Path, state: Path, fixture: dict[str, Any]) -> dict[str, Any]:
@@ -88,30 +120,44 @@ def _catalog_snapshot(repo: Path, project: Path, state: Path, fixture: dict[str,
     names = [str(row.get("name") or "") for row in catalog]
     if len(names) != len(set(names)) or any(not name for name in names):
         raise AssertionError("MCP full tool catalog contains duplicate/empty names")
+
     full_sha = hashlib.sha256(canonical_json(catalog)).hexdigest()
-    name_sha = hashlib.sha256("\n".join(names).encode()).hexdigest()
+    name_sha = hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
     expected = fixture["tool_inventory"]
     if expected.get("count") is not None and expected["count"] != len(catalog):
         raise AssertionError(f"MCP tool inventory count drift: {len(catalog)} != {expected['count']}")
     if expected.get("sha256") is not None and expected["sha256"] != full_sha:
         raise AssertionError(f"MCP tool inventory digest drift: {full_sha} != {expected['sha256']}")
+
     by_name = {row["name"]: row for row in catalog}
-    selected = {}
-    for name in ("syntavra.status", "syntavra.context.evaluate", "syntavra.sandbox.execute", "syntavra.session.open"):
+    selected: dict[str, Any] = {}
+    for name in (
+        "syntavra.status",
+        "syntavra.context.evaluate",
+        "syntavra.sandbox.execute",
+        "syntavra.session.open",
+    ):
         row = by_name.get(name)
         if row is None:
             raise AssertionError(f"MCP selected tool disappeared: {name}")
+        schema = row.get("inputSchema") or {}
         selected[name] = {
             "description": row.get("description"),
-            "input_schema_type": (row.get("inputSchema") or {}).get("type"),
-            "required": list((row.get("inputSchema") or {}).get("required") or []),
-            "property_keys": sorted(((row.get("inputSchema") or {}).get("properties") or {}).keys()),
+            "input_schema_type": schema.get("type"),
+            "required": list(schema.get("required") or []),
+            "property_keys": sorted((schema.get("properties") or {}).keys()),
         }
-    if len(MINIMAL_TOOLS) != fixture["profiles"]["minimal_exposed_tools"] or len(BALANCED_TOOLS) != fixture["profiles"]["balanced_exposed_tools"]:
-        raise AssertionError("MCP profile tool-count drift")
-    for alias, canonical in fixture["profiles"]["legacy_alias"].items():
-        if normalize_profile(alias) != canonical:
-            raise AssertionError(f"MCP legacy profile alias drift: {alias} -> {normalize_profile(alias)} != {canonical}")
+
+    profiles = fixture["profiles"]
+    if len(MINIMAL_TOOLS) != profiles["minimal_exposed_tools"]:
+        raise AssertionError("MCP minimal profile tool-count drift")
+    if len(BALANCED_TOOLS) != profiles["balanced_exposed_tools"]:
+        raise AssertionError("MCP balanced profile tool-count drift")
+    for alias, canonical in profiles["legacy_alias"].items():
+        observed_alias = normalize_profile(alias)
+        if observed_alias != canonical:
+            raise AssertionError(f"MCP legacy profile alias drift: {alias} -> {observed_alias} != {canonical}")
+
     return {
         "count": len(catalog),
         "sha256": full_sha,
@@ -123,8 +169,8 @@ def _catalog_snapshot(repo: Path, project: Path, state: Path, fixture: dict[str,
     }
 
 
-def _mcp_stdio(repo: Path, project: Path, state: Path) -> dict[str, Any]:
-    requests = [
+def _mcp_stdio(repo: Path, project: Path, state: Path, fixture: dict[str, Any]) -> dict[str, Any]:
+    valid_requests = [
         {"jsonrpc": "2.0", "id": "init", "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
         {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
         {"jsonrpc": "2.0", "id": "ping", "method": "ping"},
@@ -133,26 +179,47 @@ def _mcp_stdio(repo: Path, project: Path, state: Path) -> dict[str, Any]:
         {"jsonrpc": "2.0", "id": "denied", "method": "tools/call", "params": {"name": "syntavra.sandbox.execute", "arguments": {"argv": ["echo", "fixture"]}}},
         {"jsonrpc": "2.0", "id": "unknown", "method": "syntavra/no-such-method", "params": {}},
     ]
-    stdin = "\n".join(json.dumps(row, separators=(",", ":")) for row in requests) + "\n{\"jsonrpc\":\n"
+    raw_lines = [json.dumps(row, separators=(",", ":")) for row in valid_requests]
+    raw_lines.extend(
+        [
+            '{"jsonrpc":',
+            "[]",
+            json.dumps({"jsonrpc": "2.0", "id": "bad-init", "method": "initialize", "params": []}, separators=(",", ":")),
+            json.dumps({"jsonrpc": "2.0", "id": "post-errors-ping", "method": "ping"}, separators=(",", ":")),
+        ]
+    )
+    stdin = "\n".join(raw_lines) + "\n"
+
     env = os.environ.copy()
-    env.update({
-        "PYTHONPATH": str(repo),
-        "PYTHONIOENCODING": "utf-8",
-        "PYTHONUTF8": "1",
-        "SYNTAVRA_MCP_PROFILE": "minimal",
-        "SYNTAVRA_SCHEMA_MODE": "compact",
-        "SYNTAVRA_WIRE_MODE": "off",
-    })
+    env.update(
+        {
+            "PYTHONPATH": str(repo),
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1",
+            "SYNTAVRA_MCP_PROFILE": "minimal",
+            "SYNTAVRA_SCHEMA_MODE": "compact",
+            "SYNTAVRA_WIRE_MODE": "off",
+        }
+    )
     proc = subprocess.run(
         [
-            sys.executable, "-m", "syntavra_runtime.engine_entry",
-            "--engine", "python",
-            "--project", str(project),
-            "--state-root", str(state),
-            "--skill-root", str(repo / "skills" / "syntavra"),
-            "--codex-home", str(project / ".codex"),
-            "--host", "codex",
-            "mcp", "serve",
+            sys.executable,
+            "-m",
+            "syntavra_runtime.engine_entry",
+            "--engine",
+            "python",
+            "--project",
+            str(project),
+            "--state-root",
+            str(state),
+            "--skill-root",
+            str(repo / "skills" / "syntavra"),
+            "--codex-home",
+            str(project / ".codex"),
+            "--host",
+            "codex",
+            "mcp",
+            "serve",
         ],
         cwd=repo,
         env=env,
@@ -166,21 +233,29 @@ def _mcp_stdio(repo: Path, project: Path, state: Path) -> dict[str, Any]:
         check=False,
     )
     if proc.returncode != 0 or proc.stderr:
-        raise AssertionError(f"MCP stdio lifecycle drift: exit={proc.returncode}, stderr={proc.stderr!r}, stdout={proc.stdout!r}")
+        raise AssertionError(
+            f"MCP stdio lifecycle drift: exit={proc.returncode}, stderr={proc.stderr!r}, stdout={proc.stdout!r}"
+        )
+
     responses = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
-    if len(responses) != 7:
+    if len(responses) != 10:
         raise AssertionError(f"MCP notification/response count drift: {responses}")
-    by_id = {row.get("id"): row for row in responses if row.get("id") is not None}
-    parse_errors = [row for row in responses if row.get("id") is None and row.get("error", {}).get("code") == -32700]
+    by_id = {row.get("id"): row for row in responses if isinstance(row, dict) and row.get("id") is not None}
+    null_id_errors = [row for row in responses if isinstance(row, dict) and row.get("id") is None and "error" in row]
+
     init = by_id.get("init") or {}
-    if init.get("result", {}).get("protocolVersion") != "2025-06-18" or init.get("result", {}).get("serverInfo") != {"name": "syntavra", "version": "0.0.1"}:
-        raise AssertionError(f"MCP initialize drift: {init}")
+    if init.get("result", {}).get("protocolVersion") != "2025-06-18":
+        raise AssertionError(f"MCP initialize protocol drift: {init}")
+    if init.get("result", {}).get("serverInfo") != {"name": "syntavra", "version": "0.0.1"}:
+        raise AssertionError(f"MCP initialize serverInfo drift: {init}")
     if by_id.get("ping", {}).get("result") != {}:
         raise AssertionError(f"MCP ping drift: {by_id.get('ping')}")
+
     listed = by_id.get("list", {}).get("result", {}).get("tools") or []
     listed_names = [row.get("name") for row in listed]
     if listed_names != list(MINIMAL_TOOLS):
         raise AssertionError(f"MCP minimal tools/list ordering drift: {listed_names}")
+
     call = by_id.get("call") or {}
     result = call.get("result") or {}
     meta = result.get("_meta") or {}
@@ -188,16 +263,42 @@ def _mcp_stdio(repo: Path, project: Path, state: Path) -> dict[str, Any]:
     if not content or content[0].get("type") != "text":
         raise AssertionError(f"MCP tools/call content drift: {call}")
     parsed_status = json.loads(content[0]["text"])
-    if not isinstance(parsed_status, dict) or meta.get("syntavra_profile") != "minimal" or meta.get("syntavra_risk") != "low":
+    if not isinstance(parsed_status, dict):
+        raise AssertionError(f"MCP status payload drift: {call}")
+    if meta.get("syntavra_profile") != "minimal" or meta.get("syntavra_risk") != "read-or-plan":
         raise AssertionError(f"MCP status call metadata drift: {call}")
+
     denied = by_id.get("denied") or {}
-    if denied.get("error", {}).get("code") != -32001 or denied.get("error", {}).get("data", {}).get("reason") != "tool-not-exposed":
-        raise AssertionError(f"MCP policy-denial drift: {denied}")
+    denied_error = denied.get("error") or {}
+    denied_reason = (denied_error.get("data") or {}).get("reason")
+    if denied_error.get("code") != fixture["jsonrpc_errors"]["policy_denied"]:
+        raise AssertionError(f"MCP policy-denial code drift: {denied}")
+    if denied_reason != "tool-not-exposed-by-active-profile":
+        raise AssertionError(f"MCP policy-denial reason drift: {denied}")
+
     unknown = by_id.get("unknown") or {}
-    if unknown.get("error") != {"code": -32601, "message": "Method not found"}:
+    if unknown.get("error") != {"code": fixture["jsonrpc_errors"]["method_not_found"], "message": "Method not found"}:
         raise AssertionError(f"MCP unknown-method drift: {unknown}")
-    if len(parse_errors) != 1 or parse_errors[0].get("error", {}).get("message") != "Parse error":
-        raise AssertionError(f"MCP parse-error drift: {parse_errors}")
+
+    parse_error = next(
+        (row for row in null_id_errors if row.get("error", {}).get("code") == fixture["jsonrpc_errors"]["parse_error"]),
+        None,
+    )
+    invalid_request = next(
+        (row for row in null_id_errors if row.get("error", {}).get("code") == fixture["jsonrpc_errors"]["invalid_request"]),
+        None,
+    )
+    if parse_error is None or parse_error.get("error") != {"code": -32700, "message": "Parse error"}:
+        raise AssertionError(f"MCP parse-error drift: {parse_error}")
+    if invalid_request is None or invalid_request.get("error") != {"code": -32600, "message": "Invalid Request"}:
+        raise AssertionError(f"MCP invalid-request drift: {invalid_request}")
+
+    bad_init = by_id.get("bad-init") or {}
+    if bad_init.get("error") != {"code": fixture["jsonrpc_errors"]["invalid_parameters"], "message": "Invalid params"}:
+        raise AssertionError(f"MCP initialize invalid-params drift: {bad_init}")
+    if by_id.get("post-errors-ping", {}).get("result") != {}:
+        raise AssertionError(f"MCP server did not survive malformed request sequence: {by_id.get('post-errors-ping')}")
+
     return {
         "exit": proc.returncode,
         "response_count": len(responses),
@@ -216,11 +317,14 @@ def _mcp_stdio(repo: Path, project: Path, state: Path) -> dict[str, Any]:
             "risk": meta["syntavra_risk"],
             "schema_mode": meta["syntavra_schema_mode"],
             "route_receipt_shape": len(str(meta.get("syntavra_route_receipt") or "")) == 64,
-            "status_object": isinstance(parsed_status, dict),
+            "status_object": True,
         },
-        "denied_call": {"code": denied["error"]["code"], "reason": denied["error"]["data"]["reason"]},
+        "denied_call": {"code": denied_error["code"], "reason": denied_reason},
         "unknown_method": unknown["error"],
-        "parse_error": parse_errors[0]["error"],
+        "parse_error": parse_error["error"],
+        "invalid_request": invalid_request["error"],
+        "invalid_parameters": bad_init["error"],
+        "post_error_ping_result": by_id["post-errors-ping"]["result"],
     }
 
 
@@ -237,9 +341,12 @@ def _integrations(repo: Path, project: Path, state: Path, fixture: dict[str, Any
         raise AssertionError(f"integration digest drift: {digest} != {expected['sha256']}")
 
     all_output = _json("integrations all", _run(repo, project, state, ["integrations"]))
-    if all_output.get("integrations") != records or all_output.get("coverage") != IntegrationMatrix.validate():
-        raise AssertionError("integrations all output drift")
-    filtered_counts = {}
+    if all_output.get("integrations") != records:
+        raise AssertionError("integrations all record output drift")
+    if all_output.get("coverage") != IntegrationMatrix.validate():
+        raise AssertionError("integrations coverage output drift")
+
+    filtered_counts: dict[str, int] = {}
     for family in ("provider", "framework", "host"):
         output = _json(f"integrations {family}", _run(repo, project, state, ["integrations", "--family", family]))
         expected_rows = IntegrationMatrix.records(family)
@@ -248,6 +355,7 @@ def _integrations(repo: Path, project: Path, state: Path, fixture: dict[str, Any
         filtered_counts[family] = len(expected_rows)
     if filtered_counts != family_counts:
         raise AssertionError(f"integration filtered-count drift: {filtered_counts} / {family_counts}")
+
     return {
         "count": len(records),
         "family_counts": family_counts,
@@ -262,21 +370,59 @@ def _integrations(repo: Path, project: Path, state: Path, fixture: dict[str, Any
 
 
 def _route_policy(repo: Path, project: Path, state: Path) -> dict[str, Any]:
-    status = _json("route minimal status", _run(repo, project, state, ["run", "route", "syntavra.status", "--profile", "minimal"]))
+    status = _json(
+        "route minimal status",
+        _run(repo, project, state, ["run", "route", "syntavra.status", "--profile", "minimal"]),
+    )
     if status.get("allowed") is not True or status.get("reason") != "policy-allowed" or status.get("category") != "read":
         raise AssertionError(f"run route status drift: {status}")
-    hidden = _json("route minimal execute", _run(repo, project, state, ["run", "route", "syntavra.sandbox.execute", "--profile", "minimal"]))
+
+    hidden = _json(
+        "route minimal execute",
+        _run(repo, project, state, ["run", "route", "syntavra.sandbox.execute", "--profile", "minimal"]),
+    )
     if hidden.get("allowed") is not False or hidden.get("reason") != "tool-not-in-active-profile":
         raise AssertionError(f"run route profile denial drift: {hidden}")
-    no_auth = _json("route balanced no auth", _run(repo, project, state, ["run", "route", "syntavra.sandbox.execute", "--profile", "balanced", "--sandboxed"]))
+
+    no_auth = _json(
+        "route balanced no auth",
+        _run(
+            repo,
+            project,
+            state,
+            ["run", "route", "syntavra.sandbox.execute", "--profile", "balanced", "--sandboxed"],
+        ),
+    )
     if no_auth.get("allowed") is not False or no_auth.get("reason") != "explicit-user-authorization-required":
         raise AssertionError(f"run route authorization denial drift: {no_auth}")
-    allowed = _json("route balanced allowed", _run(repo, project, state, ["run", "route", "syntavra.sandbox.execute", "--profile", "balanced", "--sandboxed", "--user-authorized"]))
+
+    allowed = _json(
+        "route balanced allowed",
+        _run(
+            repo,
+            project,
+            state,
+            [
+                "run",
+                "route",
+                "syntavra.sandbox.execute",
+                "--profile",
+                "balanced",
+                "--sandboxed",
+                "--user-authorized",
+            ],
+        ),
+    )
     if allowed.get("allowed") is not True or allowed.get("reason") != "policy-allowed" or allowed.get("category") != "execute":
         raise AssertionError(f"run route allowed execute drift: {allowed}")
-    unknown = _json("route unknown tool", _run(repo, project, state, ["run", "route", "mystery.tool", "--profile", "balanced"]))
+
+    unknown = _json(
+        "route unknown tool",
+        _run(repo, project, state, ["run", "route", "mystery.tool", "--profile", "balanced"]),
+    )
     if unknown.get("allowed") is not False:
         raise AssertionError(f"run route unknown-tool fail-closed drift: {unknown}")
+
     return {
         "minimal_status": status,
         "minimal_execute_denied": hidden,
@@ -291,18 +437,23 @@ def certify(repo: Path) -> dict[str, Any]:
     fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     if fixture["jsonrpc_methods"] != ["initialize", "notifications/initialized", "ping", "tools/call", "tools/list"]:
         raise AssertionError("MCP JSON-RPC method fixture drift")
+
     with tempfile.TemporaryDirectory(prefix="syntavra-python-mcp-integration-") as directory:
         root = Path(directory)
         project = root / "project"
         state = root / "state"
-        project.mkdir(); state.mkdir(); (project / ".git").mkdir(); (project / ".codex").mkdir()
+        project.mkdir()
+        state.mkdir()
+        (project / ".git").mkdir()
+        (project / ".codex").mkdir()
         result = {
             "routes": _routes(fixture),
             "tool_inventory": _catalog_snapshot(repo, project, state, fixture),
-            "stdio": _mcp_stdio(repo, project, state),
+            "stdio": _mcp_stdio(repo, project, state, fixture),
             "integrations": _integrations(repo, project, state, fixture),
             "route_policy": _route_policy(repo, project, state),
         }
+
     return {
         "ok": True,
         "schema_version": 1,
@@ -321,7 +472,7 @@ def certify(repo: Path) -> dict[str, Any]:
             "MCP route receipt hashes when authorization input/state changes",
             "status payload timestamps/runtime state nested below successful tool calls",
             "temporary project/state paths",
-            "host/platform adapter environment probes nested under integration metadata where applicable"
+            "host/platform adapter environment probes nested under integration metadata where applicable",
         ],
     }
 
