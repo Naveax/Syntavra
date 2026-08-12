@@ -31,13 +31,17 @@
     }
   },
   "tool_inventory": {
-    "count": null,
-    "sha256": null
+    "count": 93,
+    "sha256": "6d7bc579b79517441003af0ce2dae2f12727ac7ec4fd785de744f4cb2c574420"
   },
   "integration_inventory": {
-    "count": null,
-    "family_counts": null,
-    "sha256": null
+    "count": 43,
+    "family_counts": {
+      "framework": 15,
+      "host": 18,
+      "provider": 10
+    },
+    "sha256": "a32641c1a246ecba9491a7e21d1bd585220b09d5de6c8bbc01ef83273312ac81"
   },
   "exit_policy": {
     "success": 0,
