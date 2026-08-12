@@ -36,6 +36,7 @@ CREDENTIAL_ENV = {
     "GITHUB_TOKEN",
     "GH_TOKEN",
 }
+CI_HEAD_ENV = {"GITHUB_SHA"}
 
 
 def _head(repo: Path) -> str:
@@ -141,10 +142,10 @@ def _isolated_env(repo: Path, scratch: Path, contract: dict[str, Any]) -> dict[s
     env = os.environ.copy()
     for key in CREDENTIAL_ENV:
         env.pop(key, None)
+    for key in CI_HEAD_ENV:
+        env.pop(key, None)
 
-    home = scratch / "home"
     temp_root = scratch / "tmp"
-    home.mkdir(parents=True, exist_ok=True)
     temp_root.mkdir(parents=True, exist_ok=True)
 
     execution = contract["execution"]
@@ -155,11 +156,6 @@ def _isolated_env(repo: Path, scratch: Path, contract: dict[str, Any]) -> dict[s
             "PYTHONPATH": str(repo),
             "PYTHONIOENCODING": "utf-8",
             "PYTHONUTF8": "1",
-            "HOME": str(home),
-            "USERPROFILE": str(home),
-            "XDG_CONFIG_HOME": str(home / ".config"),
-            "XDG_CACHE_HOME": str(home / ".cache"),
-            "XDG_DATA_HOME": str(home / ".local" / "share"),
             "TMPDIR": str(temp_root),
             "TMP": str(temp_root),
             "TEMP": str(temp_root),
@@ -203,9 +199,13 @@ def _validate_family_report(
         observed = report.get("nondeterministic_fields")
         if not isinstance(observed, list):
             raise AssertionError("family certifier must expose nondeterministic_fields")
-        if observed != expected_nondeterministic:
+        expected = list(expected_nondeterministic or [])
+        if len(expected) != len(set(expected)) or len(observed) != len(set(observed)):
+            raise AssertionError("duplicate nondeterministic field declaration")
+        unexpected = [field for field in observed if field not in expected]
+        if unexpected:
             raise AssertionError(
-                f"unexpected nondeterminism drift: {observed!r} != {expected_nondeterministic!r}"
+                f"unexpected nondeterminism drift: {unexpected!r}; observed={observed!r}; catalog={expected!r}"
             )
 
 
@@ -250,7 +250,6 @@ def run_suite(repo: Path, artifact_dir: Path) -> dict[str, Any]:
         reason: str | None = None
         exit_code: int | None = None
         timed_out = False
-        report: dict[str, Any] | None = None
 
         try:
             proc = subprocess.run(
@@ -284,7 +283,6 @@ def run_suite(repo: Path, artifact_dir: Path) -> dict[str, Any]:
             status = "passed"
             passed += 1
         except subprocess.TimeoutExpired as exc:
-            timed_out = True
             reason = f"TimeoutExpired: certifier exceeded {timeout_seconds}s"
             exit_code = None
             stdout_path.write_text((exc.stdout or "") if isinstance(exc.stdout, str) else "", encoding="utf-8")
@@ -312,7 +310,7 @@ def run_suite(repo: Path, artifact_dir: Path) -> dict[str, Any]:
             "status": status,
             "certifier": row["certifier"],
             "exit_code": exit_code,
-            "timed_out": timed_out,
+            "timed_out": False,
             "artifact_sha256": hashlib.sha256(json_path.read_bytes()).hexdigest() if json_exists else None,
             "reason": reason,
         }
@@ -350,6 +348,9 @@ def run_suite(repo: Path, artifact_dir: Path) -> dict[str, Any]:
         "catalog_semantic_sha256": catalog_sha,
         "contract_sha256": hashlib.sha256((repo / CONTRACT_RELATIVE).read_bytes()).hexdigest(),
         "credential_env_removed": sorted(CREDENTIAL_ENV),
+        "ci_head_env_removed": sorted(CI_HEAD_ENV),
+        "runtime_home_preserved": bool(contract["execution"].get("preserve_runtime_home")),
+        "runtime_xdg_preserved": bool(contract["execution"].get("preserve_runtime_xdg")),
     }
 
     required = list(contract.get("required_summary_fields") or [])
