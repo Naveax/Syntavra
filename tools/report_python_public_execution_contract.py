@@ -11,7 +11,7 @@ from typing import Any
 from tools import report_missing_native_public_routes as public_surface
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 EXPECTED_PUBLIC_ROUTES = 245
 
 # These are execution entrypoints, not an independent route authority. Route identity
@@ -126,11 +126,9 @@ def parser_alias_rows() -> list[dict[str, Any]]:
 def alias_conflicts() -> list[dict[str, str]]:
     canonical_routes = set(public_surface.python_public_route_sources())
     owners: dict[str, set[str]] = defaultdict(set)
-    source_by_alias: dict[str, set[str]] = defaultdict(set)
     for row in parser_alias_rows():
         for alias in row["aliases"]:
             owners[alias].add(row["canonical"])
-            source_by_alias[alias].add(row["source"])
 
     conflicts: list[dict[str, str]] = []
     for alias in sorted(owners):
@@ -154,9 +152,29 @@ def alias_conflicts() -> list[dict[str, str]]:
     return conflicts
 
 
-def shadow_audit() -> dict[str, Any]:
+def _expected_shadow_source(route: str) -> str:
+    """Return the unified-cli owner selected before the legacy fallback.
+
+    Ownership is leaf-sensitive. In particular, ``prove`` is normally a
+    prerelease command, but three proof actions are intercepted first and routed
+    to external_benchmark_cli. The audit must model that real precedence rather
+    than assigning one owner to an entire top-level command.
+    """
+
     from syntavra_runtime import prerelease_cli, unified_cli
 
+    parts = route.split(" ")
+    command = parts[0] if parts else ""
+    if command == "prove" and len(parts) > 1 and parts[1] in unified_cli.EXTERNAL_PROOF_ACTIONS:
+        return "external-benchmark"
+    if command in prerelease_cli.PRE_RELEASE_COMMANDS:
+        return "prerelease"
+    if command in unified_cli.CORE_COMMANDS:
+        return "core"
+    return ""
+
+
+def shadow_audit() -> dict[str, Any]:
     canonical = public_surface.python_public_route_sources()
     surfaces = {
         source: (parser, skip_top_level)
@@ -174,30 +192,42 @@ def shadow_audit() -> dict[str, Any]:
         canonical_routes = sorted(
             route for route in canonical if route == command or route.startswith(command + " ")
         )
-        if command in prerelease_cli.PRE_RELEASE_COMMANDS:
-            expected_source = "prerelease"
-        elif command in unified_cli.CORE_COMMANDS:
-            expected_source = "core"
-        else:
-            expected_source = ""
+        route_owners = [
+            {
+                "route": route,
+                "expected_source": _expected_shadow_source(route),
+                "sources": canonical[route],
+            }
+            for route in canonical_routes
+        ]
+        rows.append(
+            {
+                "command": command,
+                # A unified override is valid even when the legacy parser has no
+                # parser branch with the same name. The important invariant is
+                # that every canonical leaf has one real pre-legacy owner and no
+                # legacy leakage.
+                "legacy_route_count": len(legacy_routes),
+                "canonical_route_count": len(canonical_routes),
+                "route_owners": route_owners,
+            }
+        )
 
-        row = {
-            "command": command,
-            "expected_source": expected_source,
-            "legacy_route_count": len(legacy_routes),
-            "canonical_route_count": len(canonical_routes),
-        }
-        rows.append(row)
-
-        if not legacy_routes:
-            failures.append({"command": command, "reason": "stale legacy shadow rule"})
         if not canonical_routes:
             failures.append({"command": command, "reason": "shadowed command has no canonical owner"})
-        if not expected_source:
-            failures.append({"command": command, "reason": "shadowed command has no declared override source"})
             continue
+
         for route in canonical_routes:
+            expected_source = _expected_shadow_source(route)
             sources = canonical[route]
+            if not expected_source:
+                failures.append(
+                    {
+                        "command": command,
+                        "reason": f"{route!r} has no declared pre-legacy dispatch owner",
+                    }
+                )
+                continue
             if expected_source not in sources:
                 failures.append(
                     {
