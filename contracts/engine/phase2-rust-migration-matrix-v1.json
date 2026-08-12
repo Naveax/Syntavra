@@ -15,7 +15,6 @@
     "surface_contract": "contracts/engine/dual-engine-public-surface-v2.json",
     "remaining_authority": "tools/report_missing_native_public_routes.py",
     "ownership_probe_binary": "syntavra-remaining71-ownership",
-    "module_ownership_probe_binary": "syntavra-remaining71-module-ownership",
     "expected_promoted_native": 174,
     "expected_remaining": 71,
     "expected_remaining_owned": 71,
