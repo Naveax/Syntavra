@@ -156,10 +156,10 @@ def _validate_ownership(
     ownership: dict[str, Any],
     contract: dict[str, Any],
     missing: set[str],
-) -> dict[str, list[str]]:
+) -> tuple[dict[str, list[str]], dict[str, str]]:
     cfg = contract["rust_baseline"]
     if ownership.get("ok") is not True:
-        raise AssertionError("Remaining-71 Rust selector ownership probe is red")
+        raise AssertionError("Remaining-71 Rust ownership probe is red")
     if int(ownership.get("public_route_count", -1)) != int(
         contract["python_reference"]["expected_public_route_count"]
     ):
@@ -169,26 +169,57 @@ def _validate_ownership(
     if int(ownership.get("report_derived_remaining_count", -1)) != int(cfg["expected_remaining"]):
         raise AssertionError("ownership remaining count drift")
     if int(ownership.get("owned_count", -1)) != int(cfg["expected_remaining_owned"]):
-        raise AssertionError("ownership owned count drift")
+        raise AssertionError("ownership selector-owned count drift")
     if int(ownership.get("unowned_count", -1)) != int(cfg["expected_unowned"]):
-        raise AssertionError("ownership unowned count drift")
+        raise AssertionError("ownership selector-unowned count drift")
+    if int(ownership.get("owner_module_count", -1)) != int(cfg["expected_remaining_owned"]):
+        raise AssertionError("ownership lower-module owner count drift")
+    if int(ownership.get("module_unowned_count", -1)) != 0:
+        raise AssertionError(f"Remaining-71 lower-module unowned routes: {ownership.get('module_unowned_routes')}")
+    if int(ownership.get("duplicate_owner_count", -1)) != 0:
+        raise AssertionError(f"Remaining-71 duplicate lower-module owners: {ownership.get('duplicate_owner_routes')}")
+
     selectors_raw = ownership.get("selector_paths") or {}
+    modules_raw = ownership.get("owner_modules") or {}
+    candidates_raw = ownership.get("owner_candidates") or {}
     if not isinstance(selectors_raw, dict):
         raise AssertionError("ownership selector_paths is not an object")
-    selector_keys = set(selectors_raw)
-    missing_selector = sorted(missing - selector_keys)
-    stale_selector = sorted(selector_keys - missing)
-    if missing_selector:
-        raise AssertionError(f"Remaining-71 selector ownership missing routes: {missing_selector}")
-    if stale_selector:
-        raise AssertionError(f"stale Remaining-71 selector routes: {stale_selector}")
+    if not isinstance(modules_raw, dict):
+        raise AssertionError("ownership owner_modules is not an object")
+    if not isinstance(candidates_raw, dict):
+        raise AssertionError("ownership owner_candidates is not an object")
+
+    expected_keys = set(missing)
+    for name, mapping in [
+        ("selector_paths", selectors_raw),
+        ("owner_modules", modules_raw),
+        ("owner_candidates", candidates_raw),
+    ]:
+        keys = set(mapping)
+        missing_keys = sorted(expected_keys - keys)
+        stale_keys = sorted(keys - expected_keys)
+        if missing_keys:
+            raise AssertionError(f"Remaining-71 {name} missing routes: {missing_keys}")
+        if stale_keys:
+            raise AssertionError(f"stale Remaining-71 {name} routes: {stale_keys}")
+
     selectors: dict[str, list[str]] = {}
+    modules: dict[str, str] = {}
     for route in sorted(missing):
         path = selectors_raw.get(route)
         if not isinstance(path, list) or not path or any(not isinstance(item, str) or not item for item in path):
             raise AssertionError(f"invalid Rust selector path for {route}: {path!r}")
+        module = modules_raw.get(route)
+        if not isinstance(module, str) or not module.startswith("native_remaining71_"):
+            raise AssertionError(f"invalid Rust lower-module owner for {route}: {module!r}")
+        candidates = candidates_raw.get(route)
+        if candidates != [module]:
+            raise AssertionError(
+                f"Rust lower-module owner/candidate mismatch for {route}: owner={module!r} candidates={candidates!r}"
+            )
         selectors[route] = list(path)
-    return selectors
+        modules[route] = module
+    return selectors, modules
 
 
 def build_matrix(
@@ -206,7 +237,7 @@ def build_matrix(
     phase1_rows = _validate_phase1(phase1, contract, exact_head)
     canonical_routes = set(phase1_rows)
     promoted, missing = _validate_inventory(inventory, contract, canonical_routes)
-    selectors = _validate_ownership(ownership, contract, missing)
+    selectors, modules = _validate_ownership(ownership, contract, missing)
     programs = _program_index(contract)
 
     family_names = {str(row.get("family") or "") for row in phase1_rows.values()}
@@ -216,7 +247,7 @@ def build_matrix(
 
     rows: list[dict[str, Any]] = []
     remaining_by_family: Counter[str] = Counter()
-    unresolved_owner_modules = 0
+    remaining_by_rust_module: Counter[str] = Counter()
     for route in sorted(canonical_routes):
         python_row = phase1_rows[route]
         family = str(python_row["family"])
@@ -227,17 +258,19 @@ def build_matrix(
             selector_components = route.split()
             selector_state = "promoted-contract-route-identity"
             owner_boundary = "dual-engine-public-surface-v2.native_public_commands"
+            rust_owner_module = "frozen-native-contract"
             promotion_state = "promoted-baseline"
             certification_state = "baseline-promoted-not-part-of-remaining71-recertification"
         else:
             selector_components = selectors[route]
             selector = " ".join(selector_components)
-            selector_state = "remaining71-selector-probe-owned"
-            owner_boundary = "native_product::bulk-parity-probe"
+            selector_state = "remaining71-selector-and-lower-module-owned"
+            rust_owner_module = modules[route]
+            owner_boundary = f"native_product::bulk-parity-probe::{rust_owner_module}"
             promotion_state = "blocked-until-atomic-71-route-promotion"
             certification_state = str(program["state"])
             remaining_by_family[family] += 1
-            unresolved_owner_modules += 1
+            remaining_by_rust_module[rust_owner_module] += 1
 
         rows.append(
             {
@@ -249,8 +282,9 @@ def build_matrix(
                 "rust_selector_components": selector_components,
                 "rust_selector_resolution": selector_state,
                 "rust_owner_boundary": owner_boundary,
-                "rust_owner_module": None if not is_promoted else "frozen-native-contract",
+                "rust_owner_module": rust_owner_module,
                 "rust_selector_owned": True,
+                "rust_owner_module_owned": True,
                 "production_native": is_promoted,
                 "promotion_state": promotion_state,
                 "differential_validator": program.get("validator"),
@@ -281,12 +315,15 @@ def build_matrix(
         "promoted_native": len(promoted),
         "remaining": len(missing),
         "remaining_selector_owned": len(selectors),
+        "remaining_owner_module_owned": len(modules),
         "remaining_unowned": 0,
         "duplicate_routes": duplicate_routes,
+        "duplicate_lower_owner_routes": int(ownership.get("duplicate_owner_count", -1)),
         "stale_remaining_selector_routes": 0,
         "missing_remaining_selector_routes": 0,
-        "remaining_owner_module_unresolved": unresolved_owner_modules,
+        "remaining_owner_module_unresolved": len(missing) - len(modules),
         "remaining_by_python_family": dict(sorted(remaining_by_family.items())),
+        "remaining_by_rust_module": dict(sorted(remaining_by_rust_module.items())),
         "existing_family_gate_recertification_routes": existing_recertification_remaining,
         "pending_or_partial_family_gate_routes": pending_remaining,
         "atomic_promotion_target": int(contract["rust_baseline"]["atomic_promotion_target"]),
@@ -311,15 +348,16 @@ def build_matrix(
         "authority": {
             "route_identity": contract["rust_baseline"]["remaining_authority"],
             "remaining_selector_ownership": contract["rust_baseline"]["ownership_probe_binary"],
+            "lower_rust_module_ownership": "Remaining-71 Rust modules' supports() predicates",
             "hardcoded_remaining_route_list": False,
         },
         "family_programs": [programs[key] for key in sorted(programs)],
         "summary": summary,
         "matrix": rows,
         "claim_boundary": (
-            "This gate establishes frozen Python route/family metadata and Remaining-71 "
-            "selector ownership. Lower Rust owner-module resolution and behavioral parity "
-            "remain mandatory before Section A/S closure and atomic promotion."
+            "This gate establishes frozen Python route/family metadata plus exact Remaining-71 "
+            "selector and lower Rust module ownership. Behavioral parity and final exact-head "
+            "family certification remain mandatory before atomic promotion."
         ),
     }
 
