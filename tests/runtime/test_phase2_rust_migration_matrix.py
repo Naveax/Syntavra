@@ -31,6 +31,18 @@ class Phase2RustMigrationMatrixTests(unittest.TestCase):
         self.assertEqual(self.contract["rust_baseline"]["expected_unowned"], 0)
         self.assertEqual(self.contract["rust_baseline"]["atomic_promotion_target"], 245)
 
+    def test_selector_and_lower_module_probes_are_separate(self) -> None:
+        rust = self.contract["rust_baseline"]
+        self.assertEqual(rust["ownership_probe_binary"], "syntavra-remaining71-ownership")
+        self.assertEqual(
+            rust["module_ownership_probe_binary"],
+            "syntavra-remaining71-module-ownership",
+        )
+        self.assertNotEqual(
+            rust["ownership_probe_binary"],
+            rust["module_ownership_probe_binary"],
+        )
+
     def test_family_program_catalog_is_unique_and_explicit(self) -> None:
         programs = matrix._program_index(self.contract)
         self.assertEqual(len(programs), 14)
