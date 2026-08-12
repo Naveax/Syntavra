@@ -240,14 +240,17 @@ def _integration_receipts() -> list[dict[str, Any]]:
     rows = []
     for i, os_name in enumerate(("linux", "windows", "linux"), 1):
         rows.append({
-            "receipt_id": f"integration-{i}", "integration_id": "claude-code", "product_version": "0.0.1",
-            "source_tree_hash": hashlib.sha256(f"tree-{i}".encode()).hexdigest(), "operating_system": os_name,
-            "live": True, "detected": True, "command_config_verified": True,
-            "artifact_hash": hashlib.sha256(f"artifact-{i}".encode()).hexdigest(),
-            "result_hash": hashlib.sha256(f"result-{i}".encode()).hexdigest(), "apply_attempted": True,
-            "restoration_verified": True, "rollback_hash": hashlib.sha256(f"rollback-{i}".encode()).hexdigest(),
-            "real_repository": True, "provider_billed": False, "provider": "", "model": "",
-            "request_id_hash": "", "raw_provider_receipt_hash": "", "metadata": {},
+            "receipt_id": f"integration-{i}", "integration_id": "claude-code", "family": "host",
+            "observed_at": f"2026-08-{10 + i:02d}T00:00:00+00:00",
+            "syntavra_version": "0.0.1", "syntavra_channel": "pre-release",
+            "adapter_version": "fixture-adapter-1", "operating_system": os_name, "runtime_version": "fixture-runtime-1",
+            "environment_hash": hashlib.sha256(f"env-{i}".encode()).hexdigest(),
+            "config_hash": hashlib.sha256(f"config-{i}".encode()).hexdigest(),
+            "harness_commit": HEX40, "artifact_hash": hashlib.sha256(f"artifact-{i}".encode()).hexdigest(),
+            "install_succeeded": True, "doctor_passed": True, "request_succeeded": True, "response_succeeded": True,
+            "streaming_verified": False, "provider_usage_captured": False,
+            "tool_routing_verified": True, "session_continuity_verified": True, "rollback_verified": True,
+            "external": True, "synthetic": False, "metadata": {},
         })
     return rows
 
@@ -289,11 +292,16 @@ def _proof(repo: Path, project: Path, state: Path, root: Path) -> dict[str, Any]
     integration_path = root / "integrations.json"
     integration_path.write_text(json.dumps({"receipts": _integration_receipts()}, separators=(",", ":")), encoding="utf-8")
     integrations = _json("prove integrations", _run(repo, project, state, ["prove", "integrations", str(integration_path), "--integration", "claude-code"]), 0)
-    if integrations.get("ok") is not True or integrations.get("metrics", {}).get("certified_integrations") != 1 or integrations.get("metrics", {}).get("receipts") != 3:
+    if integrations.get("ok") is not True or integrations.get("metrics", {}).get("integrations_certified") != 1 or integrations.get("metrics", {}).get("receipts") != 3:
         raise AssertionError(f"integration drift: {integrations}")
 
     long_context = _json("prove long-context", _run(repo, project, state, ["prove", "long-context"]), 0)
-    if not isinstance(long_context.get("required_workloads"), list) or not long_context["required_workloads"]:
+    if (
+        long_context.get("name") != "Syntavra Long-Context Quality Protocol"
+        or len(long_context.get("tiers") or []) != 8
+        or len(long_context.get("task_families") or []) != 6
+        or long_context.get("claim_boundary") != "A manifest or synthetic run never proves long-context quality."
+    ):
         raise AssertionError(f"long-context drift: {long_context}")
     empty_path = root / "empty.json"; empty_path.write_text("[]\n", encoding="utf-8")
     maturity = _json("prove maturity empty", _run(repo, project, state, ["prove", "maturity", str(empty_path)]), 4)
@@ -330,9 +338,13 @@ def _proof(repo: Path, project: Path, state: Path, root: Path) -> dict[str, Any]
 
 def _empty() -> dict[str, Any]:
     values = {"measured": MeasuredBenchmarkGate.evaluate([]), "external": ExternalBenchmarkGate.evaluate([]), "integration": LiveCertificationGate.evaluate([])}
-    for label, value in values.items():
+    for label in ("measured", "external"):
+        value = values[label]
         if value.get("ok") is not False or value.get("reasons") != sorted(value.get("reasons") or []):
             raise AssertionError(f"{label} empty/order drift: {value}")
+    integration = values["integration"]
+    if integration.get("ok") is not False or integration.get("certified_integrations") != [] or integration.get("metrics", {}).get("receipts") != 0:
+        raise AssertionError(f"integration empty-state drift: {integration}")
     return values
 
 
