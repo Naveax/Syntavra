@@ -59,7 +59,8 @@ jobs:
           assert value['engine'] == 'python'
           assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
           assert value['routes']['route_count'] == 19
-          assert value['platform']['compatibility_exact'] is True
+          assert value['platform']['compatibility_stable_projection_exact'] is True
+          assert value['artifacts']['capture_kind'] == 'terminal'
           assert value['artifacts']['capture_exact_recovery'] is True
           assert value['artifacts']['artifact_stats']['artifacts'] == 2
           assert value['runtime_evidence']['stats']['nodes'] == 2
