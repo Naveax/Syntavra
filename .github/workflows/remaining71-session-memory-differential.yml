@@ -32,6 +32,7 @@ jobs:
         run: python -m pip install -e .
       - name: Build Rust selector
         run: |
+          rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal --component rustfmt
           cargo +1.82.0 fmt --all -- --check
           cargo +1.82.0 check --locked -p syntavra-cli --bins
