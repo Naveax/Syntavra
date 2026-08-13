@@ -184,6 +184,8 @@ mod state_snapshot_contract;
 #[path = "telemetry_metrics_contract.rs"]
 mod telemetry_metrics_contract;
 
+include!("cc_checkpoint.inc");
+
 fn bulk_parity_probe_enabled() -> bool {
     std::env::var_os("SYNTAVRA_BULK_PARITY_PROBE").is_some_and(|value| value == "1")
 }
@@ -255,10 +257,7 @@ pub fn supports(command: &[String]) -> bool {
             && matches!(command[1].as_str(), "plan" | "gate"))
         || (command.len() == 2
             && command[0] == "run"
-            && matches!(
-                command[1].as_str(),
-                "audit-config" | "cache-amortize" | "manifest"
-            ))
+            && matches!(command[1].as_str(), "audit-config" | "cache-amortize" | "manifest"))
         || (command.len() == 2 && command[0] == "run" && command[1] == "mode")
         || (command.len() == 2 && command[0] == "run" && command[1] == "proxy-plan")
         || (command.len() == 2 && command[0] == "run" && command[1] == "redact")
@@ -396,13 +395,11 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if bulk_parity_probe_enabled() && cc_checkpoint_supports(command) {
+        return cc_checkpoint_execute(command, &arguments);
+    }
     if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
-        return match native_remaining71_memory::execute(
-            command,
-            &arguments,
-            project_root,
-            state_root,
-        ) {
+        return match native_remaining71_memory::execute(command, &arguments, project_root, state_root) {
             Ok(value) => Ok(value),
             Err(error) => emit_failed_decision(
                 &serde_json::json!({
@@ -422,21 +419,11 @@ pub fn execute(
         };
     }
     if bulk_parity_probe_enabled() && native_remaining71_platform_misc::supports(command) {
-        return native_remaining71_platform_misc::execute(
-            command,
-            &arguments,
-            project_root,
-            state_root,
-        );
+        return native_remaining71_platform_misc::execute(command, &arguments, project_root, state_root);
     }
     if bulk_parity_probe_enabled() && native_remaining71_security::supports(command) {
-        if let Some(value) = native_remaining71_security::execute(command, &arguments, state_root)?
-        {
-            if command.len() == 2
-                && command[0] == "run"
-                && command[1] == "capability-verify"
-                && value["ok"].as_bool() == Some(false)
-            {
+        if let Some(value) = native_remaining71_security::execute(command, &arguments, state_root)? {
+            if command.len() == 2 && command[0] == "run" && command[1] == "capability-verify" && value["ok"].as_bool() == Some(false) {
                 emit_failed_decision(&value, 3);
             }
             return Ok(Some(value));
@@ -444,9 +431,7 @@ pub fn execute(
         return Ok(None);
     }
     if bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command) {
-        if let Some(decision) =
-            native_remaining71_sandbox::execute(command, &arguments, project_root, state_root)?
-        {
+        if let Some(decision) = native_remaining71_sandbox::execute(command, &arguments, project_root, state_root)? {
             if decision.exit_code != 0 {
                 emit_failed_decision(&decision.value, decision.exit_code);
             }
@@ -471,20 +456,10 @@ pub fn execute(
         return native_remaining71_agent::execute(command, &arguments, project_root, state_root);
     }
     if bulk_parity_probe_enabled() && native_remaining71_agent_live::supports(command) {
-        return native_remaining71_agent_live::execute(
-            command,
-            &arguments,
-            project_root,
-            state_root,
-        );
+        return native_remaining71_agent_live::execute(command, &arguments, project_root, state_root);
     }
     if bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command) {
-        return native_remaining71_competitive::execute(
-            command,
-            &arguments,
-            project_root,
-            state_root,
-        );
+        return native_remaining71_competitive::execute(command, &arguments, project_root, state_root);
     }
     if bulk_parity_probe_enabled() && native_remaining71_context::supports(command) {
         return native_remaining71_context::execute(command, &arguments, state_root);
@@ -502,20 +477,17 @@ pub fn execute(
         return native_context_governor::execute(command, &arguments).map(Some);
     }
     if native_read_only_product::supports(command) {
-        return native_read_only_product::execute(command, &arguments, project_root, state_root)
-            .map(Some);
+        return native_read_only_product::execute(command, &arguments, project_root, state_root).map(Some);
     }
     if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
+        let decision = native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
         if decision.exit_code != 0 {
             emit_failed_decision(&decision.value, decision.exit_code);
         }
         return Ok(Some(decision.value));
     }
     if native_engine_routes::supports(command) {
-        return native_engine_routes::execute(command, &arguments, project_root, state_root)
-            .map(Some);
+        return native_engine_routes::execute(command, &arguments, project_root, state_root).map(Some);
     }
     if native_engine_state_routes::supports(command) {
         return native_engine_state_routes::execute(command, &arguments, project_root).map(Some);
@@ -530,8 +502,7 @@ pub fn execute(
         return native_fabric_doctor::execute(&arguments, project_root, state_root).map(Some);
     }
     if native_fabric_installations::supports(command) {
-        return native_fabric_installations::execute(&arguments, project_root, state_root)
-            .map(Some);
+        return native_fabric_installations::execute(&arguments, project_root, state_root).map(Some);
     }
     if native_fabric_install::supports(command) {
         return native_fabric_install::execute(&arguments, project_root, state_root).map(Some);
@@ -543,8 +514,7 @@ pub fn execute(
         return native_fabric_profile::execute(&arguments, state_root).map(Some);
     }
     if native_fabric_platform_plan::supports(command) {
-        return native_fabric_platform_plan::execute(&arguments, project_root, state_root)
-            .map(Some);
+        return native_fabric_platform_plan::execute(&arguments, project_root, state_root).map(Some);
     }
     if native_fabric_rollback_install::supports(command) {
         return native_fabric_rollback_install::execute(&arguments, state_root).map(Some);
@@ -629,8 +599,7 @@ pub fn execute(
         return Ok(Some(value));
     }
     if native_run_adapter_conformance::supports(command) {
-        return native_run_adapter_conformance::execute(&arguments, project_root, state_root)
-            .map(Some);
+        return native_run_adapter_conformance::execute(&arguments, project_root, state_root).map(Some);
     }
     if native_run_adapters::supports(command) {
         return native_run_adapters::execute(&arguments, project_root, state_root).map(Some);
@@ -642,12 +611,10 @@ pub fn execute(
         return native_expansion::execute(command, &arguments, project_root, state_root).map(Some);
     }
     if native_session_continuity::supports(command) {
-        return native_session_continuity::execute(command, &arguments, project_root, state_root)
-            .map(Some);
+        return native_session_continuity::execute(command, &arguments, project_root, state_root).map(Some);
     }
     if native_session_mutations::supports(command) {
-        return native_session_mutations::execute(command, &arguments, project_root, state_root)
-            .map(Some);
+        return native_session_mutations::execute(command, &arguments, project_root, state_root).map(Some);
     }
     if native_session_status::supports(command) {
         return native_session_status::execute(project_root, state_root).map(Some);
@@ -671,22 +638,13 @@ pub fn execute(
     if command.first().is_some_and(|item| item == "upgrade") {
         return native_upgrade::execute(&arguments).map(Some);
     }
-    if command.len() == 2
-        && matches!(command[0].as_str(), "semantic-demo" | "structural-v2")
-        && command[1] == "demo"
-    {
+    if command.len() == 2 && matches!(command[0].as_str(), "semantic-demo" | "structural-v2") && command[1] == "demo" {
         return native_semantic_demo::execute(&arguments).map(Some);
     }
-    if command.len() == 2
-        && matches!(command[0].as_str(), "signalbench" | "signalbench2")
-        && command[1] == "plan"
-    {
+    if command.len() == 2 && matches!(command[0].as_str(), "signalbench" | "signalbench2") && command[1] == "plan" {
         return native_signalbench_plan::execute(&arguments).map(Some);
     }
-    if command.len() == 2
-        && matches!(command[0].as_str(), "signalbench" | "signalbench2")
-        && command[1] == "gate"
-    {
+    if command.len() == 2 && matches!(command[0].as_str(), "signalbench" | "signalbench2") && command[1] == "gate" {
         let decision = native_signalbench_gate::execute(&arguments)?;
         if decision.exit_code != 0 {
             println!("{}", decision.rendered);
