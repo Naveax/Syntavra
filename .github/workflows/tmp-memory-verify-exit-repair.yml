@@ -1,0 +1,88 @@
+name: Temporary Memory Verify Exit Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - .github/workflows/tmp-memory-verify-exit-repair.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-memory-verify-exit-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+      - name: Require branch did not move before repair
+        run: |
+          git fetch origin agent/r31-provider-capture-native
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/agent/r31-provider-capture-native)"
+      - name: Apply narrow frozen-contract repair
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
+          text = path.read_text(encoding="utf-8")
+          old = '''                    Ok(Some(value)) => {
+                        let blocked_agent = value["state"].as_str() == Some("blocked")
+                            && matches!(path.as_slice(), [root, action] if
+                                (root == "run" && action == "agent-execute")
+                                    || (root == "agent" && action == "replay"));
+                        emit(&value);
+                        if blocked_agent {
+                            ExitCode::from(3)
+                        } else {
+                            ExitCode::SUCCESS
+                        }
+                    }
+'''
+          new = '''                    Ok(Some(value)) => {
+                        let blocked_agent = value["state"].as_str() == Some("blocked")
+                            && matches!(path.as_slice(), [root, action] if
+                                (root == "run" && action == "agent-execute")
+                                    || (root == "agent" && action == "replay"));
+                        let integrity_failure = value["ok"].as_bool() == Some(false)
+                            && matches!(path.as_slice(), [root, action] if
+                                root == "run" && action == "memory-verify");
+                        emit(&value);
+                        if blocked_agent || integrity_failure {
+                            ExitCode::from(3)
+                        } else {
+                            ExitCode::SUCCESS
+                        }
+                    }
+'''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"exact repair precondition failed: expected 1 source block, found {count}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = "crates/syntavra-cli/src/bin/syntavra.rs"
+      - name: Validate Rust selector
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all -- --check
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+      - name: Commit exact repair only if branch stayed fixed
+        run: |
+          git fetch origin agent/r31-provider-capture-native
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/agent/r31-provider-capture-native)"
+          test "$(git diff --name-only)" = "crates/syntavra-cli/src/bin/syntavra.rs"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/syntavra-cli/src/bin/syntavra.rs
+          git commit -m "Align memory verify integrity exit with Python"
+          git push origin HEAD:agent/r31-provider-capture-native
