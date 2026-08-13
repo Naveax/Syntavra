@@ -8,6 +8,7 @@ use std::process::{Command, ExitCode, Stdio};
 
 use serde_json::{json, Value};
 
+#[rustfmt::skip]
 #[path = "../native_product.rs"]
 mod native_product;
 
