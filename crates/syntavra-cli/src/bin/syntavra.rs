@@ -271,9 +271,7 @@ fn capability_missing_positionals(
 fn capability_parser_error(arguments: &[String], path: &[String]) -> Option<ExitCode> {
     let (action, missing) = capability_missing_positionals(arguments, path)?;
     eprintln!("usage: syntavra run {action} [options] ...");
-    eprintln!(
-        "syntavra run {action}: error: missing {missing} required positional argument(s)"
-    );
+    eprintln!("syntavra run {action}: error: missing {missing} required positional argument(s)");
     Some(ExitCode::from(2))
 }
 
