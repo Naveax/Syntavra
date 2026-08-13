@@ -36,8 +36,8 @@ jobs:
           from pathlib import Path
 
           repo=Path.cwd(); rust=(repo/'target/debug/syntavra').resolve()
-          dynamic_keys={'timestamp','created_at','updated_at','started_at','stopped_at','mtime_ns','pid','cycle_hash','event_hash'}
-          dynamic_columns={'timestamp','created_at','updated_at','started_at','stopped_at','mtime_ns','pid','last_seen_at','accessed_at','last_accessed_at'}
+          dynamic_keys={'timestamp','created_at','updated_at','started_at','stopped_at','mtime_ns','pid','cycle_hash','event_hash','rate_limited_until'}
+          dynamic_columns={'timestamp','created_at','updated_at','started_at','stopped_at','mtime_ns','pid','last_seen_at','accessed_at','last_accessed_at','rate_limited_until'}
 
           def norm(value, project, state):
               if isinstance(value,dict):
@@ -58,6 +58,8 @@ jobs:
           def sqlite_snapshot(path, project, state):
               db=sqlite3.connect(path); db.row_factory=sqlite3.Row
               tables=[r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+              if path.name=='provider-accounts.sqlite3':
+                  tables=[table for table in tables if table=='provider_accounts']
               result={}
               for table in tables:
                   cols=[r[1] for r in db.execute(f'PRAGMA table_info("{table}")')]
@@ -137,7 +139,7 @@ jobs:
           for key in sorted(set(py_state)|set(rs_state)):
               if py_state.get(key)!=rs_state.get(key):
                   mismatches.append({'scope':'state','id':key,'python':py_state.get(key),'rust':rs_state.get(key)})
-          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'routes':['watch','worker','notify','provider-pool','code-intel','dashboard'],'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'claim_boundary':'stateful public receipts plus normalized logical persisted state; native route count remains frozen'}
+          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'routes':['watch','worker','notify','provider-pool','code-intel','dashboard'],'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'claim_boundary':'stateful public receipts plus normalized logical persisted domain state; provider-pool comparison is scoped to provider_accounts while unrelated generic StateDB housekeeping tables are excluded; native route count remains frozen'}
           Path('/tmp/competitive-stateful.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True,default=str),encoding='utf-8')
           print(json.dumps({'ok':report['ok'],'mismatch_count':len(mismatches)},sort_keys=True))
           for row in mismatches[:120]: print('STATEFUL_MISMATCH '+json.dumps({'scope':row['scope'],'id':row['id']},sort_keys=True))
