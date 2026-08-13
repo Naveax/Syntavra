@@ -1,0 +1,46 @@
+name: Temporary Provider Proxy Rustfmt Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-provider-proxy-rustfmt-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+      - name: Apply only the certified rustfmt drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          before="$(git rev-parse HEAD)"
+          cargo +1.82.0 fmt --all
+          changed="$(git diff --name-only)"
+          printf 'before=%s\nchanged=%s\n' "$before" "$changed"
+          test "$changed" = "crates/syntavra-cli/src/bin/syntavra.rs"
+          git diff --check
+          git diff --exit-code -- .github/workflows ':!crates/syntavra-cli/src/bin/syntavra.rs'
+      - name: Commit exact formatting repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/syntavra-cli/src/bin/syntavra.rs
+          git commit -m "style(phase2): apply exact provider proxy rustfmt"
+          git fetch origin agent/r31-provider-capture-native
+          git rebase origin/agent/r31-provider-capture-native
+          git push origin HEAD:agent/r31-provider-capture-native
