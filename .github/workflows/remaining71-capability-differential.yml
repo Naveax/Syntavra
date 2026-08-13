@@ -1,6 +1,6 @@
-name: Remaining 71 Capability Differential
+name: Remaining 71 Capability Inventory Differential
 
-# Compares public Python and Rust capability-security behavior on one exact head.
+# Read-only exact-head proof for the frozen Phase-1 capability and inventory contract.
 on:
   push:
     branches:
@@ -9,10 +9,10 @@ on:
     types: [synchronize]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: remaining71-capability-differential
+  group: remaining71-capability-inventory-differential
   cancel-in-progress: true
 
 jobs:
@@ -20,47 +20,101 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       PYTHONPATH: ${{ github.workspace }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/r31-provider-capture-native
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+      - name: Require exact checkout head before certification
+        run: |
+          actual="$(git rev-parse HEAD)"
+          echo "expected=$EXPECTED_HEAD"
+          echo "actual=$actual"
+          test "$actual" = "$EXPECTED_HEAD"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Apply pending capability parity repair
-        run: |
-          if [ -f tools/apply_remaining71_capability_parity_fix.py ]; then
-            python tools/apply_remaining71_capability_parity_fix.py
-          fi
       - name: Install Python runtime
         run: python -m pip install -e .
-      - name: Build full Rust CLI probe surface
+      - name: Build exact-head Rust selector and ownership probe
         run: |
+          rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal --component rustfmt
-          cargo +1.82.0 fmt --all
+          cargo +1.82.0 fmt --all -- --check
           cargo +1.82.0 check --locked -p syntavra-cli --bins
-          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
-      - name: Run capability differential
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra --bin syntavra-remaining71-ownership
+      - name: Re-certify frozen Python capability and inventory authority
+        run: |
+          python tools/certify_python_capability_inventory_reference.py \
+            --output /tmp/python-capability-inventory-reference.json
+      - name: Derive canonical Remaining-71 inventory
+        run: |
+          set +e
+          python tools/report_missing_native_public_routes.py > /tmp/remaining71-inventory.json
+          report_exit=$?
+          set -e
+          cat /tmp/remaining71-inventory.json
+          exit "$report_exit"
+      - name: Prove Rust selector and lower-module ownership
+        run: |
+          target/debug/syntavra-remaining71-ownership \
+            /tmp/remaining71-inventory.json \
+            > /tmp/remaining71-ownership.json
+          cat /tmp/remaining71-ownership.json
+      - name: Require capability routes to have one real Rust owner
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          ownership = json.loads(Path('/tmp/remaining71-ownership.json').read_text(encoding='utf-8'))
+          expected_routes = [
+              'run capability-decide',
+              'run capability-issue',
+              'run capability-verify',
+          ]
+          assert ownership.get('ok') is True, ownership
+          assert ownership.get('public_route_count') == 245, ownership
+          assert ownership.get('frozen_native_route_count') == 174, ownership
+          assert ownership.get('report_derived_remaining_count') == 71, ownership
+          assert ownership.get('owned_count') == 71, ownership
+          assert ownership.get('unowned_count') == 0, ownership
+          assert ownership.get('module_unowned_count') == 0, ownership
+          assert ownership.get('duplicate_owner_count') == 0, ownership
+          owners = ownership.get('owner_modules') or {}
+          for route in expected_routes:
+              assert owners.get(route) == 'native_remaining71_security', (route, owners.get(route))
+          print(json.dumps({
+              'ok': True,
+              'capability_routes': expected_routes,
+              'owner': 'native_remaining71_security',
+              'native_counter': '174/245',
+          }, sort_keys=True))
+          PY
+      - name: Run frozen capability Python-Rust differential
         run: |
           python tools/validate_remaining71_capability_differential.py \
             --rust-bin target/debug/syntavra \
-            --output /tmp/capability-differential.json
-      - name: Commit validated capability parity repair
+            --output /tmp/capability-inventory-differential.json
+      - name: Upload exact-head capability and inventory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capability-inventory-differential
+          path: |
+            /tmp/capability-inventory-differential.json
+            /tmp/python-capability-inventory-reference.json
+            /tmp/remaining71-inventory.json
+            /tmp/remaining71-ownership.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Require exact-head clean tree
         run: |
-          if [ -f tools/apply_remaining71_capability_parity_fix.py ]; then
-            rm tools/apply_remaining71_capability_parity_fix.py
-          fi
-          if ! git diff --quiet || ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "Close capability Python Rust parity"
-            git fetch origin agent/r31-provider-capture-native
-            git rebase origin/agent/r31-provider-capture-native
-            git push origin HEAD:agent/r31-provider-capture-native
-          fi
-      - name: Show exact head and clean tree
-        run: |
-          echo "head=$(git rev-parse HEAD)"
-          git status --porcelain --untracked-files=all
+          actual="$(git rev-parse HEAD)"
+          echo "head=$actual"
+          test "$actual" = "$EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
