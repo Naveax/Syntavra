@@ -1,3 +1,6 @@
+include!("cc_checkpoint_compactor_strategy_core.inc");
+include!("cc_checkpoint_compactor_strategy_misc.inc");
+
 fn cc_json_truthy(value: &Value) -> bool {
     match value {
         Value::Null => false,
@@ -60,12 +63,35 @@ fn cc_git_status_compact(output: &str) -> String {
 }
 
 fn cc_compact(command: &str, output: &str) -> Option<(&'static str, String)> {
-    let parts = cc_split(command);
+    let parts = cc_shell_split_platform(command).ok()?;
     let index = cc_executable_index(&parts)?;
     let executable = cc_casefold(cc_basename(&parts[index]));
     let arguments = cc_casefold(&parts[index + 1..].join(" "));
-    if executable == "git" && (arguments == "status" || arguments.starts_with("status ")) {
-        return Some(("git-status", cc_git_status_compact(output)));
+    let lines = cc_strategy_splitlines(output);
+    for plugin in COMPACTORS {
+        if !plugin.executables.contains(&executable.as_str()) { continue; }
+        if let Some(pattern) = plugin.argument_pattern {
+            let matcher = regex::Regex::new(pattern).ok()?;
+            if !matcher.is_match(&arguments) { continue; }
+        }
+        let selected = match plugin.strategy {
+            CompactorStrategy::GitStatus => return Some((plugin.name, cc_git_status_compact(output))),
+            CompactorStrategy::GitDiff => cc_strategy_git_diff(&lines),
+            CompactorStrategy::GitLog => cc_strategy_git_log(&lines),
+            CompactorStrategy::Search => cc_strategy_search(&lines),
+            CompactorStrategy::Table => cc_strategy_table(&lines),
+            CompactorStrategy::Test => cc_strategy_test(&lines),
+            CompactorStrategy::Lint => cc_strategy_lint(&lines),
+            CompactorStrategy::DockerBuild => cc_strategy_docker_build(&lines),
+            CompactorStrategy::HeadTail => cc_strategy_head_tail_selector(&lines),
+            CompactorStrategy::JsonOrTable => {
+                if let Ok(Some(rendered)) = cc_json_or_table_compact(output) {
+                    return Some((plugin.name, rendered));
+                }
+                cc_strategy_table(&lines)
+            }
+        };
+        return Some((plugin.name, selected.join("\n")));
     }
     None
 }
