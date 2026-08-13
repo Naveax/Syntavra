@@ -163,23 +163,45 @@ jobs:
                   "missing": missing,
               })
 
+          def capture(engine, root):
+              try:
+                  return {"ok": True, "result": exercise(engine, root), "error": None}
+              except Exception as exc:
+                  return {
+                      "ok": False,
+                      "result": None,
+                      "error": f"{type(exc).__name__}: {exc}",
+                  }
+
           with tempfile.TemporaryDirectory(prefix="syntavra-memory-negative-diff-") as directory:
               root = Path(directory)
-              python_result = exercise("python", root / "python")
-              rust_result = exercise("rust", root / "rust")
-              assert python_result == rust_result, {"python": python_result, "rust": rust_result}
+              python_capture = capture("python", root / "python")
+              rust_capture = capture("rust", root / "rust")
+              mismatches = []
+              if not python_capture["ok"]:
+                  mismatches.append({"path": "python.exercise", "error": python_capture["error"]})
+              if not rust_capture["ok"]:
+                  mismatches.append({"path": "rust.exercise", "error": rust_capture["error"]})
+              if python_capture["ok"] and rust_capture["ok"] and python_capture["result"] != rust_capture["result"]:
+                  mismatches.append({
+                      "path": "cross_engine_result",
+                      "python": python_capture["result"],
+                      "rust": rust_capture["result"],
+                  })
               result = {
-                  "ok": True,
-                  "mismatch_count": 0,
-                  "python": python_result,
-                  "rust": rust_result,
+                  "ok": not mismatches,
+                  "mismatch_count": len(mismatches),
+                  "mismatches": mismatches,
+                  "python": python_capture,
+                  "rust": rust_capture,
                   "claim_boundary": "frozen empty-state, repository-summary/ranking, missing-session and tampered hash-chain parity",
               }
               Path("/tmp/memory-negative-state-differential.json").write_text(
                   json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
                   encoding="utf-8",
               )
-              print(json.dumps({"ok": True, "mismatch_count": 0}, sort_keys=True))
+              print(json.dumps({"ok": result["ok"], "mismatch_count": result["mismatch_count"]}, sort_keys=True))
+              raise SystemExit(0 if result["ok"] else 2)
           PY
       - name: Upload exact-head Memory Intelligence evidence
         if: always()
