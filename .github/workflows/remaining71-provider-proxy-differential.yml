@@ -52,11 +52,16 @@ jobs:
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
       - name: Run Rust provider proxy unit tests
         run: cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra native_remaining71_provider_proxy -- --nocapture
-      - name: Run provider proxy differential
+      - name: Run provider proxy transport differential
         run: |
           python tools/validate_remaining71_provider_proxy_differential.py \
             --rust-bin target/debug/syntavra \
             --output /tmp/provider-proxy-differential.json
+      - name: Run frozen provider proxy CLI state differential
+        run: |
+          python tools/validate_remaining71_provider_proxy_cli_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/provider-proxy-cli-differential.json
       - name: Upload exact-head provider proxy evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -64,6 +69,7 @@ jobs:
           name: provider-proxy-differential
           path: |
             /tmp/provider-proxy-differential.json
+            /tmp/provider-proxy-cli-differential.json
             /tmp/python-provider-proxy-reference.json
           if-no-files-found: warn
           retention-days: 30
