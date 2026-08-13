@@ -276,7 +276,8 @@ fn capability_parser_error(arguments: &[String], path: &[String]) -> Option<Exit
 }
 
 fn python_public_error(path: &[String], error: &str) -> String {
-    if matches!(path, [root, action] if root == "provider" && matches!(action.as_str(), "capabilities" | "prepare")) {
+    if matches!(path, [root, action] if root == "provider" && matches!(action.as_str(), "capabilities" | "prepare"))
+    {
         if let Some(provider) = error.strip_prefix("PROVIDER_UNSUPPORTED:") {
             return format!("ValueError: unsupported provider: {provider}");
         }
