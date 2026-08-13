@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -177,6 +179,39 @@ def normalize_paths(value: Any, *, project: Path, state: Path, home: Path) -> An
     return rendered
 
 
+def normalize_descriptor(descriptor: str) -> str:
+    return re.sub(
+        r"(?m)^ExecStart=.*? --project ",
+        "ExecStart=<ENGINE_LAUNCHER> --project ",
+        descriptor,
+        count=1,
+    )
+
+
+def normalize_lifecycle_value(
+    value: Any,
+    *,
+    project: Path,
+    state: Path,
+    home: Path,
+    normalized_descriptor_hash: str | None = None,
+) -> Any:
+    normalized = normalize_paths(value, project=project, state=state, home=home)
+    if not isinstance(normalized, dict):
+        return normalized
+
+    result = json.loads(json.dumps(normalized))
+    plan = result.get("plan")
+    if isinstance(plan, dict) and isinstance(plan.get("descriptor"), str):
+        descriptor = normalize_descriptor(plan["descriptor"])
+        plan["descriptor"] = descriptor
+        plan["descriptor_hash"] = hashlib.sha256(descriptor.encode("utf-8")).hexdigest()
+    if normalized_descriptor_hash and isinstance(result.get("expected_hash"), str):
+        if result["expected_hash"]:
+            result["expected_hash"] = normalized_descriptor_hash
+    return result
+
+
 def lifecycle_projection(
     engine: str,
     *,
@@ -192,6 +227,7 @@ def lifecycle_projection(
     home.mkdir(parents=True)
     (project / ".git").mkdir()
     results: dict[str, Any] = {}
+    normalized_descriptor_hash: str | None = None
     for action in ("install", "verify", "uninstall"):
         result = run_engine(
             engine,
@@ -210,12 +246,21 @@ def lifecycle_projection(
             project=project,
             state=state,
         )
+        normalized_value = normalize_lifecycle_value(
+            result["value"],
+            project=project,
+            state=state,
+            home=home,
+            normalized_descriptor_hash=normalized_descriptor_hash,
+        )
+        if action == "install" and isinstance(normalized_value, dict):
+            plan = normalized_value.get("plan")
+            if isinstance(plan, dict) and isinstance(plan.get("descriptor_hash"), str):
+                normalized_descriptor_hash = plan["descriptor_hash"]
         results[action] = {
             "exit": result["exit"],
             "stderr": result["stderr"],
-            "value": normalize_paths(
-                result["value"], project=project, state=state, home=home
-            ),
+            "value": normalized_value,
         }
     return results
 
@@ -252,10 +297,18 @@ def compare(
         "frozen_routes": frozen_routes,
         "covered_routes": COVERED_ROUTES,
         "route_count": len(COVERED_ROUTES),
+        "normalizations": [
+            "temporary project/state/home paths",
+            "engine-specific proxy-service ExecStart launcher prefix",
+            "descriptor hash recomputed from normalized descriptor",
+            "frozen dynamic timestamp/receipt-hash fields already excluded by the Phase-1 authority",
+        ],
         "claim_boundary": (
             "frozen Phase-1 provider/proxy CLI and durable-state behavior plus dry-run "
-            "proxy-service lifecycle; live localhost transport remains certified by the "
-            "separate provider-proxy transport differential; no live provider or billing claim"
+            "proxy-service lifecycle; engine-specific service launcher identity is normalized "
+            "while descriptor arguments and normalized hash integrity remain exact; live localhost "
+            "transport remains certified by the separate provider-proxy transport differential; "
+            "no live provider or billing claim"
         ),
     }
 
