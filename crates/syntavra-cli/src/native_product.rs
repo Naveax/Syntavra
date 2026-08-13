@@ -397,7 +397,29 @@ pub fn execute(
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
-        return native_remaining71_memory::execute(command, &arguments, project_root, state_root);
+        return match native_remaining71_memory::execute(
+            command,
+            &arguments,
+            project_root,
+            state_root,
+        ) {
+            Ok(value) => Ok(value),
+            Err(error) => emit_failed_decision(
+                &serde_json::json!({
+                    "ok": false,
+                    "error": {
+                        "code": "PYTHON_PUBLIC_COMMAND_FAILED",
+                        "message": "The selected Python engine failed while executing the public command.",
+                        "details": {
+                            "command": command.first().map(String::as_str).unwrap_or(""),
+                            "error": error,
+                            "fallback": "forbidden"
+                        }
+                    }
+                }),
+                4,
+            ),
+        };
     }
     if bulk_parity_probe_enabled() && native_remaining71_platform_misc::supports(command) {
         return native_remaining71_platform_misc::execute(

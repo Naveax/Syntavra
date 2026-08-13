@@ -1107,6 +1107,17 @@ fn open_session(
 
 fn session_events(path: &Path, session_id: &str) -> Result<Vec<Value>, String> {
     let db = init_session(path)?;
+    let exists: Option<i64> = db
+        .query_row(
+            "SELECT 1 FROM sessions WHERE session_id=?1",
+            [session_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| format!("SESSION_EVENTS_SESSION_QUERY:{error}"))?;
+    if exists.is_none() {
+        return Err(format!("KeyError: '{session_id}'"));
+    }
     let mut statement = db
         .prepare("SELECT session_id,sequence,event_type,payload_json,previous_hash,event_hash,created_at FROM events WHERE session_id=?1 ORDER BY sequence")
         .map_err(|error| format!("SESSION_EVENTS_PREPARE:{error}"))?;
@@ -1488,6 +1499,17 @@ fn retrieve_session(
 
 fn checkpoint_session(path: &Path, session_id: &str, label: &str) -> Result<Value, String> {
     let db = init_session(path)?;
+    let exists: Option<i64> = db
+        .query_row(
+            "SELECT 1 FROM sessions WHERE session_id=?1",
+            [session_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| format!("SESSION_CHECKPOINT_SESSION_QUERY:{error}"))?;
+    if exists.is_none() {
+        return Err(format!("KeyError: '{session_id}'"));
+    }
     let last = db
         .query_row(
             "SELECT sequence,event_hash FROM events WHERE session_id=?1 ORDER BY sequence DESC LIMIT 1",
