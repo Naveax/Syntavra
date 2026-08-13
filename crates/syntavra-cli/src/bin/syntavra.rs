@@ -218,6 +218,65 @@ fn command_path(arguments: &[String]) -> Vec<String> {
     positional
 }
 
+fn capability_missing_positionals(
+    arguments: &[String],
+    path: &[String],
+) -> Option<(&'static str, usize)> {
+    let (action, required) = match path {
+        [root, action] if root == "run" && action == "capability-decide" => {
+            ("capability-decide", 2usize)
+        }
+        [root, action] if root == "run" && action == "capability-issue" => {
+            ("capability-issue", 3usize)
+        }
+        [root, action] if root == "run" && action == "capability-verify" => {
+            ("capability-verify", 3usize)
+        }
+        _ => return None,
+    };
+    let action_index = arguments.iter().position(|value| value == action)?;
+    let mut count = 0usize;
+    let mut index = action_index + 1;
+    while index < arguments.len() {
+        let value = &arguments[index];
+        if matches!(
+            value.as_str(),
+            "--resource" | "--network-host" | "--permission" | "--ttl"
+        ) {
+            index = (index + 2).min(arguments.len());
+            continue;
+        }
+        if value.starts_with("--resource=")
+            || value.starts_with("--network-host=")
+            || value.starts_with("--permission=")
+            || value.starts_with("--ttl=")
+            || matches!(
+                value.as_str(),
+                "--sandboxed" | "--user-authorized" | "--no-consume"
+            )
+        {
+            index += 1;
+            continue;
+        }
+        if value.starts_with('-') {
+            index += 1;
+            continue;
+        }
+        count += 1;
+        index += 1;
+    }
+    (count < required).then_some((action, required - count))
+}
+
+fn capability_parser_error(arguments: &[String], path: &[String]) -> Option<ExitCode> {
+    let (action, missing) = capability_missing_positionals(arguments, path)?;
+    eprintln!("usage: syntavra run {action} [options] ...");
+    eprintln!(
+        "syntavra run {action}: error: missing {missing} required positional argument(s)"
+    );
+    Some(ExitCode::from(2))
+}
+
 fn executable_exists(path: &Path) -> bool {
     path.is_file()
 }
@@ -449,6 +508,9 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
     let path = command_path(&parsed.forwarded);
     match selected {
         Engine::Rust => {
+            if let Some(exit) = capability_parser_error(&parsed.forwarded, &path) {
+                return exit;
+            }
             if native_product::supports(&path) {
                 match native_product::execute(&path, &parsed.project_root, &parsed.state_root) {
                     Ok(Some(value)) => {
@@ -573,7 +635,9 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{command_path, engine_command, parse_arguments, Engine};
+    use super::{
+        capability_missing_positionals, command_path, engine_command, parse_arguments, Engine,
+    };
 
     #[test]
     fn parses_command_override() {
@@ -596,6 +660,33 @@ mod tests {
             "cache-health".to_owned(),
         ]);
         assert_eq!(path, vec!["run", "cache-health"]);
+    }
+
+    #[test]
+    fn capability_parser_counts_required_positionals_without_option_values() {
+        let missing = capability_missing_positionals(
+            &[
+                "run".to_owned(),
+                "capability-decide".to_owned(),
+                "repo.read".to_owned(),
+                "--resource".to_owned(),
+                "workspace:/module.py".to_owned(),
+            ],
+            &["run".to_owned(), "capability-decide".to_owned()],
+        );
+        assert_eq!(missing, Some(("capability-decide", 1)));
+
+        let complete = capability_missing_positionals(
+            &[
+                "run".to_owned(),
+                "capability-decide".to_owned(),
+                "repo.read".to_owned(),
+                "{\"path\":\"module.py\"}".to_owned(),
+                "--resource=workspace:/module.py".to_owned(),
+            ],
+            &["run".to_owned(), "capability-decide".to_owned()],
+        );
+        assert_eq!(complete, None);
     }
 
     #[test]
