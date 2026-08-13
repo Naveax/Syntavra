@@ -47,7 +47,12 @@ jobs:
         run: |
           rustup toolchain uninstall 1.82.0 || true
           rustup toolchain install 1.82.0 --profile minimal --component rustfmt
-          cargo +1.82.0 fmt --all -- --check
+          if ! cargo +1.82.0 fmt --all -- --check; then
+            cargo +1.82.0 fmt --all
+            git diff -- crates/syntavra-cli/src/bin/syntavra.rs > /tmp/rustfmt-drift.patch
+            git restore --worktree --staged .
+            exit 1
+          fi
           cargo +1.82.0 check --locked -p syntavra-cli --bins
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
       - name: Run Rust provider proxy unit tests
@@ -71,6 +76,7 @@ jobs:
             /tmp/provider-proxy-differential.json
             /tmp/provider-proxy-cli-differential.json
             /tmp/python-provider-proxy-reference.json
+            /tmp/rustfmt-drift.patch
           if-no-files-found: warn
           retention-days: 30
       - name: Require exact-head clean tree
