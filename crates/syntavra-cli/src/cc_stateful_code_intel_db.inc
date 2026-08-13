@@ -23,8 +23,9 @@ fn cc_code_intel_symbol(project:&Path,row:&rusqlite::Row<'_>)->rusqlite::Result<
 
 fn cc_code_intel_symbols(project:&Path,connection:&rusqlite::Connection)->Result<Vec<Value>,String>{
     let mut statement=connection.prepare("SELECT path,name,qualified_name,kind,line,end_line,parser,confidence FROM structural_symbols ORDER BY path,line,qualified_name").map_err(|e|format!("CODE_INTEL_SYMBOL_PREPARE_FAILED:{e}"))?;
-    statement.query_map([],|row|cc_code_intel_symbol(project,row)).map_err(|e|format!("CODE_INTEL_SYMBOL_QUERY_FAILED:{e}"))?
-        .collect::<Result<Vec<_>,_>>().map_err(|e|format!("CODE_INTEL_SYMBOL_ROW_FAILED:{e}"))
+    let rows=statement.query_map([],|row|cc_code_intel_symbol(project,row)).map_err(|e|format!("CODE_INTEL_SYMBOL_QUERY_FAILED:{e}"))?
+        .collect::<Result<Vec<_>,_>>().map_err(|e|format!("CODE_INTEL_SYMBOL_ROW_FAILED:{e}"))?;
+    Ok(rows)
 }
 
 fn cc_code_intel_counts(connection:&rusqlite::Connection)->Result<(i64,i64,i64),String>{
