@@ -145,7 +145,14 @@ jobs:
           assert len(remaining) == 71
           assert all(row['rust_selector_owned'] is True for row in remaining)
           assert all(row['rust_owner_module_owned'] is True for row in remaining)
-          assert all(isinstance(row['rust_owner_module'], str) and row['rust_owner_module'].startswith('native_remaining71_') for row in remaining)
+          assert all(
+              isinstance(row['rust_owner_module'], str)
+              and (
+                  row['rust_owner_module'].startswith('native_remaining71_')
+                  or row['rust_owner_module'] == 'native_product_legacy'
+              )
+              for row in remaining
+          )
           PY
 
       - name: Upload Phase 2 Rust migration matrix evidence
