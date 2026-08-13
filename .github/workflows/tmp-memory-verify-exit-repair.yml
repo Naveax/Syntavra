@@ -33,40 +33,17 @@ jobs:
 
           path = Path("crates/syntavra-cli/src/bin/syntavra.rs")
           text = path.read_text(encoding="utf-8")
-          old = '''                    Ok(Some(value)) => {
-                        let blocked_agent = value["state"].as_str() == Some("blocked")
-                            && matches!(path.as_slice(), [root, action] if
-                                (root == "run" && action == "agent-execute")
-                                    || (root == "agent" && action == "replay"));
-                        emit(&value);
-                        if blocked_agent {
-                            ExitCode::from(3)
-                        } else {
-                            ExitCode::SUCCESS
-                        }
-                    }
-          '''
-          new = '''                    Ok(Some(value)) => {
-                        let blocked_agent = value["state"].as_str() == Some("blocked")
-                            && matches!(path.as_slice(), [root, action] if
-                                (root == "run" && action == "agent-execute")
-                                    || (root == "agent" && action == "replay"));
-                        let integrity_failure = value["ok"].as_bool() == Some(false)
-                            && matches!(path.as_slice(), [root, action] if
-                                root == "run" && action == "memory-verify");
-                        emit(&value);
-                        if blocked_agent || integrity_failure {
-                            ExitCode::from(3)
-                        } else {
-                            ExitCode::SUCCESS
-                        }
-                    }
-          '''
-          old = old.removesuffix("          ")
-          new = new.removesuffix("          ")
+          old = '                        emit(&value);\n                        if blocked_agent {\n'
+          new = (
+              '                        let integrity_failure = value["ok"].as_bool() == Some(false)\n'
+              '                            && matches!(path.as_slice(), [root, action] if\n'
+              '                                root == "run" && action == "memory-verify");\n'
+              '                        emit(&value);\n'
+              '                        if blocked_agent || integrity_failure {\n'
+          )
           count = text.count(old)
           if count != 1:
-              raise SystemExit(f"exact repair precondition failed: expected 1 source block, found {count}")
+              raise SystemExit(f"exact repair precondition failed: expected 1 selector exit block, found {count}")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
           git diff --check
