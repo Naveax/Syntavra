@@ -152,6 +152,52 @@ cr!("nuget",&["nuget"],None,JsonOrTable),
 ];
 const COMPACTOR_COUNT: usize = COMPACTORS.len();
 
+fn cc_json_token_boundary(bytes: &[u8], end: usize) -> bool {
+    bytes.get(end).is_none_or(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
+}
+
+fn cc_python_json_compat(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut output = Vec::<u8>::with_capacity(bytes.len());
+    let mut index = 0usize;
+    let mut quoted = false;
+    let mut escaped = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if quoted {
+            output.push(byte);
+            if escaped { escaped = false; }
+            else if byte == b'\\' { escaped = true; }
+            else if byte == b'"' { quoted = false; }
+            index += 1;
+            continue;
+        }
+        if byte == b'"' {
+            quoted = true;
+            output.push(byte);
+            index += 1;
+            continue;
+        }
+        let rest = &bytes[index..];
+        if rest.starts_with(b"-Infinity") && cc_json_token_boundary(bytes, index + 9) {
+            output.extend_from_slice(b"true"); index += 9; continue;
+        }
+        if rest.starts_with(b"Infinity") && cc_json_token_boundary(bytes, index + 8) {
+            output.extend_from_slice(b"true"); index += 8; continue;
+        }
+        if rest.starts_with(b"NaN") && cc_json_token_boundary(bytes, index + 3) {
+            output.extend_from_slice(b"true"); index += 3; continue;
+        }
+        output.push(byte);
+        index += 1;
+    }
+    String::from_utf8(output).unwrap_or_else(|_| text.to_owned())
+}
+
+fn cc_parse_python_json(text: &str) -> Result<Value, serde_json::Error> {
+    serde_json::from_str::<Value>(&cc_python_json_compat(text))
+}
+
 include!("cc_checkpoint_rewrite.inc");
 include!("cc_checkpoint_transcript.inc");
 
