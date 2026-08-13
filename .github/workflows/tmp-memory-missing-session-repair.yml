@@ -94,7 +94,12 @@ jobs:
           )
           new_boundary = (
               "    if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {\n"
-              "        return match native_remaining71_memory::execute(command, &arguments, project_root, state_root) {\n"
+              "        return match native_remaining71_memory::execute(\n"
+              "            command,\n"
+              "            &arguments,\n"
+              "            project_root,\n"
+              "            state_root,\n"
+              "        ) {\n"
               "            Ok(value) => Ok(value),\n"
               "            Err(error) => emit_failed_decision(\n"
               "                &serde_json::json!({\n"
