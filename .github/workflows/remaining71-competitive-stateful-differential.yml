@@ -1,0 +1,161 @@
+name: Remaining 71 Competitive Stateful Differential
+
+on:
+  push:
+    branches: [agent/r31-provider-capture-native]
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  stateful-differential:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+      SYNTAVRA_BULK_PARITY_PROBE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Prepare Rust 1.82 and build exact-head CLI
+        run: |
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all -- --check
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+
+      - name: Run stateful public differential
+        run: |
+          python - <<'PY' > /tmp/competitive-stateful.log 2>&1
+          import hashlib, json, os, sqlite3, subprocess, sys, tempfile
+          from pathlib import Path
+
+          repo=Path.cwd(); rust=(repo/'target/debug/syntavra').resolve()
+          dynamic_keys={'timestamp','created_at','updated_at','started_at','stopped_at','mtime_ns','pid','cycle_hash','event_hash'}
+          dynamic_columns={'timestamp','created_at','updated_at','started_at','stopped_at','mtime_ns','pid','last_seen_at','accessed_at','last_accessed_at'}
+
+          def norm(value, project, state):
+              if isinstance(value,dict):
+                  out={}
+                  for key,child in value.items():
+                      if key in dynamic_keys:
+                          out[key]='<DYNAMIC>'
+                      else:
+                          out[key]=norm(child,project,state)
+                  if 'accounts' in out and 'schema_version' in out and 'receipt_hash' in out:
+                      out['receipt_hash']='<DYNAMIC_POOL_RECEIPT>'
+                  return out
+              if isinstance(value,list): return [norm(x,project,state) for x in value]
+              if isinstance(value,str):
+                  return value.replace(str(project),'<PROJECT>').replace(str(state),'<STATE>')
+              return value
+
+          def sqlite_snapshot(path, project, state):
+              db=sqlite3.connect(path); db.row_factory=sqlite3.Row
+              tables=[r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+              result={}
+              for table in tables:
+                  cols=[r[1] for r in db.execute(f'PRAGMA table_info("{table}")')]
+                  rows=[]
+                  for row in db.execute(f'SELECT * FROM "{table}"'):
+                      item={}
+                      for col in cols:
+                          value=row[col]
+                          item[col]='<DYNAMIC>' if col in dynamic_columns else norm(value,project,state)
+                      rows.append(item)
+                  rows.sort(key=lambda x: json.dumps(x,sort_keys=True,ensure_ascii=False,default=str))
+                  result[table]=rows
+              db.close(); return result
+
+          def state_snapshot(state, project):
+              result={}
+              if not state.exists(): return result
+              for path in sorted(p for p in state.rglob('*') if p.is_file()):
+                  rel=path.relative_to(state).as_posix()
+                  if rel.endswith(('-wal','-shm')): continue
+                  if path.suffix in {'.sqlite3','.db'}:
+                      result[rel]={'type':'sqlite','value':sqlite_snapshot(path,project,state)}; continue
+                  raw=path.read_bytes()
+                  if path.suffix=='.json':
+                      try: value=json.loads(raw.decode('utf-8')); result[rel]={'type':'json','value':norm(value,project,state)}; continue
+                      except Exception: pass
+                  if path.suffix=='.jsonl':
+                      rows=[]
+                      for line in raw.decode('utf-8',errors='replace').splitlines():
+                          try: rows.append(norm(json.loads(line),project,state))
+                          except json.JSONDecodeError: rows.append(line)
+                      result[rel]={'type':'jsonl','value':rows}; continue
+                  try:
+                      text=raw.decode('utf-8'); result[rel]={'type':'text','value':norm(text,project,state)}
+                  except UnicodeDecodeError:
+                      result[rel]={'type':'binary','sha256':hashlib.sha256(raw).hexdigest(),'size':len(raw)}
+              return result
+
+          def invoke(engine, project, state, args):
+              common=['--project',str(project),'--state-root',str(state),*args]
+              cmd=[sys.executable,'-m','syntavra_runtime.engine_entry','--engine','python',*common] if engine=='python' else [str(rust),'--engine','rust',*common]
+              env=os.environ.copy(); env.update({'PYTHONPATH':str(repo),'PYTHONUTF8':'1','PYTHONIOENCODING':'utf-8','SYNTAVRA_BULK_PARITY_PROBE':'1'})
+              done=subprocess.run(cmd,cwd=repo,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace',timeout=120)
+              try: value=json.loads(done.stdout)
+              except json.JSONDecodeError: value=None
+              return {'exit':done.returncode,'value':norm(value,project,state),'stderr':done.stderr}
+
+          def sequence(engine, root):
+              project=root/'project'; state=root/'state'; (project/'src').mkdir(parents=True); state.mkdir(parents=True)
+              source=project/'src'/'a.py'; source.write_text('def alpha():\n    return 1\n',encoding='utf-8')
+              rows={}
+              def step(name,args): rows[name]=invoke(engine,project,state,args)
+              step('watch_initial',['run','watch','--iterations','1','--interval','0.001','--no-index'])
+              source.write_text('def alpha():\n    return 2\n',encoding='utf-8')
+              step('watch_modified',['run','watch','--iterations','1','--interval','0.001','--no-index'])
+              step('worker_status_initial',['run','worker','status'])
+              step('worker_run',['run','worker','run','--iterations','1','--interval','0.001'])
+              step('worker_status_final',['run','worker','status'])
+              step('notify',['run','notify','Stateful parity','local deterministic notification','--severity','warning','--channel','local'])
+              step('pool_add',['run','provider-pool','add','openai','primary','env:OPENAI_API_KEY','--subscription','--priority','3','--quota','0.75','--model','gpt-x'])
+              step('pool_list_before',['run','provider-pool','list'])
+              models=json.dumps([{'provider':'openai','model':'gpt-x','quality':0.8,'max_complexity':'reasoning','context_window':128000,'latency_ms':100.0}],separators=(',',':'))
+              step('pool_route',['run','provider-pool','route','refactor dependency','_',models,'--changed-files','3','--tokens','4000'])
+              step('pool_feedback',['run','provider-pool','feedback','openai','primary','--success','--latency-ms','120','--quota','0.70'])
+              step('pool_list_after',['run','provider-pool','list'])
+              step('code_intel_report',['run','code-intel','report'])
+              step('dashboard_snapshot',['run','dashboard','--snapshot'])
+              return {'receipts':rows,'state':state_snapshot(state,project)}
+
+          with tempfile.TemporaryDirectory(prefix='syntavra-stateful-') as tmp:
+              base=Path(tmp); py=sequence('python',base/'python'); rs=sequence('rust',base/'rust')
+          mismatches=[]
+          for key in sorted(set(py['receipts'])|set(rs['receipts'])):
+              if py['receipts'].get(key)!=rs['receipts'].get(key):
+                  mismatches.append({'scope':'receipt','id':key,'python':py['receipts'].get(key),'rust':rs['receipts'].get(key)})
+          py_state=py['state']; rs_state=rs['state']
+          for key in sorted(set(py_state)|set(rs_state)):
+              if py_state.get(key)!=rs_state.get(key):
+                  mismatches.append({'scope':'state','id':key,'python':py_state.get(key),'rust':rs_state.get(key)})
+          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'routes':['watch','worker','notify','provider-pool','code-intel','dashboard'],'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'claim_boundary':'stateful public receipts plus normalized logical persisted state; native route count remains frozen'}
+          Path('/tmp/competitive-stateful.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True,default=str),encoding='utf-8')
+          print(json.dumps({'ok':report['ok'],'mismatch_count':len(mismatches)},sort_keys=True))
+          for row in mismatches[:120]: print('STATEFUL_MISMATCH '+json.dumps({'scope':row['scope'],'id':row['id']},sort_keys=True))
+          raise SystemExit(0 if report['ok'] else 1)
+          PY
+
+      - name: Upload stateful differential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: competitive-stateful-differential
+          path: |
+            /tmp/competitive-stateful.json
+            /tmp/competitive-stateful.log
+          if-no-files-found: warn
+
+      - name: Enforce clean exact-head tree
+        if: always()
+        run: |
+          git status --porcelain=v1
+          test -z "$(git status --porcelain=v1)"
