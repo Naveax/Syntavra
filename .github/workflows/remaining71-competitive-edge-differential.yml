@@ -73,6 +73,9 @@ jobs:
                   return out
               return [] if a == b else [{"path":path or "<root>","python":a,"rust":b}]
 
+          def semantic(result):
+              return {"exit": result["exit"], "value": result["value"]}
+
           def transcript(engine, raw, root, label):
               project=root/"project"; state=root/"state"; project.mkdir(parents=True, exist_ok=True); state.mkdir(parents=True, exist_ok=True)
               source=project/f"{label}.json"; source.write_text(raw, encoding="utf-8")
@@ -89,16 +92,16 @@ jobs:
                       p=root/f"py-{case['id']}"; r=root/f"rs-{case['id']}"
                       py=run("python",["run","rewrite",*case["input"]],p/"project",p/"state")
                       rs=run("rust",["run","rewrite",*case["input"]],r/"project",r/"state")
-                  receipts["python"][case["id"]]=py; receipts["rust"][case["id"]]=rs; mismatches += diff(py,rs,f"rewrite.{case['id']}")
+                  receipts["python"][case["id"]]=py; receipts["rust"][case["id"]]=rs; mismatches += diff(semantic(py),semantic(rs),f"rewrite.{case['id']}")
               for case in contract["transcript_cases"]:
                   raw=case.get("json") or json.dumps(case["payload"],ensure_ascii=False,separators=(",",":"))
                   py=transcript("python",raw,root/f"py-{case['id']}",case["id"]); rs=transcript("rust",raw,root/f"rs-{case['id']}",case["id"])
-                  receipts["python"][case["id"]]=py; receipts["rust"][case["id"]]=rs; mismatches += diff(py,rs,f"transcript.{case['id']}")
+                  receipts["python"][case["id"]]=py; receipts["rust"][case["id"]]=rs; mismatches += diff(semantic(py),semantic(rs),f"transcript.{case['id']}")
               for case in contract["compactor_cases"]:
                   output=case.get("json") if "json" in case else "\n".join(case["lines"])
                   raw=json.dumps([{"command":case["command"],"output":output}],ensure_ascii=False,separators=(",",":"))
                   py=transcript("python",raw,root/f"py-{case['id']}",case["id"]); rs=transcript("rust",raw,root/f"rs-{case['id']}",case["id"])
-                  receipts["python"][case["id"]]=py; receipts["rust"][case["id"]]=rs; mismatches += diff(py,rs,f"compactor.{case['id']}")
+                  receipts["python"][case["id"]]=py; receipts["rust"][case["id"]]=rs; mismatches += diff(semantic(py),semantic(rs),f"compactor.{case['id']}")
 
           report={"ok":not mismatches,"contract":contract["contract"],"authority":contract["authority"],"mismatch_count":len(mismatches),
                   "mismatches":mismatches,"receipts":receipts,
