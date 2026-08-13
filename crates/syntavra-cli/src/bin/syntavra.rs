@@ -539,8 +539,15 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
                         let integrity_failure = value["ok"].as_bool() == Some(false)
                             && matches!(path.as_slice(), [root, action] if
                                 root == "run" && action == "memory-verify");
+                        let proxy_service_verify_failure = value["ok"].as_bool() == Some(false)
+                            && matches!(path.as_slice(), [root, action] if
+                                root == "run" && action == "proxy-service")
+                            && parsed
+                                .forwarded
+                                .windows(2)
+                                .any(|items| items[0] == "proxy-service" && items[1] == "verify");
                         emit(&value);
-                        if blocked_agent || integrity_failure {
+                        if blocked_agent || integrity_failure || proxy_service_verify_failure {
                             ExitCode::from(3)
                         } else {
                             ExitCode::SUCCESS
