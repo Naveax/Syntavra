@@ -1204,11 +1204,5 @@ fn prepare_impl(state_root: &Path) -> Result<Value, String> {
 }
 
 pub(crate) fn prepare(state_root: &Path) -> Result<Value, String> {
-    match prepare_impl(state_root) {
-        Ok(value) => Ok(value),
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(1);
-        }
-    }
+    prepare_impl(state_root)
 }
