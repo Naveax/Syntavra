@@ -456,8 +456,11 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
                             && matches!(path.as_slice(), [root, action] if
                                 (root == "run" && action == "agent-execute")
                                     || (root == "agent" && action == "replay"));
+                        let integrity_failure = value["ok"].as_bool() == Some(false)
+                            && matches!(path.as_slice(), [root, action] if
+                                root == "run" && action == "memory-verify");
                         emit(&value);
-                        if blocked_agent {
+                        if blocked_agent || integrity_failure {
                             ExitCode::from(3)
                         } else {
                             ExitCode::SUCCESS
