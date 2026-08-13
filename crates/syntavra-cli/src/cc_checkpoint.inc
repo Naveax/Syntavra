@@ -150,6 +150,10 @@ fn cc_compactor_json_compat(text: &str) -> String {
                 index += 1;
             }
             let token = std::str::from_utf8(&bytes[start..index]).unwrap_or("");
+            if token == "-0" {
+                output.push(b'0');
+                continue;
+            }
             let integer = !token.contains(['.', 'e', 'E']);
             if integer && token.parse::<i64>().is_err() && token.parse::<u64>().is_err() {
                 cc_push_json_marker(&mut output, &format!("{CC_JSON_INT}{token}"));
