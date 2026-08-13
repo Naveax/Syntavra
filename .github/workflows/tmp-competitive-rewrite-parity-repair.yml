@@ -1,0 +1,145 @@
+name: Temporary Competitive Rewrite Parity Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-competitive-rewrite-parity-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+
+      - name: Apply only rewrite argv versus string parity
+        id: patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/syntavra-cli/src/native_remaining71_competitive.rs')
+          text = path.read_text(encoding='utf-8')
+
+          if 'fn rewrite_text(command: &str)' in text:
+              Path('/tmp/rewrite-changed').write_text('false\n', encoding='utf-8')
+              raise SystemExit(0)
+
+          unsafe = '''    let unsafe_re = Regex::new(r"(?:\\|\\||&&|[|;`]|\\$\\(|\\n|\\r|>|<)")
+              .map_err(|error| format!("REWRITE_REGEX_FAILED:{error}"))?;
+          if argv.iter().any(|part| unsafe_re.is_match(part)) {
+              return Ok(
+                  json!({"original":original,"rewritten":original,"changed":false,"rule":Value::Null,"safe":false,"reason":"unsafe shell syntax detected"}),
+              );
+          }
+          '''
+          if text.count(unsafe) != 1:
+              raise SystemExit(f'expected argv unsafe block once, found {text.count(unsafe)}')
+          text = text.replace(unsafe, '', 1)
+
+          conflict_old = '''            return Ok(
+                  json!({"original":original,"rewritten":original,"changed":false,"rule":Value::Null,"safe":true,"reason":"explicit human-oriented or conflicting output option present"}),
+              );
+          '''
+          conflict_new = '''            return Ok(
+                  json!({"original":original,"rewritten":original,"changed":false,"rule":rule.name,"safe":true,"reason":"explicit user format preserved"}),
+              );
+          '''
+          if text.count(conflict_old) != 1:
+              raise SystemExit(f'expected conflict block once, found {text.count(conflict_old)}')
+          text = text.replace(conflict_old, conflict_new, 1)
+
+          call_old = '''        let argv = shellish_split(&command);
+              let rewrite = rewrite_argv(&argv)?;
+          '''
+          call_new = '''        let rewrite = rewrite_text(&command)?;
+          '''
+          if text.count(call_old) != 1:
+              raise SystemExit(f'expected transcript rewrite call once, found {text.count(call_old)}')
+          text = text.replace(call_old, call_new, 1)
+
+          marker = '\nfn transcript_mine(arguments: &[String]) -> Result<Value, String> {'
+          if text.count(marker) != 1:
+              raise SystemExit(f'expected transcript marker once, found {text.count(marker)}')
+          helper = r'''
+          fn rewrite_text(command: &str) -> Result<Value, String> {
+              let argv = shellish_split(command);
+              let original = argv.clone();
+              let unsafe_re = Regex::new(r"(?:\|\||&&|[|;`]|\$\(|\n|\r|>|<)")
+                  .map_err(|error| format!("REWRITE_REGEX_FAILED:{error}"))?;
+              if unsafe_re.is_match(command) {
+                  return Ok(json!({
+                      "original": original,
+                      "rewritten": original,
+                      "changed": false,
+                      "rule": Value::Null,
+                      "safe": false,
+                      "reason": "shell composition is not rewritten"
+                  }));
+              }
+              rewrite_argv(&argv)
+          }
+          '''
+          text = text.replace(marker, '\n' + helper.strip('\n') + marker, 1)
+          path.write_text(text, encoding='utf-8')
+          Path('/tmp/rewrite-changed').write_text('true\n', encoding='utf-8')
+          PY
+          changed="$(cat /tmp/rewrite-changed)"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          if [ "$changed" = "true" ]; then
+            test "$(git diff --name-only)" = "crates/syntavra-cli/src/native_remaining71_competitive.rs"
+            git diff --check
+          fi
+
+      - name: Validate rewrite repair against frozen differential
+        if: steps.patch.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all
+          test "$(git diff --name-only)" = "crates/syntavra-cli/src/native_remaining71_competitive.rs"
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+          set +e
+          python tools/validate_remaining71_competitive_core_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/competitive-after-rewrite.json
+          set -e
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/competitive-after-rewrite.json').read_text(encoding='utf-8'))
+          mismatches = (report.get('differential') or {}).get('mismatches') or []
+          rewrite = [row for row in mismatches if str(row.get('path', '')).startswith('rewrite_')]
+          if rewrite:
+              raise SystemExit(f'rewrite mismatches remain: {rewrite}')
+          print(f"rewrite parity closed; residual mismatch_count={len(mismatches)}")
+          PY
+          git diff --check
+
+      - name: Commit validated rewrite repair
+        if: steps.patch.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/syntavra-cli/src/native_remaining71_competitive.rs
+          git commit -m "fix(phase2): align competitive rewrite semantics"
+          git fetch origin agent/r31-provider-capture-native
+          git rebase origin/agent/r31-provider-capture-native
+          git push origin HEAD:agent/r31-provider-capture-native
