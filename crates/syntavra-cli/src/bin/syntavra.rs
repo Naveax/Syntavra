@@ -275,6 +275,25 @@ fn capability_parser_error(arguments: &[String], path: &[String]) -> Option<Exit
     Some(ExitCode::from(2))
 }
 
+fn python_public_error(path: &[String], error: &str) -> String {
+    if matches!(path, [root, action] if root == "provider" && matches!(action.as_str(), "capabilities" | "prepare")) {
+        if let Some(provider) = error.strip_prefix("PROVIDER_UNSUPPORTED:") {
+            return format!("ValueError: unsupported provider: {provider}");
+        }
+        if error.starts_with("unsupported provider:")
+            || error.starts_with("credential field is transport-only:")
+        {
+            return format!("ValueError: {error}");
+        }
+    }
+    if matches!(path, [root, action] if root == "run" && action == "provider-pool")
+        && error.starts_with("credential_ref must be a non-secret")
+    {
+        return format!("ValueError: {error}");
+    }
+    error.to_owned()
+}
+
 fn executable_exists(path: &Path) -> bool {
     path.is_file()
 }
@@ -531,11 +550,14 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
                         "The selected Rust engine does not implement this public command.",
                         json!({"command_path": path, "fallback": "forbidden"}),
                     ),
-                    Err(error) => fail(
-                        "RUST_PUBLIC_COMMAND_FAILED",
-                        "The selected Rust engine failed while executing the public command.",
-                        json!({"command_path": path, "error": error, "fallback": "forbidden"}),
-                    ),
+                    Err(error) => {
+                        let error = python_public_error(&path, &error);
+                        fail(
+                            "RUST_PUBLIC_COMMAND_FAILED",
+                            "The selected Rust engine failed while executing the public command.",
+                            json!({"command_path": path, "error": error, "fallback": "forbidden"}),
+                        )
+                    }
                 }
             } else {
                 fail(
@@ -634,7 +656,8 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        capability_missing_positionals, command_path, engine_command, parse_arguments, Engine,
+        capability_missing_positionals, command_path, engine_command, parse_arguments,
+        python_public_error, Engine,
     };
 
     #[test]
@@ -685,6 +708,31 @@ mod tests {
             &["run".to_owned(), "capability-decide".to_owned()],
         );
         assert_eq!(complete, None);
+    }
+
+    #[test]
+    fn provider_public_errors_match_python_exception_strings() {
+        assert_eq!(
+            python_public_error(
+                &["provider".to_owned(), "capabilities".to_owned()],
+                "PROVIDER_UNSUPPORTED:not-a-provider",
+            ),
+            "ValueError: unsupported provider: not-a-provider",
+        );
+        assert_eq!(
+            python_public_error(
+                &["provider".to_owned(), "prepare".to_owned()],
+                "credential field is transport-only: request.authorization",
+            ),
+            "ValueError: credential field is transport-only: request.authorization",
+        );
+        assert_eq!(
+            python_public_error(
+                &["run".to_owned(), "provider-pool".to_owned()],
+                "credential_ref must be a non-secret env/file/keyring/oauth-profile reference",
+            ),
+            "ValueError: credential_ref must be a non-secret env/file/keyring/oauth-profile reference",
+        );
     }
 
     #[test]
