@@ -45,7 +45,7 @@ jobs:
                             ExitCode::SUCCESS
                         }
                     }
-'''
+          '''
           new = '''                    Ok(Some(value)) => {
                         let blocked_agent = value["state"].as_str() == Some("blocked")
                             && matches!(path.as_slice(), [root, action] if
@@ -61,7 +61,9 @@ jobs:
                             ExitCode::SUCCESS
                         }
                     }
-'''
+          '''
+          old = old.removesuffix("          ")
+          new = new.removesuffix("          ")
           count = text.count(old)
           if count != 1:
               raise SystemExit(f"exact repair precondition failed: expected 1 source block, found {count}")
