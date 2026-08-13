@@ -113,7 +113,7 @@ fn cc_transcript_mine(arguments: &[String]) -> Result<Value, String> {
         }
     }
     let total = opportunities.iter().map(|row| row["estimated_saved_tokens"].as_u64().unwrap_or(0)).sum::<u64>();
-    let mut body = serde_json::json!({"events":events.len(),"commands":commands,"opportunities":opportunities,"estimated_saved_tokens":total,"coverage":{"rewrite_rules":REWRITE_RULE_COUNT,"compactors":112}});
+    let mut body = serde_json::json!({"events":events.len(),"commands":commands,"opportunities":opportunities,"estimated_saved_tokens":total,"coverage":{"rewrite_rules":REWRITE_RULE_COUNT,"compactors":COMPACTOR_COUNT}});
     body["analysis_hash"] = Value::String(syntavra_core::sha256_hex(cc_canonical_json(&body)?.as_bytes()));
     Ok(body)
 }
