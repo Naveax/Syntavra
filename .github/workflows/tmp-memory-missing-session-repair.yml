@@ -34,48 +34,52 @@ jobs:
           memory = Path("crates/syntavra-cli/src/native_remaining71_memory.rs")
           text = memory.read_text(encoding="utf-8")
 
-          old_events = '''fn session_events(path: &Path, session_id: &str) -> Result<Vec<Value>, String> {
-              let db = init_session(path)?;
-              let mut statement = db
-          '''.replace("              ", "")
-          new_events = '''fn session_events(path: &Path, session_id: &str) -> Result<Vec<Value>, String> {
-              let db = init_session(path)?;
-              let exists: Option<i64> = db
-                  .query_row(
-                      "SELECT 1 FROM sessions WHERE session_id=?1",
-                      [session_id],
-                      |row| row.get(0),
-                  )
-                  .optional()
-                  .map_err(|error| format!("SESSION_EVENTS_SESSION_QUERY:{error}"))?;
-              if exists.is_none() {
-                  return Err(format!("KeyError: '{session_id}'"));
-              }
-              let mut statement = db
-          '''.replace("              ", "")
+          old_events = (
+              "fn session_events(path: &Path, session_id: &str) -> Result<Vec<Value>, String> {\n"
+              "    let db = init_session(path)?;\n"
+              "    let mut statement = db\n"
+          )
+          new_events = (
+              "fn session_events(path: &Path, session_id: &str) -> Result<Vec<Value>, String> {\n"
+              "    let db = init_session(path)?;\n"
+              "    let exists: Option<i64> = db\n"
+              "        .query_row(\n"
+              "            \"SELECT 1 FROM sessions WHERE session_id=?1\",\n"
+              "            [session_id],\n"
+              "            |row| row.get(0),\n"
+              "        )\n"
+              "        .optional()\n"
+              "        .map_err(|error| format!(\"SESSION_EVENTS_SESSION_QUERY:{error}\"))?;\n"
+              "    if exists.is_none() {\n"
+              "        return Err(format!(\"KeyError: '{session_id}'\"));\n"
+              "    }\n"
+              "    let mut statement = db\n"
+          )
           if text.count(old_events) != 1:
               raise SystemExit(f"session_events precondition failed: {text.count(old_events)}")
           text = text.replace(old_events, new_events, 1)
 
-          old_checkpoint = '''fn checkpoint_session(path: &Path, session_id: &str, label: &str) -> Result<Value, String> {
-              let db = init_session(path)?;
-              let last = db
-          '''.replace("              ", "")
-          new_checkpoint = '''fn checkpoint_session(path: &Path, session_id: &str, label: &str) -> Result<Value, String> {
-              let db = init_session(path)?;
-              let exists: Option<i64> = db
-                  .query_row(
-                      "SELECT 1 FROM sessions WHERE session_id=?1",
-                      [session_id],
-                      |row| row.get(0),
-                  )
-                  .optional()
-                  .map_err(|error| format!("SESSION_CHECKPOINT_SESSION_QUERY:{error}"))?;
-              if exists.is_none() {
-                  return Err(format!("KeyError: '{session_id}'"));
-              }
-              let last = db
-          '''.replace("              ", "")
+          old_checkpoint = (
+              "fn checkpoint_session(path: &Path, session_id: &str, label: &str) -> Result<Value, String> {\n"
+              "    let db = init_session(path)?;\n"
+              "    let last = db\n"
+          )
+          new_checkpoint = (
+              "fn checkpoint_session(path: &Path, session_id: &str, label: &str) -> Result<Value, String> {\n"
+              "    let db = init_session(path)?;\n"
+              "    let exists: Option<i64> = db\n"
+              "        .query_row(\n"
+              "            \"SELECT 1 FROM sessions WHERE session_id=?1\",\n"
+              "            [session_id],\n"
+              "            |row| row.get(0),\n"
+              "        )\n"
+              "        .optional()\n"
+              "        .map_err(|error| format!(\"SESSION_CHECKPOINT_SESSION_QUERY:{error}\"))?;\n"
+              "    if exists.is_none() {\n"
+              "        return Err(format!(\"KeyError: '{session_id}'\"));\n"
+              "    }\n"
+              "    let last = db\n"
+          )
           if text.count(old_checkpoint) != 1:
               raise SystemExit(f"checkpoint precondition failed: {text.count(old_checkpoint)}")
           text = text.replace(old_checkpoint, new_checkpoint, 1)
@@ -83,31 +87,33 @@ jobs:
 
           product = Path("crates/syntavra-cli/src/native_product.rs")
           text = product.read_text(encoding="utf-8")
-          old_boundary = '''    if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
-              return native_remaining71_memory::execute(command, &arguments, project_root, state_root);
-          }
-          '''.replace("              ", "    ")
-          new_boundary = '''    if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
-              return match native_remaining71_memory::execute(command, &arguments, project_root, state_root) {
-                  Ok(value) => Ok(value),
-                  Err(error) => emit_failed_decision(
-                      &serde_json::json!({
-                          "ok": false,
-                          "error": {
-                              "code": "PYTHON_PUBLIC_COMMAND_FAILED",
-                              "message": "The selected Python engine failed while executing the public command.",
-                              "details": {
-                                  "command": command.first().map(String::as_str).unwrap_or(""),
-                                  "error": error,
-                                  "fallback": "forbidden"
-                              }
-                          }
-                      }),
-                      4,
-                  ),
-              };
-          }
-          '''.replace("              ", "    ")
+          old_boundary = (
+              "    if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {\n"
+              "        return native_remaining71_memory::execute(command, &arguments, project_root, state_root);\n"
+              "    }\n"
+          )
+          new_boundary = (
+              "    if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {\n"
+              "        return match native_remaining71_memory::execute(command, &arguments, project_root, state_root) {\n"
+              "            Ok(value) => Ok(value),\n"
+              "            Err(error) => emit_failed_decision(\n"
+              "                &serde_json::json!({\n"
+              "                    \"ok\": false,\n"
+              "                    \"error\": {\n"
+              "                        \"code\": \"PYTHON_PUBLIC_COMMAND_FAILED\",\n"
+              "                        \"message\": \"The selected Python engine failed while executing the public command.\",\n"
+              "                        \"details\": {\n"
+              "                            \"command\": command.first().map(String::as_str).unwrap_or(\"\"),\n"
+              "                            \"error\": error,\n"
+              "                            \"fallback\": \"forbidden\"\n"
+              "                        }\n"
+              "                    }\n"
+              "                }),\n"
+              "                4,\n"
+              "            ),\n"
+              "        };\n"
+              "    }\n"
+          )
           if text.count(old_boundary) != 1:
               raise SystemExit(f"memory boundary precondition failed: {text.count(old_boundary)}")
           product.write_text(text.replace(old_boundary, new_boundary, 1), encoding="utf-8")
