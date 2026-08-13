@@ -210,7 +210,10 @@ def _validate_ownership(
         if not isinstance(path, list) or not path or any(not isinstance(item, str) or not item for item in path):
             raise AssertionError(f"invalid Rust selector path for {route}: {path!r}")
         module = modules_raw.get(route)
-        if not isinstance(module, str) or not module.startswith("native_remaining71_"):
+        valid_module = isinstance(module, str) and (
+            module.startswith("native_remaining71_") or module == "native_product_legacy"
+        )
+        if not valid_module:
             raise AssertionError(f"invalid Rust lower-module owner for {route}: {module!r}")
         candidates = candidates_raw.get(route)
         if candidates != [module]:
@@ -348,7 +351,7 @@ def build_matrix(
         "authority": {
             "route_identity": contract["rust_baseline"]["remaining_authority"],
             "remaining_selector_ownership": contract["rust_baseline"]["ownership_probe_binary"],
-            "lower_rust_module_ownership": "Remaining-71 Rust modules' supports() predicates",
+            "lower_rust_module_ownership": "production Rust modules' supports() predicates",
             "hardcoded_remaining_route_list": False,
         },
         "family_programs": [programs[key] for key in sorted(programs)],
