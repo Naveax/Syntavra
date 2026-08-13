@@ -9,6 +9,8 @@ use serde_json::{json, Value};
 
 #[path = "../native_product.rs"]
 mod native_product;
+#[path = "../native_product_legacy.rs"]
+mod native_product_legacy;
 
 // Dependency closure required when the ownership audit reuses the exact
 // Remaining-71 family modules' supports() predicates. These support modules do
@@ -66,7 +68,11 @@ fn selector_path(route: &str) -> Vec<String> {
 }
 
 fn remaining71_owner_modules(command: &[String]) -> Vec<&'static str> {
-    let candidates: [(&str, fn(&[String]) -> bool); 12] = [
+    // Probe the production supports() predicates themselves. Most frozen
+    // Remaining-71 routes live in the dedicated family modules, while
+    // provider capture is already implemented by native_product_legacy and is
+    // intentionally still unpromoted in the public 174/245 contract.
+    let candidates: [(&str, fn(&[String]) -> bool); 13] = [
         (
             "native_remaining71_memory",
             native_remaining71_memory::supports,
@@ -115,6 +121,7 @@ fn remaining71_owner_modules(command: &[String]) -> Vec<&'static str> {
             "native_remaining71_headless",
             native_remaining71_headless::supports,
         ),
+        ("native_product_legacy", native_product_legacy::supports),
     ];
     candidates
         .into_iter()
@@ -258,7 +265,7 @@ fn main() -> ExitCode {
         serde_json::to_string_pretty(&json!({
             "ok": ok,
             "authority": "tools/report_missing_native_public_routes.py missing_routes",
-            "module_authority": "Remaining-71 Rust modules' supports() predicates",
+            "module_authority": "production Rust modules' supports() predicates",
             "public_route_count": EXPECTED_PUBLIC_ROUTE_COUNT,
             "frozen_native_route_count": EXPECTED_NATIVE_ROUTE_COUNT,
             "report_derived_remaining_count": routes.len(),
@@ -310,6 +317,7 @@ mod tests {
             "run language inventory",
             "run capability-decide",
             "run sandbox-run",
+            "provider capture",
             "provider proxy",
             "run benchmark-gate",
             "run graph-query",
@@ -323,5 +331,9 @@ mod tests {
             let owners = remaining71_owner_modules(&path);
             assert_eq!(owners.len(), 1, "route={route} owners={owners:?}");
         }
+        assert_eq!(
+            remaining71_owner_modules(&selector_path("provider capture")),
+            vec!["native_product_legacy"]
+        );
     }
 }
