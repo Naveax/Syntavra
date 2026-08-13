@@ -1,159 +1,9 @@
-use std::collections::{BTreeMap, HashSet};
-
-#[derive(Clone, Copy)]
-enum CompactorStrategy { GitStatus, GitDiff, GitLog, Search, Table, Test, Lint, JsonOrTable, DockerBuild, HeadTail }
-
-#[derive(Clone, Copy)]
-struct CompactorRegistration {
-    name: &'static str,
-    executables: &'static [&'static str],
-    argument_pattern: Option<&'static str>,
-    strategy: CompactorStrategy,
-}
-
-macro_rules! cr {
-    ($name:expr,$executables:expr,$pattern:expr,$strategy:ident) => {
-        CompactorRegistration { name:$name, executables:$executables, argument_pattern:$pattern, strategy:CompactorStrategy::$strategy }
-    };
-}
-
-const COMPACTORS: &[CompactorRegistration] = &[
-cr!("git-status",&["git"],Some("^status\\b"),GitStatus),
-cr!("git-diff",&["git"],Some("^(?:diff|show)\\b"),GitDiff),
-cr!("git-log",&["git"],Some("^log\\b"),GitLog),
-cr!("git-branch",&["git"],Some("^branch\\b"),Table),
-cr!("git-stash",&["git"],Some("^stash\\b"),Table),
-cr!("git-worktree",&["git"],Some("^worktree\\b"),Table),
-cr!("git-fetch",&["git"],Some("^(?:fetch|pull|push)\\b"),Table),
-cr!("git-remote",&["git"],Some("^remote\\b"),Table),
-cr!("git-tag",&["git"],Some("^tag\\b"),Table),
-cr!("git-clean",&["git"],Some("^(?:clean|reset|restore|checkout|switch)\\b"),Table),
-cr!("ripgrep",&["rg"],None,Search),
-cr!("grep",&["grep"],None,Search),
-cr!("find",&["find","fd"],None,Search),
-cr!("tree",&["tree"],None,Search),
-cr!("ls",&["ls","dir"],None,Table),
-cr!("pytest",&["pytest","py.test"],None,Test),
-cr!("cargo-test",&["cargo"],Some("\\btest\\b"),Test),
-cr!("cargo-check",&["cargo"],Some("\\b(?:check|clippy|build)\\b"),Lint),
-cr!("go-test",&["go"],Some("^test\\b"),Test),
-cr!("go-build",&["go"],Some("^(?:build|vet|list)\\b"),Lint),
-cr!("npm-test",&["npm"],Some("^(?:test|run test)\\b"),Test),
-cr!("npm-list",&["npm"],Some("^(?:list|ls|outdated|audit)\\b"),JsonOrTable),
-cr!("pnpm-test",&["pnpm"],Some("^(?:test|run test)\\b"),Test),
-cr!("pnpm-list",&["pnpm"],Some("^(?:list|ls|outdated|audit)\\b"),JsonOrTable),
-cr!("yarn-test",&["yarn"],Some("^(?:test|run test)\\b"),Test),
-cr!("yarn-list",&["yarn"],Some("^(?:list|info|audit)\\b"),JsonOrTable),
-cr!("jest",&["jest"],None,Test),
-cr!("vitest",&["vitest"],None,Test),
-cr!("playwright",&["playwright"],Some("^test\\b"),Test),
-cr!("coverage",&["coverage"],None,Test),
-cr!("ruff",&["ruff"],None,Lint),
-cr!("mypy",&["mypy"],None,Lint),
-cr!("eslint",&["eslint"],None,Lint),
-cr!("biome",&["biome"],None,Lint),
-cr!("pylint",&["pylint"],None,Lint),
-cr!("flake8",&["flake8"],None,Lint),
-cr!("docker-build",&["docker","podman"],Some("^build\\b"),DockerBuild),
-cr!("docker-ps",&["docker","podman"],Some("^(?:ps|images)\\b"),Table),
-cr!("docker-logs",&["docker","podman"],Some("^logs\\b"),Table),
-cr!("docker-inspect",&["docker","podman"],Some("^(?:inspect|stats|info)\\b"),JsonOrTable),
-cr!("docker-compose",&["docker-compose"],None,Table),
-cr!("kubectl-get",&["kubectl"],Some("^(?:get|describe)\\b"),JsonOrTable),
-cr!("kubectl-logs",&["kubectl"],Some("^logs\\b"),Table),
-cr!("kubectl-events",&["kubectl"],Some("^(?:events|top|api-resources)\\b"),JsonOrTable),
-cr!("helm",&["helm"],None,JsonOrTable),
-cr!("terraform",&["terraform","tofu"],None,JsonOrTable),
-cr!("ansible",&["ansible","ansible-playbook"],None,Table),
-cr!("gh-pr",&["gh"],Some("^pr\\b"),JsonOrTable),
-cr!("gh-issue",&["gh"],Some("^issue\\b"),JsonOrTable),
-cr!("gh-run",&["gh"],Some("^run\\b"),JsonOrTable),
-cr!("gh-repo",&["gh"],Some("^(?:repo|api)\\b"),JsonOrTable),
-cr!("pip",&["pip","pip3"],None,JsonOrTable),
-cr!("uv",&["uv"],None,JsonOrTable),
-cr!("poetry",&["poetry"],None,JsonOrTable),
-cr!("aws",&["aws"],None,JsonOrTable),
-cr!("gcloud",&["gcloud"],None,JsonOrTable),
-cr!("azure-cli",&["az"],None,JsonOrTable),
-cr!("curl",&["curl","wget"],None,HeadTail),
-cr!("systemctl",&["systemctl"],None,Table),
-cr!("journalctl",&["journalctl"],None,Table),
-cr!("process-list",&["ps","tasklist"],None,Table),
-cr!("disk-usage",&["du","df"],None,Table),
-cr!("dotnet",&["dotnet"],None,Test),
-cr!("maven",&["mvn","mvnw"],None,Test),
-cr!("gradle",&["gradle","gradlew"],None,Test),
-cr!("cmake",&["cmake","ctest","ninja","make"],None,Test),
-cr!("java",&["java","javac"],None,Table),
-cr!("rustc",&["rustc"],None,Lint),
-cr!("powershell",&["pwsh","powershell"],None,Table),
-cr!("package-manager",&["apt","apt-get","dnf","yum","brew","winget","choco","scoop"],None,Table),
-cr!("git-blame",&["git"],Some("^blame\\b"),Table),
-cr!("git-grep",&["git"],Some("^grep\\b"),Search),
-cr!("git-ls-files",&["git"],Some("^ls-files\\b"),Search),
-cr!("git-reflog",&["git"],Some("^reflog\\b"),GitLog),
-cr!("git-submodule",&["git"],Some("^submodule\\b"),Table),
-cr!("git-config",&["git"],Some("^config\\b"),Table),
-cr!("git-shortlog",&["git"],Some("^shortlog\\b"),GitLog),
-cr!("git-rev-list",&["git"],Some("^rev-list\\b"),Table),
-cr!("git-bisect",&["git"],Some("^bisect\\b"),Table),
-cr!("git-notes",&["git"],Some("^notes\\b"),Table),
-cr!("cargo-tree",&["cargo"],Some("^tree\\b"),Table),
-cr!("cargo-metadata",&["cargo"],Some("^metadata\\b"),JsonOrTable),
-cr!("cargo-audit",&["cargo"],Some("^audit\\b"),JsonOrTable),
-cr!("cargo-deny",&["cargo"],Some("^deny\\b"),JsonOrTable),
-cr!("cargo-nextest",&["cargo"],Some("^nextest\\b"),Test),
-cr!("gofmt",&["gofmt"],None,Lint),
-cr!("golangci-lint",&["golangci-lint"],None,Lint),
-cr!("staticcheck",&["staticcheck"],None,Lint),
-cr!("govulncheck",&["govulncheck"],None,JsonOrTable),
-cr!("bun-test",&["bun"],Some("^(?:test|run\\s+test)\\b"),Test),
-cr!("bun-install",&["bun"],Some("^(?:install|add|update|outdated|audit)\\b"),JsonOrTable),
-cr!("deno-test",&["deno"],Some("^test\\b"),Test),
-cr!("deno-lint",&["deno"],Some("^(?:lint|check|info)\\b"),Lint),
-cr!("mocha",&["mocha"],None,Test),
-cr!("ava",&["ava"],None,Test),
-cr!("tox",&["tox"],None,Test),
-cr!("nox",&["nox"],None,Test),
-cr!("semgrep",&["semgrep"],None,JsonOrTable),
-cr!("sqlfluff",&["sqlfluff"],None,Lint),
-cr!("trivy",&["trivy"],None,JsonOrTable),
-cr!("snyk",&["snyk"],None,JsonOrTable),
-cr!("composer",&["composer"],None,JsonOrTable),
-cr!("phpunit",&["phpunit"],None,Test),
-cr!("bundle",&["bundle"],None,JsonOrTable),
-cr!("rspec",&["rspec"],None,Test),
-cr!("swift",&["swift"],None,Test),
-cr!("xcodebuild",&["xcodebuild"],None,Test),
-cr!("jq",&["jq"],None,JsonOrTable),
-cr!("yq",&["yq"],None,JsonOrTable),
-cr!("sqlite3",&["sqlite3"],None,JsonOrTable),
-cr!("psql",&["psql"],None,Table),
-cr!("mysql",&["mysql"],None,Table),
-cr!("redis-cli",&["redis-cli"],None,Table),
-cr!("kustomize",&["kustomize"],None,JsonOrTable),
-cr!("gh-release",&["gh"],Some("^release\\b"),JsonOrTable),
-cr!("gh-workflow",&["gh"],Some("^workflow\\b"),JsonOrTable),
-cr!("gh-secret",&["gh"],Some("^secret\\b"),JsonOrTable),
-cr!("gh-variable",&["gh"],Some("^variable\\b"),JsonOrTable),
-cr!("gh-codespace",&["gh"],Some("^codespace\\b"),JsonOrTable),
-cr!("docker-system",&["docker","podman"],Some("^system\\b"),JsonOrTable),
-cr!("docker-volume",&["docker","podman"],Some("^volume\\b"),JsonOrTable),
-cr!("docker-network",&["docker","podman"],Some("^network\\b"),JsonOrTable),
-cr!("podman-compose",&["podman-compose"],None,Table),
-cr!("hadolint",&["hadolint"],None,Lint),
-cr!("shellcheck",&["shellcheck"],None,Lint),
-cr!("bats",&["bats"],None,Test),
-cr!("bazel",&["bazel"],None,Test),
-cr!("buck2",&["buck2"],None,Test),
-cr!("pants",&["pants"],None,Test),
-cr!("msbuild",&["msbuild"],None,Test),
-cr!("nuget",&["nuget"],None,JsonOrTable),
-];
-const COMPACTOR_COUNT: usize = COMPACTORS.len();
+include!("cc_checkpoint_compactor_registry.inc");
 
 fn cc_json_token_boundary(bytes: &[u8], end: usize) -> bool {
-    bytes.get(end).is_none_or(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
+    bytes
+        .get(end)
+        .map_or(true, |byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
 }
 
 fn cc_python_json_compat(text: &str) -> String {
@@ -166,9 +16,13 @@ fn cc_python_json_compat(text: &str) -> String {
         let byte = bytes[index];
         if quoted {
             output.push(byte);
-            if escaped { escaped = false; }
-            else if byte == b'\\' { escaped = true; }
-            else if byte == b'"' { quoted = false; }
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                quoted = false;
+            }
             index += 1;
             continue;
         }
@@ -180,13 +34,19 @@ fn cc_python_json_compat(text: &str) -> String {
         }
         let rest = &bytes[index..];
         if rest.starts_with(b"-Infinity") && cc_json_token_boundary(bytes, index + 9) {
-            output.extend_from_slice(b"true"); index += 9; continue;
+            output.extend_from_slice(b"true");
+            index += 9;
+            continue;
         }
         if rest.starts_with(b"Infinity") && cc_json_token_boundary(bytes, index + 8) {
-            output.extend_from_slice(b"true"); index += 8; continue;
+            output.extend_from_slice(b"true");
+            index += 8;
+            continue;
         }
         if rest.starts_with(b"NaN") && cc_json_token_boundary(bytes, index + 3) {
-            output.extend_from_slice(b"true"); index += 3; continue;
+            output.extend_from_slice(b"true");
+            index += 3;
+            continue;
         }
         output.push(byte);
         index += 1;
@@ -201,15 +61,87 @@ fn cc_parse_python_json(text: &str) -> Result<Value, serde_json::Error> {
 include!("cc_checkpoint_rewrite.inc");
 include!("cc_checkpoint_transcript.inc");
 
+fn cc_load_transcript_compat(text: &str) -> Vec<Value> {
+    if let Ok(value) = cc_parse_python_json(text) {
+        if let Some(rows) = value.as_array() {
+            return rows.iter().filter(|row| row.is_object()).cloned().collect();
+        }
+        if let Some(object) = value.as_object() {
+            let selected = ["events", "messages", "transcript"]
+                .iter()
+                .filter_map(|key| object.get(*key))
+                .find(|value| cc_json_truthy(value));
+            if let Some(rows) = selected.and_then(Value::as_array) {
+                return rows.iter().filter(|row| row.is_object()).cloned().collect();
+            }
+            return Vec::new();
+        }
+        return Vec::new();
+    }
+    text.lines()
+        .filter_map(|line| cc_parse_python_json(line).ok())
+        .filter(Value::is_object)
+        .collect()
+}
+
+fn cc_transcript_mine_compat(arguments: &[String]) -> Result<Value, String> {
+    let start = arguments
+        .windows(2)
+        .position(|items| items[0] == "run" && items[1] == "transcript-mine")
+        .map(|index| index + 2)
+        .ok_or_else(|| "ACTION_NOT_FOUND:transcript-mine".to_owned())?;
+    let source = arguments
+        .get(start)
+        .ok_or_else(|| "POSITIONAL_MISSING:transcript-mine:0".to_owned())?;
+    let text = if Path::new(source).is_file() {
+        fs::read_to_string(source).map_err(|error| format!("TRANSCRIPT_READ_FAILED:{error}"))?
+    } else {
+        source.to_owned()
+    };
+    let events = cc_load_transcript_compat(&text);
+    let mut opportunities = Vec::<Value>::new();
+    let mut commands = 0usize;
+    for (index, row) in events.iter().enumerate() {
+        let command = cc_transcript_command(row);
+        if command.is_empty() {
+            continue;
+        }
+        commands += 1;
+        let output = cc_transcript_output(row);
+        let input_tokens = ((command.as_bytes().len() + output.as_bytes().len()) / 4).max(1);
+        let rewrite = cc_rewrite_text(&command)?;
+        if rewrite["changed"].as_bool().unwrap_or(false) {
+            opportunities.push(serde_json::json!({"index":index,"command":command,"kind":"pre-tool-rewrite","estimated_input_tokens":input_tokens,"estimated_saved_tokens":(output.chars().count()/20).max(8),"recommendation":"rewrite before execution","rule":rewrite["rule"],"compactor":Value::Null}));
+        }
+        if let Some((compactor, visible)) = cc_compact(&command, &output) {
+            let saved = output.as_bytes().len().saturating_sub(visible.as_bytes().len()) / 4;
+            if saved > 0 {
+                opportunities.push(serde_json::json!({"index":index,"command":command,"kind":"post-tool-compaction","estimated_input_tokens":input_tokens,"estimated_saved_tokens":saved,"recommendation":"capture exact output and return compact view","rule":Value::Null,"compactor":compactor}));
+            }
+        }
+    }
+    let total = opportunities
+        .iter()
+        .map(|row| row["estimated_saved_tokens"].as_u64().unwrap_or(0))
+        .sum::<u64>();
+    let mut body = serde_json::json!({"events":events.len(),"commands":commands,"opportunities":opportunities,"estimated_saved_tokens":total,"coverage":{"rewrite_rules":REWRITE_RULE_COUNT,"compactors":COMPACTOR_COUNT}});
+    body["analysis_hash"] = Value::String(syntavra_core::sha256_hex(
+        cc_canonical_json(&body)?.as_bytes(),
+    ));
+    Ok(body)
+}
+
 fn cc_checkpoint_supports(command: &[String]) -> bool {
     matches!(command, [root, action] if root == "run" && matches!(action.as_str(), "rewrite" | "transcript-mine"))
 }
 
 fn cc_checkpoint_execute(command: &[String], arguments: &[String]) -> Result<Option<Value>, String> {
-    if !cc_checkpoint_supports(command) { return Ok(None); }
+    if !cc_checkpoint_supports(command) {
+        return Ok(None);
+    }
     match command[1].as_str() {
         "rewrite" => cc_rewrite_action(arguments).map(Some),
-        "transcript-mine" => cc_transcript_mine(arguments).map(Some),
+        "transcript-mine" => cc_transcript_mine_compat(arguments).map(Some),
         _ => Ok(None),
     }
 }
