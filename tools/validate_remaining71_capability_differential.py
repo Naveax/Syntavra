@@ -11,8 +11,9 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import traceback
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 FIXTURE_RELATIVE = Path("contracts/python/capability-inventory-reference-v1.json")
 
@@ -27,19 +28,11 @@ def run_engine(
     state_root: Path,
 ) -> dict[str, Any]:
     common = ["--project", str(project), "--state-root", str(state_root), *args]
-    if engine == "python":
-        command = [
-            sys.executable,
-            "-m",
-            "syntavra_runtime.engine_entry",
-            "--engine",
-            "python",
-            *common,
-        ]
-    elif engine == "rust":
-        command = [str(rust_bin), "--engine", "rust", *common]
-    else:
-        raise ValueError(engine)
+    command = (
+        [sys.executable, "-m", "syntavra_runtime.engine_entry", "--engine", "python", *common]
+        if engine == "python"
+        else [str(rust_bin), "--engine", "rust", *common]
+    )
     env = os.environ.copy()
     env.update(
         {
@@ -49,44 +42,45 @@ def run_engine(
             "SYNTAVRA_BULK_PARITY_PROBE": "1",
         }
     )
-    result = subprocess.run(
+    completed = subprocess.run(
         command,
         cwd=repo,
         env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
         errors="replace",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
         timeout=30,
         check=False,
     )
     value: Any = None
-    if result.stdout.strip():
+    if completed.stdout.strip():
         try:
-            value = json.loads(result.stdout)
+            value = json.loads(completed.stdout)
         except json.JSONDecodeError as exc:
             raise RuntimeError(
-                f"{engine} emitted non-JSON for {' '.join(args)}\n"
-                f"exit={result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}"
+                f"{engine} emitted non-JSON for {' '.join(args)}: "
+                f"exit={completed.returncode} stdout={completed.stdout!r} "
+                f"stderr={completed.stderr!r}"
             ) from exc
     return {
-        "exit": result.returncode,
+        "exit": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
         "value": value,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
     }
 
 
-def require_json(result: dict[str, Any], *, label: str) -> dict[str, Any]:
+def require_object(result: dict[str, Any], label: str) -> dict[str, Any]:
     value = result.get("value")
     if not isinstance(value, dict):
-        raise RuntimeError(f"{label} emitted no JSON object: {result}")
+        raise AssertionError(f"{label}: expected JSON object, got {result}")
     return value
 
 
-def norm_decision(result: dict[str, Any], *, label: str) -> dict[str, Any]:
-    value = require_json(result, label=label)
+def norm_decision(result: dict[str, Any], label: str) -> dict[str, Any]:
+    value = require_object(result, label)
     return {
         "exit": result["exit"],
         "stderr": result["stderr"],
@@ -100,16 +94,18 @@ def norm_decision(result: dict[str, Any], *, label: str) -> dict[str, Any]:
     }
 
 
-def norm_verify(result: dict[str, Any], *, label: str) -> dict[str, Any]:
-    value = require_json(result, label=label)
-    capability = value.get("capability") if isinstance(value.get("capability"), dict) else {}
-    return {
+def norm_verify(result: dict[str, Any], label: str) -> dict[str, Any]:
+    value = require_object(result, label)
+    capability = value.get("capability") if isinstance(value.get("capability"), dict) else None
+    summary: dict[str, Any] = {
         "exit": result["exit"],
         "stderr": result["stderr"],
         "ok": value.get("ok"),
         "reason": value.get("reason"),
         "keys": sorted(value),
-        "capability": {
+    }
+    if capability is not None:
+        summary["capability"] = {
             "version": capability.get("version"),
             "channel": capability.get("channel"),
             "session_id": capability.get("session_id"),
@@ -118,31 +114,31 @@ def norm_verify(result: dict[str, Any], *, label: str) -> dict[str, Any]:
             "resource": capability.get("resource"),
             "permissions": list(capability.get("permissions") or []),
             "single_use": capability.get("single_use"),
-            "has_nonce": bool(capability.get("nonce")),
+            "nonce_present": bool(capability.get("nonce")),
             "issued_at_is_int": isinstance(capability.get("issued_at"), int),
             "expires_at_is_int": isinstance(capability.get("expires_at"), int),
             "time_order_valid": isinstance(capability.get("issued_at"), int)
             and isinstance(capability.get("expires_at"), int)
             and capability.get("expires_at") >= capability.get("issued_at"),
             "keys": sorted(capability),
-        },
-    }
+        }
+    return summary
 
 
 def invalid_signature_token(token: str) -> str:
     payload, signature = token.split(".", 1)
     if not signature:
-        raise RuntimeError("capability signature is empty")
+        raise AssertionError("empty capability signature")
     first = "A" if signature[0] != "A" else "B"
     return f"{payload}.{first}{signature[1:]}"
 
 
-def expired_token(token: str, *, signing_key: bytes) -> str:
+def expired_token(token: str, signing_key: bytes) -> str:
     payload_text, _ = token.split(".", 1)
-    payload_raw = base64.urlsafe_b64decode(payload_text + "=" * (-len(payload_text) % 4))
-    body = json.loads(payload_raw)
+    raw = base64.urlsafe_b64decode(payload_text + "=" * (-len(payload_text) % 4))
+    body = json.loads(raw)
     if not isinstance(body, dict):
-        raise RuntimeError("capability payload is not an object")
+        raise AssertionError("capability payload is not an object")
     body["expires_at"] = 0
     canonical = json.dumps(
         body,
@@ -159,21 +155,16 @@ def expired_token(token: str, *, signing_key: bytes) -> str:
     )
 
 
-def parser_error_summary(result: dict[str, Any]) -> dict[str, Any]:
-    stderr = str(result.get("stderr") or "")
-    return {
-        "exit": result.get("exit"),
-        "stdout_empty": not bool(str(result.get("stdout") or "")),
-        "stderr_kind": "argparse-usage-error" if "usage:" in stderr.casefold() else "other",
-    }
+def unique_state_file(state: Path, name: str) -> Path:
+    matches = sorted(path for path in state.rglob(name) if path.is_file())
+    if len(matches) != 1:
+        raise AssertionError(
+            f"expected exactly one {name} below {state}, got {[str(path) for path in matches]}"
+        )
+    return matches[0]
 
 
-def issue_token(
-    call: Any,
-    *,
-    session_id: str,
-    arguments: str,
-) -> tuple[dict[str, Any], str]:
+def issue_token(call: Callable[..., dict[str, Any]], session_id: str, arguments: str) -> tuple[dict[str, Any], str]:
     result = call(
         "run",
         "capability-issue",
@@ -189,19 +180,27 @@ def issue_token(
         "--ttl",
         "300",
     )
-    value = require_json(result, label=f"capability-issue {session_id}")
+    value = require_object(result, f"capability-issue {session_id}")
     token = str(value.get("token") or "")
-    if not token or token.count(".") != 1:
-        raise RuntimeError(f"capability-issue returned invalid token: {result}")
-    summary = {
+    if token.count(".") != 1:
+        raise AssertionError(f"capability-issue token shape drift: {value}")
+    return {
         "exit": result["exit"],
         "stderr": result["stderr"],
         "ok": value.get("ok"),
         "single_use": value.get("single_use"),
-        "token_shape": token.count(".") == 1,
+        "token_shape": True,
         "keys": sorted(value),
+    }, token
+
+
+def parser_error(result: dict[str, Any]) -> dict[str, Any]:
+    stderr = str(result.get("stderr") or "")
+    return {
+        "exit": result.get("exit"),
+        "stdout_empty": not bool(str(result.get("stdout") or "")),
+        "stderr_kind": "argparse-usage-error" if "usage:" in stderr.casefold() else "other",
     }
-    return summary, token
 
 
 def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str, Any]:
@@ -223,226 +222,137 @@ def exercise(engine: str, *, repo: Path, rust_bin: Path, root: Path) -> dict[str
 
     read_args = json.dumps({"path": "module.py"}, separators=(",", ":"))
     write_args = json.dumps({"path": "module.py", "content": "x"}, separators=(",", ":"))
-    changed_write_args = json.dumps({"path": "other.py", "content": "x"}, separators=(",", ":"))
+    changed_args = json.dumps({"path": "other.py", "content": "x"}, separators=(",", ":"))
     exec_args = json.dumps({"argv": ["python", "-m", "unittest"]}, separators=(",", ":"))
     destructive_args = json.dumps({"argv": ["git", "reset", "--hard"]}, separators=(",", ":"))
     network_args = json.dumps({"host": "blocked.example"}, separators=(",", ":"))
     unknown_args = json.dumps({"x": 1}, separators=(",", ":"))
 
-    decisions = {
-        "read": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "repo.read",
-                read_args,
-                "--resource",
-                "workspace:/module.py",
-            ),
-            label="read",
-        ),
-        "write_authorization_required": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "repo.patch",
-                write_args,
-                "--resource",
-                "workspace:/module.py",
-            ),
-            label="write_authorization_required",
-        ),
-        "write_allowed": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "repo.patch",
-                write_args,
-                "--resource",
-                "workspace:/module.py",
-                "--user-authorized",
-            ),
-            label="write_allowed",
-        ),
-        "execute_authorization_required": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "test.run",
-                exec_args,
-                "--sandboxed",
-            ),
-            label="execute_authorization_required",
-        ),
-        "execute_sandbox_required": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "test.run",
-                exec_args,
-                "--user-authorized",
-            ),
-            label="execute_sandbox_required",
-        ),
-        "execute_allowed": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "test.run",
-                exec_args,
-                "--sandboxed",
-                "--user-authorized",
-            ),
-            label="execute_allowed",
-        ),
-        "destructive_denied": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "shell_run",
-                destructive_args,
-                "--sandboxed",
-                "--user-authorized",
-            ),
-            label="destructive_denied",
-        ),
-        "outside_workspace_denied": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "repo.patch",
-                write_args,
-                "--resource",
-                "file:/tmp/outside",
-                "--user-authorized",
-            ),
-            label="outside_workspace_denied",
-        ),
-        "network_allowlist_denied": norm_decision(
-            call(
-                "run",
-                "capability-decide",
-                "http_request",
-                network_args,
-                "--user-authorized",
-                "--network-host",
-                "allowed.example",
-            ),
-            label="network_allowlist_denied",
-        ),
-        "unknown_fail_closed": norm_decision(
-            call("run", "capability-decide", "totally.unknown.tool", unknown_args),
-            label="unknown_fail_closed",
-        ),
-    }
+    def decision(name: str, *args: str) -> tuple[str, dict[str, Any]]:
+        return name, norm_decision(call(*args), name)
 
-    issue, token = issue_token(call, session_id="session-1", arguments=write_args)
-    first_verify = norm_verify(
-        call(
-            "run",
-            "capability-verify",
-            token,
-            "repo.patch",
-            write_args,
-            "--resource",
-            "workspace:/module.py",
-        ),
-        label="first_verify",
-    )
-    consumed_verify = norm_verify(
-        call(
-            "run",
-            "capability-verify",
-            token,
-            "repo.patch",
-            write_args,
-            "--resource",
-            "workspace:/module.py",
-        ),
-        label="consumed_verify",
+    decisions = dict(
+        [
+            decision(
+                "read",
+                "run", "capability-decide", "repo.read", read_args,
+                "--resource", "workspace:/module.py",
+            ),
+            decision(
+                "write_authorization_required",
+                "run", "capability-decide", "repo.patch", write_args,
+                "--resource", "workspace:/module.py",
+            ),
+            decision(
+                "write_allowed",
+                "run", "capability-decide", "repo.patch", write_args,
+                "--resource", "workspace:/module.py", "--user-authorized",
+            ),
+            decision(
+                "execute_authorization_required",
+                "run", "capability-decide", "test.run", exec_args, "--sandboxed",
+            ),
+            decision(
+                "execute_sandbox_required",
+                "run", "capability-decide", "test.run", exec_args, "--user-authorized",
+            ),
+            decision(
+                "execute_allowed",
+                "run", "capability-decide", "test.run", exec_args,
+                "--sandboxed", "--user-authorized",
+            ),
+            decision(
+                "destructive_denied",
+                "run", "capability-decide", "shell_run", destructive_args,
+                "--sandboxed", "--user-authorized",
+            ),
+            decision(
+                "outside_workspace_denied",
+                "run", "capability-decide", "repo.patch", write_args,
+                "--resource", "file:/tmp/outside", "--user-authorized",
+            ),
+            decision(
+                "network_allowlist_denied",
+                "run", "capability-decide", "http_request", network_args,
+                "--user-authorized", "--network-host", "allowed.example",
+            ),
+            decision(
+                "unknown_fail_closed",
+                "run", "capability-decide", "totally.unknown.tool", unknown_args,
+            ),
+        ]
     )
 
-    _, second_token = issue_token(call, session_id="session-2", arguments=write_args)
+    issue, first_token = issue_token(call, "session-1", write_args)
+    verified = norm_verify(
+        call(
+            "run", "capability-verify", first_token, "repo.patch", write_args,
+            "--resource", "workspace:/module.py",
+        ),
+        "verified",
+    )
+    already_consumed = norm_verify(
+        call(
+            "run", "capability-verify", first_token, "repo.patch", write_args,
+            "--resource", "workspace:/module.py",
+        ),
+        "already_consumed",
+    )
+
+    _, second_token = issue_token(call, "session-2", write_args)
     binding_mismatch = norm_verify(
         call(
-            "run",
-            "capability-verify",
-            second_token,
-            "repo.patch",
-            changed_write_args,
-            "--resource",
-            "workspace:/module.py",
-            "--no-consume",
+            "run", "capability-verify", second_token, "repo.patch", changed_args,
+            "--resource", "workspace:/module.py", "--no-consume",
         ),
-        label="binding_mismatch",
+        "binding_mismatch",
     )
     malformed = norm_verify(
         call(
-            "run",
-            "capability-verify",
-            "not-a-token",
-            "repo.patch",
-            write_args,
-            "--resource",
-            "workspace:/module.py",
-            "--no-consume",
+            "run", "capability-verify", "not-a-token", "repo.patch", write_args,
+            "--resource", "workspace:/module.py", "--no-consume",
         ),
-        label="malformed",
+        "malformed",
     )
     invalid_signature = norm_verify(
         call(
-            "run",
-            "capability-verify",
-            invalid_signature_token(second_token),
-            "repo.patch",
-            write_args,
-            "--resource",
-            "workspace:/module.py",
-            "--no-consume",
+            "run", "capability-verify", invalid_signature_token(second_token),
+            "repo.patch", write_args, "--resource", "workspace:/module.py", "--no-consume",
         ),
-        label="invalid_signature",
+        "invalid_signature",
     )
 
-    key_path = state / "capability.key"
-    db_path = state / "capability.sqlite3"
+    key_path = unique_state_file(state, "capability.key")
+    db_path = unique_state_file(state, "capability.sqlite3")
     signing_key = key_path.read_bytes()
     expired = norm_verify(
         call(
-            "run",
-            "capability-verify",
-            expired_token(second_token, signing_key=signing_key),
-            "repo.patch",
-            write_args,
-            "--resource",
-            "workspace:/module.py",
-            "--no-consume",
+            "run", "capability-verify", expired_token(second_token, signing_key),
+            "repo.patch", write_args, "--resource", "workspace:/module.py", "--no-consume",
         ),
-        label="expired",
+        "expired",
     )
-
     with sqlite3.connect(db_path) as database:
-        consumed_rows = database.execute("SELECT COUNT(*) FROM consumed").fetchone()[0]
-
-    parser_error = parser_error_summary(
-        call("run", "capability-decide", "repo.read")
-    )
+        consumed_rows = int(database.execute("SELECT COUNT(*) FROM consumed").fetchone()[0])
 
     return {
         "decisions": decisions,
         "issue": issue,
         "verification": {
-            "verified": first_verify,
-            "already_consumed": consumed_verify,
+            "verified": verified,
+            "already_consumed": already_consumed,
             "binding_mismatch": binding_mismatch,
             "malformed": malformed,
             "invalid_signature": invalid_signature,
             "expired": expired,
         },
-        "parser_error": parser_error,
+        "parser_error": parser_error(call("run", "capability-decide", "repo.read")),
         "durable_state": {
             "signing_key_bytes": len(signing_key),
             "database_exists": db_path.is_file(),
             "consumed_rows": consumed_rows,
+            "key_relative": key_path.relative_to(state).as_posix(),
+            "database_relative": db_path.relative_to(state).as_posix(),
         },
     }
 
@@ -452,158 +362,49 @@ def expected_decisions() -> dict[str, dict[str, Any]]:
     authorized = [*base, "explicit-user-authorization"]
     execute = [*authorized, "sandbox"]
     return {
-        "read": {
-            "exit": 0,
-            "allowed": True,
-            "category": "read",
-            "reason": "policy-allowed",
-            "requirements": base,
-            "resource": "workspace:/module.py",
-        },
-        "write_authorization_required": {
-            "exit": 0,
-            "allowed": False,
-            "category": "write",
-            "reason": "authorization-required",
-            "requirements": authorized,
-            "resource": "workspace:/module.py",
-        },
-        "write_allowed": {
-            "exit": 0,
-            "allowed": True,
-            "category": "write",
-            "reason": "policy-allowed",
-            "requirements": authorized,
-            "resource": "workspace:/module.py",
-        },
-        "execute_authorization_required": {
-            "exit": 0,
-            "allowed": False,
-            "category": "execute",
-            "reason": "authorization-required",
-            "requirements": execute,
-            "resource": "workspace:/",
-        },
-        "execute_sandbox_required": {
-            "exit": 0,
-            "allowed": False,
-            "category": "execute",
-            "reason": "sandbox-required",
-            "requirements": execute,
-            "resource": "workspace:/",
-        },
-        "execute_allowed": {
-            "exit": 0,
-            "allowed": True,
-            "category": "execute",
-            "reason": "policy-allowed",
-            "requirements": execute,
-            "resource": "workspace:/",
-        },
-        "destructive_denied": {
-            "exit": 0,
-            "allowed": False,
-            "category": "execute",
-            "reason": "destructive-command-denied",
-            "requirements": execute,
-            "resource": "workspace:/",
-        },
-        "outside_workspace_denied": {
-            "exit": 0,
-            "allowed": False,
-            "category": "write",
-            "reason": "resource-outside-workspace",
-            "requirements": authorized,
-            "resource": "file:/tmp/outside",
-        },
-        "network_allowlist_denied": {
-            "exit": 0,
-            "allowed": False,
-            "category": "network",
-            "reason": "network-host-not-allowlisted",
-            "requirements": authorized,
-            "resource": "workspace:/",
-        },
-        "unknown_fail_closed": {
-            "exit": 0,
-            "allowed": False,
-            "category": "unknown",
-            "reason": "unknown-tool-fail-closed",
-            "requirements": base,
-            "resource": "workspace:/",
-        },
+        "read": {"exit": 0, "allowed": True, "category": "read", "reason": "policy-allowed", "requirements": base, "resource": "workspace:/module.py"},
+        "write_authorization_required": {"exit": 0, "allowed": False, "category": "write", "reason": "authorization-required", "requirements": authorized, "resource": "workspace:/module.py"},
+        "write_allowed": {"exit": 0, "allowed": True, "category": "write", "reason": "policy-allowed", "requirements": authorized, "resource": "workspace:/module.py"},
+        "execute_authorization_required": {"exit": 0, "allowed": False, "category": "execute", "reason": "authorization-required", "requirements": execute, "resource": "workspace:/"},
+        "execute_sandbox_required": {"exit": 0, "allowed": False, "category": "execute", "reason": "sandbox-required", "requirements": execute, "resource": "workspace:/"},
+        "execute_allowed": {"exit": 0, "allowed": True, "category": "execute", "reason": "policy-allowed", "requirements": execute, "resource": "workspace:/"},
+        "destructive_denied": {"exit": 0, "allowed": False, "category": "execute", "reason": "destructive-command-denied", "requirements": execute, "resource": "workspace:/"},
+        "outside_workspace_denied": {"exit": 0, "allowed": False, "category": "write", "reason": "resource-outside-workspace", "requirements": authorized, "resource": "file:/tmp/outside"},
+        "network_allowlist_denied": {"exit": 0, "allowed": False, "category": "network", "reason": "network-host-not-allowlisted", "requirements": authorized, "resource": "workspace:/"},
+        "unknown_fail_closed": {"exit": 0, "allowed": False, "category": "unknown", "reason": "unknown-tool-fail-closed", "requirements": base, "resource": "workspace:/"},
     }
 
 
-def append_mismatch(
-    mismatches: list[dict[str, Any]],
-    *,
+def mismatch(
+    rows: list[dict[str, Any]],
     path: str,
     expected: Any,
-    python: Any,
-    rust: Any,
+    python_value: Any,
+    rust_value: Any,
 ) -> None:
-    if python != expected or rust != expected or python != rust:
-        mismatches.append(
+    if python_value != expected or rust_value != expected or python_value != rust_value:
+        rows.append(
             {
                 "path": path,
                 "expected": expected,
-                "python": python,
-                "rust": rust,
+                "python": python_value,
+                "rust": rust_value,
             }
         )
 
 
-def compare(
-    python_result: dict[str, Any],
-    rust_result: dict[str, Any],
-    *,
-    fixture: dict[str, Any],
-) -> dict[str, Any]:
-    mismatches: list[dict[str, Any]] = []
-    decisions = expected_decisions()
-    decision_fields = [
-        "exit",
-        "allowed",
-        "category",
-        "reason",
-        "requirements",
-        "resource",
-    ]
-    for name, contract in decisions.items():
-        py = python_result["decisions"][name]
-        rs = rust_result["decisions"][name]
-        for field in decision_fields:
-            append_mismatch(
-                mismatches,
-                path=f"decisions.{name}.{field}",
-                expected=contract[field],
-                python=py.get(field),
-                rust=rs.get(field),
-            )
-        append_mismatch(
-            mismatches,
-            path=f"decisions.{name}.stderr",
-            expected="",
-            python=py.get("stderr"),
-            rust=rs.get("stderr"),
-        )
-        append_mismatch(
-            mismatches,
-            path=f"decisions.{name}.keys",
-            expected=[
-                "allowed",
-                "arguments_hash",
-                "category",
-                "reason",
-                "requirements",
-                "resource",
-            ],
-            python=py.get("keys"),
-            rust=rs.get("keys"),
-        )
+def compare(python: dict[str, Any], rust: dict[str, Any], fixture: dict[str, Any]) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    decision_schema = ["allowed", "arguments_hash", "category", "reason", "requirements", "resource"]
+    for name, contract in expected_decisions().items():
+        py = python["decisions"][name]
+        rs = rust["decisions"][name]
+        for field, expected in contract.items():
+            mismatch(rows, f"decisions.{name}.{field}", expected, py.get(field), rs.get(field))
+        mismatch(rows, f"decisions.{name}.stderr", "", py.get("stderr"), rs.get("stderr"))
+        mismatch(rows, f"decisions.{name}.keys", decision_schema, py.get("keys"), rs.get("keys"))
         if py.get("arguments_hash") != rs.get("arguments_hash"):
-            mismatches.append(
+            rows.append(
                 {
                     "path": f"decisions.{name}.arguments_hash",
                     "expected": "equal",
@@ -612,189 +413,71 @@ def compare(
                 }
             )
 
-    observed_categories = sorted(
-        {row["category"] for row in python_result["decisions"].values()}
-    )
-    observed_reasons = sorted(
-        {row["reason"] for row in python_result["decisions"].values()}
-    )
-    observed_requirements = sorted(
-        {
-            requirement
-            for row in python_result["decisions"].values()
-            for requirement in row["requirements"]
-        }
-    )
-    rust_categories = sorted(
-        {row["category"] for row in rust_result["decisions"].values()}
-    )
-    rust_reasons = sorted(
-        {row["reason"] for row in rust_result["decisions"].values()}
-    )
-    rust_requirements = sorted(
-        {
-            requirement
-            for row in rust_result["decisions"].values()
-            for requirement in row["requirements"]
-        }
-    )
-    frozen_capability = fixture["capability"]
-    for path, expected, py, rs in [
-        (
-            "vocabulary.categories",
-            frozen_capability["category_vocabulary"],
-            observed_categories,
-            rust_categories,
-        ),
-        (
-            "vocabulary.decision_reasons",
-            frozen_capability["decision_reason_vocabulary"],
-            observed_reasons,
-            rust_reasons,
-        ),
-        (
-            "vocabulary.requirements",
-            frozen_capability["requirement_vocabulary"],
-            observed_requirements,
-            rust_requirements,
-        ),
-    ]:
-        append_mismatch(
-            mismatches,
-            path=path,
-            expected=expected,
-            python=py,
-            rust=rs,
-        )
+    frozen = fixture["capability"]
+    for engine_name, result in (("python", python), ("rust", rust)):
+        categories = sorted({item["category"] for item in result["decisions"].values()})
+        reasons = sorted({item["reason"] for item in result["decisions"].values()})
+        requirements = sorted({req for item in result["decisions"].values() for req in item["requirements"]})
+        if categories != frozen["category_vocabulary"]:
+            rows.append({"path": f"{engine_name}.category_vocabulary", "expected": frozen["category_vocabulary"], "actual": categories})
+        if reasons != frozen["decision_reason_vocabulary"]:
+            rows.append({"path": f"{engine_name}.decision_reason_vocabulary", "expected": frozen["decision_reason_vocabulary"], "actual": reasons})
+        if requirements != frozen["requirement_vocabulary"]:
+            rows.append({"path": f"{engine_name}.requirement_vocabulary", "expected": frozen["requirement_vocabulary"], "actual": requirements})
 
-    issue_expected = {
-        "exit": 0,
-        "stderr": "",
-        "ok": True,
-        "single_use": True,
-        "token_shape": True,
-        "keys": ["ok", "single_use", "token"],
-    }
+    issue_expected = {"exit": 0, "stderr": "", "ok": True, "single_use": True, "token_shape": True, "keys": ["ok", "single_use", "token"]}
     for field, expected in issue_expected.items():
-        append_mismatch(
-            mismatches,
-            path=f"issue.{field}",
-            expected=expected,
-            python=python_result["issue"].get(field),
-            rust=rust_result["issue"].get(field),
-        )
+        mismatch(rows, f"issue.{field}", expected, python["issue"].get(field), rust["issue"].get(field))
 
-    verification_expected = {
-        "verified": (0, True, "verified", ["capability", "ok", "reason"]),
-        "already_consumed": (3, False, "already-consumed", ["capability", "ok", "reason"]),
-        "binding_mismatch": (3, False, "binding-mismatch", ["capability", "ok", "reason"]),
-        "malformed": (3, False, "malformed-token", ["ok", "reason"]),
-        "invalid_signature": (3, False, "invalid-signature", ["ok", "reason"]),
-        "expired": (3, False, "expired", ["capability", "ok", "reason"]),
+    verify_expected = {
+        "verified": (0, True, "verified"),
+        "already_consumed": (3, False, "already-consumed"),
+        "binding_mismatch": (3, False, "binding-mismatch"),
+        "malformed": (3, False, "malformed-token"),
+        "invalid_signature": (3, False, "invalid-signature"),
+        "expired": (3, False, "expired"),
     }
-    for name, (exit_code, ok, reason, keys) in verification_expected.items():
-        py = python_result["verification"][name]
-        rs = rust_result["verification"][name]
-        for field, expected in {
-            "exit": exit_code,
-            "stderr": "",
-            "ok": ok,
-            "reason": reason,
-            "keys": keys,
-        }.items():
-            append_mismatch(
-                mismatches,
-                path=f"verification.{name}.{field}",
-                expected=expected,
-                python=py.get(field),
-                rust=rs.get(field),
-            )
+    for name, (exit_code, ok, reason) in verify_expected.items():
+        py = python["verification"][name]
+        rs = rust["verification"][name]
+        for field, expected in (("exit", exit_code), ("stderr", ""), ("ok", ok), ("reason", reason)):
+            mismatch(rows, f"verification.{name}.{field}", expected, py.get(field), rs.get(field))
+        if py.get("keys") != rs.get("keys"):
+            rows.append({"path": f"verification.{name}.keys", "expected": "equal", "python": py.get("keys"), "rust": rs.get("keys")})
+        if py.get("capability") != rs.get("capability"):
+            rows.append({"path": f"verification.{name}.capability", "expected": "equal normalized capability", "python": py.get("capability"), "rust": rs.get("capability")})
 
-    py_verify_reasons = sorted(
-        {row["reason"] for row in python_result["verification"].values()}
-    )
-    rs_verify_reasons = sorted(
-        {row["reason"] for row in rust_result["verification"].values()}
-    )
-    append_mismatch(
-        mismatches,
-        path="vocabulary.verification_reasons",
-        expected=frozen_capability["verification_reason_vocabulary"],
-        python=py_verify_reasons,
-        rust=rs_verify_reasons,
-    )
+    for engine_name, result in (("python", python), ("rust", rust)):
+        verify_reasons = sorted({item["reason"] for item in result["verification"].values()})
+        if verify_reasons != frozen["verification_reason_vocabulary"]:
+            rows.append({"path": f"{engine_name}.verification_reason_vocabulary", "expected": frozen["verification_reason_vocabulary"], "actual": verify_reasons})
 
-    capability_fields = [
-        "version",
-        "channel",
-        "session_id",
-        "tool",
-        "arguments_hash",
-        "resource",
-        "permissions",
-        "single_use",
-        "has_nonce",
-        "issued_at_is_int",
-        "expires_at_is_int",
-        "time_order_valid",
-        "keys",
-    ]
-    py_capability = python_result["verification"]["verified"]["capability"]
-    rs_capability = rust_result["verification"]["verified"]["capability"]
-    for field in capability_fields:
-        if py_capability.get(field) != rs_capability.get(field):
-            mismatches.append(
-                {
-                    "path": f"verification.verified.capability.{field}",
-                    "expected": "equal",
-                    "python": py_capability.get(field),
-                    "rust": rs_capability.get(field),
-                }
-            )
+    parser_expected = {"exit": 2, "stdout_empty": True, "stderr_kind": "argparse-usage-error"}
+    mismatch(rows, "parser_error", parser_expected, python["parser_error"], rust["parser_error"])
 
-    append_mismatch(
-        mismatches,
-        path="parser_error",
-        expected={
-            "exit": 2,
-            "stdout_empty": True,
-            "stderr_kind": "argparse-usage-error",
-        },
-        python=python_result["parser_error"],
-        rust=rust_result["parser_error"],
-    )
-    append_mismatch(
-        mismatches,
-        path="durable_state",
-        expected={
-            "signing_key_bytes": 32,
-            "database_exists": True,
-            "consumed_rows": 1,
-        },
-        python=python_result["durable_state"],
-        rust=rust_result["durable_state"],
-    )
+    durable_expected = {"signing_key_bytes": 32, "database_exists": True, "consumed_rows": 1}
+    for field, expected in durable_expected.items():
+        mismatch(rows, f"durable_state.{field}", expected, python["durable_state"].get(field), rust["durable_state"].get(field))
+    if python["durable_state"].get("key_relative") != rust["durable_state"].get("key_relative"):
+        rows.append({"path": "durable_state.key_relative", "expected": "equal", "python": python["durable_state"].get("key_relative"), "rust": rust["durable_state"].get("key_relative")})
+    if python["durable_state"].get("database_relative") != rust["durable_state"].get("database_relative"):
+        rows.append({"path": "durable_state.database_relative", "expected": "equal", "python": python["durable_state"].get("database_relative"), "rust": rust["durable_state"].get("database_relative")})
 
     return {
-        "ok": not mismatches,
-        "mismatch_count": len(mismatches),
-        "mismatches": mismatches,
-        "frozen_public_routes": frozen_capability["public_routes"],
-        "category_vocabulary": frozen_capability["category_vocabulary"],
-        "decision_reason_vocabulary": frozen_capability["decision_reason_vocabulary"],
-        "requirement_vocabulary": frozen_capability["requirement_vocabulary"],
-        "verification_reason_vocabulary": frozen_capability["verification_reason_vocabulary"],
-        "claim_boundary": (
-            "frozen Phase-1 capability decision/verification vocabulary, parser-error, "
-            "single-use durable state and Python/Rust behavior"
-        ),
+        "ok": not rows,
+        "mismatch_count": len(rows),
+        "mismatches": rows,
+        "frozen_public_routes": frozen["public_routes"],
+        "category_vocabulary": frozen["category_vocabulary"],
+        "decision_reason_vocabulary": frozen["decision_reason_vocabulary"],
+        "requirement_vocabulary": frozen["requirement_vocabulary"],
+        "verification_reason_vocabulary": frozen["verification_reason_vocabulary"],
+        "claim_boundary": "frozen Phase-1 capability/inventory behavior and durable security state",
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Validate frozen Python/Rust capability security parity"
-    )
+    parser = argparse.ArgumentParser(description="Validate frozen Python/Rust capability-inventory parity")
     parser.add_argument("--repo", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--rust-bin", default="target/debug/syntavra")
     parser.add_argument("--output")
@@ -805,25 +488,34 @@ def main() -> int:
         rust_bin = (repo / rust_bin).resolve(strict=True)
     fixture = json.loads((repo / FIXTURE_RELATIVE).read_text(encoding="utf-8"))
 
-    with tempfile.TemporaryDirectory(prefix="syntavra-capability-diff-") as directory:
-        root = Path(directory)
-        python_result = exercise("python", repo=repo, rust_bin=rust_bin, root=root)
-        rust_result = exercise("rust", repo=repo, rust_bin=rust_bin, root=root)
-        differential = compare(python_result, rust_result, fixture=fixture)
+    try:
+        with tempfile.TemporaryDirectory(prefix="syntavra-capability-diff-") as directory:
+            root = Path(directory)
+            python_result = exercise("python", repo=repo, rust_bin=rust_bin, root=root)
+            rust_result = exercise("rust", repo=repo, rust_bin=rust_bin, root=root)
+            differential = compare(python_result, rust_result, fixture)
+            result: dict[str, Any] = {
+                "ok": differential["ok"],
+                "schema_version": 2,
+                "family": "capability-inventory",
+                "python": python_result,
+                "rust": rust_result,
+                "differential": differential,
+            }
+    except Exception as exc:
         result = {
-            "ok": differential["ok"],
+            "ok": False,
             "schema_version": 2,
             "family": "capability-inventory",
-            "python": python_result,
-            "rust": rust_result,
-            "differential": differential,
+            "error": f"{type(exc).__name__}: {exc}",
+            "traceback": traceback.format_exc(),
         }
 
     rendered = json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
-    return 0 if result["ok"] else 2
+    return 0 if result.get("ok") is True else 2
 
 
 if __name__ == "__main__":
