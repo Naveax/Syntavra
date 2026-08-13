@@ -219,7 +219,7 @@ pub(super) fn execute(
         Some("language") => {
             let operation = super::positional_after(arguments, "language", 0)?;
             match operation {
-                "inventory" => language_status(project_root, &database, false),
+                "inventory" => language_status(project_root, &database, true),
                 "doctor" => language_status(project_root, &database, true),
                 "detect" => {
                     let raw = super::positional_after(arguments, "language", 1)?;
@@ -231,7 +231,7 @@ pub(super) fn execute(
                         .map_err(|error| format!("LANGUAGE_PROJECT_RESOLVE_FAILED:{error}"))?;
                     let data = fs::read(&source)
                         .map_err(|error| format!("LANGUAGE_SOURCE_READ_FAILED:{error}"))?;
-                    let detection = detect_language(&project, &source, &data, false)?;
+                    let detection = detect_language(&project, &source, &data, true)?;
                     let relative = source
                         .strip_prefix(&project)
                         .map_err(|_| "LANGUAGE_PATH_ESCAPE".to_owned())?
