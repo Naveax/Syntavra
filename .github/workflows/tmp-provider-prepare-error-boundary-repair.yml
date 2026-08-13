@@ -1,0 +1,77 @@
+name: Temporary Provider Prepare Error Boundary Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-provider-prepare-error-boundary-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/r31-provider-capture-native
+          fetch-depth: 0
+      - name: Replace only the provider prepare exit wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/syntavra-cli/src/native_provider_gateway_prepare.rs')
+          text = path.read_text(encoding='utf-8')
+          old = '''pub(crate) fn prepare(state_root: &Path) -> Result<Value, String> {
+              match prepare_impl(state_root) {
+                  Ok(value) => Ok(value),
+                  Err(error) => {
+                      eprintln!("{error}");
+                      std::process::exit(1);
+                  }
+              }
+          }
+          '''
+          new = '''pub(crate) fn prepare(state_root: &Path) -> Result<Value, String> {
+              prepare_impl(state_root)
+          }
+          '''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exact prepare wrapper once, found {count}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          changed="$(git diff --name-only)"
+          printf 'changed=%s\n' "$changed"
+          test "$changed" = "crates/syntavra-cli/src/native_provider_gateway_prepare.rs"
+          git diff --check
+      - name: Validate exact Rust repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all
+          changed="$(git diff --name-only)"
+          printf 'changed_after_fmt=%s\n' "$changed"
+          test "$changed" = "crates/syntavra-cli/src/native_provider_gateway_prepare.rs"
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+          git diff --check
+      - name: Commit validated boundary repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/syntavra-cli/src/native_provider_gateway_prepare.rs
+          git commit -m "fix(phase2): propagate provider prepare errors"
+          git fetch origin agent/r31-provider-capture-native
+          git rebase origin/agent/r31-provider-capture-native
+          git push origin HEAD:agent/r31-provider-capture-native
