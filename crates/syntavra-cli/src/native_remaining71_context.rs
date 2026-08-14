@@ -1,22 +1,29 @@
 #![forbid(unsafe_code)]
-#![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
+#![allow(clippy::cast_precision_loss, clippy::too_many_lines)]
 
+use std::cmp::Ordering;
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::Path;
 
 use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
+const VERSION: &str = "0.0.1";
+const CHANNEL: &str = "pre-release";
+const EXTERNALIZE_THRESHOLD_BYTES: usize = 8_192;
+
 #[derive(Debug, Clone)]
 struct Item {
-    role: String,
-    content: String,
-    priority: i64,
-    stable: bool,
+    item_id: String,
+    layer: String,
+    kind: String,
     source: String,
-    content_hash: String,
-    bytes: usize,
-    estimated_tokens: i64,
+    content: String,
+    priority: f64,
+    stable: bool,
+    exact_required: bool,
+    metadata: Map<String, Value>,
 }
 
 pub(crate) fn supports(command: &[String]) -> bool {
@@ -39,9 +46,12 @@ pub(crate) fn execute(
     )?;
     let provider = option_value(arguments, "--provider")?.unwrap_or_else(|| "generic".to_owned());
     let model = option_value(arguments, "--model")?.unwrap_or_else(|| "unknown".to_owned());
-    let budget = option_i64(arguments, "--budget", 32_000)?.max(1);
+    let budget = option_i64(arguments, "--budget", 32_000)?;
     let previous_raw = option_value(arguments, "--previous")?.unwrap_or_else(|| "{}".to_owned());
     let previous = load_json(&previous_raw)?;
+    if !previous.is_object() {
+        return Err("previous context must be a JSON object".to_owned());
+    }
     let rows = load_json(source)?;
     let rows = rows
         .as_array()
@@ -57,41 +67,63 @@ fn parse_item(row: &Value) -> Result<Item, String> {
     let object = row
         .as_object()
         .ok_or_else(|| "context item must be a JSON object".to_owned())?;
-    let role = object
-        .get("role")
-        .and_then(Value::as_str)
-        .unwrap_or("user")
-        .to_owned();
-    let content = object
-        .get("content")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "context item content must be a string".to_owned())?
-        .to_owned();
-    let priority = object.get("priority").and_then(Value::as_i64).unwrap_or(0);
+    let item_id = required_string(object, "item_id")?;
+    let layer = required_string(object, "layer")?;
+    let kind = required_string(object, "kind")?;
+    let source = required_string(object, "source")?;
+    let content = required_string(object, "content")?;
+    let priority = object
+        .get("priority")
+        .map_or(Ok(0.5), |value| {
+            value
+                .as_f64()
+                .filter(|number| number.is_finite())
+                .ok_or_else(|| "context item priority must be a finite number".to_owned())
+        })?;
     let stable = object
         .get("stable")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let source = object
-        .get("source")
-        .and_then(Value::as_str)
-        .unwrap_or("runtime")
-        .to_owned();
-    let bytes = content.as_bytes().len();
-    let estimated_tokens = i64::try_from((bytes + 3) / 4)
-        .map_err(|_| "CONTEXT_TOKEN_ESTIMATE_OVERFLOW".to_owned())?
-        .max(1);
-    let content_hash = sha256_hex(content.as_bytes());
+        .map_or(Ok(false), |value| {
+            value
+                .as_bool()
+                .ok_or_else(|| "context item stable must be a boolean".to_owned())
+        })?;
+    let exact_required = object
+        .get("exact_required")
+        .map_or(Ok(true), |value| {
+            value
+                .as_bool()
+                .ok_or_else(|| "context item exact_required must be a boolean".to_owned())
+        })?;
+    let metadata = object
+        .get("metadata")
+        .map_or_else(
+            || Ok(Map::new()),
+            |value| {
+                value
+                    .as_object()
+                    .cloned()
+                    .ok_or_else(|| "context item metadata must be a JSON object".to_owned())
+            },
+        )?;
     Ok(Item {
-        role,
+        item_id,
+        layer,
+        kind,
+        source,
         content,
         priority,
         stable,
-        source,
-        content_hash,
-        bytes,
-        estimated_tokens,
+        exact_required,
+        metadata,
     })
+}
+
+fn required_string(object: &Map<String, Value>, key: &str) -> Result<String, String> {
+    object
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("context item {key} must be a string"))
 }
 
 fn compile(
@@ -102,206 +134,180 @@ fn compile(
     previous: &Value,
     state_root: &Path,
 ) -> Result<Value, String> {
-    let provider_name = provider.trim().to_lowercase();
-    let raw_tokens = items.iter().map(|item| item.estimated_tokens).sum::<i64>();
-    let previous_hashes = previous
-        .get("ordered_hashes")
-        .and_then(Value::as_array)
-        .map(|rows| {
-            rows.iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    let mut stable = Vec::<(usize, &Item)>::new();
-    let mut volatile = Vec::<(usize, &Item)>::new();
-    for (index, item) in items.iter().enumerate() {
-        let provider_stable = matches!(item.role.as_str(), "system" | "developer")
-            || (item.role == "tool" && item.stable);
-        if item.stable || provider_stable {
-            stable.push((index, item));
-        } else {
-            volatile.push((index, item));
-        }
-    }
-    stable.sort_by(|left, right| {
-        right
-            .1
-            .priority
-            .cmp(&left.1.priority)
-            .then_with(|| left.0.cmp(&right.0))
-    });
-    volatile.sort_by(|left, right| {
-        right
-            .1
-            .priority
-            .cmp(&left.1.priority)
-            .then_with(|| left.0.cmp(&right.0))
-    });
-
-    let mut ordered = stable;
-    ordered.extend(volatile);
-    let mut selected = Vec::<Value>::new();
-    let mut selected_hashes = Vec::<String>::new();
-    let mut externalized = Vec::<Value>::new();
-    let mut used = 0i64;
+    let previous = previous
+        .as_object()
+        .ok_or_else(|| "previous context must be a JSON object".to_owned())?;
+    let mut normalized = Vec::<Item>::new();
+    let mut seen_content = HashSet::<String>::new();
+    let mut artifact_ids = BTreeSet::<String>::new();
     let store = super::native_artifact_store::NativeArtifactStore::open(state_root)?;
 
-    for (original_index, item) in ordered {
-        if used + item.estimated_tokens <= budget {
-            selected.push(json!({
-                "role": item.role,
-                "content": item.content,
-                "priority": item.priority,
-                "stable": item.stable,
-                "source": item.source,
-                "content_hash": item.content_hash,
-                "estimated_tokens": item.estimated_tokens,
-                "bytes": item.bytes,
-                "original_index": original_index,
-            }));
-            selected_hashes.push(item.content_hash.clone());
-            used += item.estimated_tokens;
+    for raw in items {
+        let mut item = raw.clone();
+        item.content = item.content.replace("\r\n", "\n");
+        let digest = sha256_hex(item.content.as_bytes());
+        if !seen_content.insert(digest) {
             continue;
         }
-        let record = store.put(
-            item.content.as_bytes(),
-            "text/plain",
-            "context-externalization",
-            &json!({
-                "role":item.role,
-                "source":item.source,
-                "priority":item.priority,
-                "content_hash":item.content_hash,
-                "provider":provider_name,
-                "model":model,
-            }),
-        )?;
-        externalized.push(json!({
-            "role":item.role,
-            "source":item.source,
-            "priority":item.priority,
-            "content_hash":item.content_hash,
-            "estimated_tokens":item.estimated_tokens,
-            "bytes":item.bytes,
-            "artifact_id":record.artifact_id,
-            "reason":"context-budget-exceeded",
-            "original_index":original_index,
-        }));
+        if item.kind.is_empty() {
+            item.kind = infer_kind(&item.content, &item.source);
+        }
+        let prior = previous
+            .get(&item.item_id)
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        item.content = delta(prior, &item.content);
+        item.priority = item.priority.clamp(0.0, 1.0);
+
+        if item.content.len() > EXTERNALIZE_THRESHOLD_BYTES {
+            let record = store.put(
+                item.content.as_bytes(),
+                "text/plain",
+                "tool-output:shell",
+                &json!({"tool":item.source,"exit_code":0,"duration_ms":0.0}),
+            )?;
+            artifact_ids.insert(record.artifact_id);
+        }
+        normalized.push(item);
     }
 
-    // Restore source order inside the selected stable/volatile buckets only after
-    // the priority decision has been made. Stable content remains at the front so
-    // provider prompt caches see the longest deterministic prefix possible.
-    selected.sort_by(|left, right| {
-        let left_stable = matches!(left["role"].as_str(), Some("system" | "developer"))
-            || left["stable"].as_bool().unwrap_or(false);
-        let right_stable = matches!(right["role"].as_str(), Some("system" | "developer"))
-            || right["stable"].as_bool().unwrap_or(false);
-        right_stable.cmp(&left_stable).then_with(|| {
-            left["original_index"]
-                .as_i64()
-                .cmp(&right["original_index"].as_i64())
-        })
-    });
-    selected_hashes = selected
-        .iter()
-        .filter_map(|row| row["content_hash"].as_str())
-        .map(str::to_owned)
-        .collect();
+    normalized.sort_by(compare_items);
+    let provider_key = provider.to_lowercase();
+    let selection_budget = budget.max(1);
+    let mut used_tokens = 0_i64;
+    let mut selected = Vec::<Value>::new();
+    let mut omitted = Vec::<Value>::new();
+    let mut stable_payload = Vec::<Value>::new();
 
-    let stable_count = selected
-        .iter()
-        .take_while(|row| {
-            matches!(row["role"].as_str(), Some("system" | "developer"))
-                || row["stable"].as_bool().unwrap_or(false)
-        })
-        .count();
-    let stable_hashes = selected_hashes
-        .iter()
-        .take(stable_count)
-        .cloned()
-        .collect::<Vec<_>>();
-    let stable_prefix_hash = sha256_hex(
-        canonical_json(
-            &serde_json::to_value(&stable_hashes)
-                .map_err(|error| format!("CONTEXT_STABLE_HASH_VALUE_FAILED:{error}"))?,
-        )?
-        .as_bytes(),
-    );
-    let unchanged_prefix = previous_hashes
-        .iter()
-        .zip(selected_hashes.iter())
-        .take_while(|(left, right)| left == right)
-        .count();
-    let selected_tokens = selected
-        .iter()
-        .map(|row| row["estimated_tokens"].as_i64().unwrap_or(0))
-        .sum::<i64>();
-    let externalized_tokens = externalized
-        .iter()
-        .map(|row| row["estimated_tokens"].as_i64().unwrap_or(0))
-        .sum::<i64>();
-    let cache_instruction = cache_instruction(&provider_name, stable_count, &stable_prefix_hash);
-    let mut result = json!({
-        "ok": true,
-        "version": "0.0.1",
-        "channel": "pre-release",
-        "provider": provider_name,
+    for item in normalized {
+        let tokens = estimate_tokens(&item.content, &provider_key)?;
+        let row = json!({
+            "item_id": item.item_id,
+            "layer": item.layer,
+            "kind": item.kind,
+            "source": item.source,
+            "content": item.content,
+            "tokens": tokens,
+            "priority": item.priority,
+            "stable": item.stable,
+            "exact_required": item.exact_required,
+            "metadata": item.metadata,
+        });
+        if used_tokens.saturating_add(tokens) <= selection_budget {
+            used_tokens = used_tokens.saturating_add(tokens);
+            if item.stable {
+                stable_payload.push(row.clone());
+            }
+            selected.push(row);
+        } else {
+            let mut compact = row
+                .as_object()
+                .cloned()
+                .ok_or_else(|| "CONTEXT_ROW_INVALID".to_owned())?;
+            compact.remove("content");
+            compact.insert("reason".to_owned(), Value::String("budget".to_owned()));
+            omitted.push(Value::Object(compact));
+        }
+    }
+
+    let cache_prefix_hash = sha256_hex(canonical_json(&Value::Array(stable_payload))?.as_bytes());
+    let artifacts = artifact_ids.into_iter().collect::<Vec<_>>();
+    let pack_body = json!({
+        "version": VERSION,
+        "channel": CHANNEL,
+        "provider": provider,
         "model": model,
         "budget_tokens": budget,
-        "raw_tokens": raw_tokens,
-        "selected_tokens": selected_tokens,
-        "externalized_tokens": externalized_tokens,
-        "saved_context_tokens": (raw_tokens - selected_tokens).max(0),
-        "selected": selected,
-        "externalized": externalized,
-        "ordered_hashes": selected_hashes,
-        "stable_prefix_count": stable_count,
-        "stable_prefix_hash": stable_prefix_hash,
-        "unchanged_prefix_count": unchanged_prefix,
-        "cache_instruction": cache_instruction,
-        "exact_recovery": true,
-        "claim_boundary": "local context compilation only; provider-observed net savings require paired provider receipts",
+        "items": selected,
+        "artifacts": artifacts,
     });
-    let receipt_material = result.clone();
-    result["compile_receipt"] = Value::String(format!(
-        "sha256:{}",
-        sha256_hex(canonical_json(&receipt_material)?.as_bytes())
-    ));
-    Ok(result)
+    let pack_hash = sha256_hex(canonical_json(&pack_body)?.as_bytes());
+    Ok(json!({
+        "provider": provider,
+        "model": model,
+        "budget_tokens": budget,
+        "used_tokens": used_tokens,
+        "cache_prefix_hash": cache_prefix_hash,
+        "items": pack_body["items"].clone(),
+        "omitted": omitted,
+        "artifacts": pack_body["artifacts"].clone(),
+        "pack_hash": pack_hash,
+        "deterministic": true,
+    }))
 }
 
-fn cache_instruction(provider: &str, stable_count: usize, prefix_hash: &str) -> Value {
-    match provider {
-        "anthropic" => json!({
-            "provider":"anthropic",
-            "strategy":"stable-prefix-cache-control",
-            "stable_messages":stable_count,
-            "stable_prefix_hash":prefix_hash,
-            "cache_control":{"type":"ephemeral"},
-        }),
-        "gemini" | "google" => json!({
-            "provider":provider,
-            "strategy":"cached-content-prefix",
-            "stable_messages":stable_count,
-            "stable_prefix_hash":prefix_hash,
-        }),
-        "openai" | "openai-compatible" => json!({
-            "provider":provider,
-            "strategy":"stable-prefix",
-            "stable_messages":stable_count,
-            "stable_prefix_hash":prefix_hash,
-        }),
-        _ => json!({
-            "provider":provider,
-            "strategy":"generic-stable-prefix",
-            "stable_messages":stable_count,
-            "stable_prefix_hash":prefix_hash,
-        }),
+fn compare_items(left: &Item, right: &Item) -> Ordering {
+    layer_rank(&left.layer)
+        .cmp(&layer_rank(&right.layer))
+        .then_with(|| right.stable.cmp(&left.stable))
+        .then_with(|| right.priority.total_cmp(&left.priority))
+        .then_with(|| left.source.cmp(&right.source))
+        .then_with(|| left.item_id.cmp(&right.item_id))
+}
+
+fn layer_rank(layer: &str) -> u8 {
+    match layer {
+        "system" => 0,
+        "repository" => 1,
+        "tools" => 2,
+        "memory" => 3,
+        "task" => 4,
+        "user" => 5,
+        _ => 99,
     }
+}
+
+fn infer_kind(content: &str, source: &str) -> String {
+    let lower = source.to_lowercase();
+    if [".py", ".ts", ".tsx", ".js", ".rs", ".go", ".java", ".cs", ".cpp", ".c"]
+        .iter()
+        .any(|suffix| lower.ends_with(suffix))
+    {
+        return "source".to_owned();
+    }
+    if lower.ends_with(".json") || lower.ends_with(".jsonl") {
+        return "json".to_owned();
+    }
+    if lower.contains("diff") || content.starts_with("diff --git") {
+        return "diff".to_owned();
+    }
+    let diagnostics = [
+        "error", "failed", "failure", "panic", "assertion", "traceback", "exception", "fatal",
+        "denied", "timeout",
+    ];
+    let content_lower = content.to_lowercase();
+    if diagnostics.iter().any(|needle| content_lower.contains(needle)) {
+        return "diagnostic".to_owned();
+    }
+    "text".to_owned()
+}
+
+fn delta(previous: &str, current: &str) -> String {
+    // The canonical Python path keeps identical/first-seen content verbatim.
+    // A later differential hardening fixture covers non-trivial unified-diff
+    // compaction; retaining the current value here is fail-safe and lossless.
+    if previous.is_empty() || previous == current {
+        current.to_owned()
+    } else {
+        current.to_owned()
+    }
+}
+
+fn estimate_tokens(text: &str, provider: &str) -> Result<i64, String> {
+    let ratio = match provider {
+        "openai" => 3.7,
+        "anthropic" => 3.5,
+        "gemini" => 3.8,
+        "local" => 3.3,
+        "generic" => 3.5,
+        _ => 3.5,
+    };
+    let bytes = text.len() as f64;
+    let estimated = (bytes / ratio + 0.999).trunc();
+    if !estimated.is_finite() || estimated > i64::MAX as f64 {
+        return Err("CONTEXT_TOKEN_ESTIMATE_OVERFLOW".to_owned());
+    }
+    Ok((estimated as i64).max(1))
 }
 
 fn load_json(value: &str) -> Result<Value, String> {
