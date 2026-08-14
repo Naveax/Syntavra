@@ -18,6 +18,11 @@ from export_rust_surface import export_surface as export_rust_surface
 CONTRACT = ROOT / "contracts" / "engine" / "dual-engine-public-surface-v2.json"
 FULL_CLAIM = "FULL_DUAL_ENGINE_PARITY_PROVEN"
 INCOMPLETE_CLAIM = "DUAL_ENGINE_PARITY_INCOMPLETE"
+EXPECTED_PUBLIC_COMMAND_COUNT = 245
+FROZEN_NATIVE_COMMAND_COUNT = 174
+FROZEN_BRIDGE_COMMAND_COUNT = 71
+PROMOTED_NATIVE_COMMAND_COUNT = 245
+PROMOTED_BRIDGE_COMMAND_COUNT = 0
 
 
 def _command_digest(commands: list[str]) -> str:
@@ -27,6 +32,30 @@ def _command_digest(commands: list[str]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _inventory_state(total: int, native_count: int, bridge_count: int) -> str:
+    if total != EXPECTED_PUBLIC_COMMAND_COUNT:
+        raise RuntimeError(
+            "dual-engine public command count drift: "
+            f"expected {EXPECTED_PUBLIC_COMMAND_COUNT}, got {total}"
+        )
+    if (native_count, bridge_count) == (
+        FROZEN_NATIVE_COMMAND_COUNT,
+        FROZEN_BRIDGE_COMMAND_COUNT,
+    ):
+        return "frozen"
+    if (native_count, bridge_count) == (
+        PROMOTED_NATIVE_COMMAND_COUNT,
+        PROMOTED_BRIDGE_COMMAND_COUNT,
+    ):
+        return "promoted"
+    raise RuntimeError(
+        "dual-engine inventory must remain atomic: "
+        f"native={native_count}, bridged={bridge_count}; accepted states are "
+        f"{FROZEN_NATIVE_COMMAND_COUNT}/{FROZEN_BRIDGE_COMMAND_COUNT} or "
+        f"{PROMOTED_NATIVE_COMMAND_COUNT}/{PROMOTED_BRIDGE_COMMAND_COUNT}"
+    )
 
 
 def verify(*, require_full: bool = False) -> dict[str, object]:
@@ -81,10 +110,16 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
         raise RuntimeError(f"unknown bridge commands: {sorted(bridge_set - command_set)!r}")
     if native_set & bridge_set:
         raise RuntimeError("native and bridge command inventories overlap")
+    if native_set | bridge_set != command_set:
+        unaccounted = sorted(command_set - native_set - bridge_set)
+        raise RuntimeError(
+            f"native and bridge inventories must exactly partition the Python surface: unaccounted={unaccounted!r}"
+        )
 
     total = len(commands)
     native_count = len(native)
     bridge_count = len(bridged)
+    inventory_state = _inventory_state(total, native_count, bridge_count)
     expected_rust = {
         "module_count": rust_surface["module_count"],
         "native_public_command_count": native_count,
@@ -98,7 +133,7 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
                 f"Rust public surface drift for {key}: expected {value!r}, got {rust_row.get(key)!r}"
             )
 
-    full = native_set == command_set and not bridge_set
+    full = inventory_state == "promoted"
     claim = contract.get("claim")
     if full and claim != FULL_CLAIM:
         raise RuntimeError("complete dual-engine coverage must carry the full claim")
@@ -114,6 +149,7 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
         "ok": True,
         "claim": claim,
         "full": full,
+        "inventory_state": inventory_state,
         "python": {
             "module_count": python_surface["module_count"],
             "public_command_count": total,
