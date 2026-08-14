@@ -239,7 +239,7 @@ def _rejection(root: Path, selector: Path) -> dict[str, Any]:
         "evidence_exists": (rs_state / "evidence").exists(),
     }
     return {
-        "ok": py_code == rs_code == 1 and py_shape == rs_shape,
+        "ok": py_code == rs_code == 4 and py_shape == rs_shape,
         "python_exit": py_code,
         "rust_exit": rs_code,
         "python_state": py_shape,
