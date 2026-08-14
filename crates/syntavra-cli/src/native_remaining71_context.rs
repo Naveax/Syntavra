@@ -72,39 +72,31 @@ fn parse_item(row: &Value) -> Result<Item, String> {
     let kind = required_string(object, "kind")?;
     let source = required_string(object, "source")?;
     let content = required_string(object, "content")?;
-    let priority = object
-        .get("priority")
-        .map_or(Ok(0.5), |value| {
+    let priority = object.get("priority").map_or(Ok(0.5), |value| {
+        value
+            .as_f64()
+            .filter(|number| number.is_finite())
+            .ok_or_else(|| "context item priority must be a finite number".to_owned())
+    })?;
+    let stable = object.get("stable").map_or(Ok(false), |value| {
+        value
+            .as_bool()
+            .ok_or_else(|| "context item stable must be a boolean".to_owned())
+    })?;
+    let exact_required = object.get("exact_required").map_or(Ok(true), |value| {
+        value
+            .as_bool()
+            .ok_or_else(|| "context item exact_required must be a boolean".to_owned())
+    })?;
+    let metadata = object.get("metadata").map_or_else(
+        || Ok(Map::new()),
+        |value| {
             value
-                .as_f64()
-                .filter(|number| number.is_finite())
-                .ok_or_else(|| "context item priority must be a finite number".to_owned())
-        })?;
-    let stable = object
-        .get("stable")
-        .map_or(Ok(false), |value| {
-            value
-                .as_bool()
-                .ok_or_else(|| "context item stable must be a boolean".to_owned())
-        })?;
-    let exact_required = object
-        .get("exact_required")
-        .map_or(Ok(true), |value| {
-            value
-                .as_bool()
-                .ok_or_else(|| "context item exact_required must be a boolean".to_owned())
-        })?;
-    let metadata = object
-        .get("metadata")
-        .map_or_else(
-            || Ok(Map::new()),
-            |value| {
-                value
-                    .as_object()
-                    .cloned()
-                    .ok_or_else(|| "context item metadata must be a JSON object".to_owned())
-            },
-        )?;
+                .as_object()
+                .cloned()
+                .ok_or_else(|| "context item metadata must be a JSON object".to_owned())
+        },
+    )?;
     Ok(Item {
         item_id,
         layer,
@@ -259,9 +251,11 @@ fn layer_rank(layer: &str) -> u8 {
 
 fn infer_kind(content: &str, source: &str) -> String {
     let lower = source.to_lowercase();
-    if [".py", ".ts", ".tsx", ".js", ".rs", ".go", ".java", ".cs", ".cpp", ".c"]
-        .iter()
-        .any(|suffix| lower.ends_with(suffix))
+    if [
+        ".py", ".ts", ".tsx", ".js", ".rs", ".go", ".java", ".cs", ".cpp", ".c",
+    ]
+    .iter()
+    .any(|suffix| lower.ends_with(suffix))
     {
         return "source".to_owned();
     }
@@ -272,11 +266,22 @@ fn infer_kind(content: &str, source: &str) -> String {
         return "diff".to_owned();
     }
     let diagnostics = [
-        "error", "failed", "failure", "panic", "assertion", "traceback", "exception", "fatal",
-        "denied", "timeout",
+        "error",
+        "failed",
+        "failure",
+        "panic",
+        "assertion",
+        "traceback",
+        "exception",
+        "fatal",
+        "denied",
+        "timeout",
     ];
     let content_lower = content.to_lowercase();
-    if diagnostics.iter().any(|needle| content_lower.contains(needle)) {
+    if diagnostics
+        .iter()
+        .any(|needle| content_lower.contains(needle))
+    {
         return "diagnostic".to_owned();
     }
     "text".to_owned()
