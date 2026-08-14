@@ -1,0 +1,147 @@
+name: Remaining 71 Benchmark Proof SignalBench Differential
+
+on:
+  push:
+    branches: [agent/r31-provider-capture-native]
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+      SYNTAVRA_BULK_PARITY_PROBE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Prepare exact Rust 1.82 CLI
+        run: |
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all -- --check
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+
+      - name: Run Proof and SignalBench public differential
+        run: |
+          python - <<'PY' > /tmp/benchmark-proof-signalbench.log 2>&1
+          import json, os, subprocess, sys, tempfile
+          from pathlib import Path
+          from tools.certify_python_benchmark_proof_reference import (
+              _provider_receipts, _provider_runs, _external_receipts,
+              _integration_receipts, _signalbench_rows,
+          )
+
+          repo=Path.cwd(); rust=(repo/'target/debug/syntavra').resolve()
+
+          def norm(value, root, project, state):
+              if isinstance(value,dict): return {k:norm(v,root,project,state) for k,v in value.items()}
+              if isinstance(value,list): return [norm(v,root,project,state) for v in value]
+              if isinstance(value,str):
+                  return value.replace(str(root),'<ROOT>').replace(str(project),'<PROJECT>').replace(str(state),'<STATE>')
+              return value
+
+          def invoke(engine, root, project, state, args):
+              common=['--project',str(project),'--state-root',str(state),*args]
+              cmd=[sys.executable,'-m','syntavra_runtime.engine_entry','--engine','python',*common] if engine=='python' else [str(rust),'--engine','rust',*common]
+              env=os.environ.copy(); env.update({'PYTHONPATH':str(repo),'PYTHONUTF8':'1','PYTHONIOENCODING':'utf-8','SYNTAVRA_BULK_PARITY_PROBE':'1'})
+              done=subprocess.run(cmd,cwd=repo,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace',timeout=120,check=False)
+              try: value=json.loads(done.stdout) if done.stdout.strip() else None
+              except json.JSONDecodeError: value=None
+              return {'exit':done.returncode,'value':norm(value,root,project,state),'stderr_nonempty':bool(done.stderr)}
+
+          def prepare(root):
+              project=root/'project'; state=root/'state'; project.mkdir(parents=True); state.mkdir(parents=True); (project/'.git').mkdir()
+              provider=root/'provider-receipts.json'; provider.write_text(json.dumps({'receipts':_provider_receipts()},separators=(',',':')),encoding='utf-8')
+              billed=root/'provider-billed.json'; billed.write_text(json.dumps({'results':_provider_runs()},separators=(',',':')),encoding='utf-8')
+              external=root/'external.json'; external.write_text(json.dumps({'receipts':_external_receipts()},separators=(',',':')),encoding='utf-8')
+              integrations=root/'integrations.json'; integrations.write_text(json.dumps({'receipts':_integration_receipts()},separators=(',',':')),encoding='utf-8')
+              signal=root/'signalbench.json'; signal.write_text(json.dumps(_signalbench_rows(),separators=(',',':')),encoding='utf-8')
+              maturity=root/'maturity.json'; maturity.write_text('{}\n',encoding='utf-8')
+              malformed_maturity=root/'malformed-maturity.json'; malformed_maturity.write_text('[]\n',encoding='utf-8')
+              schema=root/'provider-usage-schema.json'
+              return project,state,provider,billed,external,integrations,signal,maturity,malformed_maturity,schema
+
+          def run_engine(engine, root):
+              project,state,provider,billed,external,integrations,signal,maturity,malformed_maturity,schema=prepare(root)
+              cases=[
+                  ('proof_status',['proof','status']),
+                  ('prove_plan',['prove','plan']),
+                  ('prove_receipts',['prove','receipts',str(provider)]),
+                  ('prove_benchmark',['prove','benchmark',str(provider)]),
+                  ('prove_provider_billed',['prove','provider-billed',str(billed),'--baseline','plain-host','--candidate','syntavra-minimal']),
+                  ('prove_external_suite',['prove','external-suite',str(external),'--suite','longbench-v2']),
+                  ('prove_integrations',['prove','integrations',str(integrations),'--integration','claude-code']),
+                  ('prove_long_context',['prove','long-context']),
+                  ('prove_maturity_valid_empty',['prove','maturity',str(maturity)]),
+                  ('prove_maturity_malformed',['prove','maturity',str(malformed_maturity)]),
+                  ('prove_readiness_empty',['prove','readiness']),
+                  ('prove_schema',['prove','schema','--output',str(schema)]),
+                  ('prove_suites',['prove','suites']),
+                  ('signalbench_plan',['signalbench','plan','--repetitions','30']),
+                  ('signalbench_gate',['signalbench','gate',str(signal)]),
+                  ('signalbench2_plan',['signalbench2','plan','--repetitions','30']),
+                  ('signalbench2_gate',['signalbench2','gate',str(signal)]),
+              ]
+              receipts={}
+              for name,args in cases:
+                  receipts[name]=invoke(engine,root,project,state,args)
+                  if name=='prove_schema':
+                      receipts[name]['output_file']=norm(json.loads(schema.read_text(encoding='utf-8')),root,project,state) if schema.is_file() else None
+              return receipts
+
+          def malformed_contract(row):
+              value=row.get('value') if isinstance(row,dict) else None
+              error=value.get('error') if isinstance(value,dict) else None
+              details=error.get('details') if isinstance(error,dict) else None
+              code=error.get('code') if isinstance(error,dict) else None
+              domain_error=details.get('error') if isinstance(details,dict) else None
+              return {
+                  'exit':row.get('exit') if isinstance(row,dict) else None,
+                  'stderr_nonempty':row.get('stderr_nonempty') if isinstance(row,dict) else None,
+                  'ok':value.get('ok') if isinstance(value,dict) else None,
+                  'fallback':details.get('fallback') if isinstance(details,dict) else None,
+                  'public_command_failed':isinstance(code,str) and code.endswith('_PUBLIC_COMMAND_FAILED'),
+                  'domain_error_present':isinstance(domain_error,str) and bool(domain_error),
+              }
+
+          with tempfile.TemporaryDirectory(prefix='syntavra-benchmark-proof-') as tmp:
+              base=Path(tmp); py=run_engine('python',base/'python'); rs=run_engine('rust',base/'rust')
+          mismatches=[]
+          for name in py:
+              if name=='prove_maturity_malformed':
+                  py_contract=malformed_contract(py[name]); rs_contract=malformed_contract(rs.get(name))
+                  expected={'exit':4,'stderr_nonempty':False,'ok':False,'fallback':'forbidden','public_command_failed':True,'domain_error_present':True}
+                  if py_contract!=expected or rs_contract!=expected:
+                      mismatches.append({'id':name,'python':py[name],'rust':rs.get(name),'python_contract':py_contract,'rust_contract':rs_contract,'expected_contract':expected})
+              elif py[name]!=rs.get(name):
+                  mismatches.append({'id':name,'python':py[name],'rust':rs.get(name)})
+          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'route_count':16,'case_count':17,'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'claim_boundary':'offline deterministic public CLI differential only; valid maturity domain output is exact; malformed maturity compares fail-closed engine-neutral invariants; does not prove live external superiority; native route count remains frozen'}
+          Path('/tmp/benchmark-proof-signalbench.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True),encoding='utf-8')
+          print(json.dumps({'ok':report['ok'],'route_count':16,'case_count':17,'mismatch_count':len(mismatches)},sort_keys=True))
+          for row in mismatches: print('BENCHMARK_PROOF_MISMATCH '+row['id'])
+          raise SystemExit(0 if report['ok'] else 1)
+          PY
+
+      - name: Upload differential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-proof-signalbench-differential
+          path: |
+            /tmp/benchmark-proof-signalbench.json
+            /tmp/benchmark-proof-signalbench.log
+          if-no-files-found: warn
+
+      - name: Enforce clean exact-head tree
+        if: always()
+        run: |
+          git status --porcelain=v1
+          test -z "$(git status --porcelain=v1)"

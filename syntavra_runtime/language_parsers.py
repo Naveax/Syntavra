@@ -107,9 +107,10 @@ _NAME_TYPES = {"identifier", "type_identifier", "property_identifier", "field_id
 class TreeSitterLanguageBackend:
     """Optional exact parser backend.
 
-    The runtime stays dependency-free. When ``tree-sitter-language-pack`` is
-    installed, supported languages are parsed structurally; otherwise callers
-    receive ``None`` and must use an explicitly lower-confidence fallback.
+    The general language surface is provided by ``tree-sitter-language-pack``.
+    Grammars that must remain available during offline certification can also
+    be packaged directly; C# is currently pinned to that local path so the
+    reference suite never depends on a first-use grammar download.
     """
 
     def __init__(self) -> None:
@@ -117,14 +118,40 @@ class TreeSitterLanguageBackend:
             from tree_sitter_language_pack import get_parser  # type: ignore
         except ImportError:
             get_parser = None
+        try:
+            import tree_sitter_c_sharp  # type: ignore
+            from tree_sitter import Language, Parser  # type: ignore
+        except ImportError:
+            tree_sitter_c_sharp = None
+            Language = None
+            Parser = None
         self._get_parser = get_parser
+        self._csharp_binding = tree_sitter_c_sharp
+        self._tree_sitter_language = Language
+        self._tree_sitter_parser = Parser
 
     @property
     def installed(self) -> bool:
-        return self._get_parser is not None
+        return self._get_parser is not None or self._csharp_binding is not None
+
+    def _packaged_parser(self, language: str):
+        if language not in {"c_sharp", "csharp"}:
+            return None
+        if self._csharp_binding is None:
+            return None
+        if self._tree_sitter_language is None or self._tree_sitter_parser is None:
+            return None
+        try:
+            grammar = self._tree_sitter_language(self._csharp_binding.language())
+            return self._tree_sitter_parser(grammar)
+        except Exception:
+            return None
 
     @lru_cache(maxsize=128)
     def _parser(self, language: str):
+        packaged = self._packaged_parser(language)
+        if packaged is not None:
+            return packaged
         if self._get_parser is None:
             return None
         try:

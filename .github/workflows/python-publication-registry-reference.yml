@@ -1,0 +1,98 @@
+name: Python Publication Registry Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-publication-registry-reference
+  cancel-in-progress: true
+
+jobs:
+  python-publication-registry-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python publication/registry regression tests
+        run: python -m unittest tests.runtime.test_python_publication_registry_reference -v
+
+      - name: Generate exact-head Python publication/registry evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_publication_registry_reference.py \
+            --output /tmp/python-publication-registry-reference.json \
+            > /tmp/python-publication-registry-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-publication-registry-reference.log
+          test -f /tmp/python-publication-registry-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-publication-registry-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'publication-registry'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['public_cli']['canonical_route_count'] == 245
+          assert value['public_cli']['owned_routes'] == []
+          assert value['public_cli']['matching_routes'] == []
+          assert value['release']['identity']['version'] == '0.0.1'
+          assert value['release']['identity']['channel'] == 'pre-release'
+          assert value['release']['repository_identity']['ok'] is True
+          assert value['release']['pre_release']['claim_boundaries']['registry_publication'] == 'REGISTRY_PUBLICATION_NOT_PERFORMED'
+          for target in ('python', 'npm', 'vscode', 'native'):
+              assert value['release']['publish_readiness'][target]['published'] is False
+          assert len(value['release']['snapshot_sha256']) == 64
+          assert len(value['schema_registry']['snapshot_sha256']) == 64
+          assert value['schema_registry']['catalog'] == {'publication.metadata': {'latest': 2, 'versions': [1, 2]}}
+          assert value['schema_registry']['migrated'] == value['schema_registry']['validated']
+          assert value['schema_registry']['errors']['duplicate_schema'] == 'schema version already registered'
+          assert value['schema_registry']['errors']['downgrade_forbidden'] == 'automatic schema downgrade is forbidden'
+          assert value['claim_boundary'] == 'REGISTRY_PUBLICATION_NOT_PERFORMED'
+          assert value['nondeterministic_fields'] == []
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python publication/registry reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-publication-registry-reference
+          path: |
+            /tmp/python-publication-registry-reference.json
+            /tmp/python-publication-registry-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

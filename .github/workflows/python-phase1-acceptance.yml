@@ -1,0 +1,131 @@
+name: Python Phase 1 Acceptance
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-phase1-acceptance
+  cancel-in-progress: true
+
+jobs:
+  python-phase1-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Phase 1 acceptance architecture regression
+        run: python -m unittest tests.runtime.test_python_phase1_acceptance -v
+
+      - name: Generate exact-head Phase 1 acceptance evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_phase1_acceptance.py \
+            --output /tmp/python-phase1-acceptance.json \
+            > /tmp/python-phase1-acceptance.log 2>&1
+          acceptance_exit=$?
+          set -e
+          cat /tmp/python-phase1-acceptance.log
+          test -f /tmp/python-phase1-acceptance.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-phase1-acceptance.json').read_text(encoding='utf-8'))
+          contract = json.loads(Path('contracts/python/python-phase1-acceptance-v1.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+
+          assert value['ok'] is True, value
+          assert value['family'] == 'python-phase1-acceptance'
+          assert value['phase'] == 'final-python-phase1'
+          assert value['engine'] == 'python-reference-metadata'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['strict'] is contract['strict']
+          assert value['claim'] == contract['claim']
+
+          freeze = value['behavior_freeze']
+          assert freeze['strict'] is True
+          assert freeze['claim'] == 'PYTHON_REFERENCE_BEHAVIOR_FROZEN'
+          assert freeze['route_count'] == 245
+          assert freeze['family_count'] == 14
+          assert freeze['suite_total'] == freeze['suite_passed'] == 15
+          assert freeze['suite_failed'] == 0
+          assert freeze['suite_skipped'] == 0
+          assert freeze['repository_status_preserved'] is True
+          assert freeze['repository_clean_before'] is True
+          assert freeze['repository_clean_after'] is True
+          assert 'closed sink' in freeze['offline_policy']
+
+          binding = value['route_binding']
+          assert binding['route_count'] == contract['route_binding']['expected_route_count'] == 245
+          assert binding['family_explicit_route_count'] == contract['route_binding']['expected_family_explicit_route_count'] == 147
+          assert binding['core_legacy_route_count'] == contract['route_binding']['expected_core_legacy_route_count'] == 98
+          assert binding['unbound_route_count'] == 0
+          assert binding['overlap_count'] == 0
+
+          required = contract['required_route_semantics']
+          assert value['required_route_semantics'] == required
+          assert value['route_semantics_complete'] is True
+          rows = value['route_semantics']
+          assert len(rows) == 245
+          assert len({row['route'] for row in rows}) == 245
+          for row in rows:
+              for field in required:
+                  assert field in row and row[field] not in (None, '', [], {}), (row['route'], field)
+
+          observed = value['route_semantics_sha256']
+          assert isinstance(observed, str) and len(observed) == 64
+          expected = contract['derived_freeze']['expected_route_semantics_sha256']
+          if contract['strict']:
+              assert observed == expected, (observed, expected)
+          else:
+              assert expected is None
+
+          dispatch = value['dispatch_contract']
+          assert dispatch['ok'] is True
+          assert dispatch['generic_runtime_fallthrough_reachable'] is False
+          assert value['rust_native_promotion_credit'] is False
+          assert value['frozen_rust_native_count'] == 174
+          PY
+          exit "$acceptance_exit"
+
+      - name: Upload Phase 1 acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-phase1-acceptance
+          path: |
+            /tmp/python-phase1-acceptance.json
+            /tmp/python-phase1-acceptance.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

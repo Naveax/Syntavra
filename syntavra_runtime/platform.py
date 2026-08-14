@@ -107,6 +107,10 @@ class SyntavraPlatform:
         self.firewall = TerminalOutputEngine(self.artifacts)
         self.context = ContextCompiler(self.artifacts)
         self.graph = CanonicalRepositoryGraph(self.state_root / "semantic-graph.sqlite3")
+        # Repository language manifests are part of the project-level public
+        # language contract. Load them when the platform is created so direct
+        # detection, inventory/status and indexing all consult the same registry.
+        self.graph.languages.discover_manifests(self.project)
         self.runtime_evidence = RuntimeEvidenceGraph(self.state_root / "runtime-evidence.sqlite3")
 
         # Backward-compatible public attributes. They are façades over the same
