@@ -68,6 +68,9 @@ jobs:
                   if 'finished_at' in value: value['finished_at']='<DYNAMIC_TIME>'
                   for fuzz in value.get('fuzz') or []:
                       if isinstance(fuzz,dict) and 'duration_ms' in fuzz: fuzz['duration_ms']='<DYNAMIC_DURATION>'
+                  for fault in value.get('faults') or []:
+                      if isinstance(fault,dict) and fault.get('name')=='sqlite-corruption-recovery':
+                          fault['detail']='<BACKEND_DIAGNOSTIC>'
                   for key in ('report_id','report_sha256','report_path'):
                       if key in value: value[key]='<DYNAMIC_REPORT>'
               if name=='update_install' and isinstance(value,dict):
@@ -79,31 +82,51 @@ jobs:
           def sha256(path):
               return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
 
+          def write_json(path, value):
+              path.write_text(json.dumps(value,separators=(',',':')),encoding='utf-8')
+
           def prepare(root):
               project=root/'project'; state=root/'state'; project.mkdir(parents=True); state.mkdir(parents=True); (project/'.git').mkdir()
               items=project/'context-items.json'
-              items.write_text(json.dumps([
+              write_json(items,[
                   {'item_id':'system-1','layer':'system','kind':'text','source':'fixture-system','content':'stable system fixture','priority':1.0,'stable':True,'exact_required':True,'metadata':{'fixture':True}},
                   {'item_id':'user-1','layer':'user','kind':'text','source':'fixture-user','content':'volatile user fixture','priority':0.5,'stable':False,'exact_required':True,'metadata':{}},
                   {'item_id':'tool-1','layer':'tools','kind':'text','source':'fixture-tool','content':'stable tool fixture','priority':0.7,'stable':True,'exact_required':True,'metadata':{}},
-              ],separators=(',',':')),encoding='utf-8')
+              ])
+              dedupe=project/'context-dedupe.json'
+              write_json(dedupe,[
+                  {'item_id':'dedupe-system','layer':'system','kind':'text','source':'dedupe-system','content':'duplicate fixture','priority':1.0,'stable':True,'exact_required':True,'metadata':{}},
+                  {'item_id':'dedupe-user','layer':'user','kind':'text','source':'dedupe-user','content':'duplicate fixture','priority':0.2,'stable':False,'exact_required':True,'metadata':{'duplicate':True}},
+                  {'item_id':'budget-tool','layer':'tools','kind':'text','source':'budget-tool','content':'tool budget fixture','priority':0.8,'stable':False,'exact_required':False,'metadata':{}},
+              ])
+              delta=project/'context-delta.json'
+              write_json(delta,[
+                  {'item_id':'delta-1','layer':'task','kind':'text','source':'delta-fixture','content':'new fixture','priority':0.6,'stable':False,'exact_required':True,'metadata':{}},
+              ])
+              external=project/'context-external.json'
+              write_json(external,[
+                  {'item_id':'external-1','layer':'repository','kind':'text','source':'fixture-long','content':'x'*9001,'priority':0.9,'stable':True,'exact_required':True,'metadata':{'external':True}},
+              ])
               output=project/'output.txt'; output.write_text('alpha\nwarning: fixture\nerror: fixture\nomega\n',encoding='utf-8')
-              console=project/'console.json'; console.write_text(json.dumps({
+              console=project/'console.json'; write_json(console,{
                   'task_state':'idle','risk':'low','retries':0,
                   'tokens':{'raw_context_tokens':1000,'compiled_context_tokens':250,'cache_read_tokens':40,'cache_write_tokens':10,'externalized_bytes':128,'visible_output_bytes':100,'original_output_bytes':400,'current_cost':1.25,'avoided_estimated_cost':2.5},
                   'plan':['fixture-step'],'active_symbols':['alpha'],'changed_files':['fixture.py'],'tests':{'passed':1},'tool_calls':[],'capability_decisions':[],'sandbox':{},'session':{},'adapters':{},'claim_boundary':['fixture'],
-              },separators=(',',':')),encoding='utf-8')
+              })
               source=project/'fixture-update.bin'; source.write_bytes(b'fixture-update-v1\n')
               digest=sha256(source)
               artifact=json.dumps({'platform':'linux','architecture':'x86_64','filename':'fixture-update.bin','sha256':digest,'size':source.stat().st_size,'url':'','delta_from':'','delta_sha256':''},separators=(',',':'))
               target=state/'unified'/'bin'/'fixture-tool'; target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(b'fixture-old-v0\n')
               old_sha=sha256(target)
-              return project,state,items,output,console,source,artifact,target,old_sha,digest
+              return project,state,items,dedupe,delta,external,output,console,source,artifact,target,old_sha,digest
 
           def run_engine(engine, root):
-              project,state,items,output,console,source,artifact,target,old_sha,new_sha=prepare(root)
+              project,state,items,dedupe,delta,external,output,console,source,artifact,target,old_sha,new_sha=prepare(root)
               cases=[
                   ('context_compile',['run','context-compile',str(items),'--provider','openai','--model','fixture-model','--budget','128','--previous','{}']),
+                  ('context_dedupe_budget',['run','context-compile',str(dedupe),'--provider','anthropic','--model','fixture-model','--budget','5','--previous','{}']),
+                  ('context_previous_changed',['run','context-compile',str(delta),'--provider','generic','--model','fixture-model','--budget','128','--previous','{"delta-1":"old fixture"}']),
+                  ('context_externalized',['run','context-compile',str(external),'--provider','openai','--model','fixture-model','--budget','10000','--previous','{}']),
                   ('output_capture',['run','output-capture','fixture-tool',str(output),'--exit-code','7','--duration-ms','12.5','--media-type','text/plain']),
                   ('console',['run','console',str(console),'--json']),
                   ('reliability',['run','reliability-run','--cases','32','--seed','7']),
@@ -126,9 +149,9 @@ jobs:
           mismatches=[]
           for name in py:
               if py[name]!=rs.get(name): mismatches.append({'id':name,'python':py[name],'rust':rs.get(name)})
-          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'route_count':6,'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'normalization':['temporary paths','console generated_at','reliability started_at/finished_at/fuzz duration/report digest path','update-install started_at/finished_at/receipt_id'],'claim_boundary':'offline deterministic public CLI and update mutation differential; native route count remains frozen'}
+          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'route_count':6,'case_count':9,'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'normalization':['temporary paths','console generated_at','reliability started_at/finished_at/fuzz duration/report digest path','sqlite corruption backend diagnostic detail','update-install started_at/finished_at/receipt_id'],'context_hardening':['canonical ContextIR item shape','content deduplication','budget omission','provider token ratios','changed previous fallback','over-8KiB content-addressed externalization'],'claim_boundary':'offline deterministic public CLI and update mutation differential; compact-beneficial difflib and multi-line firewall compaction remain separate hardening targets; native route count remains frozen'}
           Path('/tmp/platform-context.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True),encoding='utf-8')
-          print(json.dumps({'ok':report['ok'],'route_count':6,'mismatch_count':len(mismatches)},sort_keys=True))
+          print(json.dumps({'ok':report['ok'],'route_count':6,'case_count':9,'mismatch_count':len(mismatches)},sort_keys=True))
           for row in mismatches: print('PLATFORM_CONTEXT_MISMATCH '+row['id'])
           raise SystemExit(0 if report['ok'] else 1)
           PY
