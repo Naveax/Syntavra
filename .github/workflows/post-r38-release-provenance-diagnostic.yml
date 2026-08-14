@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   package-provenance:
@@ -49,6 +51,12 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install -e . build twine
+
+      - name: Install locked npm installer dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
 
       - name: Install pinned Rust 1.82
         shell: bash
@@ -114,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           cd sdk/typescript
-          npm install --ignore-scripts --package-lock=false 2>&1 | tee /tmp/release-provenance/logs/npm-sdk-install.log
+          npm ci 2>&1 | tee /tmp/release-provenance/logs/npm-sdk-install.log
           npm run check 2>&1 | tee /tmp/release-provenance/logs/npm-sdk-check.log
           npm test 2>&1 | tee /tmp/release-provenance/logs/npm-sdk-test.log
           npm pack --json --pack-destination /tmp/release-provenance/npm-sdk \
@@ -134,20 +142,69 @@ jobs:
             --out /tmp/release-provenance/vscode/syntavra-vscode-0.0.1.vsix \
             2>&1 | tee /tmp/release-provenance/logs/vscode-package.log
 
-      - name: Package production Rust publication graph without publishing
+      - name: Prove production Rust publication graph without publishing
         id: rust_production
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          for crate in syntavra-contracts syntavra-core syntavra-cli; do
+          for crate in syntavra-contracts syntavra-core; do
             cargo +1.82.0 package --locked -p "$crate" --allow-dirty --no-verify \
               2>&1 | tee "/tmp/release-provenance/logs/rust-${crate}-package.log"
-          done
-          for crate in syntavra-contracts syntavra-core syntavra-cli; do
             test -f "target/package/${crate}-0.0.1.crate"
             cp "target/package/${crate}-0.0.1.crate" /tmp/release-provenance/rust-production/
           done
+
+          cargo +1.82.0 check --locked -p syntavra-cli --bins \
+            2>&1 | tee /tmp/release-provenance/logs/rust-syntavra-cli-check.log
+
+          set +e
+          cargo +1.82.0 package --locked -p syntavra-cli --allow-dirty --no-verify \
+            > /tmp/release-provenance/logs/rust-syntavra-cli-package.log 2>&1
+          cli_package_rc=$?
+          set -e
+          cat /tmp/release-provenance/logs/rust-syntavra-cli-package.log
+
+          python - "$cli_package_rc" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          rc = int(sys.argv[1])
+          log = Path('/tmp/release-provenance/logs/rust-syntavra-cli-package.log').read_text(encoding='utf-8', errors='replace')
+          crate = Path('target/package/syntavra-cli-0.0.1.crate')
+          if rc == 0:
+              if not crate.is_file():
+                  raise SystemExit('cargo package succeeded but syntavra-cli crate artifact is missing')
+              target = Path('/tmp/release-provenance/rust-production') / crate.name
+              target.write_bytes(crate.read_bytes())
+              state = 'package-ready'
+              dependency = None
+          else:
+              missing = None
+              for name in ('syntavra-contracts', 'syntavra-core'):
+                  if f'no matching package named `{name}` found' in log:
+                      missing = name
+                      break
+              if missing is None:
+                  raise SystemExit(f'unexpected syntavra-cli cargo package failure rc={rc}')
+              state = 'registry-dependency-publication-required'
+              dependency = missing
+          value = {
+              'ok': True,
+              'package': 'syntavra-cli',
+              'version': '0.0.1',
+              'local_build_check': 'passed',
+              'package_state': state,
+              'blocking_registry_dependency': dependency,
+              'publish_order': ['syntavra-contracts', 'syntavra-core', 'syntavra-cli'],
+              'registry_publication_performed': False,
+          }
+          Path('/tmp/release-provenance/rust-production-state.json').write_text(
+              json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(value, indent=2, sort_keys=True))
+          PY
 
       - name: Package legacy native companion without publishing
         id: rust_legacy
@@ -167,6 +224,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           import json
           import tomllib
@@ -211,7 +269,24 @@ jobs:
           git checkout -- MANIFEST.sha256
           rm -rf syntavra_runtime.egg-info
           rm -f release-smoke.json fusion-release-smoke.json platform-registry.json native-dry-run.json
-          test -z "$(git status --porcelain --untracked-files=all)"
+          git status --porcelain --untracked-files=all | tee /tmp/release-provenance/logs/clean-tree-status.log
+          test ! -s /tmp/release-provenance/logs/clean-tree-status.log
+
+      - name: Attest non-published package artifacts
+        id: attestation
+        if: github.event_name == 'push'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            /tmp/release-provenance/python/*
+            /tmp/release-provenance/npm-installer/*.tgz
+            /tmp/release-provenance/npm-sdk/*.tgz
+            /tmp/release-provenance/vscode/*.vsix
+            /tmp/release-provenance/rust-production/*.crate
+            /tmp/release-provenance/rust-legacy/*.crate
+            /tmp/release-provenance/candidate-MANIFEST.sha256
+            /tmp/release-provenance/release-identity-mapping.json
+            /tmp/release-provenance/rust-production-state.json
 
       - name: Upload package provenance evidence
         if: always()
@@ -236,7 +311,8 @@ jobs:
             "rust_production=${{ steps.rust_production.outcome }}" \
             "rust_legacy=${{ steps.rust_legacy.outcome }}" \
             "identity=${{ steps.identity.outcome }}" \
-            "clean_tree=${{ steps.clean_tree.outcome }}"
+            "clean_tree=${{ steps.clean_tree.outcome }}" \
+            "attestation=${{ steps.attestation.outcome }}"
           test "${{ steps.baseline.outcome }}" = success
           test "${{ steps.python_package.outcome }}" = success
           test "${{ steps.npm_installer.outcome }}" = success
@@ -246,3 +322,6 @@ jobs:
           test "${{ steps.rust_legacy.outcome }}" = success
           test "${{ steps.identity.outcome }}" = success
           test "${{ steps.clean_tree.outcome }}" = success
+          if [ "${{ github.event_name }}" = "push" ]; then
+            test "${{ steps.attestation.outcome }}" = success
+          fi
