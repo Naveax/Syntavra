@@ -1,6 +1,7 @@
 name: Remaining 71 Capability Inventory Differential
 
-# Read-only exact-head proof for the frozen Phase-1 capability and inventory contract.
+# Read-only exact-head proof for the capability contract across the frozen and
+# atomically promoted native-inventory endpoints.
 on:
   push:
     branches:
@@ -44,11 +45,11 @@ jobs:
           cargo +1.82.0 fmt --all -- --check
           cargo +1.82.0 check --locked -p syntavra-cli --bins
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra --bin syntavra-remaining71-ownership
-      - name: Re-certify frozen Python capability and inventory authority
+      - name: Re-certify Python capability and inventory authority
         run: |
           python tools/certify_python_capability_inventory_reference.py \
             --output /tmp/python-capability-inventory-reference.json
-      - name: Derive canonical Remaining-71 inventory
+      - name: Derive canonical native inventory
         run: |
           set +e
           python tools/report_missing_native_public_routes.py > /tmp/remaining71-inventory.json
@@ -56,13 +57,13 @@ jobs:
           set -e
           cat /tmp/remaining71-inventory.json
           exit "$report_exit"
-      - name: Prove Rust selector and lower-module ownership
+      - name: Prove Rust selector ownership boundary
         run: |
           target/debug/syntavra-remaining71-ownership \
             /tmp/remaining71-inventory.json \
             > /tmp/remaining71-ownership.json
           cat /tmp/remaining71-ownership.json
-      - name: Require capability routes to have one real Rust owner
+      - name: Require capability ownership boundary at an atomic inventory endpoint
         run: |
           python - <<'PY'
           import json
@@ -76,23 +77,35 @@ jobs:
           ]
           assert ownership.get('ok') is True, ownership
           assert ownership.get('public_route_count') == 245, ownership
-          assert ownership.get('frozen_native_route_count') == 174, ownership
-          assert ownership.get('report_derived_remaining_count') == 71, ownership
-          assert ownership.get('owned_count') == 71, ownership
           assert ownership.get('unowned_count') == 0, ownership
           assert ownership.get('module_unowned_count') == 0, ownership
           assert ownership.get('duplicate_owner_count') == 0, ownership
-          owners = ownership.get('owner_modules') or {}
-          for route in expected_routes:
-              assert owners.get(route) == 'native_remaining71_security', (route, owners.get(route))
+
+          state = ownership.get('inventory_state')
+          if state == 'frozen-174-71':
+              assert ownership.get('native_route_count') == 174, ownership
+              assert ownership.get('report_derived_remaining_count') == 71, ownership
+              assert ownership.get('owned_count') == 71, ownership
+              owners = ownership.get('owner_modules') or {}
+              for route in expected_routes:
+                  assert owners.get(route) == 'native_remaining71_security', (route, owners.get(route))
+              boundary = 'frozen-owner-modules'
+          elif state == 'promoted-245-0':
+              assert ownership.get('native_route_count') == 245, ownership
+              assert ownership.get('report_derived_remaining_count') == 0, ownership
+              assert ownership.get('promoted_public_native_set_equality') is True, ownership
+              boundary = 'promoted-public-native-set-equality'
+          else:
+              raise AssertionError(f'unexpected inventory state: {state!r}')
+
           print(json.dumps({
               'ok': True,
               'capability_routes': expected_routes,
-              'owner': 'native_remaining71_security',
-              'native_counter': '174/245',
+              'inventory_state': state,
+              'ownership_boundary': boundary,
           }, sort_keys=True))
           PY
-      - name: Run frozen capability Python-Rust differential
+      - name: Run capability Python-Rust differential
         run: |
           python tools/validate_remaining71_capability_differential.py \
             --rust-bin target/debug/syntavra \
