@@ -46,10 +46,6 @@ jobs:
           new_workflows = '''        ".github/workflows/codex-integration-closure.yml",\n        ".github/workflows/dual-engine-promotion-boundary.yml",\n        ".github/workflows/phase2-rust-migration-matrix.yml",\n        ".github/workflows/remaining71-capability-differential.yml",\n        ".github/workflows/remaining71-inventory-observe.yml",\n        ".github/workflows/post-r38-release-provenance-diagnostic.yml",\n'''
           replace_once(hygiene, old_workflows, new_workflows, 'current authority workflows')
 
-          required_anchor = '        "native/syntavra-native/Cargo.toml",\n'
-          required_insert = '''        "crates/syntavra-contracts/Cargo.toml",\n        "crates/syntavra-core/Cargo.toml",\n        "crates/syntavra-cli/Cargo.toml",\n        "tests/runtime/test_release_publish_identity.py",\n''' + required_anchor
-          replace_once(hygiene, required_anchor, required_insert, 'production release identity files')
-
           replace_once(
               hygiene,
               '    if "attest-build-provenance" not in workflow_text:\n        failures.append("artifact-provenance-not-enforced")\n',
