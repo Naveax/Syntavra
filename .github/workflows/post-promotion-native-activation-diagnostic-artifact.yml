@@ -1,0 +1,158 @@
+name: Guarded Post-Promotion Ownership Diagnostic Artifact
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-promotion-native-activation-diagnostic-artifact
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+      CERTIFIED_PREIMAGE: 20bfa000fa330ea4aff7e6018284bfca72e54705
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Require exact promoted product preimage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git diff --exit-code "$CERTIFIED_PREIMAGE" -- \
+            crates/syntavra-cli/src/native_product.rs \
+            crates/syntavra-cli/src/bin/syntavra.rs \
+            crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs \
+            tools/report_phase2_rust_migration_transition.py \
+            tests/runtime/test_phase2_rust_migration_transition.py \
+            .github/workflows/phase2-rust-migration-matrix.yml \
+            .github/workflows/remaining71-capability-differential.yml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply exact activation candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/apply_post_promotion_native_activation.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs')
+          text = path.read_text(encoding='utf-8')
+          replacements = (
+              ('            "run benchmark-gate",\n', '            "benchmark compare",\n'),
+              ('            "run context evaluate",\n', '            "run context-compile",\n'),
+          )
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'ownership smoke fixture drift: expected one {old.strip()!r}, got {count}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          git diff --check
+
+      - name: Install runtime and pinned Rust 1.82
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Build diagnostic binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra --bin syntavra-remaining71-ownership
+
+      - name: Capture exact production ownership diagnostics
+        id: capture
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/ownership-diagnostic
+          unset SYNTAVRA_BULK_PARITY_PROBE || true
+
+          set +e
+          python tools/report_missing_native_public_routes.py \
+            > /tmp/ownership-diagnostic/native-inventory.json \
+            2> /tmp/ownership-diagnostic/native-inventory.err
+          inventory_rc=$?
+
+          ownership_rc=125
+          : > /tmp/ownership-diagnostic/native-ownership.json
+          : > /tmp/ownership-diagnostic/native-ownership.err
+          if [ "$inventory_rc" -eq 0 ]; then
+            target/debug/syntavra-remaining71-ownership \
+              /tmp/ownership-diagnostic/native-inventory.json \
+              > /tmp/ownership-diagnostic/native-ownership.json \
+              2> /tmp/ownership-diagnostic/native-ownership.err
+            ownership_rc=$?
+          fi
+
+          target/debug/syntavra --engine rust engine status \
+            > /tmp/ownership-diagnostic/engine-status.json \
+            2> /tmp/ownership-diagnostic/engine-status.err
+          status_rc=$?
+          set -e
+
+          python - "$inventory_rc" "$ownership_rc" "$status_rc" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path('/tmp/ownership-diagnostic')
+          value = {
+              'inventory_rc': int(sys.argv[1]),
+              'ownership_rc': int(sys.argv[2]),
+              'engine_status_rc': int(sys.argv[3]),
+          }
+          (root / 'return-codes.json').write_text(
+              json.dumps(value, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(value, sort_keys=True))
+          PY
+
+      - name: Upload exact diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-promotion-ownership-diagnostic-${{ github.sha }}
+          path: /tmp/ownership-diagnostic
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Preserve original diagnostic failure
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/ownership-diagnostic/return-codes.json').read_text(encoding='utf-8'))
+          if value['inventory_rc'] != 0:
+              raise SystemExit(value['inventory_rc'])
+          if value['ownership_rc'] != 0:
+              raise SystemExit(value['ownership_rc'])
+          if value['engine_status_rc'] != 0:
+              raise SystemExit(value['engine_status_rc'])
+          PY
