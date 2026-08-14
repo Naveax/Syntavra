@@ -114,7 +114,7 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
     assert result["inventory_state"] == "frozen"
     assert result["python"]["public_command_count"] == 245
     assert result["rust"]["native_public_command_count"] == 174
-    assert result["rust"]["launcher_bridge_command_count"] == 71
+    assert result["rust"]["launcher_bridge_command_count"] == 0
     assert result["rust"]["missing_native_public_command_count"] == 71
     assert result["rust"]["native_coverage_ppm"] == 710_204
     assert result["policy"]["hidden_fallback_forbidden"] is True
@@ -122,19 +122,19 @@ def test_dual_engine_inventory_is_complete_and_fail_closed() -> None:
 
 
 def test_dual_engine_inventory_accepts_only_atomic_endpoints() -> None:
-    assert MODULE._inventory_state(245, 174, 71) == "frozen"
+    assert MODULE._inventory_state(245, 174, 0) == "frozen"
     assert MODULE._inventory_state(245, 245, 0) == "promoted"
     for native_count, bridge_count in [
-        (175, 70),
-        (200, 45),
-        (244, 1),
-        (245, 1),
+        (175, 0),
+        (200, 0),
         (244, 0),
+        (174, 1),
+        (245, 1),
     ]:
         with pytest.raises(RuntimeError, match="dual-engine inventory must remain atomic"):
             MODULE._inventory_state(245, native_count, bridge_count)
     with pytest.raises(RuntimeError, match="public command count drift"):
-        MODULE._inventory_state(244, 174, 70)
+        MODULE._inventory_state(244, 174, 0)
 
 
 def test_full_claim_cannot_open_while_native_commands_are_missing() -> None:
