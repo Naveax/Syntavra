@@ -29,8 +29,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "9cd9d298c71825b66764d91df0d478f151133fac"
-          test "$(git rev-parse HEAD^^)" = "20bfa000fa330ea4aff7e6018284bfca72e54705"
+          test "$(git rev-parse HEAD^)" = "032e30136269c062de85e90a45bfa0d19c2c919b"
+          test "$(git rev-parse HEAD^^)" = "9cd9d298c71825b66764d91df0d478f151133fac"
+          test "$(git rev-parse HEAD^^^)" = "20bfa000fa330ea4aff7e6018284bfca72e54705"
           test -z "$(git status --porcelain --untracked-files=all)"
 
       - uses: actions/setup-python@v5
@@ -342,7 +343,7 @@ jobs:
           set -euo pipefail
           python -m pip install -e .
           rustup toolchain uninstall 1.82.0 || true
-          rustup toolchain install 1.82.0 --profile minimal
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
           rustc +1.82.0 --version
           cargo +1.82.0 --version
 
@@ -418,8 +419,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "9cd9d298c71825b66764d91df0d478f151133fac"
-          test "$(git rev-parse HEAD^^)" = "20bfa000fa330ea4aff7e6018284bfca72e54705"
+          test "$(git rev-parse HEAD^)" = "032e30136269c062de85e90a45bfa0d19c2c919b"
+          test "$(git rev-parse HEAD^^)" = "9cd9d298c71825b66764d91df0d478f151133fac"
+          test "$(git rev-parse HEAD^^^)" = "20bfa000fa330ea4aff7e6018284bfca72e54705"
           remote_head="$(git ls-remote origin refs/heads/agent/r31-provider-capture-native | awk '{print $1}')"
           test "$remote_head" = "$GITHUB_SHA"
           git rm .github/workflows/post-promotion-native-activation-selfpatch.yml
