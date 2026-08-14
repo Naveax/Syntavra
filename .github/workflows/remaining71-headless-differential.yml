@@ -1,0 +1,95 @@
+name: Remaining 71 Headless Differential
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+      SYNTAVRA_BULK_PARITY_PROBE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Prepare exact Rust 1.82 toolchain
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Validate source formatting
+        run: cargo +1.82.0 fmt --all -- --check
+
+      - name: Compile exact-head Rust CLI
+        run: |
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+
+      - name: Run Python Rust headless differential
+        run: |
+          set +e
+          python tools/validate_remaining71_headless_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/headless-differential.json \
+            > /tmp/headless-differential-validator.log 2>&1
+          differential_exit=$?
+          set -e
+
+          if [ -f /tmp/headless-differential.json ]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/headless-differential.json').read_text(encoding='utf-8'))
+          differential = report.get('differential') or {}
+          mismatches = differential.get('mismatches') or []
+
+          def compact(value, limit=600):
+              rendered = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+              if len(rendered) <= limit:
+                  return rendered
+              return rendered[: limit - 3] + '...'
+
+          print(f"HEADLESS_DIFFERENTIAL ok={report.get('ok')} mismatch_count={differential.get('mismatch_count')}")
+          print(f"HEADLESS_CLAIM_BOUNDARY {differential.get('claim_boundary', '')}")
+          for index, mismatch in enumerate(mismatches):
+              print(f"HEADLESS_MISMATCH[{index}] path={mismatch.get('path', '')}")
+              for key in ('python', 'rust', 'expected', 'actual'):
+                  if key in mismatch:
+                      print(f"  {key}={compact(mismatch[key])}")
+          PY
+          else
+            echo "headless differential report was not produced"
+            tail -n 160 /tmp/headless-differential-validator.log || true
+          fi
+
+          exit "$differential_exit"
+
+      - name: Upload differential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-differential
+          path: |
+            /tmp/headless-differential.json
+            /tmp/headless-differential-validator.log
+          if-no-files-found: warn
+
+      - name: Enforce clean exact-head tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

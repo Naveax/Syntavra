@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "public_routes": [
+    "evidence describe",
+    "evidence gc",
+    "evidence get",
+    "evidence rotate-key",
+    "evidence stats",
+    "run artifact-put",
+    "run artifact-query",
+    "run artifact-stats",
+    "run artifact-verify",
+    "run competitive-doctor",
+    "run competitive-manifest",
+    "run competitive-status",
+    "run evidence-neighbors",
+    "run evidence-stats",
+    "run output-capture",
+    "run platform-doctor",
+    "run platform-manifest",
+    "run platform-status",
+    "run semantic-import"
+  ],
+  "platform": {
+    "product": "Syntavra",
+    "version": "0.0.1",
+    "channel": "pre-release",
+    "manifest_external_claims": "NOT_PROVEN_WITHOUT_EXTERNAL_RECEIPTS",
+    "compatibility_pairs": [
+      ["run platform-status", "run competitive-status"],
+      ["run platform-doctor", "run competitive-doctor"],
+      ["run platform-manifest", "run competitive-manifest"]
+    ]
+  },
+  "evidence": {
+    "handle_prefix": "sc://sha256/",
+    "schema_version": 3,
+    "encryption": {
+      "algorithm": "AES-256-GCM",
+      "mode": "encrypted"
+    },
+    "malformed_handle_exit": 4
+  },
+  "fd3": {
+    "applicable": false,
+    "contract": "no dedicated file-descriptor-3 evidence/output channel exists in the K-owned Python reference surface"
+  },
+  "os_variants": {
+    "k_owned_evidence_artifact_output": "schema-and-semantics-invariant-across-windows-linux-macos",
+    "nested_sandbox_backend": "host-dependent-delegated-to-J",
+    "nested_language_adapter_availability": "host-dependent-delegated-to-F"
+  },
+  "exit_policy": {
+    "success": 0,
+    "application_error": 4,
+    "integrity_or_result_failure": 3,
+    "argparse_error": 2
+  }
+}

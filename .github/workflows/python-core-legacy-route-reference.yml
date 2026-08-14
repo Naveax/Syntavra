@@ -1,0 +1,98 @@
+name: Python Core Legacy Route Reference
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-core-legacy-route-reference
+  cancel-in-progress: true
+
+jobs:
+  python-core-legacy-route-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run core/legacy route reference architecture regression
+        run: python -m unittest tests.runtime.test_python_core_legacy_reference -v
+
+      - name: Generate exact-head core/legacy route evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_core_legacy_reference.py \
+            --output /tmp/python-core-legacy-route-reference.json \
+            > /tmp/python-core-legacy-route-reference.log 2>&1
+          cert_exit=$?
+          set -e
+          cat /tmp/python-core-legacy-route-reference.log
+          test -f /tmp/python-core-legacy-route-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-core-legacy-route-reference.json').read_text(encoding='utf-8'))
+          contract = json.loads(Path('contracts/python/core-legacy-route-reference-v1.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+
+          assert value['family'] == 'core-legacy-route-reference'
+          assert value['phase'] == 'T'
+          assert value['exact_head'] == checkout_head, (value.get('exact_head'), checkout_head)
+          if 'canonical_route_count' in value:
+              assert value['canonical_route_count'] == contract['selection']['expected_canonical_route_count'] == 245
+              assert value['dp_explicit_route_count'] == contract['selection']['expected_dp_explicit_route_count'] == 147
+              assert value['target_route_count'] == contract['selection']['expected_target_route_count'] == 98
+              assert value['source_counts'] == contract['selection']['expected_source_counts']
+              assert len(value['target_routes']) == 98
+              assert len(value['routes']) == 98
+              assert value['repository_status_preserved'] is True
+              assert value['repository_clean_before'] is True
+              assert value['repository_clean_after'] is True
+              for digest in value['derived_hashes'].values():
+                  assert isinstance(digest, str) and len(digest) == 64
+              if value['ok']:
+                  assert value['failure_count'] == 0
+                  assert value['failures'] == []
+          PY
+          exit "$cert_exit"
+
+      - name: Upload core/legacy route evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-core-legacy-route-reference
+          path: |
+            /tmp/python-core-legacy-route-reference.json
+            /tmp/python-core-legacy-route-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

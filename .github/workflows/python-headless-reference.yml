@@ -1,0 +1,99 @@
+name: Python Headless Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  python-headless-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Run Python headless reference regression tests
+        run: |
+          export GITHUB_SHA="$(git rev-parse HEAD)"
+          python -m unittest tests.runtime.test_python_headless_reference -v
+
+      - name: Generate exact-head Python headless reference evidence
+        run: |
+          checkout_head="$(git rev-parse HEAD)"
+          export GITHUB_SHA="$checkout_head"
+          set +e
+          python tools/certify_python_headless_reference.py \
+            --output /tmp/python-headless-reference.json \
+            > /tmp/python-headless-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-headless-reference.log
+          test -f /tmp/python-headless-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-headless-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['engine'] == 'python'
+          assert value['family'] == 'headless'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert len(value['routes']) == 8, value['routes']
+          assert value['exit_policy'] == {
+              'success': 0,
+              'application_error': 4,
+              'argument_parser_error': 2,
+          }
+          machine = value['sqlite_state_machine']
+          assert machine['allowed_case_count'] == 18, machine
+          assert machine['forbidden_case_count'] == 46, machine
+          run = value['cases']['run_completed']
+          assert run['state'] == 'completed', run
+          assert run['event_types'] == ['submitted', 'claimed', 'running', 'completed'], run
+          lifecycle = value['cases']['cancel_resume']
+          assert lifecycle['event_types'] == ['submitted', 'cancelled', 'resumed'], lifecycle
+          assert value['cases']['export_import']['bundle_schema'] == 'syntavra-headless-job'
+          assert value['cases']['sqlite']['states'] == {'completed': 1, 'queued': 2}
+          for name in (
+              'resume_queued_error',
+              'unknown_status_error',
+              'unknown_events_error',
+              'malformed_submit_error',
+              'malformed_policy_error',
+              'tampered_bundle_error',
+          ):
+              assert value['cases'][name]['exit'] == 4, (name, value['cases'][name])
+              assert value['cases'][name]['error_code'] == 'PYTHON_PUBLIC_COMMAND_FAILED', (name, value['cases'][name])
+          assert value['cases']['missing_events_argument']['exit'] == 2
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python headless reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-headless-reference
+          path: |
+            /tmp/python-headless-reference.json
+            /tmp/python-headless-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

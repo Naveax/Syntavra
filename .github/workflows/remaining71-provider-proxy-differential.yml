@@ -1,0 +1,90 @@
+name: Remaining 71 Provider Proxy Differential
+
+# Read-only exact-head proof for the frozen Phase-1 provider/proxy family.
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remaining71-provider-proxy-differential
+  cancel-in-progress: true
+
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Require exact checkout head before certification
+        run: |
+          actual="$(git rev-parse HEAD)"
+          echo "expected=$EXPECTED_HEAD"
+          echo "actual=$actual"
+          test "$actual" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python runtime
+        run: python -m pip install -e .
+      - name: Re-certify frozen Python provider proxy authority
+        run: |
+          python tools/certify_python_provider_proxy_reference.py \
+            --output /tmp/python-provider-proxy-reference.json
+      - name: Run Python proxy regression suite
+        run: python -m unittest discover -s tests/runtime -p 'test_provider_proxy_v4.py' -v
+      - name: Build exact-head Rust selector
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          if ! cargo +1.82.0 fmt --all -- --check; then
+            cargo +1.82.0 fmt --all
+            git diff -- crates/syntavra-cli/src/bin/syntavra.rs > /tmp/rustfmt-drift.patch
+            git restore --worktree --staged .
+            exit 1
+          fi
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+      - name: Run Rust provider proxy unit tests
+        run: cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra native_remaining71_provider_proxy -- --nocapture
+      - name: Run provider proxy transport differential
+        run: |
+          python tools/validate_remaining71_provider_proxy_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/provider-proxy-differential.json
+      - name: Run frozen provider proxy CLI state differential
+        run: |
+          python tools/validate_remaining71_provider_proxy_cli_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/provider-proxy-cli-differential.json
+      - name: Upload exact-head provider proxy evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-proxy-differential
+          path: |
+            /tmp/provider-proxy-differential.json
+            /tmp/provider-proxy-cli-differential.json
+            /tmp/python-provider-proxy-reference.json
+            /tmp/rustfmt-drift.patch
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Require exact-head clean tree
+        run: |
+          actual="$(git rev-parse HEAD)"
+          echo "head=$actual"
+          test "$actual" = "$EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

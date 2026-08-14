@@ -1,0 +1,221 @@
+name: Remaining 71 Memory Intelligence Differential
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remaining71-memory-intelligence-differential
+  cancel-in-progress: true
+
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python runtime
+        run: python -m pip install -e .
+      - name: Build exact-head Rust selector
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all -- --check
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 test --locked -p syntavra-cli python_casefold_matches_sharp_s_expansion -- --exact
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+      - name: Run memory-intelligence differential
+        run: |
+          python tools/validate_remaining71_memory_intelligence_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/memory-intelligence-differential.json
+      - name: Run session-memory regression differential
+        run: |
+          python tools/validate_remaining71_session_memory_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/session-memory-differential.json
+      - name: Run frozen empty repository ranking and malformed-state parity
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sqlite3
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          repo = Path.cwd()
+          rust_bin = (repo / "target/debug/syntavra").resolve(strict=True)
+
+          def run_engine(engine, project, state, args):
+              common = ["--project", str(project), "--state-root", str(state), *args]
+              if engine == "python":
+                  command = [sys.executable, "-m", "syntavra_runtime.engine_entry", "--engine", "python", *common]
+              else:
+                  command = [str(rust_bin), "--engine", "rust", *common]
+              env = os.environ.copy()
+              env.update({
+                  "PYTHONPATH": str(repo),
+                  "PYTHONIOENCODING": "utf-8",
+                  "PYTHONUTF8": "1",
+                  "SYNTAVRA_BULK_PARITY_PROBE": "1",
+              })
+              completed = subprocess.run(
+                  command,
+                  cwd=repo,
+                  env=env,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+                  text=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  timeout=30,
+                  check=False,
+              )
+              value = json.loads(completed.stdout) if completed.stdout.strip() else None
+              return {"exit": completed.returncode, "value": value, "stderr": completed.stderr}
+
+          def clean(value):
+              if isinstance(value, dict):
+                  return {key: clean(child) for key, child in value.items() if key not in {"created_at", "updated_at"}}
+              if isinstance(value, list):
+                  return [clean(child) for child in value]
+              return value
+
+          def success(engine, project, state, *args):
+              result = run_engine(engine, project, state, list(args))
+              assert result["exit"] == 0 and result["stderr"] == "", (engine, args, result)
+              assert isinstance(result["value"], dict), (engine, args, result)
+              return result["value"]
+
+          def exercise(engine, root):
+              project = root / "project"
+              project.mkdir(parents=True)
+              (project / ".git").mkdir()
+              state = root / "state"
+
+              success(engine, project, state, "run", "memory-open", "--session-id", "session-a")
+              empty_verify = success(engine, project, state, "run", "memory-verify", "session-a")
+              empty_retrieve = success(engine, project, state, "run", "memory-retrieve", "session-a", "anything")
+              empty_status = success(engine, project, state, "run", "memory-intelligence-status")
+              empty_search = success(engine, project, state, "run", "memory-search", "nothing", "--limit", "10")
+              assert empty_verify.get("ok") is True and empty_verify.get("events") == 0, empty_verify
+              assert empty_retrieve.get("results") == [] and empty_retrieve.get("exact_recovery") is True, empty_retrieve
+              assert empty_status == {"stats": {"observations": 0, "valid": 0, "missing_embeddings": 0}, "ranked": []}, empty_status
+              assert empty_search == {"results": []}, empty_search
+
+              success(engine, project, state, "run", "memory-append", "session-a", "decision", '{"decision":"keep deterministic cache","importance":0.8,"pinned":true}')
+              success(engine, project, state, "run", "memory-append", "session-a", "test", '{"test":"cache verify","result":"passed","coverage":91}')
+              success(engine, project, state, "run", "memory-append", "session-a", "repository", '{"repository":"Syntavra","branch":"agent/reference","module":"memory","commit":"fixture"}')
+              compact = success(
+                  engine, project, state, "run", "memory-compact", "session-a",
+                  "--view", "decision", "--view", "test", "--view", "repository",
+              )
+              summaries = compact.get("summaries") or []
+              assert [row.get("view") for row in summaries] == ["decision", "test", "repository"], compact
+              repository_summary = next(row for row in summaries if row.get("view") == "repository")
+              assert "agent/reference" in str(repository_summary.get("summary")), repository_summary
+              assert "memory" in str(repository_summary.get("summary")), repository_summary
+              retrieve = success(engine, project, state, "run", "memory-retrieve", "session-a", "cache verify", "--limit", "8")
+              scores = [float(row["score"]) for row in retrieve.get("results") or []]
+              assert scores and scores == sorted(scores, reverse=True), retrieve
+
+              success(engine, project, state, "run", "memory-open", "--session-id", "tamper-session")
+              success(engine, project, state, "run", "memory-append", "tamper-session", "decision", '{"decision":"original"}')
+              success(engine, project, state, "run", "memory-append", "tamper-session", "test", '{"test":"second"}')
+              database = state / "unified" / "session-memory.sqlite3"
+              with sqlite3.connect(database) as db:
+                  db.execute(
+                      "UPDATE events SET payload_json=? WHERE session_id=? AND sequence=1",
+                      ('{"decision":"tampered"}', "tamper-session"),
+                  )
+              tampered = run_engine(engine, project, state, ["run", "memory-verify", "tamper-session"])
+              assert tampered["exit"] == 3 and tampered["stderr"] == "", tampered
+              assert isinstance(tampered["value"], dict) and tampered["value"].get("ok") is False, tampered
+              assert tampered["value"].get("failures") == ["hash:1"], tampered
+
+              missing = run_engine(engine, project, state, ["run", "memory-verify", "missing-session"])
+              assert missing["exit"] == 4 and missing["stderr"] == "", missing
+              assert isinstance(missing["value"], dict) and missing["value"].get("ok") is False, missing
+              assert (missing["value"].get("error") or {}).get("code") == "PYTHON_PUBLIC_COMMAND_FAILED", missing
+
+              return clean({
+                  "empty_verify": empty_verify,
+                  "empty_retrieve": empty_retrieve,
+                  "empty_status": empty_status,
+                  "empty_search": empty_search,
+                  "compact": compact,
+                  "retrieve": retrieve,
+                  "tampered": tampered,
+                  "missing": missing,
+              })
+
+          def capture(engine, root):
+              try:
+                  return {"ok": True, "result": exercise(engine, root), "error": None}
+              except Exception as exc:
+                  return {
+                      "ok": False,
+                      "result": None,
+                      "error": f"{type(exc).__name__}: {exc}",
+                  }
+
+          with tempfile.TemporaryDirectory(prefix="syntavra-memory-negative-diff-") as directory:
+              root = Path(directory)
+              python_capture = capture("python", root / "python")
+              rust_capture = capture("rust", root / "rust")
+              mismatches = []
+              if not python_capture["ok"]:
+                  mismatches.append({"path": "python.exercise", "error": python_capture["error"]})
+              if not rust_capture["ok"]:
+                  mismatches.append({"path": "rust.exercise", "error": rust_capture["error"]})
+              if python_capture["ok"] and rust_capture["ok"] and python_capture["result"] != rust_capture["result"]:
+                  mismatches.append({
+                      "path": "cross_engine_result",
+                      "python": python_capture["result"],
+                      "rust": rust_capture["result"],
+                  })
+              result = {
+                  "ok": not mismatches,
+                  "mismatch_count": len(mismatches),
+                  "mismatches": mismatches,
+                  "python": python_capture,
+                  "rust": rust_capture,
+                  "claim_boundary": "frozen empty-state, repository-summary/ranking, missing-session and tampered hash-chain parity",
+              }
+              Path("/tmp/memory-negative-state-differential.json").write_text(
+                  json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+                  encoding="utf-8",
+              )
+              print(json.dumps({"ok": result["ok"], "mismatch_count": result["mismatch_count"]}, sort_keys=True))
+              raise SystemExit(0 if result["ok"] else 2)
+          PY
+      - name: Upload exact-head Memory Intelligence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-intelligence-differential
+          path: |
+            /tmp/memory-intelligence-differential.json
+            /tmp/session-memory-differential.json
+            /tmp/memory-negative-state-differential.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Require exact-head clean tree
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"

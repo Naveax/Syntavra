@@ -7,10 +7,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .backup import BackupError
 from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
+from .evidence import EvidenceError
+from .migrations import MigrationError
+from .model_gateway import GatewayError
 from .runtime_paths import discover_project_root, resolve_state_root
+from .sandbox import SandboxError
 
 SELECTOR_COMMANDS = frozenset({"engine"})
 CODEX_BRIDGE_COMMAND = "codex-mcp-bridge"
@@ -20,6 +25,16 @@ READ_ONLY_COMMANDS = {
     ("pipeline", "describe"): "pipeline.describe",
     ("plugins", "list"): "plugins.list",
 }
+BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES = frozenset(
+    {
+        ("prove", "provider-billed"),
+        ("prove", "external-suite"),
+    }
+)
+CONTEXT_COMPACTION_TYPE_ERROR_ROUTES = frozenset({("context", "pack")})
+CONTEXT_COMPACTION_INDEX_ERROR_ROUTES = frozenset({("compress", "get")})
+SETUP_HOST_TYPE_ERROR_ROUTES = frozenset({("run", "update-install")})
+CORE_LEGACY_TYPE_ERROR_ROUTES = frozenset({("fabric", "cache-align")})
 
 
 def _configure_utf8_stdio() -> None:
@@ -31,6 +46,23 @@ def _configure_utf8_stdio() -> None:
 
 def _emit(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=str))
+
+
+def _emit_public_command_failure(command: str, exc: Exception) -> None:
+    _emit(
+        {
+            "ok": False,
+            "error": {
+                "code": "PYTHON_PUBLIC_COMMAND_FAILED",
+                "message": "The selected Python engine failed while executing the public command.",
+                "details": {
+                    "command": command or "<missing>",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "fallback": "forbidden",
+                },
+            },
+        }
+    )
 
 
 def _extract_engine_override(argv: list[str]) -> tuple[str | None, list[str]]:
@@ -230,7 +262,37 @@ def main(argv: list[str] | None = None) -> int:
 
     from .unified_cli import main as python_main
 
-    return int(python_main(values))
+    try:
+        return int(python_main(values))
+    except (
+        ValueError,
+        KeyError,
+        GatewayError,
+        FileNotFoundError,
+        PermissionError,
+        SandboxError,
+        EvidenceError,
+        BackupError,
+        MigrationError,
+    ) as exc:
+        _emit_public_command_failure(command, exc)
+        return 4
+    except TypeError as exc:
+        route = tuple(rest[:2])
+        if (
+            route not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES
+            and route not in CONTEXT_COMPACTION_TYPE_ERROR_ROUTES
+            and route not in SETUP_HOST_TYPE_ERROR_ROUTES
+            and route not in CORE_LEGACY_TYPE_ERROR_ROUTES
+        ):
+            raise
+        _emit_public_command_failure(command, exc)
+        return 4
+    except IndexError as exc:
+        if tuple(rest[:2]) not in CONTEXT_COMPACTION_INDEX_ERROR_ROUTES:
+            raise
+        _emit_public_command_failure(command, exc)
+        return 4
 
 
 if __name__ == "__main__":
