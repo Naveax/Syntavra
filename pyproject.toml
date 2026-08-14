@@ -8,17 +8,18 @@ version = "0.0.1"
 description = "Pre-release token and context optimization skill for AI coding agents"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["cryptography>=43", "tree-sitter-language-pack>=0.9"]
+dependencies = ["cryptography>=43", "tree-sitter-language-pack>=0.9", "tree-sitter-c-sharp>=0.23.1"]
 license = {text = "MIT"}
 authors = [{name = "Naveax"}]
 keywords = ["token-saver", "context-optimization", "agent-skill", "coding-agent", "mcp", "tool-output", "exact-recovery"]
 classifiers = ["Development Status :: 2 - Pre-Alpha", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Programming Language :: Python :: 3.13", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent"]
 
 [project.optional-dependencies]
-code-intelligence = ["tree-sitter-language-pack>=0.9"]
+code-intelligence = ["tree-sitter-language-pack>=0.9", "tree-sitter-c-sharp>=0.23.1"]
 
 [project.scripts]
 syntavra = "syntavra_runtime.engine_entry:main"
+syntavra-python = "syntavra_runtime.engine_entry:main"
 
 [project.urls]
 Repository = "https://github.com/Naveax/Syntavra"

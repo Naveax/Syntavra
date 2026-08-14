@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .backup import StateBackupManager
+from .evidence_rotation import rotate_evidence_key
 from .unified_config import ConfigManager
 from .identity import Authorizer
 from .janitor import RuntimeJanitor
@@ -78,7 +79,10 @@ def _build_registry() -> MCPToolRegistry:
     ))
     registry.register(ToolDefinition(
         "syntavra.evidence.rotate_key", "Rotate and re-encrypt local evidence keys", _object_schema({"reencrypt": {"type": "boolean"}}),
-        lambda server, args: server.evidence.rotate_key(reencrypt=bool(args.get("reencrypt", True))),
+        lambda server, args: rotate_evidence_key(
+            server.evidence,
+            reencrypt=bool(args.get("reencrypt", True)),
+        ),
         permissions=("admin", "evidence-write"), approval_required=True, timeout_seconds=3600,
     ))
     registry.register(ToolDefinition(

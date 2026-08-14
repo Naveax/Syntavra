@@ -41,8 +41,13 @@ ACTIONS = CANONICAL_ACTIONS | COMPATIBILITY_ACTIONS
 
 def _load(value: str) -> Any:
     path = Path(value)
-    if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        # Long inline JSON is data, not a filesystem path. Path.is_file() may
+        # raise ENAMETOOLONG before the JSON parser gets a chance to consume it.
+        pass
     return json.loads(value)
 
 
@@ -199,7 +204,7 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
 
     run_sub.add_parser("sandbox-status")
     sandbox_run = run_sub.add_parser("sandbox-run")
-    sandbox_run.add_argument("command", help="JSON argv or path")
+    sandbox_run.add_argument("sandbox_command", help="JSON argv or path")
     sandbox_run.add_argument("--cwd")
     sandbox_run.add_argument("--timeout", type=float, default=300.0)
     sandbox_run.add_argument("--strict-native", action="store_true")
@@ -246,7 +251,7 @@ def add_run_subcommands(run_sub: argparse._SubParsersAction[argparse.ArgumentPar
     execute.add_argument("--retain-workspace", action="store_true")
 
     submit = run_sub.add_parser("headless-submit")
-    submit.add_argument("command")
+    submit.add_argument("headless_command", metavar="command")
     submit.add_argument("--workspace", default=".")
     submit.add_argument("--workspace-type", default="local-worktree")
     submit.add_argument("--policy", default="{}")
@@ -415,7 +420,7 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
     if action == "sandbox-status":
         return runtime.sandbox.health(project)
     if action == "sandbox-run":
-        command = _argv(args.command, "sandbox command")
+        command = _argv(args.sandbox_command, "sandbox command")
         writable = tuple(_project_path(project, value) for value in args.writable_path) or (project,)
         receipt = runtime.sandbox.run(
             command,
@@ -468,7 +473,7 @@ def handle(args: argparse.Namespace, *, project: Path, state: Path) -> dict[str,
         )
         return asdict(receipt) | {"ok": receipt.ok}
     if action == "headless-submit":
-        command = _argv(args.command, "headless command")
+        command = _argv(args.headless_command, "headless command")
         workspace = _project_path(project, args.workspace).resolve(strict=True)
         return asdict(runtime.headless.submit(command, workspace=workspace, workspace_type=args.workspace_type, policy=_json_object(args.policy, "policy"), metadata=_json_object(args.metadata, "metadata")))
     if action == "headless-run":

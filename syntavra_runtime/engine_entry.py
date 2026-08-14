@@ -2,25 +2,67 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
+from .backup import BackupError
 from .telemetry_metrics_router_r24 import TelemetryMetricsRouterR24
 from .engine_cli import main as engine_main
 from .engine_selector import ENGINE_MODES, EngineSelectionError, EngineSelector
+from .evidence import EvidenceError
+from .migrations import MigrationError
+from .model_gateway import GatewayError
+from .runtime_paths import discover_project_root, resolve_state_root
+from .sandbox import SandboxError
 
 SELECTOR_COMMANDS = frozenset({"engine"})
+CODEX_BRIDGE_COMMAND = "codex-mcp-bridge"
 READ_ONLY_COMMANDS = {
     ("config", "show"): "config.show",
     ("config", "validate"): "config.validate",
     ("pipeline", "describe"): "pipeline.describe",
     ("plugins", "list"): "plugins.list",
 }
+BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES = frozenset(
+    {
+        ("prove", "provider-billed"),
+        ("prove", "external-suite"),
+    }
+)
+CONTEXT_COMPACTION_TYPE_ERROR_ROUTES = frozenset({("context", "pack")})
+CONTEXT_COMPACTION_INDEX_ERROR_ROUTES = frozenset({("compress", "get")})
+SETUP_HOST_TYPE_ERROR_ROUTES = frozenset({("run", "update-install")})
+CORE_LEGACY_TYPE_ERROR_ROUTES = frozenset({("fabric", "cache-align")})
+
+
+def _configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
 
 
 def _emit(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=str))
+
+
+def _emit_public_command_failure(command: str, exc: Exception) -> None:
+    _emit(
+        {
+            "ok": False,
+            "error": {
+                "code": "PYTHON_PUBLIC_COMMAND_FAILED",
+                "message": "The selected Python engine failed while executing the public command.",
+                "details": {
+                    "command": command or "<missing>",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "fallback": "forbidden",
+                },
+            },
+        }
+    )
 
 
 def _extract_engine_override(argv: list[str]) -> tuple[str | None, list[str]]:
@@ -58,22 +100,49 @@ def _extract_engine_override(argv: list[str]) -> tuple[str | None, list[str]]:
     return override, forwarded
 
 
-def _context(argv: list[str]) -> tuple[Path, Path, list[str]]:
+def _without_context_flags(argv: list[str]) -> list[str]:
+    """Remove global project/state flags before inserting one canonical pair."""
+
+    forwarded: list[str] = []
+    index = 0
+    while index < len(argv):
+        value = argv[index]
+        if value in {"--project", "--state-root"}:
+            if index + 1 >= len(argv):
+                raise EngineSelectionError(
+                    "CONTEXT_OPTION_MISSING_VALUE",
+                    f"{value} requires a value",
+                )
+            index += 2
+            continue
+        if value.startswith("--project=") or value.startswith("--state-root="):
+            index += 1
+            continue
+        forwarded.append(value)
+        index += 1
+    return forwarded
+
+
+def _context(argv: list[str]) -> tuple[Path, Path, list[str], list[str]]:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--project", default=".")
+    parser.add_argument("--project", default="auto")
     parser.add_argument("--state-root")
     parser.add_argument("--skill-root")
     parser.add_argument("--codex-home")
     parser.add_argument("--host", default="codex")
     parser.add_argument("--json", action="store_true")
-    values, rest = parser.parse_known_args(argv)
-    project = Path(values.project).resolve(strict=False)
-    state = (
-        Path(values.state_root).resolve(strict=False)
-        if values.state_root
-        else project / ".syntavra" / "pre-release"
-    )
-    return project, state, rest
+    values, _ = parser.parse_known_args(argv)
+    project = discover_project_root(values.project, strict=False)
+    state = resolve_state_root(project, values.state_root, namespace="pre-release")
+    canonical = [
+        "--project",
+        str(project),
+        "--state-root",
+        str(state),
+        *_without_context_flags(argv),
+    ]
+    _, rest = parser.parse_known_args(canonical)
+    return project, state, rest, canonical
 
 
 def _find_command(rest: list[str]) -> str:
@@ -144,10 +213,25 @@ def _read_only_request(rest: list[str]) -> tuple[str, dict[str, Any]] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _configure_utf8_stdio()
     raw = list(sys.argv[1:] if argv is None else argv)
+
+    # This route intentionally runs before project/state canonicalization. A global
+    # Codex MCP process must start unbound and receive repository identity through
+    # syntavra.project.bind; project-scope installs may still auto-bind via the
+    # SYNTAVRA_PROJECT value placed in their local Codex configuration.
+    if raw == [CODEX_BRIDGE_COMMAND]:
+        from .codex_mcp_bridge import main as codex_bridge_main
+
+        return int(codex_bridge_main())
+
     try:
-        override, values = _extract_engine_override(raw)
-        project, state, rest = _context(values)
+        override, forwarded = _extract_engine_override(raw)
+        project, state, rest, values = _context(forwarded)
+        # Child Syntavra commands inherit the same project/state identity even when
+        # a host launches them without repeating the global flags.
+        os.environ["SYNTAVRA_PROJECT"] = str(project)
+        os.environ["SYNTAVRA_STATE_ROOT"] = str(state)
         command = _find_command(rest)
         selector = EngineSelector(project_root=project, state_root=state)
         request = _read_only_request(rest)
@@ -178,7 +262,37 @@ def main(argv: list[str] | None = None) -> int:
 
     from .unified_cli import main as python_main
 
-    return int(python_main(values))
+    try:
+        return int(python_main(values))
+    except (
+        ValueError,
+        KeyError,
+        GatewayError,
+        FileNotFoundError,
+        PermissionError,
+        SandboxError,
+        EvidenceError,
+        BackupError,
+        MigrationError,
+    ) as exc:
+        _emit_public_command_failure(command, exc)
+        return 4
+    except TypeError as exc:
+        route = tuple(rest[:2])
+        if (
+            route not in BENCHMARK_RECEIPT_TYPE_ERROR_ROUTES
+            and route not in CONTEXT_COMPACTION_TYPE_ERROR_ROUTES
+            and route not in SETUP_HOST_TYPE_ERROR_ROUTES
+            and route not in CORE_LEGACY_TYPE_ERROR_ROUTES
+        ):
+            raise
+        _emit_public_command_failure(command, exc)
+        return 4
+    except IndexError as exc:
+        if tuple(rest[:2]) not in CONTEXT_COMPACTION_INDEX_ERROR_ROUTES:
+            raise
+        _emit_public_command_failure(command, exc)
+        return 4
 
 
 if __name__ == "__main__":

@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "family": "publication-registry",
+  "public_cli": {
+    "canonical_route_count": 245,
+    "owned_routes": [],
+    "forbidden_public_route_tokens": [
+      "publish",
+      "publication",
+      "registry"
+    ],
+    "policy": "publication and registry certification does not invent a public CLI leaf"
+  },
+  "release_identity": {
+    "product": "Syntavra",
+    "version": "0.0.1",
+    "channel": "pre-release",
+    "stability": "pre-alpha",
+    "version_locked": true,
+    "publish_as_prerelease": true,
+    "stable": false,
+    "registry_publication_claim": "REGISTRY_PUBLICATION_NOT_PERFORMED"
+  },
+  "publication_targets": {
+    "python": {
+      "package": "syntavra-runtime",
+      "published": false,
+      "uvx": "uvx --from syntavra-runtime syntavra"
+    },
+    "npm": {
+      "package": "@syntavra/install",
+      "published": false,
+      "tag": "next"
+    },
+    "vscode": {
+      "package": "syntavra-vscode",
+      "published": false
+    },
+    "native": {
+      "package": "syntavra-native",
+      "published": false
+    }
+  },
+  "package_metadata": {
+    "python_name": "syntavra-runtime",
+    "npm_installer_name": "@syntavra/install",
+    "typescript_sdk_name": "@syntavra/sdk",
+    "vscode_name": "syntavra-vscode",
+    "npm_tag": "next",
+    "npm_provenance": true,
+    "typescript_tag": "next",
+    "typescript_provenance": true
+  },
+  "schema_registry": {
+    "fixture_name": "publication.metadata",
+    "versions": [1, 2],
+    "latest": 2,
+    "errors": {
+      "invalid_identity": "invalid schema identity",
+      "duplicate_schema": "schema version already registered",
+      "duplicate_migration": "schema migration already registered",
+      "missing_migration_endpoints": "both migration endpoint schemas must be registered",
+      "missing_required": "missing required properties: package",
+      "unknown_property": "unknown properties: extra",
+      "invalid_type": "property package has invalid type",
+      "unknown_schema": "unknown schema: publication.metadata@3",
+      "downgrade_forbidden": "automatic schema downgrade is forbidden",
+      "missing_migration": "missing migration: publication.metadata@1->2"
+    }
+  },
+  "frozen_snapshots": {
+    "release_metadata_sha256": "305ac3fe93935f740a7c28bdd775adf94d54346328cea2680cafa102c53a6f89",
+    "schema_registry_sha256": "9d8a6184762918ec5eb0c7898c8d76bf3e455f6fd80f00501be0f84b04487aa0"
+  },
+  "network_boundary": "offline repository metadata and temporary local registry fixtures only; no PyPI, npm, VS Code Marketplace, package registry, signing service, or credential use",
+  "ownership_notes": {
+    "mcp_tool_registry": "owned by O MCP / integration reference",
+    "provider_registry": "owned by I Provider / proxy reference",
+    "host_and_platform_registry": "owned by N Setup / host and K Platform / helper references",
+    "external_publication": "credential-gated and explicitly not performed by Python Phase 1 certification"
+  }
+}

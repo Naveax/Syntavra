@@ -77,17 +77,28 @@ fn normalize_absolute_path(path: &Path) -> Result<String, String> {
     let value = path
         .to_str()
         .ok_or_else(|| "STATE_PROJECT_ROOT_UTF8_INVALID".to_owned())?;
-    let mut normalized = value.replace('\\', "/");
-    if let Some(rest) = normalized.strip_prefix("//?/UNC/") {
-        normalized = format!("//{rest}");
-    } else if let Some(rest) = normalized.strip_prefix("//?/") {
-        normalized = rest.to_owned();
+    if cfg!(windows) {
+        // Match syntavra_runtime.state_snapshot_contract exactly. Project identity
+        // is a cross-engine byte contract, not a Windows path-equivalence oracle:
+        // use forward slashes, remove the extended-path prefix, and normalize only
+        // the drive letter. Preserve the remaining path case so Rust hashes the
+        // same bytes as the Python reference implementation.
+        let mut normalized = value.replace('\\', "/");
+        if let Some(rest) = normalized.strip_prefix("//?/") {
+            normalized = rest.to_owned();
+        }
+        if normalized.len() >= 3 {
+            let bytes = normalized.as_bytes();
+            if bytes[1] == b':' && bytes[2] == b'/' {
+                let mut owned = normalized.into_bytes();
+                owned[0] = owned[0].to_ascii_lowercase();
+                normalized = String::from_utf8(owned)
+                    .map_err(|_| "STATE_PROJECT_ROOT_UTF8_INVALID".to_owned())?;
+            }
+        }
+        return Ok(normalized);
     }
-    let bytes = normalized.as_bytes();
-    if bytes.len() >= 3 && bytes[1] == b':' && bytes[2] == b'/' && bytes[0].is_ascii_uppercase() {
-        normalized.replace_range(0..1, &char::from(bytes[0]).to_ascii_lowercase().to_string());
-    }
-    Ok(normalized)
+    Ok(value.to_owned())
 }
 
 fn canonical_root(project_root: &str) -> Result<(PathBuf, String), String> {
@@ -248,7 +259,9 @@ pub fn inspect_state_root_json(
 
 #[cfg(test)]
 mod tests {
-    use super::{inspect_state_root_json, project_id_for_root};
+    use std::path::Path;
+
+    use super::{inspect_state_root_json, normalize_absolute_path, project_id_for_root};
 
     #[test]
     fn rejects_invalid_expected_project_id() {
@@ -265,5 +278,27 @@ mod tests {
         assert!(value.contains("\"inspection_id\":\"syntavra-state-inspection-v1\""));
         assert!(value.contains("\"filesystem\":false"));
         assert!(value.contains("\"database_opened\":false"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_path_identity_matches_python_reference_bytes() {
+        assert_eq!(
+            normalize_absolute_path(Path::new(r"\\?\C:\Users\MiXeD\Repo")).expect("path"),
+            "c:/Users/MiXeD/Repo"
+        );
+        assert_eq!(
+            normalize_absolute_path(Path::new(r"\\?\UNC\Server\Share\Repo")).expect("unc"),
+            "UNC/Server/Share/Repo"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn non_windows_path_identity_preserves_case_and_separators() {
+        assert_eq!(
+            normalize_absolute_path(Path::new("/Tmp/MiXeD/Repo")).expect("path"),
+            "/Tmp/MiXeD/Repo"
+        );
     }
 }

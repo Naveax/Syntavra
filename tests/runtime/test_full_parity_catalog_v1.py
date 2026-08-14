@@ -11,7 +11,12 @@ if str(TOOLS) not in sys.path:
 
 from export_python_surface import export_surface as export_python_surface
 from export_rust_surface import export_surface as export_rust_surface
-from verify_full_parity_catalog import EXPECTED_PHASES, verify
+from verify_full_parity_catalog import (
+    EXPECTED_PHASES,
+    REQUIRED_PYTHON_COMMAND_ROOTS,
+    reachable_command_roots,
+    verify,
+)
 
 CATALOG = ROOT / "contracts" / "parity" / "python-rust-full-parity-v1.json"
 
@@ -29,6 +34,17 @@ def test_full_parity_catalog_verifier_passes() -> None:
 def test_surface_exporters_are_deterministic() -> None:
     assert export_python_surface() == export_python_surface()
     assert export_rust_surface() == export_rust_surface()
+
+
+def test_baseline_groups_have_reachable_command_paths() -> None:
+    commands = set(export_python_surface()["cli_commands"])
+    roots = reachable_command_roots(commands)
+    assert REQUIRED_PYTHON_COMMAND_ROOTS <= roots
+
+    # Required argparse groups are not independently runnable public commands.
+    # Their reachable descendants, rather than synthetic roots, are certified.
+    for root in REQUIRED_PYTHON_COMMAND_ROOTS:
+        assert any(command.startswith(f"{root} ") for command in commands)
 
 
 def test_every_workstream_is_complete() -> None:

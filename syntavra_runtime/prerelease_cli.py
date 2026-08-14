@@ -67,8 +67,13 @@ def _emit(value: Any) -> None:
 
 def _load_json_argument(value: str) -> Any:
     path = Path(value)
-    if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        # Long inline JSON is data, not a filesystem path. Path.is_file() may
+        # raise ENAMETOOLONG before the JSON parser gets a chance to consume it.
+        pass
     return json.loads(value)
 
 

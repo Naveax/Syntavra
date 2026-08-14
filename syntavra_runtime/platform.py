@@ -51,6 +51,15 @@ if not getattr(IncrementalCodeIntelligenceGraph, "_syntavra_language_status_comp
         _core: Any = _language_status_core,
     ) -> dict[str, Any]:
         value = _core(self, repository_root)
+        tree_sitter = value.get("tree_sitter", {})
+        available_languages = tree_sitter.get("available_languages", [])
+        if isinstance(available_languages, list):
+            tree_sitter["available_languages"] = sorted(
+                {
+                    "csharp" if str(item) == "c_sharp" else str(item)
+                    for item in available_languages
+                }
+            )
         registry = value.get("language_registry", {})
         analyzers = value.get("sandboxed_analyzers", {})
         lsp = value.get("lsp_services", {})
@@ -98,6 +107,10 @@ class SyntavraPlatform:
         self.firewall = TerminalOutputEngine(self.artifacts)
         self.context = ContextCompiler(self.artifacts)
         self.graph = CanonicalRepositoryGraph(self.state_root / "semantic-graph.sqlite3")
+        # Repository language manifests are part of the project-level public
+        # language contract. Load them when the platform is created so direct
+        # detection, inventory/status and indexing all consult the same registry.
+        self.graph.languages.discover_manifests(self.project)
         self.runtime_evidence = RuntimeEvidenceGraph(self.state_root / "runtime-evidence.sqlite3")
 
         # Backward-compatible public attributes. They are façades over the same

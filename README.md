@@ -30,6 +30,28 @@ npx github:Naveax/Syntavra
 
 The installer prefers checksum-verified portable binaries, falls back to Python 3.11+, configures detected hosts transactionally and runs a final health check.
 
+## Engine selection
+
+Syntavra is migrating to one dual-engine bundle containing the Python runtime, native Rust runtime and a native selector. Engine preference is explicit and persisted without hidden fallback:
+
+```bash
+syntavra engine status
+syntavra engine use python --scope project
+syntavra engine use rust --scope project
+syntavra engine use auto --scope project
+
+syntavra --engine python version
+syntavra --engine rust version
+```
+
+Selection precedence is command override, `SYNTAVRA_ENGINE`, project configuration, user configuration and then the explicit `auto` policy. Selecting `python` never invokes Rust. Selecting `rust` never invokes Python; a command without an independent native Rust handler fails closed.
+
+The complete Python surface currently contains 257 public command paths. Full dual-engine parity is tracked against all 257 paths in `contracts/engine/dual-engine-public-surface-v2.json`; bounded R23–R37 contract parity is not treated as a complete native product rewrite. The full claim remains:
+
+```text
+DUAL_ENGINE_PARITY_INCOMPLETE
+```
+
 ## Product surface
 
 ```bash
@@ -45,11 +67,13 @@ syntavra prove plan
 
 Normal daily work still happens in the existing coding agent. Syntavra is intended to activate through its skill, MCP integration and host hooks rather than requiring every command to be prefixed manually.
 
+For Codex, the managed MCP entry starts through the same Syntavra launcher using the internal `codex-mcp-bridge` route. User/global installs begin repository-unbound and require `syntavra.project.bind` before repository or process tools can run; trusted project-scope installs may auto-bind only to their exact project.
+
 ## MCP profiles
 
 | Profile | Purpose | Maximum public surface |
 |---|---|---:|
-| `minimal` | Default hot-loop token saver | 8 tools |
+| `minimal` | Default hot-loop token saver | 10 tools |
 | `balanced` | Repository context, output, memory and provider controls | 36 tools |
 | `audit` | Full inspection and administration | Entire installed catalog |
 
@@ -131,6 +155,7 @@ Missing competitors, provider usage or verifier output fail closed; they are nev
 ## Current claim boundary
 
 ```text
+DUAL_ENGINE_PARITY_INCOMPLETE
 EXTERNAL_SUPERIORITY_NOT_PROVEN
 LONG_CONTEXT_QUALITY_NOT_PROVEN
 MEASURED_AGENT_BENCHMARK_NOT_PROVEN

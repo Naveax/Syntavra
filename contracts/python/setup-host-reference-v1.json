@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "family": "setup-host",
+  "public_routes": [
+    "doctor",
+    "fabric doctor",
+    "fabric install",
+    "fabric installations",
+    "fabric platform-plan",
+    "fabric rollback-install",
+    "fabric verify-install",
+    "host",
+    "host capabilities",
+    "host detect",
+    "host negotiate",
+    "init",
+    "install",
+    "repair",
+    "run update-install",
+    "run update-rollback",
+    "setup",
+    "status",
+    "uninstall",
+    "upgrade",
+    "wrap"
+  ],
+  "selected_hosts": ["codex", "claude-code"],
+  "setup_mental_model": ["setup", "status", "run", "prove"],
+  "upgrade_reason": "version-locked-until-owner-authorization",
+  "exit_policy": {
+    "success": 0,
+    "argparse_or_doctor_unhealthy": 2,
+    "domain_or_verification_failure": 3,
+    "application_or_malformed_input": 4
+  },
+  "safety": {
+    "certification_home": "temporary",
+    "certification_project": "temporary",
+    "external_network": false,
+    "developer_home_mutation": false,
+    "destructive_host_install": "temporary project only",
+    "update_install_root": "temporary state only"
+  },
+  "ownership_notes": {
+    "integrations": "owned by O MCP / integration reference",
+    "provider proxy-service install/uninstall": "owned by I Provider / proxy reference",
+    "platform status/doctor helper routes": "owned by K Platform / helper / evidence reference"
+  }
+}

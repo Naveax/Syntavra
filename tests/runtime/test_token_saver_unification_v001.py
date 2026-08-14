@@ -30,8 +30,10 @@ class TokenSaverUnificationV001Tests(unittest.TestCase):
         self.assertEqual(normalize_profile("tiny"), "minimal")
         self.assertEqual(normalize_profile("optimized"), "balanced")
         self.assertEqual(normalize_profile("full"), "audit")
-        self.assertEqual(len(MINIMAL_TOOLS), 8)
+        self.assertEqual(len(MINIMAL_TOOLS), 10)
         self.assertEqual(len(BALANCED_TOOLS), 36)
+        self.assertIn("syntavra.process.submit", MINIMAL_TOOLS)
+        self.assertIn("syntavra.process.completions", MINIMAL_TOOLS)
         self.assertEqual(MCP_PROFILES["minimal"].exposed_tools, MINIMAL_TOOLS)
         self.assertEqual(MCP_PROFILES["balanced"].exposed_tools, BALANCED_TOOLS)
 
@@ -72,7 +74,10 @@ class TokenSaverUnificationV001Tests(unittest.TestCase):
             with patch.dict(os.environ, {"SYNTAVRA_MCP_PROFILE": "minimal", "SYNTAVRA_SCHEMA_MODE": "compact"}, clear=False):
                 server = MCPServer(project=root, state_root=root / "state", skill_root=skill, codex_home=root / ".codex", host="codex")
                 listed = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
-                self.assertEqual(len(listed["result"]["tools"]), 8)
+                self.assertEqual(len(listed["result"]["tools"]), 10)
+                names = {row["name"] for row in listed["result"]["tools"]}
+                self.assertIn("syntavra.process.submit", names)
+                self.assertIn("syntavra.process.completions", names)
                 manifest = listed["result"]["_meta"]["syntavra"]
                 self.assertEqual(manifest["policy"]["profile"], "minimal")
                 self.assertEqual(manifest["schema"]["mode"], "compact")

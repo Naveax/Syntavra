@@ -38,8 +38,47 @@ def _small_project(root: Path) -> None:
     )
 
 
+def _security_workflow_checks(check, external_gates: dict[str, str]) -> None:
+    """Validate the security-triage workflow only when that gate is installed.
+
+    R38 intentionally removed the normal GitHub Actions workflows while native
+    runtime work was in progress. Absence of that external CI gate must therefore
+    be reported as not executed, not converted into either a FileNotFoundError or
+    a synthetic PASS for CodeQL closure.
+    """
+
+    workflow_path = ROOT / ".github/workflows/security-alert-triage.yml"
+    if not workflow_path.is_file():
+        external_gates["security_alert_triage_workflow"] = "INTENTIONALLY_DISABLED_NOT_EXECUTED"
+        return
+
+    workflow = workflow_path.read_text(encoding="utf-8")
+    check(
+        "dynamic_code_scanning_enumeration",
+        "/code-scanning/alerts?" in workflow
+        and 'for state in ("open", "fixed", "dismissed")' in workflow,
+    )
+    check(
+        "no_hardcoded_alert_ceiling",
+        "range(1, 7)" not in workflow and "range(1, 6)" not in workflow,
+    )
+    check(
+        "codeql_alert_6_main_closure_gate",
+        "Enforce CodeQL alert 6 closure on main" in workflow
+        and 'rule.get("id") != "py/redos"' in workflow
+        and "CODEQL_ALERT_6_FIXED_ON_MAIN" in workflow,
+    )
+    external_gates["security_alert_triage_workflow"] = "STATIC_CONTRACT_VERIFIED_NOT_EXECUTED"
+
+
 def main() -> int:
     checks: list[dict[str, object]] = []
+    external_gates = {
+        "registry_publication": "CREDENTIAL_GATED_NOT_EXECUTED",
+        "provider_billed_signalbench": "PROVIDER_ACCOUNT_AND_BUDGET_GATED",
+        "independent_validation": "THIRD_PARTY_GATED",
+        "public_maturity": "TIME_AND_ADOPTION_GATED",
+    }
 
     def check(name: str, passed: bool, detail: object = None) -> None:
         checks.append({"name": name, "passed": bool(passed), "detail": detail})
@@ -53,15 +92,7 @@ def main() -> int:
     check("safe_wrapper_rewriting", wrapped.changed and wrapped.rewritten[:2] == ("env", "CI=1"))
     check("wrapper_options_fail_closed", not rejected.changed and not rejected.safe)
 
-    workflow = (ROOT / ".github/workflows/security-alert-triage.yml").read_text(encoding="utf-8")
-    check("dynamic_code_scanning_enumeration", "/code-scanning/alerts?" in workflow and 'for state in ("open", "fixed", "dismissed")' in workflow)
-    check("no_hardcoded_alert_ceiling", "range(1, 7)" not in workflow and "range(1, 6)" not in workflow)
-    check(
-        "codeql_alert_6_main_closure_gate",
-        "Enforce CodeQL alert 6 closure on main" in workflow
-        and 'rule.get("id") != "py/redos"' in workflow
-        and "CODEQL_ALERT_6_FIXED_ON_MAIN" in workflow,
-    )
+    _security_workflow_checks(check, external_gates)
 
     check("redos_scanner_materialization_bound", 0 < MAX_PATH_CANDIDATE_CHARS <= 4_096, MAX_PATH_CANDIDATE_CHARS)
     oversized = "root/" + "x" * (MAX_PATH_CANDIDATE_CHARS + 1)
@@ -120,13 +151,8 @@ def main() -> int:
         "version": "0.0.1",
         "channel": "pre-release",
         "checks": checks,
-        "external_gates": {
-            "registry_publication": "CREDENTIAL_GATED_NOT_EXECUTED",
-            "provider_billed_signalbench": "PROVIDER_ACCOUNT_AND_BUDGET_GATED",
-            "independent_validation": "THIRD_PARTY_GATED",
-            "public_maturity": "TIME_AND_ADOPTION_GATED",
-        },
-        "claim_boundary": "Technical gap closure is internally verified; external superiority remains unproven.",
+        "external_gates": external_gates,
+        "claim_boundary": "Technical gap closure is internally verified; disabled or external gates remain explicitly unexecuted and external superiority remains unproven.",
     }
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["ok"] else 2

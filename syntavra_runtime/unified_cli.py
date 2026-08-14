@@ -13,6 +13,7 @@ from .config_show_contract import show_result
 from .live_config_discovery import discover_live_config_wire
 from .unified_config import ConfigManager
 from .evidence import EvidenceStore
+from .evidence_rotation import rotate_evidence_key
 from .janitor import RuntimeJanitor
 from .job_scheduler import DurableJobScheduler
 from .migration_plan_read_only_contract import migration_plan_read_only_result
@@ -342,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         store = EvidenceStore(state / "evidence", project_id=stable_project_id(project))
         action = rest[1]
         if action == "stats": _emit(store.stats()); return 0
-        if action == "rotate-key": _emit(store.rotate_key(reencrypt=True)); return 0
+        if action == "rotate-key": _emit(rotate_evidence_key(store, reencrypt=True)); return 0
         dry_run = "--apply" not in rest
         ttl_days = 30.0
         if "--ttl-days" in rest:

@@ -14,7 +14,7 @@ Syntavra uses one canonical `SKILL.md` and several delivery adapters. The core P
 | Platform | Level | Project installation | Global installation | Manual invocation |
 |---|---|---|---|---|
 | Agent Skills standard | Native | `.agents/skills/syntavra` | `~/.agents/skills/syntavra` | Mention `syntavra` |
-| OpenAI Codex | Native | `.codex/skills/syntavra` | `~/.codex/skills/syntavra` | `Use $syntavra` |
+| OpenAI Codex | Native | `.agents/skills/syntavra` | `~/.agents/skills/syntavra` | `Use $syntavra` |
 | Claude Code | Native | `.claude/skills/syntavra` | `~/.claude/skills/syntavra` | Mention/install the skill or plugin |
 | Gemini CLI | Native | `.gemini/skills/syntavra` | `~/.gemini/skills/syntavra` | Ask Gemini to activate it |
 | Google Antigravity IDE | Native | `.agents/skills/syntavra` | `~/.gemini/config/skills/syntavra` | Mention/select the skill |
@@ -28,6 +28,8 @@ Syntavra uses one canonical `SKILL.md` and several delivery adapters. The core P
 | JetBrains Junie | Instruction bridge | `AGENTS.md` | — | Reference Syntavra section |
 | JetBrains integrated agents | Instruction/native-selected-agent | `AGENTS.md` or selected agent skill path | — | Depends on selected agent |
 | Roo Code, Aider, Zed, Kiro, Qwen Code, Kimi CLI, Goose | Universal bridge | `AGENTS.md` | Tool-specific | Attach instructions or run CLI |
+
+For Codex MCP, the current user configuration is `~/.codex/config.toml`; a trusted project can use `.codex/config.toml`. User-scope Syntavra MCP configuration must remain project-dynamic. Project-scope configuration may bind to that exact project.
 
 ## Installer
 
@@ -70,6 +72,8 @@ Remove only Syntavra-managed files/blocks:
 ```bash
 python tools/install.py uninstall --platforms cursor,cline,continue --scope project
 ```
+
+Legacy Codex installs that used `.codex/mcp.json` or `.codex/skills/syntavra` are migration inputs only. Use `tools/repair_codex_integration.py` to back them up, move known Syntavra state out of the repository, and install the current TOML/Agent-Skill layout.
 
 ## Compatibility boundary
 

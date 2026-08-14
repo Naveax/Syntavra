@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -13,10 +14,21 @@ COUNTERS = (
     "malformed_lines", "duplicate_events",
 )
 
+_WINDOWS_EPOCH_OFFSET_100NS = 116_444_736_000_000_000
+
+
+def _file_numbers(path: Path) -> tuple[int, int]:
+    stat = path.stat()
+    if os.name == "nt":
+        birth_ns = int(getattr(stat, "st_birthtime_ns", stat.st_ctime_ns))
+        return birth_ns // 100 + _WINDOWS_EPOCH_OFFSET_100NS, 0
+    return int(getattr(stat, "st_ino", 0)), int(stat.st_dev)
+
 
 def _file_identity(path: Path) -> str:
-    stat = path.stat()
-    return sha256_bytes(f"{path.resolve(strict=True)}|{getattr(stat, 'st_ino', 0)}|{stat.st_dev}".encode())
+    resolved = path.resolve(strict=True)
+    inode, device = _file_numbers(resolved)
+    return sha256_bytes(f"{resolved}|{inode}|{device}".encode())
 
 
 def _walk(value: Any) -> Iterable[tuple[str, Any]]:

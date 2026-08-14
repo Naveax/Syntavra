@@ -480,6 +480,14 @@ class ProviderProxyRuntime:
                 if not isinstance(payload, Mapping):
                     self._json(HTTPStatus.BAD_REQUEST, {"error": "provider-request-must-be-object"})
                     return
+                # Validate the request target before cache/replay lookup. Otherwise
+                # a previously cached payload could return a replay hit for an
+                # absolute-form target and bypass the fixed-origin boundary.
+                try:
+                    upstream_url = runtime._upstream_url(self.path)
+                except ValueError:
+                    self._json(HTTPStatus.BAD_GATEWAY, {"error": "ValueError", "detail": "upstream request failed"})
+                    return
                 try:
                     plan = runtime._prepare(payload)
                 except Exception as exc:
@@ -508,9 +516,8 @@ class ProviderProxyRuntime:
                         return
                 prepared_body = canonical_json(plan.prepared_request)
                 try:
-                    url = runtime._upstream_url(self.path)
                     request = urllib.request.Request(
-                        url,
+                        upstream_url,
                         data=prepared_body,
                         headers=runtime._headers(self.headers, len(prepared_body), request_id),
                         method="POST",

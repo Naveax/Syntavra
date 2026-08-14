@@ -134,11 +134,11 @@ def generate_synthetic_repository(
         else:
             body.append("    return value")
         file_path = path / f"module_{index:04d}.py"
-        file_path.write_text("\n".join(body) + "\n", encoding="utf-8")
+        file_path.write_text("\n".join(body) + "\n", encoding="utf-8", newline="\n")
         ground_truth["symbols"][f"func_{index}"] = {"path": file_path.name, "calls": callers}
     for index in range(min(faults, files)):
         file_path = path / f"fault_{index:04d}.py"
-        file_path.write_text(f"def fault_{index}():\n    raise RuntimeError('SC_FAULT_{index}')\n", encoding="utf-8")
+        file_path.write_text(f"def fault_{index}():\n    raise RuntimeError('SC_FAULT_{index}')\n", encoding="utf-8", newline="\n")
         ground_truth["faults"].append({"marker": f"SC_FAULT_{index}", "path": file_path.name})
     atomic_write_json(path / "ground_truth.json", ground_truth, mode=0o644)
     observed = {

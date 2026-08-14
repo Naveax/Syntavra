@@ -32,16 +32,22 @@ class PlatformTests(unittest.TestCase):
             self.assertEqual(rows[key]["support"], "native")
             self.assertTrue(rows[key]["verified"])
 
+    def test_codex_registry_normalizes_to_current_agent_skill_path(self):
+        codex = platforms.platform_map()["codex"]
+        self.assertEqual(codex["project_target"], ".agents/skills/syntavra")
+        self.assertEqual(codex["user_target"], ".agents/skills/syntavra")
+
     def test_install_native_project(self):
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp) / "project"
             home = Path(temp) / "home"
             project.mkdir(); home.mkdir()
             result = platforms.install("codex", scope="project", project=project, home=home)
-            target = project / ".codex" / "skills" / "syntavra"
+            target = project / ".agents" / "skills" / "syntavra"
             self.assertTrue(result["changed"])
             self.assertTrue((target / "SKILL.md").is_file())
             self.assertTrue((target / "scripts" / "platforms.py").is_file())
+            self.assertFalse((project / ".codex" / "skills" / "syntavra").exists())
 
     def test_rule_bridge_preserves_existing_agents_md(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -82,6 +88,7 @@ class PlatformTests(unittest.TestCase):
     def test_platform_json_valid(self):
         data = json.loads((ROOT / "skills" / "syntavra" / "data" / "platforms.json").read_text(encoding="utf-8"))
         self.assertEqual(data["schema_version"], 1)
+        self.assertTrue(any(row["id"] == "codex" for row in data["platforms"]))
 
 
 if __name__ == "__main__":

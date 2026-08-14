@@ -37,7 +37,11 @@ PROVEN_ROUTE_CAPABILITIES = {
     "route.pipeline.describe": "pipeline.describe",
     "route.plugins.list": "plugins.list",
 }
-REQUIRED_PYTHON_COMMANDS = {
+# The installed public-command inventory intentionally contains only reachable
+# command paths. Required argparse group nodes are not independently runnable and
+# therefore must be represented by at least one reachable descendant, not by a
+# synthetic root-only command.
+REQUIRED_PYTHON_COMMAND_ROOTS = {
     "agent",
     "backup",
     "config",
@@ -98,6 +102,14 @@ def _dimension_report(features: dict[str, dict[str, object]]) -> dict[str, objec
             "complete": bool(rows) and len(ready) == len(rows),
         }
     return report
+
+
+def reachable_command_roots(commands: set[str]) -> set[str]:
+    return {
+        command.split(maxsplit=1)[0]
+        for command in commands
+        if isinstance(command, str) and command.strip()
+    }
 
 
 def verify() -> dict[str, object]:
@@ -162,9 +174,13 @@ def verify() -> dict[str, object]:
                     raise RuntimeError(f"missing parity test for {identifier}: {relative!r}")
 
     python_commands = set(python_surface.get("cli_commands", []))
-    missing_commands = sorted(REQUIRED_PYTHON_COMMANDS - python_commands)
-    if missing_commands:
-        raise RuntimeError(f"Python CLI exporter missed baseline commands: {missing_commands!r}")
+    command_roots = reachable_command_roots(python_commands)
+    missing_roots = sorted(REQUIRED_PYTHON_COMMAND_ROOTS - command_roots)
+    if missing_roots:
+        raise RuntimeError(
+            "Python CLI exporter missed reachable baseline command roots: "
+            f"{missing_roots!r}"
+        )
 
     status_counts = Counter(str(row.get("status")) for row in features.values())
     dimensions = _dimension_report(features)
@@ -200,6 +216,7 @@ def verify() -> dict[str, object]:
         "python_surface": {
             "module_count": python_surface["module_count"],
             "cli_command_count": len(python_surface["cli_commands"]),
+            "reachable_command_roots": sorted(command_roots),
             "environment_variable_count": len(python_surface["environment_variables"]),
         },
         "rust_surface": {

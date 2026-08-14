@@ -1,0 +1,269 @@
+name: Temporary Agent Live Parity Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+    paths:
+      - .github/workflows/tmp-agent-live-parity-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch live agent product parity
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old_lines: list[str], new_lines: list[str], label: str) -> str:
+              old = "\n".join(old_lines) + "\n"
+              new = "\n".join(new_lines) + "\n"
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one anchor, found {count}")
+              return text.replace(old, new, 1)
+
+          path = Path("crates/syntavra-cli/src/native_remaining71_agent_live.rs")
+          text = path.read_text(encoding="utf-8")
+
+          text = replace_once(
+              text,
+              [
+                  "const SYSTEM_PROMPT: &str = r#\"You are the patch-planning component of Syntavra.",
+                  "Return exactly one JSON object and no markdown.",
+                  "Allowed actions:",
+                  "- {\"action\":\"search\",\"query\":\"...\"}",
+                  "- {\"action\":\"inspect\",\"paths\":[\"relative/path.py\"]}",
+                  "- {\"action\":\"impact\",\"node_id\":\"...\"}",
+                  "- {\"action\":\"verifiers\"}",
+                  "- {\"action\":\"patch\",\"patch\":\"unified diff\",\"rationale\":\"...\"}",
+                  "Use search, inspect or impact when evidence is insufficient. Never invent file contents.",
+                  "Patch must stay inside the repository and must be suitable for git apply.",
+                  "\"#;",
+              ],
+              [
+                  "const SYSTEM_PROMPT: &str = r#\"You are the patch-planning component of Syntavra.",
+                  "Return exactly one JSON object and no markdown.",
+                  "Allowed actions:",
+                  "- {\"action\":\"search\",\"query\":\"...\"}",
+                  "- {\"action\":\"inspect\",\"paths\":[\"relative/path.py\"]}",
+                  "- {\"action\":\"diff\"}",
+                  "- {\"action\":\"impact\",\"node_id\":\"...\"}",
+                  "- {\"action\":\"verifiers\"}",
+                  "- {\"action\":\"run_verifier\",\"name\":\"...\"}",
+                  "- {\"action\":\"edit\",\"edits\":[{\"path\":\"...\",\"operation\":\"replace\",\"old\":\"...\",\"new\":\"...\",\"count\":1}],\"rationale\":\"...\"}",
+                  "- {\"action\":\"patch\",\"patch\":\"unified diff\",\"rationale\":\"...\"}",
+                  "Use search, inspect, impact or a verifier when evidence is insufficient. Never invent file contents.",
+                  "Patch or structured edits must stay inside the repository and must be suitable for git apply.",
+                  "\"#;",
+              ],
+              "live system prompt",
+          )
+
+          text = replace_once(
+              text,
+              [
+                  "    let run = super::native_remaining71_agent::execute(",
+                  "        &replay_command,",
+                  "        &replay_args,",
+                  "        project,",
+                  "        state_root,",
+                  "    )?",
+                  "    .ok_or_else(|| \"AGENT_REPLAY_NATIVE_UNAVAILABLE\".to_owned())?;",
+                  "    let workspace = PathBuf::from(run[\"workspace\"].as_str().unwrap_or_default());",
+              ],
+              [
+                  "    let mut run = super::native_remaining71_agent::execute(",
+                  "        &replay_command,",
+                  "        &replay_args,",
+                  "        project,",
+                  "        state_root,",
+                  "    )?",
+                  "    .ok_or_else(|| \"AGENT_REPLAY_NATIVE_UNAVAILABLE\".to_owned())?;",
+                  "    run[\"task\"][\"metadata\"] = json!({",
+                  "        \"verifier_discovery\": verifiers.iter().map(Verifier::json).collect::<Vec<_>>(),",
+                  "        \"semantic_results\": initial.clone(),",
+                  "    });",
+                  "    super::native_remaining71_agent::persist_receipt(state_root, &run)?;",
+                  "    let workspace = PathBuf::from(run[\"workspace\"].as_str().unwrap_or_default());",
+              ],
+              "live task metadata persistence",
+          )
+
+          text = replace_once(
+              text,
+              [
+                  "    let delivery_receipt = deliver(project, &run, &delivery, authorized, arguments)?;",
+                  "    let limitations = if delivery == \"pr\" && !command_exists(\"gh\") {",
+                  "        vec![\"gh CLI is required for PR delivery\"]",
+                  "    } else {",
+                  "        Vec::new()",
+                  "    };",
+                  "    let ok = run[\"ok\"].as_bool().unwrap_or(false)",
+                  "        && verification_complete",
+                  "        && post.iter().all(|row| row[\"ok\"].as_bool().unwrap_or(false))",
+                  "        && delivery_receipt[\"ok\"].as_bool().unwrap_or(false);",
+                  "    let events = Vec::<Value>::new();",
+                  "    Ok(",
+                  "        json!({\"run\":run,\"provider\":result_provider,\"model\":result_model,\"verifier\":primary.json(),\"post_verifiers\":post,\"tool_trace\":trace,\"usage\":usage,\"delivery\":delivery_receipt,\"events\":events,\"verification_complete\":verification_complete,\"delivery_options\":[\"diff\",\"worktree\",\"apply\",\"commit\",\"pr\"],\"limitations\":limitations,\"ok\":ok}),",
+                  "    )",
+              ],
+              [
+                  "    let delivery_receipt = deliver(project, &run, &delivery, authorized, arguments)?;",
+                  "    let limitations = if delivery == \"pr\" && !command_exists(\"gh\") {",
+                  "        vec![\"gh CLI is required for PR delivery\"]",
+                  "    } else {",
+                  "        Vec::new()",
+                  "    };",
+                  "    let run_ok = run[\"ok\"].as_bool().unwrap_or(false);",
+                  "    let ok = run_ok",
+                  "        && verification_complete",
+                  "        && post.iter().all(|row| row[\"ok\"].as_bool().unwrap_or(false))",
+                  "        && delivery_receipt[\"ok\"].as_bool().unwrap_or(false);",
+                  "    let mut events = Vec::<Value>::new();",
+                  "    push_journal_event(",
+                  "        &mut events,",
+                  "        \"agent-started\",",
+                  "        json!({\"instruction\":task,\"mode\":mode,\"delivery\":delivery}),",
+                  "    )?;",
+                  "    push_journal_event(",
+                  "        &mut events,",
+                  "        \"verification-plan\",",
+                  "        json!({",
+                  "            \"primary\": primary.json(),",
+                  "            \"post\": verifiers.iter().skip(1).map(Verifier::json).collect::<Vec<_>>(),",
+                  "        }),",
+                  "    )?;",
+                  "    push_journal_event(",
+                  "        &mut events,",
+                  "        \"model-loop-started\",",
+                  "        json!({\"attempt\":1,\"workspace\":run[\"workspace\"]}),",
+                  "    )?;",
+                  "    for row in &trace {",
+                  "        let round = row[\"round\"].as_i64().unwrap_or(0);",
+                  "        let action = row[\"action\"].as_str().unwrap_or_default();",
+                  "        push_journal_event(&mut events, \"model-requested\", json!({\"round\":round}))?;",
+                  "        push_journal_event(",
+                  "            &mut events,",
+                  "            \"model-action\",",
+                  "            json!({\"round\":round,\"action\":action}),",
+                  "        )?;",
+                  "        if action == \"patch\" {",
+                  "            push_journal_event(",
+                  "                &mut events,",
+                  "                \"patch-proposed\",",
+                  "                json!({",
+                  "                    \"round\":round,",
+                  "                    \"source\":\"unified-diff\",",
+                  "                    \"bytes\":row[\"patch_bytes\"],",
+                  "                }),",
+                  "            )?;",
+                  "        }",
+                  "    }",
+                  "    push_journal_event(",
+                  "        &mut events,",
+                  "        \"primary-run-finished\",",
+                  "        json!({\"ok\":run_ok,\"state\":run[\"state\"],\"stop_reason\":run[\"stop_reason\"]}),",
+                  "    )?;",
+                  "    for row in &post {",
+                  "        push_journal_event(",
+                  "            &mut events,",
+                  "            \"post-verifier-started\",",
+                  "            json!({\"name\":row[\"name\"]}),",
+                  "        )?;",
+                  "        push_journal_event(&mut events, \"post-verifier-finished\", row.clone())?;",
+                  "    }",
+                  "    push_journal_event(",
+                  "        &mut events,",
+                  "        \"delivery-finished\",",
+                  "        json!({",
+                  "            \"mode\":delivery_receipt[\"mode\"],",
+                  "            \"ok\":delivery_receipt[\"ok\"],",
+                  "            \"branch\":delivery_receipt[\"branch\"],",
+                  "            \"commit\":delivery_receipt[\"commit\"],",
+                  "        }),",
+                  "    )?;",
+                  "    if let Some(object) = run.as_object_mut() {",
+                  "        object.remove(\"ok\");",
+                  "        object.remove(\"surface\");",
+                  "    }",
+                  "    Ok(",
+                  "        json!({\"run\":run,\"provider\":result_provider,\"model\":result_model,\"verifier\":primary.json(),\"post_verifiers\":post,\"tool_trace\":trace,\"usage\":usage,\"delivery\":delivery_receipt,\"events\":events,\"verification_complete\":verification_complete,\"delivery_options\":[\"diff\",\"worktree\",\"apply\",\"commit\",\"pr\"],\"limitations\":limitations,\"ok\":ok}),",
+                  "    )",
+              ],
+              "live product receipt and journal",
+          )
+
+          marker = "fn emit_event(arguments: &[String], event: &str, payload: Value) -> Result<(), String> {\n"
+          if text.count(marker) != 1:
+              raise SystemExit(f"live event helper marker count drifted: {text.count(marker)}")
+          helper = "\n".join([
+              "fn push_journal_event(events: &mut Vec<Value>, event: &str, payload: Value) -> Result<(), String> {",
+              "    let sequence = events.len() + 1;",
+              "    events.push(json!({",
+              "        \"sequence\":sequence,",
+              "        \"event_type\":event,",
+              "        \"created_at\":now_seconds()?,",
+              "        \"payload\":payload,",
+              "    }));",
+              "    Ok(())",
+              "}",
+              "",
+          ])
+          text = text.replace(marker, helper + marker, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Prepare exact Rust 1.82 toolchain
+        run: rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+
+      - name: Format and compile live repair
+        run: |
+          cargo +1.82.0 fmt --all
+          cargo +1.82.0 check --locked -p syntavra-cli --bin syntavra
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+
+      - name: Require zero current fixture mismatches
+        shell: bash
+        run: |
+          python tools/validate_remaining71_agent_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/agent-differential.json \
+            > /tmp/agent-differential.log 2>&1
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/agent-differential.json').read_text(encoding='utf-8'))
+          differential = report.get('differential') or {}
+          count = int(differential.get('mismatch_count', 9999))
+          print(f"patched live agent mismatch_count={count}")
+          if count != 0 or not report.get('ok'):
+              for mismatch in differential.get('mismatches') or []:
+                  print(json.dumps(mismatch, ensure_ascii=False, sort_keys=True))
+              raise SystemExit(f"live agent differential remains nonzero: {count}")
+          PY
+
+      - name: Guard exact repair scope
+        shell: bash
+        run: |
+          git diff --check
+          git status --short
+          test "$(git status --short | awk '{print $2}')" = "crates/syntavra-cli/src/native_remaining71_agent_live.rs"
+
+      - name: Commit live repair
+        shell: bash
+        run: |
+          git config user.name "syntavra-ci"
+          git config user.email "syntavra-ci@users.noreply.github.com"
+          git add crates/syntavra-cli/src/native_remaining71_agent_live.rs
+          git commit -m "fix: align live agent product receipts"
+          git push origin HEAD:agent/r31-provider-capture-native

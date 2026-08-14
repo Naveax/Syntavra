@@ -1,4 +1,4 @@
-from .unified_cli import main
+from .engine_entry import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

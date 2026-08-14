@@ -1,0 +1,21 @@
+{
+  "authority": {
+    "claim_boundary": "representative behavior for all 10 selector strategies; native route count remains frozen",
+    "python_compactors": "syntavra_runtime/command_compactors.py",
+    "python_transcript": "syntavra_runtime/transcript_miner.py",
+    "rust_registry": "crates/syntavra-cli/src/cc_checkpoint_compactor_registry.inc"
+  },
+  "cases": [
+    {"command":"git status","fixture":"git-status","id":"git-status","strategy":"git_status"},
+    {"command":"git diff","fixture":"git-diff","id":"git-diff","strategy":"git_diff"},
+    {"command":"git log","fixture":"git-log","id":"git-log","strategy":"git_log"},
+    {"command":"env A=1 rg needle","fixture":"search","id":"search","strategy":"search"},
+    {"command":"ls","fixture":"table","id":"table","strategy":"table"},
+    {"command":"pytest","fixture":"test","id":"test","strategy":"test"},
+    {"command":"ruff check .","fixture":"lint","id":"lint","strategy":"lint"},
+    {"command":"aws x","fixture":"json-or-table","id":"json-or-table","strategy":"json_or_table"},
+    {"command":"docker build .","fixture":"docker-build","id":"docker-build","strategy":"docker_build"},
+    {"command":"curl https://example.invalid","fixture":"head-tail","id":"head-tail","strategy":"head_tail_selector"}
+  ],
+  "contract": "remaining71-competitive-compactor-strategy-v1"
+}

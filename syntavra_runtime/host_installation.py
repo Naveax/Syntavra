@@ -10,6 +10,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .codex_integration import (
+    CODEX_CONFIG_PATH,
+    CODEX_SKILL_PATH,
+    mcp_entry as codex_mcp_entry,
+    parse_config as parse_codex_config,
+    render_config as render_codex_config,
+    verify_entry as verify_codex_entry,
+)
 from .competitive_fabric import PlatformPlanBuilder
 from .host_adapters import KNOWN_HOSTS, host_spec, negotiate
 from .state import StateDB
@@ -46,9 +54,9 @@ class InstallationResult:
 class HostInstallationManager:
     """Atomic, reversible installer for Syntavra host integrations.
 
-    The manager only writes paths declared by HostCapabilities. Every write is staged,
-    backed up, recorded in SQLite, and rolled back on partial failure. Existing JSON
-    configuration is recursively merged; unrelated user keys are never discarded.
+    Every write is staged, backed up, recorded in SQLite and rolled back on partial
+    failure. Codex is handled through its current TOML/Agent-Skill contract; older
+    JSON hosts continue to use recursive merge semantics.
     """
 
     def __init__(
@@ -198,8 +206,34 @@ class HostInstallationManager:
             return "managed-text", self._managed_text(existing, source).encode("utf-8")
         return "skill-directory", self.skill_root
 
+    @staticmethod
+    def _paths(host: str) -> tuple[str, str]:
+        spec = host_spec(host)
+        if host == "codex":
+            return CODEX_CONFIG_PATH, CODEX_SKILL_PATH
+        return spec.config_path, spec.skill_path
+
     def plan(self, host: str, *, scope: str = "project") -> dict[str, Any]:
-        return PlatformPlanBuilder().plan(host, project=self.project, scope=scope)
+        normalized = host.casefold()
+        if normalized != "codex":
+            return PlatformPlanBuilder().plan(normalized, project=self.project, scope=scope)
+        spec = host_spec(normalized)
+        entry = codex_mcp_entry(("syntavra",), project=self.project, scope=scope)
+        return {
+            "host": "codex",
+            "display_name": spec.display_name,
+            "scope": scope,
+            "project": str(self.project),
+            "mode": negotiate("codex")["mode"],
+            "enforced": negotiate("codex")["enforced"],
+            "verified_adapter": spec.verified,
+            "files": [
+                {"path": CODEX_CONFIG_PATH, "format": "toml", "entry": entry},
+                {"path": f"{CODEX_SKILL_PATH}/SKILL.md", "source": "bundled syntavra skill"},
+            ],
+            "capabilities": {**asdict(spec), "config_path": CODEX_CONFIG_PATH, "skill_path": CODEX_SKILL_PATH},
+            "validation": ["codex mcp list", "syntavra status --doctor", "syntavra status"],
+        }
 
     def apply(self, host: str, *, scope: str = "project", dry_run: bool = False) -> InstallationResult:
         normalized = host.casefold()
@@ -212,28 +246,35 @@ class HostInstallationManager:
         transaction = self.storage / transaction_id
         changes: list[InstallationChange] = []
         staged: list[tuple[Path, str, bytes | Path, bool, str, str]] = []
+        config_path, skill_path = self._paths(normalized)
 
-        if spec.config_path:
-            target = self._safe_target(root, spec.config_path)
+        if config_path:
+            target = self._safe_target(root, config_path)
             if target.exists() and not target.is_file():
                 raise IsADirectoryError(target)
-            existing: dict[str, Any] = {}
-            if target.is_file():
-                try:
-                    loaded = json.loads(target.read_text(encoding="utf-8"))
-                except json.JSONDecodeError as exc:
-                    raise ValueError(f"host config is not valid JSON: {target}: {exc}") from exc
-                if not isinstance(loaded, Mapping):
-                    raise TypeError(f"host config root must be an object: {target}")
-                existing = dict(loaded)
-            overlay = next((row["merge"] for row in plan["files"] if row.get("path") == spec.config_path), {})
-            merged = self._merge(existing, overlay)
-            staged.append((target, "json-config", self._json_bytes(merged), target.exists(), self._digest(target), spec.config_path))
+            if normalized == "codex":
+                existing_text = target.read_text(encoding="utf-8", errors="strict") if target.is_file() else ""
+                entry = codex_mcp_entry(("syntavra",), project=self.project, scope=scope)
+                rendered = render_codex_config(existing_text, entry).encode("utf-8")
+                staged.append((target, "toml-config", rendered, target.exists(), self._digest(target), config_path))
+            else:
+                existing: dict[str, Any] = {}
+                if target.is_file():
+                    try:
+                        loaded = json.loads(target.read_text(encoding="utf-8"))
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"host config is not valid JSON: {target}: {exc}") from exc
+                    if not isinstance(loaded, Mapping):
+                        raise TypeError(f"host config root must be an object: {target}")
+                    existing = dict(loaded)
+                overlay = next((row["merge"] for row in plan["files"] if row.get("path") == config_path), {})
+                merged = self._merge(existing, overlay)
+                staged.append((target, "json-config", self._json_bytes(merged), target.exists(), self._digest(target), config_path))
 
-        if spec.skill_path:
-            target = self._safe_target(root, spec.skill_path)
+        if skill_path:
+            target = self._safe_target(root, skill_path)
             kind, payload = self._skill_payload(target)
-            staged.append((target, kind, payload, target.exists(), self._digest(target), spec.skill_path))
+            staged.append((target, kind, payload, target.exists(), self._digest(target), skill_path))
 
         if dry_run:
             for target, kind, payload, existed, before_hash, relative in staged:
@@ -314,10 +355,22 @@ class HostInstallationManager:
         root = self._root(scope)
         reasons: list[str] = []
         details: dict[str, Any] = {}
-        if spec.config_path:
-            target = self._safe_target(root, spec.config_path)
+        config_path, skill_path = self._paths(normalized)
+        if config_path:
+            target = self._safe_target(root, config_path)
             if not target.is_file():
                 reasons.append("missing-config")
+            elif normalized == "codex":
+                try:
+                    entry = parse_codex_config(target.read_text(encoding="utf-8", errors="strict"))
+                except (ValueError, UnicodeError):
+                    reasons.append("invalid-config-toml")
+                else:
+                    if not entry:
+                        reasons.append("missing-syntavra-mcp")
+                    else:
+                        reasons.extend(verify_codex_entry(entry, project=self.project, scope=scope))
+                details["config"] = {"path": config_path, "hash": self._digest(target), "format": "toml"}
             else:
                 try:
                     config = json.loads(target.read_text(encoding="utf-8"))
@@ -331,9 +384,9 @@ class HostInstallationManager:
                         hooks = config.get("hooks") if isinstance(config, Mapping) else None
                         if not isinstance(hooks, Mapping):
                             reasons.append("missing-hooks")
-                details["config"] = {"path": spec.config_path, "hash": self._digest(target)}
-        if spec.skill_path:
-            target = self._safe_target(root, spec.skill_path)
+                details["config"] = {"path": config_path, "hash": self._digest(target), "format": "json"}
+        if skill_path:
+            target = self._safe_target(root, skill_path)
             if not target.exists():
                 reasons.append("missing-skill")
             elif target.is_file():
@@ -342,7 +395,7 @@ class HostInstallationManager:
                     reasons.append("unmanaged-skill-file")
             elif not (target / "SKILL.md").is_file():
                 reasons.append("missing-skill-entrypoint")
-            details["skill"] = {"path": spec.skill_path, "hash": self._digest(target)}
+            details["skill"] = {"path": skill_path, "hash": self._digest(target)}
         return {
             "ok": not reasons,
             "host": normalized,

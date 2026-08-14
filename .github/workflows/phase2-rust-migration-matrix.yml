@@ -1,0 +1,225 @@
+name: Phase 2 Rust Migration Matrix
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase2-rust-migration-matrix
+  cancel-in-progress: true
+
+jobs:
+  phase2-rust-migration-matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run migration-matrix architecture regressions
+        run: |
+          python -m unittest \
+            tests.runtime.test_phase2_rust_migration_matrix \
+            tests.runtime.test_phase2_rust_migration_transition \
+            -v
+
+      - name: Re-certify frozen Python Phase 1 on this exact head
+        run: |
+          python tools/certify_python_phase1_acceptance.py \
+            --output /tmp/python-phase1-acceptance.json \
+            > /tmp/python-phase1-acceptance.log
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-phase1-acceptance.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['claim'] == 'PYTHON_PHASE1_ACCEPTED'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert len(value['route_semantics']) == 245
+          PY
+
+      - name: Derive canonical atomic public/native inventory
+        id: inventory
+        run: |
+          python tools/report_missing_native_public_routes.py \
+            > /tmp/remaining71-inventory.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/remaining71-inventory.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['python']['derived_count'] == 245
+          assert value['rust']['module_count'] == 150
+          assert value['rust']['extra_native_routes'] == []
+          state = (value['rust']['native_count'], value['rust']['missing_count'])
+          if state == (174, 71):
+              label = 'frozen-174-71'
+          elif state == (245, 0):
+              label = 'promoted-245-0'
+          else:
+              raise AssertionError(f'intermediate public/native inventory is forbidden: {state}')
+          assert len(value['missing_routes']) == state[1]
+          Path('/tmp/phase2-inventory-state.txt').write_text(label + '\n', encoding='utf-8')
+          PY
+          echo "state=$(cat /tmp/phase2-inventory-state.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Install pinned Rust 1.82
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal
+          rustc +1.82.0 --version
+          cargo +1.82.0 --version
+
+      - name: Compile Rust ownership probe
+        run: cargo +1.82.0 check --locked -p syntavra-cli --bins
+
+      - name: Prove endpoint-specific selector/set ownership
+        run: |
+          cargo +1.82.0 run --locked -p syntavra-cli \
+            --bin syntavra-remaining71-ownership \
+            -- /tmp/remaining71-inventory.json \
+            > /tmp/remaining71-ownership.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          inventory = json.loads(Path('/tmp/remaining71-inventory.json').read_text(encoding='utf-8'))
+          value = json.loads(Path('/tmp/remaining71-ownership.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['public_route_count'] == 245
+          state = (inventory['rust']['native_count'], inventory['rust']['missing_count'])
+          if state == (174, 71):
+              assert value['inventory_state'] == 'frozen-174-71'
+              assert value['native_route_count'] == 174
+              assert value['report_derived_remaining_count'] == 71
+              assert value['promoted_public_native_set_equality'] is False
+              assert value['owned_count'] == 71
+              assert value['unowned_count'] == 0
+              assert len(value['selector_paths']) == 71
+              assert value['owner_module_count'] == 71
+              assert len(value['owner_modules']) == 71
+              assert value['module_unowned_count'] == 0
+              assert value['module_unowned_routes'] == []
+              assert value['duplicate_owner_count'] == 0
+              assert value['duplicate_owner_routes'] == []
+              assert set(value['selector_paths']) == set(value['owner_modules']) == set(value['owner_candidates'])
+              assert all(value['owner_candidates'][route] == [owner] for route, owner in value['owner_modules'].items())
+          elif state == (245, 0):
+              assert value['inventory_state'] == 'promoted-245-0'
+              assert value['native_route_count'] == 245
+              assert value['report_derived_remaining_count'] == 0
+              assert value['promoted_public_native_set_equality'] is True
+              assert value['owned_count'] == 245
+              assert value['unowned_count'] == 0
+              assert len(value['selector_paths']) == 245
+              manifest_routes = {row['route'] for row in inventory['python']['manifest']}
+              assert set(value['selector_paths']) == manifest_routes
+              assert value['owner_module_count'] == 0
+              assert value['owner_modules'] == {}
+              assert value['owner_candidates'] == {}
+              assert value['module_unowned_count'] == 0
+              assert value['module_unowned_routes'] == []
+              assert value['duplicate_owner_count'] == 0
+              assert value['duplicate_owner_routes'] == []
+          else:
+              raise AssertionError(f'intermediate public/native inventory is forbidden: {state}')
+          PY
+
+      - name: Generate exact-head Phase 2 transition matrix
+        run: |
+          python tools/report_phase2_rust_migration_transition.py \
+            --phase1-acceptance /tmp/python-phase1-acceptance.json \
+            --inventory /tmp/remaining71-inventory.json \
+            --ownership /tmp/remaining71-ownership.json \
+            --output /tmp/phase2-rust-migration-matrix.json \
+            > /tmp/phase2-rust-migration-matrix.log
+          cat /tmp/phase2-rust-migration-matrix.log
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/phase2-rust-migration-matrix.json').read_text(encoding='utf-8'))
+          inventory = json.loads(Path('/tmp/remaining71-inventory.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['exact_head'] == checkout_head
+          summary = value['summary']
+          assert summary['public_routes'] == 245
+          assert summary['duplicate_routes'] == 0
+          assert summary['duplicate_lower_owner_routes'] == 0
+          assert summary['stale_remaining_selector_routes'] == 0
+          assert summary['missing_remaining_selector_routes'] == 0
+          assert summary['remaining_owner_module_unresolved'] == 0
+          assert len(value['matrix']) == 245
+          assert len({row['route'] for row in value['matrix']}) == 245
+
+          state = (inventory['rust']['native_count'], inventory['rust']['missing_count'])
+          if state == (174, 71):
+              assert value['inventory_state'] == 'frozen-174-71'
+              assert value['claim'] == 'PHASE2_RUST_MIGRATION_MATRIX_BASELINE'
+              assert summary['promoted_native'] == 174
+              assert summary['remaining'] == 71
+              assert summary['remaining_selector_owned'] == 71
+              assert summary['remaining_owner_module_owned'] == 71
+              assert summary['remaining_unowned'] == 0
+              remaining = [row for row in value['matrix'] if not row['production_native']]
+              assert len(remaining) == 71
+              assert all(row['rust_selector_owned'] is True for row in remaining)
+              assert all(row['rust_owner_module_owned'] is True for row in remaining)
+          elif state == (245, 0):
+              assert value['inventory_state'] == 'promoted-245-0'
+              assert value['claim'] == 'PHASE2_RUST_MIGRATION_COMPLETE'
+              assert summary['promoted_native'] == 245
+              assert summary['remaining'] == 0
+              assert summary['remaining_selector_owned'] == 0
+              assert summary['remaining_owner_module_owned'] == 0
+              assert summary['remaining_unowned'] == 0
+              assert all(row['production_native'] is True for row in value['matrix'])
+          else:
+              raise AssertionError(f'intermediate public/native inventory is forbidden: {state}')
+          PY
+
+      - name: Upload Phase 2 Rust migration transition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-rust-migration-matrix
+          path: |
+            /tmp/phase2-rust-migration-matrix.json
+            /tmp/phase2-rust-migration-matrix.log
+            /tmp/python-phase1-acceptance.json
+            /tmp/remaining71-inventory.json
+            /tmp/remaining71-ownership.json
+            /tmp/phase2-inventory-state.txt
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

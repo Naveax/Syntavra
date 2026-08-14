@@ -1,0 +1,38 @@
+name: R38 Native Gap Inventory
+
+on:
+  push:
+    branches:
+      - agent/r38-native-gap-inventory
+  pull_request:
+    branches:
+      - agent/r38-parent-gate-fixes-after-codex
+    paths:
+      - "tools/report_missing_native_public_routes.py"
+      - ".github/workflows/r38-native-gap-inventory.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout inventory head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install runtime
+        run: python -m pip install -e .
+
+      - name: Report missing native public routes
+        run: python tools/report_missing_native_public_routes.py

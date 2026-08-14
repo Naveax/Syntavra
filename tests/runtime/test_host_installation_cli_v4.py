@@ -3,11 +3,13 @@ from __future__ import annotations
 import io
 import json
 import tempfile
+import tomllib
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
 from syntavra_runtime.cli import main
+from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND
 
 
 class HostInstallationCLIV4Tests(unittest.TestCase):
@@ -41,7 +43,16 @@ class HostInstallationCLIV4Tests(unittest.TestCase):
         code, installed = self.run_cli("fabric", "install", "codex", "--home", str(self.home))
         self.assertEqual(code, 0)
         transaction_id = installed["transaction_id"]
-        self.assertTrue((self.project / ".codex" / "mcp.json").is_file())
+        config_path = self.project / ".codex" / "config.toml"
+        skill_path = self.project / ".agents" / "skills" / "syntavra" / "SKILL.md"
+        self.assertTrue(config_path.is_file())
+        self.assertTrue(skill_path.is_file())
+        config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        entry = config["mcp_servers"]["syntavra"]
+        self.assertEqual(entry["command"], "syntavra")
+        self.assertEqual(entry["args"], [CODEX_BRIDGE_COMMAND])
+        self.assertEqual(entry["cwd"], str(self.project.resolve()))
+        self.assertEqual(entry["env"]["SYNTAVRA_PROJECT"], str(self.project.resolve()))
 
         code, verified = self.run_cli("fabric", "verify-install", "codex", "--home", str(self.home))
         self.assertEqual(code, 0)
@@ -54,7 +65,8 @@ class HostInstallationCLIV4Tests(unittest.TestCase):
         code, rolled = self.run_cli("fabric", "rollback-install", transaction_id, "--home", str(self.home))
         self.assertEqual(code, 0)
         self.assertEqual(rolled["status"], "rolled-back")
-        self.assertFalse((self.project / ".codex" / "mcp.json").exists())
+        self.assertFalse(config_path.exists())
+        self.assertFalse(skill_path.exists())
 
     def test_install_dry_run_writes_nothing(self):
         code, result = self.run_cli("fabric", "install", "claude-code", "--dry-run")

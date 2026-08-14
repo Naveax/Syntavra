@@ -1,0 +1,152 @@
+name: Python Capability Inventory Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-capability-inventory-reference
+  cancel-in-progress: true
+
+jobs:
+  python-capability-inventory-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python capability/inventory regression tests
+        run: python -m unittest tests.runtime.test_python_capability_inventory_reference -v
+
+      - name: Generate exact-head Python capability/inventory evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_capability_inventory_reference.py \
+            --output /tmp/python-capability-inventory-reference.json \
+            > /tmp/python-capability-inventory-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-capability-inventory-reference.log
+          test -f /tmp/python-capability-inventory-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-capability-inventory-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'capability-inventory'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['exit_policy'] == {
+              'success': 0,
+              'verification_failure': 3,
+              'argument_parser_error': 2,
+          }
+
+          inventory = value['inventory']
+          assert inventory['route_count'] == 245, inventory
+          assert inventory['duplicate_routes'] == 0, inventory
+          assert inventory['namespace_dest_collisions'] == 0, inventory
+          assert inventory['unknown_source_rows'] == 0, inventory
+          assert inventory['unowned_routes'] == 0, inventory
+          assert inventory['capability_routes'] == [
+              'run capability-decide',
+              'run capability-issue',
+              'run capability-verify',
+          ]
+          assert len(inventory['command_paths_sha256']) == 64
+          assert len(inventory['ownership_sha256']) == 64
+
+          capability = value['capability']
+          assert capability['decisions']['read']['allowed'] is True
+          assert capability['decisions']['write_authorization_required']['reason'] == 'authorization-required'
+          assert capability['decisions']['write_allowed']['allowed'] is True
+          assert capability['decisions']['execute_sandbox_required']['reason'] == 'sandbox-required'
+          assert capability['decisions']['execute_allowed']['category'] == 'execute'
+          assert capability['decisions']['destructive_denied']['reason'] == 'destructive-command-denied'
+          assert capability['decisions']['outside_workspace_denied']['reason'] == 'resource-outside-workspace'
+          assert capability['decisions']['network_denied']['reason'] == 'network-host-not-allowlisted'
+          assert capability['decisions']['unknown_tool_denied']['allowed'] is False
+          assert capability['decisions']['unknown_tool_denied']['category'] == 'unknown'
+          assert capability['decisions']['unknown_tool_denied']['reason'] == 'unknown-tool-fail-closed'
+
+          assert capability['issue']['top_level_keys'] == ['ok', 'single_use', 'token']
+          assert capability['issue']['capability']['ttl_seconds'] == 300
+          assert capability['issue']['capability']['permissions'] == ['evidence', 'write']
+          assert capability['verify']['first']['reason'] == 'verified'
+          assert capability['verify']['first']['exit'] == 0
+          assert capability['verify']['replay']['reason'] == 'already-consumed'
+          assert capability['verify']['replay']['exit'] == 3
+          assert capability['verify']['binding_mismatch']['reason'] == 'binding-mismatch'
+          assert capability['verify']['binding_mismatch']['exit'] == 3
+          assert capability['verify']['expired']['reason'] == 'expired'
+          assert capability['verify']['expired']['exit'] == 3
+          assert capability['verify']['malformed'] == {
+              'exit': 3,
+              'ok': False,
+              'reason': 'malformed-token',
+              'top_level_keys': ['ok', 'reason'],
+          }
+          assert capability['verify']['invalid_signature'] == {
+              'exit': 3,
+              'ok': False,
+              'reason': 'invalid-signature',
+              'top_level_keys': ['ok', 'reason'],
+          }
+          assert capability['verify']['reason_vocabulary'] == [
+              'already-consumed',
+              'binding-mismatch',
+              'expired',
+              'invalid-signature',
+              'malformed-token',
+              'verified',
+          ]
+          assert capability['durable_side_effects'] == {
+              'signing_key_bytes': 32,
+              'consumed_rows': 1,
+              'consumed_nonce_matches_issued_token': True,
+              'store': 'sqlite',
+          }
+          assert capability['parser_error']['exit'] == 2
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python capability/inventory reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-capability-inventory-reference
+          path: |
+            /tmp/python-capability-inventory-reference.json
+            /tmp/python-capability-inventory-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
