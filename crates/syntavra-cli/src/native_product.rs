@@ -186,10 +186,6 @@ mod telemetry_metrics_contract;
 
 include!("cc_checkpoint.inc");
 
-fn bulk_parity_probe_enabled() -> bool {
-    std::env::var_os("SYNTAVRA_BULK_PARITY_PROBE").is_some_and(|value| value == "1")
-}
-
 pub fn supports(command: &[String]) -> bool {
     native_analytics::supports(command)
         || native_backup::supports(command)
@@ -227,18 +223,18 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_verify_install::supports(command)
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
-        || (bulk_parity_probe_enabled() && native_remaining71_memory::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_platform_misc::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_security::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_proof::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_graph::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_agent::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_agent_live::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_context::supports(command))
-        || (bulk_parity_probe_enabled() && native_remaining71_headless::supports(command))
+        || (native_remaining71_memory::supports(command))
+        || (native_remaining71_platform_misc::supports(command))
+        || (native_remaining71_security::supports(command))
+        || (native_remaining71_sandbox::supports(command))
+        || (native_remaining71_proxy::supports(command))
+        || (native_remaining71_proof::supports(command))
+        || (native_remaining71_graph::supports(command))
+        || (native_remaining71_agent::supports(command))
+        || (native_remaining71_agent_live::supports(command))
+        || (native_remaining71_competitive::supports(command))
+        || (native_remaining71_context::supports(command))
+        || (native_remaining71_headless::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -398,10 +394,10 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    if bulk_parity_probe_enabled() && cc_checkpoint_supports(command) {
+    if cc_checkpoint_supports(command) {
         return cc_checkpoint_execute(command, &arguments);
     }
-    if bulk_parity_probe_enabled() && native_remaining71_memory::supports(command) {
+    if native_remaining71_memory::supports(command) {
         return match native_remaining71_memory::execute(
             command,
             &arguments,
@@ -426,7 +422,7 @@ pub fn execute(
             ),
         };
     }
-    if bulk_parity_probe_enabled() && native_remaining71_platform_misc::supports(command) {
+    if native_remaining71_platform_misc::supports(command) {
         return native_remaining71_platform_misc::execute(
             command,
             &arguments,
@@ -434,7 +430,7 @@ pub fn execute(
             state_root,
         );
     }
-    if bulk_parity_probe_enabled() && native_remaining71_security::supports(command) {
+    if native_remaining71_security::supports(command) {
         if let Some(value) = native_remaining71_security::execute(command, &arguments, state_root)?
         {
             if command.len() == 2
@@ -448,7 +444,7 @@ pub fn execute(
         }
         return Ok(None);
     }
-    if bulk_parity_probe_enabled() && native_remaining71_sandbox::supports(command) {
+    if native_remaining71_sandbox::supports(command) {
         if let Some(decision) =
             native_remaining71_sandbox::execute(command, &arguments, project_root, state_root)?
         {
@@ -458,10 +454,10 @@ pub fn execute(
             return Ok(Some(decision.value));
         }
     }
-    if bulk_parity_probe_enabled() && native_remaining71_proxy::supports(command) {
+    if native_remaining71_proxy::supports(command) {
         return native_remaining71_proxy::execute(command, &arguments, project_root, state_root);
     }
-    if bulk_parity_probe_enabled() && native_remaining71_proof::supports(command) {
+    if native_remaining71_proof::supports(command) {
         if let Some(decision) = native_remaining71_proof::execute(command, &arguments)? {
             if decision.exit_code != 0 {
                 emit_failed_decision(&decision.value, decision.exit_code);
@@ -469,13 +465,13 @@ pub fn execute(
             return Ok(Some(decision.value));
         }
     }
-    if bulk_parity_probe_enabled() && native_remaining71_graph::supports(command) {
+    if native_remaining71_graph::supports(command) {
         return native_remaining71_graph::execute(command, &arguments, project_root, state_root);
     }
-    if bulk_parity_probe_enabled() && native_remaining71_agent::supports(command) {
+    if native_remaining71_agent::supports(command) {
         return native_remaining71_agent::execute(command, &arguments, project_root, state_root);
     }
-    if bulk_parity_probe_enabled() && native_remaining71_agent_live::supports(command) {
+    if native_remaining71_agent_live::supports(command) {
         return native_remaining71_agent_live::execute(
             command,
             &arguments,
@@ -483,7 +479,7 @@ pub fn execute(
             state_root,
         );
     }
-    if bulk_parity_probe_enabled() && native_remaining71_competitive::supports(command) {
+    if native_remaining71_competitive::supports(command) {
         return native_remaining71_competitive::execute(
             command,
             &arguments,
@@ -491,10 +487,10 @@ pub fn execute(
             state_root,
         );
     }
-    if bulk_parity_probe_enabled() && native_remaining71_context::supports(command) {
+    if native_remaining71_context::supports(command) {
         return native_remaining71_context::execute(command, &arguments, state_root);
     }
-    if bulk_parity_probe_enabled() && native_remaining71_headless::supports(command) {
+    if native_remaining71_headless::supports(command) {
         return native_remaining71_headless::execute(command, &arguments, project_root, state_root);
     }
     if native_analytics::supports(command) {

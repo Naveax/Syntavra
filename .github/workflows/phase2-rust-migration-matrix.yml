@@ -131,9 +131,11 @@ jobs:
               assert value['native_route_count'] == 245
               assert value['report_derived_remaining_count'] == 0
               assert value['promoted_public_native_set_equality'] is True
-              assert value['owned_count'] == 0
+              assert value['owned_count'] == 245
               assert value['unowned_count'] == 0
-              assert value['selector_paths'] == {}
+              assert len(value['selector_paths']) == 245
+              manifest_routes = {row['route'] for row in inventory['python']['manifest']}
+              assert set(value['selector_paths']) == manifest_routes
               assert value['owner_module_count'] == 0
               assert value['owner_modules'] == {}
               assert value['owner_candidates'] == {}

@@ -50,7 +50,7 @@ def _validate_promoted_ownership(ownership: dict[str, Any]) -> None:
         "public_route_count": 245,
         "native_route_count": 245,
         "report_derived_remaining_count": 0,
-        "owned_count": 0,
+        "owned_count": 245,
         "unowned_count": 0,
         "owner_module_count": 0,
         "module_unowned_count": 0,
@@ -69,7 +69,10 @@ def _validate_promoted_ownership(ownership: dict[str, Any]) -> None:
     ):
         if ownership.get(key) != []:
             raise AssertionError(f"promoted ownership {key} must be empty")
-    for key in ("selector_paths", "owner_modules", "owner_candidates"):
+    selector_paths = ownership.get("selector_paths")
+    if not isinstance(selector_paths, dict) or len(selector_paths) != 245:
+        raise AssertionError("promoted ownership selector_paths must prove all 245 routes")
+    for key in ("owner_modules", "owner_candidates"):
         if ownership.get(key) != {}:
             raise AssertionError(f"promoted ownership {key} must be empty")
 
@@ -100,6 +103,10 @@ def _build_promoted(
         raise AssertionError("promoted inventory must have zero extra native routes")
     _validate_promoted_ownership(ownership)
 
+    selector_paths = ownership["selector_paths"]
+    if set(selector_paths) != canonical_routes:
+        raise AssertionError("promoted production selector proof must cover the exact canonical route set")
+
     manifest = list(python.get("manifest") or [])
     manifest_routes = [row.get("route") for row in manifest if isinstance(row, dict)]
     if len(manifest_routes) != 245 or set(manifest_routes) != canonical_routes:
@@ -115,10 +122,10 @@ def _build_promoted(
                 "python_entrypoint": python_row.get("entrypoint"),
                 "python_sources": python_row.get("sources"),
                 "rust_selector": route,
-                "rust_selector_components": route.split(),
-                "rust_selector_resolution": "promoted-contract-route-identity",
-                "rust_owner_boundary": "dual-engine-public-surface-v2.native_public_commands",
-                "rust_owner_module": "promoted-native-contract",
+                "rust_selector_components": selector_paths[route],
+                "rust_selector_resolution": "production-selector-owned",
+                "rust_owner_boundary": "production-selector",
+                "rust_owner_module": "production-selector",
                 "rust_selector_owned": True,
                 "rust_owner_module_owned": True,
                 "production_native": True,
@@ -145,7 +152,7 @@ def _build_promoted(
         },
         "authority": {
             "route_identity": contract["rust_baseline"]["remaining_authority"],
-            "promoted_set_equality": "tools/report_missing_native_public_routes.py + syntavra-remaining71-ownership",
+            "promoted_set_equality": "canonical inventory + production selector ownership audit",
             "hardcoded_remaining_route_list": False,
         },
         "summary": {
@@ -161,12 +168,15 @@ def _build_promoted(
             "missing_remaining_selector_routes": 0,
             "remaining_owner_module_unresolved": 0,
             "atomic_promotion_target": 245,
+            "public_selector_owned": 245,
+            "public_selector_unowned": 0,
         },
         "matrix": rows,
         "claim_boundary": (
             "This transition receipt proves the canonical 245-route Python identity is exactly the "
-            "promoted native set with zero bridge/missing/extra routes. Behavioral parity still "
-            "requires the final exact-head family differential gates."
+            "promoted native set with zero bridge/missing/extra routes and that all 245 canonical "
+            "routes are owned by the production Rust selector without an activation probe flag. "
+            "Behavioral parity still requires the final exact-head family differential gates."
         ),
     }
 

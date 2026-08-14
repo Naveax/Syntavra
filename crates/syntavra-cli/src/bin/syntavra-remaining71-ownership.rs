@@ -81,14 +81,54 @@ struct InventoryReport {
 }
 
 fn selector_path(route: &str) -> Vec<String> {
-    // The public selector owns these remaining routes at two components. The
-    // third component on language/proxy-service routes is an action consumed by
-    // the already-selected native family, not a separate engine selector path.
-    route
+    let mut positional = route
         .split_whitespace()
-        .take(2)
         .map(str::to_owned)
-        .collect()
+        .collect::<Vec<_>>();
+    if matches!(
+        positional.first().map(String::as_str),
+        Some("rollout-tail" | "context-stress" | "claim" | "context" | "init" | "hook" | "mcp")
+    ) {
+        positional.truncate(1);
+    } else if positional.first().map(String::as_str) == Some("engine")
+        && positional.get(1).map(String::as_str) == Some("route")
+    {
+        positional.truncate(3);
+    } else {
+        positional.truncate(2);
+    }
+    positional
+}
+
+
+fn production_selector_owns(route: &str, command: &[String]) -> bool {
+    // The top-level selector consumes engine management actions before
+    // run_selected()/native_product dispatch. They are native selector-owned,
+    // but intentionally are not native_product::supports() routes.
+    if matches!(
+        command,
+        [engine, action]
+            if engine == "engine"
+                && matches!(action.as_str(), "list" | "status" | "use" | "verify")
+    ) {
+        return true;
+    }
+
+    // "engine route" is a canonical parser leaf with a required positional
+    // route name. Production dispatch owns the family at three components via
+    // native_engine_route_control::supports(). Probe that family with a
+    // deliberately non-certified route name: ownership is what is being
+    // audited here, not successful execution of a particular route payload.
+    if route == "engine route" {
+        let family_probe = vec![
+            "engine".to_owned(),
+            "route".to_owned(),
+            "__ownership_probe__".to_owned(),
+        ];
+        return native_product::supports(&family_probe);
+    }
+
+    native_product::supports(command)
 }
 
 fn remaining71_owner_modules(command: &[String]) -> Vec<&'static str> {
@@ -311,7 +351,7 @@ fn fail(message: &str) -> ExitCode {
         serde_json::to_string_pretty(&json!({
             "ok": false,
             "error": message,
-            "claim_boundary": "selector/lower-module ownership in the frozen state and exact public/native set equality in the promoted state; behavioral parity still requires differential execution",
+            "claim_boundary": "production selector ownership for the canonical route set, plus lower-module ownership for frozen remaining routes; behavioral parity still requires differential execution",
         }))
         .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
     );
@@ -319,8 +359,6 @@ fn fail(message: &str) -> ExitCode {
 }
 
 fn main() -> ExitCode {
-    std::env::set_var("SYNTAVRA_BULK_PARITY_PROBE", "1");
-
     let Some(report_path) = std::env::args_os().nth(1) else {
         return fail("usage: syntavra-remaining71-ownership <inventory-report.json>");
     };
@@ -329,7 +367,11 @@ fn main() -> ExitCode {
         Ok(report) => report,
         Err(error) => return fail(&error),
     };
-    let routes = &report.remaining_routes;
+    let selector_routes = match report.state {
+        InventoryState::Frozen => &report.remaining_routes,
+        InventoryState::Promoted => &report.public_routes,
+    };
+    let lower_module_routes = &report.remaining_routes;
 
     let mut unowned = Vec::<String>::new();
     let mut ownership = BTreeMap::<String, bool>::new();
@@ -339,17 +381,20 @@ fn main() -> ExitCode {
     let mut duplicate_owner_routes = Vec::<String>::new();
     let mut module_unowned_routes = Vec::<String>::new();
 
-    for route in routes {
+    for route in selector_routes {
         let path = selector_path(route);
-        let owned = native_product::supports(&path);
-        let candidates = remaining71_owner_modules(&path);
+        let owned = production_selector_owns(route, &path);
         ownership.insert(route.clone(), owned);
         selector_paths.insert(route.clone(), path);
-        owner_candidates.insert(route.clone(), candidates.clone());
-
         if !owned {
             unowned.push(route.clone());
         }
+    }
+
+    for route in lower_module_routes {
+        let path = selector_path(route);
+        let candidates = remaining71_owner_modules(&path);
+        owner_candidates.insert(route.clone(), candidates.clone());
         match candidates.as_slice() {
             [owner] => {
                 owner_modules.insert(route.clone(), (*owner).to_owned());
@@ -362,7 +407,9 @@ fn main() -> ExitCode {
     let promoted_set_equality = report.state == InventoryState::Promoted
         && report.native_count == EXPECTED_PUBLIC_ROUTE_COUNT
         && report.public_routes.len() == EXPECTED_PUBLIC_ROUTE_COUNT as usize
-        && routes.is_empty();
+        && report.remaining_routes.is_empty()
+        && ownership.len() == EXPECTED_PUBLIC_ROUTE_COUNT as usize
+        && unowned.is_empty();
     let ok = match report.state {
         InventoryState::Frozen => {
             unowned.is_empty()
@@ -379,11 +426,12 @@ fn main() -> ExitCode {
         serde_json::to_string_pretty(&json!({
             "ok": ok,
             "authority": "tools/report_missing_native_public_routes.py canonical report",
+            "selector_authority": "syntavra.rs engine_command for engine management; native_product::supports for native product routes; native_engine_route_control family ownership for the engine route parser leaf",
             "module_authority": "production Rust modules' supports() predicates for frozen remaining routes",
             "inventory_state": report.state.label(),
             "public_route_count": EXPECTED_PUBLIC_ROUTE_COUNT,
             "native_route_count": report.native_count,
-            "report_derived_remaining_count": routes.len(),
+            "report_derived_remaining_count": report.remaining_routes.len(),
             "promoted_public_native_set_equality": promoted_set_equality,
             "owned_count": ownership.values().filter(|value| **value).count(),
             "unowned_count": unowned.len(),
@@ -396,8 +444,8 @@ fn main() -> ExitCode {
             "module_unowned_routes": module_unowned_routes,
             "duplicate_owner_count": duplicate_owner_routes.len(),
             "duplicate_owner_routes": duplicate_owner_routes,
-            "probe_environment": "SYNTAVRA_BULK_PARITY_PROBE=1",
-            "claim_boundary": "selector/lower-module ownership in the frozen state and exact public/native set equality in the promoted state; behavioral parity still requires differential execution",
+            "probe_environment": "production selector; no activation probe flag",
+            "claim_boundary": "production selector ownership for the canonical route set, plus lower-module ownership for frozen remaining routes; behavioral parity still requires differential execution",
         }))
         .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
     );
@@ -411,7 +459,10 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{inventory_state, remaining71_owner_modules, selector_path, InventoryState};
+    use super::{
+        inventory_state, production_selector_owns, remaining71_owner_modules, selector_path,
+        InventoryState,
+    };
 
     #[test]
     fn inventory_state_accepts_only_atomic_endpoints() {
@@ -438,6 +489,25 @@ mod tests {
             vec!["run", "proxy-service"]
         );
         assert_eq!(selector_path("provider proxy"), vec!["provider", "proxy"]);
+        assert_eq!(
+            selector_path("engine route config.show"),
+            vec!["engine", "route", "config.show"]
+        );
+        assert_eq!(selector_path("context evaluate"), vec!["context"]);
+    }
+
+    #[test]
+    fn production_selector_accounts_for_engine_management_and_route_family() {
+        for action in ["list", "status", "use", "verify"] {
+            let route = format!("engine {action}");
+            let path = selector_path(&route);
+            assert!(production_selector_owns(&route, &path), "route={route}");
+        }
+
+        let route = "engine route";
+        let path = selector_path(route);
+        assert_eq!(path, vec!["engine", "route"]);
+        assert!(production_selector_owns(route, &path));
     }
 
     #[test]
@@ -449,12 +519,12 @@ mod tests {
             "run sandbox-run",
             "provider capture",
             "provider proxy",
-            "run benchmark-gate",
+            "benchmark compare",
             "run graph-query",
             "run agent-plan",
             "agent run",
             "run rewrite",
-            "run context evaluate",
+            "run context-compile",
             "run headless-run",
         ] {
             let path = selector_path(route);

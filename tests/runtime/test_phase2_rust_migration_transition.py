@@ -43,7 +43,7 @@ class Phase2RustMigrationTransitionTests(unittest.TestCase):
             "public_route_count": 245,
             "native_route_count": 245,
             "report_derived_remaining_count": 0,
-            "owned_count": 0,
+            "owned_count": 245,
             "unowned_count": 0,
             "owner_module_count": 0,
             "module_unowned_count": 0,
@@ -52,13 +52,14 @@ class Phase2RustMigrationTransitionTests(unittest.TestCase):
             "unowned_routes": [],
             "module_unowned_routes": [],
             "duplicate_owner_routes": [],
-            "selector_paths": {},
+            "selector_paths": {f"run route-{index}": ["run", f"route-{index}"] for index in range(245)},
             "owner_modules": {},
             "owner_candidates": {},
         }
         transition._validate_promoted_ownership(ownership)
         for key, bad_value in [
             ("native_route_count", 244),
+            ("owned_count", 244),
             ("report_derived_remaining_count", 1),
             ("promoted_public_native_set_equality", False),
             ("selector_paths", {"run fake": ["run", "fake"]}),

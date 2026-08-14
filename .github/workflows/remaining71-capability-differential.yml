@@ -94,7 +94,9 @@ jobs:
               assert ownership.get('native_route_count') == 245, ownership
               assert ownership.get('report_derived_remaining_count') == 0, ownership
               assert ownership.get('promoted_public_native_set_equality') is True, ownership
-              boundary = 'promoted-public-native-set-equality'
+              assert ownership.get('owned_count') == 245, ownership
+              assert len(ownership.get('selector_paths') or {}) == 245, ownership
+              boundary = 'promoted-production-selector-ownership'
           else:
               raise AssertionError(f'unexpected inventory state: {state!r}')
 
