@@ -43,7 +43,7 @@ def _state_root(args: argparse.Namespace) -> Path:
 
 
 def _skill_root(args: argparse.Namespace) -> Path:
-    configured = getattr(args, "skill_root", None)
+    configured = getattr(args, "fabric_skill_root", None) or getattr(args, "skill_root", None)
     if configured:
         return Path(configured).resolve(strict=True)
     bundled = Path(__file__).resolve().parent.parent / "skills" / "syntavra"
@@ -309,7 +309,7 @@ def add_competitive_commands(
     install = fs.add_parser("install", help="Atomically install Syntavra into a host")
     install.add_argument("host_name")
     install.add_argument("--scope", choices=("project", "user"), default="project")
-    install.add_argument("--skill-root")
+    install.add_argument("--skill-root", dest="fabric_skill_root")
     install.add_argument("--home")
     install.add_argument("--dry-run", action="store_true")
     install.add_argument("--output")
@@ -317,20 +317,20 @@ def add_competitive_commands(
     verify_install = fs.add_parser("verify-install", help="Verify an installed host integration")
     verify_install.add_argument("host_name")
     verify_install.add_argument("--scope", choices=("project", "user"), default="project")
-    verify_install.add_argument("--skill-root")
+    verify_install.add_argument("--skill-root", dest="fabric_skill_root")
     verify_install.add_argument("--home")
     verify_install.add_argument("--output")
 
     rollback_install = fs.add_parser("rollback-install", help="Rollback one host installation transaction")
     rollback_install.add_argument("transaction_id")
-    rollback_install.add_argument("--skill-root")
+    rollback_install.add_argument("--skill-root", dest="fabric_skill_root")
     rollback_install.add_argument("--home")
     rollback_install.add_argument("--output")
 
     installations = fs.add_parser("installations", help="List auditable host installation transactions")
     installations.add_argument("--host-name")
     installations.add_argument("--limit", type=int, default=20)
-    installations.add_argument("--skill-root")
+    installations.add_argument("--skill-root", dest="fabric_skill_root")
     installations.add_argument("--home")
     installations.add_argument("--output")
 

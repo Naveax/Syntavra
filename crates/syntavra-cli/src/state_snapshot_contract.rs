@@ -78,13 +78,25 @@ fn normalize_absolute_path(path: &Path) -> Result<String, String> {
         .to_str()
         .ok_or_else(|| "STATE_PROJECT_ROOT_UTF8_INVALID".to_owned())?;
     if cfg!(windows) {
-        let mut normalized = value.replace('/', "\\");
-        if let Some(rest) = normalized.strip_prefix(r"\\?\UNC\") {
-            normalized = format!(r"\\{rest}");
-        } else if let Some(rest) = normalized.strip_prefix(r"\\?\") {
+        // Match syntavra_runtime.state_snapshot_contract exactly. Project identity
+        // is a cross-engine byte contract, not a Windows path-equivalence oracle:
+        // use forward slashes, remove the extended-path prefix, and normalize only
+        // the drive letter. Preserve the remaining path case so Rust hashes the
+        // same bytes as the Python reference implementation.
+        let mut normalized = value.replace('\\', "/");
+        if let Some(rest) = normalized.strip_prefix("//?/") {
             normalized = rest.to_owned();
         }
-        return Ok(normalized.to_lowercase());
+        if normalized.len() >= 3 {
+            let bytes = normalized.as_bytes();
+            if bytes[1] == b':' && bytes[2] == b'/' {
+                let mut owned = normalized.into_bytes();
+                owned[0] = owned[0].to_ascii_lowercase();
+                normalized = String::from_utf8(owned)
+                    .map_err(|_| "STATE_PROJECT_ROOT_UTF8_INVALID".to_owned())?;
+            }
+        }
+        return Ok(normalized);
     }
     Ok(value.to_owned())
 }
@@ -270,14 +282,14 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn windows_path_identity_matches_python_normcase() {
+    fn windows_path_identity_matches_python_reference_bytes() {
         assert_eq!(
             normalize_absolute_path(Path::new(r"\\?\C:\Users\MiXeD\Repo")).expect("path"),
-            r"c:\users\mixed\repo"
+            "c:/Users/MiXeD/Repo"
         );
         assert_eq!(
             normalize_absolute_path(Path::new(r"\\?\UNC\Server\Share\Repo")).expect("unc"),
-            r"\\server\share\repo"
+            "UNC/Server/Share/Repo"
         );
     }
 

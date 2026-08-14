@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from .crypto import KeyRing, open_sealed_file, seal_file
+from .crypto import CryptoError, KeyRing, open_sealed_file, seal_file
 from .util import atomic_write_json, sha256_file
 
 
@@ -156,11 +156,14 @@ class StateBackupManager:
         if not encrypted:
             return source
         from .crypto import inspect_sealed_file
-        info = inspect_sealed_file(source)
-        key = self.keyring.get(info.key_id)
-        archive = temp / "state.tar"
-        open_sealed_file(source, archive, master_key=key, project_id=self.project_id)
-        return archive
+        try:
+            info = inspect_sealed_file(source)
+            key = self.keyring.get(info.key_id)
+            archive = temp / "state.tar"
+            open_sealed_file(source, archive, master_key=key, project_id=self.project_id)
+            return archive
+        except CryptoError as exc:
+            raise BackupError(f"invalid encrypted backup: {exc}") from exc
 
     @staticmethod
     def _safe_extract(archive: Path, destination: Path) -> None:

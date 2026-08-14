@@ -109,6 +109,30 @@ mod native_proxy_plan;
 mod native_read_only_product;
 #[path = "native_redact.rs"]
 mod native_redact;
+#[path = "native_remaining71_agent.rs"]
+mod native_remaining71_agent;
+#[path = "native_remaining71_agent_live.rs"]
+mod native_remaining71_agent_live;
+#[path = "native_remaining71_competitive.rs"]
+mod native_remaining71_competitive;
+#[path = "native_remaining71_context.rs"]
+mod native_remaining71_context;
+#[path = "native_remaining71_graph.rs"]
+mod native_remaining71_graph;
+#[path = "native_remaining71_headless.rs"]
+mod native_remaining71_headless;
+#[path = "native_remaining71_memory.rs"]
+mod native_remaining71_memory;
+#[path = "native_remaining71_platform_misc.rs"]
+mod native_remaining71_platform_misc;
+#[path = "native_remaining71_proof.rs"]
+mod native_remaining71_proof;
+#[path = "native_remaining71_proxy.rs"]
+mod native_remaining71_proxy;
+#[path = "native_remaining71_sandbox.rs"]
+mod native_remaining71_sandbox;
+#[path = "native_remaining71_security.rs"]
+mod native_remaining71_security;
 #[path = "native_route.rs"]
 mod native_route;
 #[path = "native_run_adapter_certify.rs"]
@@ -143,6 +167,8 @@ mod native_signalbench_plan;
 mod native_static_surfaces;
 #[path = "native_statusline.rs"]
 mod native_statusline;
+#[path = "native_structural.rs"]
+mod native_structural;
 #[path = "native_upgrade.rs"]
 mod native_upgrade;
 #[path = "native_wire.rs"]
@@ -157,6 +183,8 @@ mod scheduler_read_only_contract;
 mod state_snapshot_contract;
 #[path = "telemetry_metrics_contract.rs"]
 mod telemetry_metrics_contract;
+
+include!("cc_checkpoint.inc");
 
 pub fn supports(command: &[String]) -> bool {
     native_analytics::supports(command)
@@ -195,6 +223,18 @@ pub fn supports(command: &[String]) -> bool {
         || native_fabric_verify_install::supports(command)
         || native_fabric_route::supports(command)
         || native_expansion::supports(command)
+        || (native_remaining71_memory::supports(command))
+        || (native_remaining71_platform_misc::supports(command))
+        || (native_remaining71_security::supports(command))
+        || (native_remaining71_sandbox::supports(command))
+        || (native_remaining71_proxy::supports(command))
+        || (native_remaining71_proof::supports(command))
+        || (native_remaining71_graph::supports(command))
+        || (native_remaining71_agent::supports(command))
+        || (native_remaining71_agent_live::supports(command))
+        || (native_remaining71_competitive::supports(command))
+        || (native_remaining71_context::supports(command))
+        || (native_remaining71_headless::supports(command))
         || native_session_continuity::supports(command)
         || native_session_mutations::supports(command)
         || native_session_status::supports(command)
@@ -354,6 +394,105 @@ pub fn execute(
     state_root: &Path,
 ) -> Result<Option<Value>, String> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if cc_checkpoint_supports(command) {
+        return cc_checkpoint_execute(command, &arguments);
+    }
+    if native_remaining71_memory::supports(command) {
+        return match native_remaining71_memory::execute(
+            command,
+            &arguments,
+            project_root,
+            state_root,
+        ) {
+            Ok(value) => Ok(value),
+            Err(error) => emit_failed_decision(
+                &serde_json::json!({
+                    "ok": false,
+                    "error": {
+                        "code": "PYTHON_PUBLIC_COMMAND_FAILED",
+                        "message": "The selected Python engine failed while executing the public command.",
+                        "details": {
+                            "command": command.first().map(String::as_str).unwrap_or(""),
+                            "error": error,
+                            "fallback": "forbidden"
+                        }
+                    }
+                }),
+                4,
+            ),
+        };
+    }
+    if native_remaining71_platform_misc::supports(command) {
+        return native_remaining71_platform_misc::execute(
+            command,
+            &arguments,
+            project_root,
+            state_root,
+        );
+    }
+    if native_remaining71_security::supports(command) {
+        if let Some(value) = native_remaining71_security::execute(command, &arguments, state_root)?
+        {
+            if command.len() == 2
+                && command[0] == "run"
+                && command[1] == "capability-verify"
+                && value["ok"].as_bool() == Some(false)
+            {
+                emit_failed_decision(&value, 3);
+            }
+            return Ok(Some(value));
+        }
+        return Ok(None);
+    }
+    if native_remaining71_sandbox::supports(command) {
+        if let Some(decision) =
+            native_remaining71_sandbox::execute(command, &arguments, project_root, state_root)?
+        {
+            if decision.exit_code != 0 {
+                emit_failed_decision(&decision.value, decision.exit_code);
+            }
+            return Ok(Some(decision.value));
+        }
+    }
+    if native_remaining71_proxy::supports(command) {
+        return native_remaining71_proxy::execute(command, &arguments, project_root, state_root);
+    }
+    if native_remaining71_proof::supports(command) {
+        if let Some(decision) = native_remaining71_proof::execute(command, &arguments)? {
+            if decision.exit_code != 0 {
+                emit_failed_decision(&decision.value, decision.exit_code);
+            }
+            return Ok(Some(decision.value));
+        }
+    }
+    if native_remaining71_graph::supports(command) {
+        return native_remaining71_graph::execute(command, &arguments, project_root, state_root);
+    }
+    if native_remaining71_agent::supports(command) {
+        return native_remaining71_agent::execute(command, &arguments, project_root, state_root);
+    }
+    if native_remaining71_agent_live::supports(command) {
+        return native_remaining71_agent_live::execute(
+            command,
+            &arguments,
+            project_root,
+            state_root,
+        );
+    }
+    if native_remaining71_competitive::supports(command) {
+        return native_remaining71_competitive::execute(
+            command,
+            &arguments,
+            project_root,
+            state_root,
+        );
+    }
+    if native_remaining71_context::supports(command) {
+        return native_remaining71_context::execute(command, &arguments, state_root);
+    }
+    if native_remaining71_headless::supports(command) {
+        return native_remaining71_headless::execute(command, &arguments, project_root, state_root);
+    }
     if native_analytics::supports(command) {
         return native_analytics::execute(&arguments, state_root).map(Some);
     }
@@ -366,510 +505,6 @@ pub fn execute(
     if native_read_only_product::supports(command) {
         return native_read_only_product::execute(command, &arguments, project_root, state_root)
             .map(Some);
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
-    }
-    if native_engine_route_control::supports(command) {
-        let decision =
-            native_engine_route_control::execute(command, &arguments, project_root, state_root)?;
-        if decision.exit_code != 0 {
-            emit_failed_decision(&decision.value, decision.exit_code);
-        }
-        return Ok(Some(decision.value));
     }
     if native_engine_route_control::supports(command) {
         let decision =

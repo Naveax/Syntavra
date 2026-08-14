@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 
 def install() -> None:
+    from . import codex_integration
+    from . import competitive_fabric
     from . import host_adapters
     from . import product_surface
 
@@ -106,4 +108,47 @@ def install() -> None:
         replacements.get(item.host, item)
         for item in product_surface.PLATFORM_ADAPTERS
     )
+
+    # CompetitiveContextFabric historically emitted a generic JSON MCP plan for
+    # every host. Codex now has a TOML + explicit workspace-bridge contract, so its
+    # planning surface must use the same canonical entry as both installers. Keep
+    # every non-Codex host on the original planner to avoid widening this repair.
+    original_platform_plan = competitive_fabric.PlatformPlanBuilder.plan
+
+    def current_platform_plan(self, host: str, *, project, scope: str = "project"):
+        if host != "codex":
+            return original_platform_plan(self, host, project=project, scope=scope)
+        if scope not in {"project", "user"}:
+            raise ValueError("scope must be project or user")
+        spec = host_adapters.host_spec("codex")
+        negotiation = host_adapters.negotiate("codex", runtime_available=True, installed=None)
+        entry = codex_integration.mcp_entry(("syntavra",), project=project, scope=scope)
+        return {
+            "host": "codex",
+            "display_name": spec.display_name,
+            "scope": scope,
+            "project": str(project.resolve(strict=False)),
+            "mode": negotiation["mode"],
+            "enforced": negotiation["enforced"],
+            "verified_adapter": spec.verified,
+            "files": [
+                {
+                    "path": codex_integration.CODEX_CONFIG_PATH,
+                    "format": "toml",
+                    "entry": entry,
+                },
+                {
+                    "path": f"{codex_integration.CODEX_SKILL_PATH}/SKILL.md",
+                    "source": "bundled syntavra skill",
+                },
+            ],
+            "capabilities": {
+                **asdict(spec),
+                "config_path": codex_integration.CODEX_CONFIG_PATH,
+                "skill_path": codex_integration.CODEX_SKILL_PATH,
+            },
+            "validation": ["codex mcp list", "syntavra status --doctor", "syntavra status"],
+        }
+
+    competitive_fabric.PlatformPlanBuilder.plan = current_platform_plan
     host_adapters._syntavra_v001_platform_paths = True

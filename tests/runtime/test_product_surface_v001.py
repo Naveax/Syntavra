@@ -24,7 +24,7 @@ class ProductSurfaceV001Tests(unittest.TestCase):
         self.assertEqual(VERSION, "0.0.1")
         self.assertEqual(CHANNEL, "pre-release")
         self.assertEqual([item.command for item in MENTAL_MODEL], ["setup", "status", "run", "prove"])
-        self.assertEqual(MCP_PROFILES["minimal"].max_active_tools, 8)
+        self.assertEqual(MCP_PROFILES["minimal"].max_active_tools, 10)
         self.assertEqual(MCP_PROFILES["balanced"].max_active_tools, 36)
         self.assertEqual(MCP_PROFILES["audit"].exposed_tools, ("*",))
 

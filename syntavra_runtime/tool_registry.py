@@ -21,6 +21,8 @@ PROFILE_ALIASES: dict[str, str] = {
 MINIMAL_TOOLS: tuple[str, ...] = (
     "syntavra.status",
     "syntavra.inspect.map",
+    "syntavra.process.submit",
+    "syntavra.process.completions",
     "syntavra.output.capture",
     "syntavra.output.search",
     "syntavra.output.reveal",
@@ -46,8 +48,6 @@ BALANCED_TOOLS: tuple[str, ...] = (
     "syntavra.session.verify",
     "syntavra.sandbox.plan",
     "syntavra.sandbox.execute",
-    "syntavra.process.submit",
-    "syntavra.process.completions",
     "syntavra.fabric.profile",
     "syntavra.fabric.insights",
     "syntavra.provider.capabilities",

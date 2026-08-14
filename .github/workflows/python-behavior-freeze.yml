@@ -1,0 +1,138 @@
+name: Python Behavior Freeze
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-behavior-freeze
+  cancel-in-progress: true
+
+jobs:
+  python-behavior-freeze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python behavior freeze architecture regression
+        run: python -m unittest tests.runtime.test_python_behavior_freeze -v
+
+      - name: Generate exact-head Python behavior freeze evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_behavior_freeze.py \
+            --output /tmp/python-behavior-freeze.json \
+            > /tmp/python-behavior-freeze.log 2>&1
+          freeze_exit=$?
+          set -e
+          cat /tmp/python-behavior-freeze.log
+          test -f /tmp/python-behavior-freeze.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-behavior-freeze.json').read_text(encoding='utf-8'))
+          contract = json.loads(Path('contracts/python/python-behavior-freeze-v1.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+
+          assert value['ok'] is True, value
+          assert value['family'] == 'python-behavior-freeze'
+          assert value['engine'] == 'python-reference-metadata'
+          assert value['phase'] == 'S'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['strict'] is contract['strict']
+          assert value['claim'] == contract['claim']
+
+          surface = value['public_surface']
+          assert surface['route_count'] == contract['public_surface']['expected_route_count'] == 245
+          assert surface['route_sha256'] == contract['public_surface']['expected_route_sha256']
+          assert len(surface['manifest']) == 245
+          assert surface['duplicate_route_count'] == 0
+          assert surface['namespace_collision_count'] == 0
+
+          execution = value['execution_contract']
+          assert execution['schema_version'] == contract['execution_contract']['expected_schema_version'] == 2
+          assert execution['unique_execution_owner_count'] == contract['execution_contract']['expected_unique_owner_count'] == 245
+          assert len(execution['manifest']) == 245
+
+          suite = value['reference_suite']
+          expected_total = contract['reference_suite']['expected_total_certifiers']
+          assert suite['total'] == expected_total
+          assert suite['passed'] == expected_total
+          assert suite['failed'] == contract['reference_suite']['expected_failed'] == 0
+          assert suite['skipped'] == contract['reference_suite']['expected_skipped'] == 0
+          assert suite['repository_status_preserved'] is True
+          assert suite['repository_clean_before'] is True
+          assert suite['repository_clean_after'] is True
+          assert 'closed sink' in suite['offline_policy']
+
+          schemas = value['family_schema_versions']
+          expected_family_count = contract['fixture_catalog']['expected_family_count']
+          assert len(schemas) == expected_family_count
+          assert len({row['family'] for row in schemas}) == expected_family_count
+          assert all(isinstance(row['reference_schema_version'], int) and row['reference_schema_version'] >= 1 for row in schemas)
+
+          derived = value['derived_hashes']
+          key_map = {
+              'family_schema_sha256': 'expected_family_schema_sha256',
+              'behavior_policy_sha256': 'expected_behavior_policy_sha256',
+              'error_exit_policy_sha256': 'expected_error_exit_policy_sha256',
+              'nondeterminism_sha256': 'expected_nondeterminism_sha256',
+              'side_effect_sha256': 'expected_side_effect_sha256',
+          }
+          for observed_key, contract_key in key_map.items():
+              observed = derived[observed_key]
+              assert isinstance(observed, str) and len(observed) == 64
+              expected = contract['derived_freeze'][contract_key]
+              if contract['strict']:
+                  assert observed == expected, (observed_key, observed, expected)
+              else:
+                  assert expected is None, (contract_key, expected)
+
+          assert value['route_authority_duplicated'] is False
+          assert value['rust_python_required_for_fixture_consumption'] is False
+          assert value['rust_native_promotion_credit'] is False
+          assert value['frozen_rust_native_count'] == 174
+          PY
+          exit "$freeze_exit"
+
+      - name: Upload Python behavior freeze evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-behavior-freeze
+          path: |
+            /tmp/python-behavior-freeze.json
+            /tmp/python-behavior-freeze.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
