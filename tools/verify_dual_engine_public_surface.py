@@ -20,7 +20,7 @@ FULL_CLAIM = "FULL_DUAL_ENGINE_PARITY_PROVEN"
 INCOMPLETE_CLAIM = "DUAL_ENGINE_PARITY_INCOMPLETE"
 EXPECTED_PUBLIC_COMMAND_COUNT = 245
 FROZEN_NATIVE_COMMAND_COUNT = 174
-FROZEN_BRIDGE_COMMAND_COUNT = 71
+FROZEN_BRIDGE_COMMAND_COUNT = 0
 PROMOTED_NATIVE_COMMAND_COUNT = 245
 PROMOTED_BRIDGE_COMMAND_COUNT = 0
 
@@ -110,16 +110,21 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
         raise RuntimeError(f"unknown bridge commands: {sorted(bridge_set - command_set)!r}")
     if native_set & bridge_set:
         raise RuntimeError("native and bridge command inventories overlap")
-    if native_set | bridge_set != command_set:
-        unaccounted = sorted(command_set - native_set - bridge_set)
-        raise RuntimeError(
-            f"native and bridge inventories must exactly partition the Python surface: unaccounted={unaccounted!r}"
-        )
 
     total = len(commands)
     native_count = len(native)
     bridge_count = len(bridged)
     inventory_state = _inventory_state(total, native_count, bridge_count)
+    missing_set = command_set - native_set
+    if inventory_state == "frozen":
+        if bridge_set:
+            raise RuntimeError("frozen Remaining-71 state must not use a Python launcher bridge")
+        if len(missing_set) != total - FROZEN_NATIVE_COMMAND_COUNT:
+            raise RuntimeError("frozen Remaining-71 identity count drift")
+    else:
+        if native_set != command_set or bridge_set:
+            raise RuntimeError("promoted dual-engine state must be the exact Python public set with zero bridge")
+
     expected_rust = {
         "module_count": rust_surface["module_count"],
         "native_public_command_count": native_count,
