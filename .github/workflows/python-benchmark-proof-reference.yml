@@ -1,0 +1,103 @@
+name: Python Benchmark Proof Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-benchmark-proof-reference
+  cancel-in-progress: true
+
+jobs:
+  python-benchmark-proof-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python benchmark/proof regression tests
+        run: python -m unittest tests.runtime.test_python_benchmark_proof_reference -v
+
+      - name: Generate exact-head Python benchmark/proof evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_benchmark_proof_reference.py \
+            --output /tmp/python-benchmark-proof-reference.json \
+            > /tmp/python-benchmark-proof-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-benchmark-proof-reference.log
+          test -f /tmp/python-benchmark-proof-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-benchmark-proof-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'benchmark-proof'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['routes']['route_count'] == 20
+          assert value['signalbench']['plan']['corpus'] == {'tasks': 150, 'live': False}
+          assert value['signalbench']['plan']['schedule'] == {'runs': 27000, 'repetitions': 30}
+          assert value['signalbench']['pair_count'] == 4500
+          assert value['signalbench']['fixture_rows'] == 9000
+          assert value['signalbench']['gate']['ok'] is True
+          assert value['signalbench']['gate']['claim'] == 'SUPERIORITY_PROVEN'
+          assert value['signalbench']['gate']['metrics']['tasks'] == 150
+          assert value['signalbench']['gate']['metrics']['repetitions'] == 30
+          assert value['signalbench']['gate']['metrics']['success'] == 1.0
+          assert value['signalbench']['gate']['metrics']['token_ratio'] == 0.1
+          assert value['signalbench']['gate']['metrics']['wall_ratio'] == 0.1
+          assert value['proof']['measured_benchmark']['ok'] is True
+          assert value['proof']['provider_billed']['claimable_superiority'] is True
+          assert value['proof']['external_suite']['ok'] is True
+          assert value['proof']['integrations']['ok'] is True
+          assert value['proof']['maturity_empty']['exit'] == 4
+          assert value['proof']['readiness_empty']['exit'] == 4
+          assert value['proof']['malformed_provider_raw'] == {'exit': 4, 'stderr_nonempty': False, 'json_object': True}
+          assert value['proof']['malformed_external_raw'] == {'exit': 4, 'stderr_nonempty': False, 'json_object': True}
+          assert value['claim_boundary'] == 'offline deterministic certification fixtures validate Python gate semantics only; they are not real external superiority evidence'
+          assert value['network_boundary'] == 'offline deterministic fixtures only; no live provider, repository benchmark, or SaaS execution'
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python benchmark/proof reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-benchmark-proof-reference
+          path: |
+            /tmp/python-benchmark-proof-reference.json
+            /tmp/python-benchmark-proof-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
