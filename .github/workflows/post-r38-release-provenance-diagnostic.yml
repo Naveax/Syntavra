@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e . build twine
+          python -m pip install -e . build twine pytest
 
       - name: Install locked npm installer dependencies
         shell: bash
@@ -266,9 +266,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git checkout -- MANIFEST.sha256
+          git checkout -- MANIFEST.sha256 release-smoke.json
           rm -rf syntavra_runtime.egg-info
-          rm -f release-smoke.json fusion-release-smoke.json platform-registry.json native-dry-run.json
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
           git status --porcelain --untracked-files=all | tee /tmp/release-provenance/logs/clean-tree-status.log
           test ! -s /tmp/release-provenance/logs/clean-tree-status.log
 
