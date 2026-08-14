@@ -23,7 +23,8 @@ def manifest(project: Path | None = None) -> dict[str, Any]:
     }
     files = {
         "vscode_extension": root / "integrations/vscode-syntavra/package.json",
-        "native_binary": root / "native/syntavra-native/Cargo.toml",
+        "native_binary": root / "crates/syntavra-cli/Cargo.toml",
+        "legacy_native_companion": root / "native/syntavra-native/Cargo.toml",
         "publish_readiness": root / "release/publish-readiness.json",
         "language_parsers": root / "syntavra_runtime/language_parsers.py",
         "provider_account_pool": root / "syntavra_runtime/provider_account_pool.py",
