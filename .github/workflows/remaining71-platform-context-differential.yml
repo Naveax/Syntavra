@@ -71,7 +71,7 @@ jobs:
                   for key in ('report_id','report_sha256','report_path'):
                       if key in value: value[key]='<DYNAMIC_REPORT>'
               if name=='update_install' and isinstance(value,dict):
-                  for key in ('started_at','finished_at'): 
+                  for key in ('started_at','finished_at'):
                       if key in value: value[key]='<DYNAMIC_TIME>'
                   if 'receipt_id' in value: value['receipt_id']='<DYNAMIC_RECEIPT>'
               return row
@@ -83,9 +83,9 @@ jobs:
               project=root/'project'; state=root/'state'; project.mkdir(parents=True); state.mkdir(parents=True); (project/'.git').mkdir()
               items=project/'context-items.json'
               items.write_text(json.dumps([
-                  {'role':'system','content':'stable system fixture','priority':10,'stable':True,'source':'fixture'},
-                  {'role':'user','content':'volatile user fixture','priority':5,'stable':False,'source':'fixture'},
-                  {'role':'tool','content':'stable tool fixture','priority':7,'stable':True,'source':'fixture'},
+                  {'item_id':'system-1','layer':'system','kind':'text','source':'fixture-system','content':'stable system fixture','priority':1.0,'stable':True,'exact_required':True,'metadata':{'fixture':True}},
+                  {'item_id':'user-1','layer':'user','kind':'text','source':'fixture-user','content':'volatile user fixture','priority':0.5,'stable':False,'exact_required':True,'metadata':{}},
+                  {'item_id':'tool-1','layer':'tools','kind':'text','source':'fixture-tool','content':'stable tool fixture','priority':0.7,'stable':True,'exact_required':True,'metadata':{}},
               ],separators=(',',':')),encoding='utf-8')
               output=project/'output.txt'; output.write_text('alpha\nwarning: fixture\nerror: fixture\nomega\n',encoding='utf-8')
               console=project/'console.json'; console.write_text(json.dumps({
