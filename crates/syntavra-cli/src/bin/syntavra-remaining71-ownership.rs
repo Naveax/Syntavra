@@ -191,9 +191,7 @@ fn string_routes(rows: &[Value], field_name: &str) -> Result<Vec<String>, String
                 .as_str()
                 .filter(|route| !route.trim().is_empty())
                 .map(str::to_owned)
-                .ok_or_else(|| {
-                    format!("inventory {field_name} contains a non-string/empty route")
-                })
+                .ok_or_else(|| format!("inventory {field_name} contains a non-string/empty route"))
         })
         .collect::<Result<Vec<_>, _>>()?;
     let unique = routes.iter().collect::<BTreeSet<_>>();
