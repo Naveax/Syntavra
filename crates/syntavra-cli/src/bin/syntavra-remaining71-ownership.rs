@@ -53,8 +53,32 @@ mod native_remaining71_sandbox;
 mod native_remaining71_security;
 
 const EXPECTED_PUBLIC_ROUTE_COUNT: u64 = 245;
-const EXPECTED_NATIVE_ROUTE_COUNT: u64 = 174;
-const EXPECTED_REMAINING_ROUTE_COUNT: usize = 71;
+const FROZEN_NATIVE_ROUTE_COUNT: u64 = 174;
+const FROZEN_REMAINING_ROUTE_COUNT: usize = 71;
+const PROMOTED_NATIVE_ROUTE_COUNT: u64 = 245;
+const PROMOTED_REMAINING_ROUTE_COUNT: usize = 0;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InventoryState {
+    Frozen,
+    Promoted,
+}
+
+impl InventoryState {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Frozen => "frozen-174-71",
+            Self::Promoted => "promoted-245-0",
+        }
+    }
+}
+
+struct InventoryReport {
+    state: InventoryState,
+    native_count: u64,
+    public_routes: Vec<String>,
+    remaining_routes: Vec<String>,
+}
 
 fn selector_path(route: &str) -> Vec<String> {
     // The public selector owns these remaining routes at two components. The
@@ -137,7 +161,53 @@ fn report_u64(report: &Value, section: &str, field: &str) -> Result<u64, String>
         .ok_or_else(|| format!("inventory report missing integer {section}.{field}"))
 }
 
-fn load_report_routes(path: &Path) -> Result<Vec<String>, String> {
+fn inventory_state(
+    public_count: u64,
+    native_count: u64,
+    remaining_count: u64,
+) -> Result<InventoryState, String> {
+    match (public_count, native_count, remaining_count) {
+        (EXPECTED_PUBLIC_ROUTE_COUNT, FROZEN_NATIVE_ROUTE_COUNT, remaining)
+            if remaining == FROZEN_REMAINING_ROUTE_COUNT as u64 =>
+        {
+            Ok(InventoryState::Frozen)
+        }
+        (EXPECTED_PUBLIC_ROUTE_COUNT, PROMOTED_NATIVE_ROUTE_COUNT, remaining)
+            if remaining == PROMOTED_REMAINING_ROUTE_COUNT as u64 =>
+        {
+            Ok(InventoryState::Promoted)
+        }
+        _ => Err(format!(
+            "inventory count contract mismatch: public={public_count} native={native_count} remaining={remaining_count}; accepted states are {EXPECTED_PUBLIC_ROUTE_COUNT}/{FROZEN_NATIVE_ROUTE_COUNT}/{FROZEN_REMAINING_ROUTE_COUNT} or {EXPECTED_PUBLIC_ROUTE_COUNT}/{PROMOTED_NATIVE_ROUTE_COUNT}/{PROMOTED_REMAINING_ROUTE_COUNT}"
+        )),
+    }
+}
+
+fn string_routes(rows: &[Value], field_name: &str) -> Result<Vec<String>, String> {
+    let routes = rows
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .filter(|route| !route.trim().is_empty())
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    format!("inventory {field_name} contains a non-string/empty route")
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let unique = routes.iter().collect::<BTreeSet<_>>();
+    if unique.len() != routes.len() {
+        return Err(format!(
+            "inventory {field_name} contains duplicates: rows={} unique={}",
+            routes.len(),
+            unique.len()
+        ));
+    }
+    Ok(routes)
+}
+
+fn load_report(path: &Path) -> Result<InventoryReport, String> {
     let data = fs::read(path).map_err(|error| {
         format!(
             "failed to read inventory report {}: {error}",
@@ -158,48 +228,83 @@ fn load_report_routes(path: &Path) -> Result<Vec<String>, String> {
     let public_count = report_u64(&report, "python", "derived_count")?;
     let native_count = report_u64(&report, "rust", "native_count")?;
     let remaining_count = report_u64(&report, "rust", "missing_count")?;
-    if public_count != EXPECTED_PUBLIC_ROUTE_COUNT
-        || native_count != EXPECTED_NATIVE_ROUTE_COUNT
-        || remaining_count != EXPECTED_REMAINING_ROUTE_COUNT as u64
-    {
-        return Err(format!(
-            "inventory count contract mismatch: public={public_count} native={native_count} remaining={remaining_count}; expected {EXPECTED_PUBLIC_ROUTE_COUNT}/{EXPECTED_NATIVE_ROUTE_COUNT}/{EXPECTED_REMAINING_ROUTE_COUNT}"
-        ));
-    }
+    let state = inventory_state(public_count, native_count, remaining_count)?;
 
-    let rows = report
+    let missing_rows = report
         .get("missing_routes")
         .and_then(Value::as_array)
         .ok_or_else(|| "inventory report missing array missing_routes".to_owned())?;
-    let routes = rows
+    let remaining_routes = string_routes(missing_rows, "missing_routes")?;
+    if remaining_routes.len() != remaining_count as usize {
+        return Err(format!(
+            "inventory route identity count mismatch: got {}, report says {remaining_count}",
+            remaining_routes.len()
+        ));
+    }
+
+    let manifest_rows = report
+        .get("python")
+        .and_then(|value| value.get("manifest"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "inventory report missing array python.manifest".to_owned())?;
+    let public_routes = manifest_rows
         .iter()
         .map(|value| {
             value
-                .as_str()
+                .get("route")
+                .and_then(Value::as_str)
                 .filter(|route| !route.trim().is_empty())
                 .map(str::to_owned)
                 .ok_or_else(|| {
-                    "inventory missing_routes contains a non-string/empty route".to_owned()
+                    "inventory python.manifest contains a missing/non-string/empty route".to_owned()
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
-
-    if routes.len() != EXPECTED_REMAINING_ROUTE_COUNT {
+    if public_routes.len() != EXPECTED_PUBLIC_ROUTE_COUNT as usize {
         return Err(format!(
-            "inventory route identity count mismatch: got {}, expected {EXPECTED_REMAINING_ROUTE_COUNT}",
-            routes.len()
+            "inventory public manifest count mismatch: got {}, expected {EXPECTED_PUBLIC_ROUTE_COUNT}",
+            public_routes.len()
         ));
     }
-    let unique = routes.iter().collect::<BTreeSet<_>>();
-    if unique.len() != routes.len() {
+    let unique_public = public_routes.iter().collect::<BTreeSet<_>>();
+    if unique_public.len() != public_routes.len() {
         return Err(format!(
-            "inventory missing_routes contains duplicates: rows={} unique={}",
-            routes.len(),
-            unique.len()
+            "inventory python.manifest contains duplicate routes: rows={} unique={}",
+            public_routes.len(),
+            unique_public.len()
         ));
     }
 
-    Ok(routes)
+    let extra_native = report
+        .get("rust")
+        .and_then(|value| value.get("extra_native_routes"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "inventory report missing array rust.extra_native_routes".to_owned())?;
+    if !extra_native.is_empty() {
+        return Err(format!(
+            "inventory contains {} extra native routes",
+            extra_native.len()
+        ));
+    }
+
+    match state {
+        InventoryState::Frozen if remaining_routes.len() != FROZEN_REMAINING_ROUTE_COUNT => {
+            return Err(format!(
+                "frozen inventory must contain exactly {FROZEN_REMAINING_ROUTE_COUNT} remaining routes"
+            ));
+        }
+        InventoryState::Promoted if !remaining_routes.is_empty() => {
+            return Err("promoted inventory must contain zero remaining routes".to_owned());
+        }
+        _ => {}
+    }
+
+    Ok(InventoryReport {
+        state,
+        native_count,
+        public_routes,
+        remaining_routes,
+    })
 }
 
 fn fail(message: &str) -> ExitCode {
@@ -208,7 +313,7 @@ fn fail(message: &str) -> ExitCode {
         serde_json::to_string_pretty(&json!({
             "ok": false,
             "error": message,
-            "claim_boundary": "selector and lower-module ownership only; behavioral parity still requires differential execution",
+            "claim_boundary": "selector/lower-module ownership in the frozen state and exact public/native set equality in the promoted state; behavioral parity still requires differential execution",
         }))
         .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
     );
@@ -222,10 +327,11 @@ fn main() -> ExitCode {
         return fail("usage: syntavra-remaining71-ownership <inventory-report.json>");
     };
     let report_path = Path::new(&report_path);
-    let routes = match load_report_routes(report_path) {
-        Ok(routes) => routes,
+    let report = match load_report(report_path) {
+        Ok(report) => report,
         Err(error) => return fail(&error),
     };
+    let routes = &report.remaining_routes;
 
     let mut unowned = Vec::<String>::new();
     let mut ownership = BTreeMap::<String, bool>::new();
@@ -235,7 +341,7 @@ fn main() -> ExitCode {
     let mut duplicate_owner_routes = Vec::<String>::new();
     let mut module_unowned_routes = Vec::<String>::new();
 
-    for route in &routes {
+    for route in routes {
         let path = selector_path(route);
         let owned = native_product::supports(&path);
         let candidates = remaining71_owner_modules(&path);
@@ -255,20 +361,32 @@ fn main() -> ExitCode {
         }
     }
 
-    let ok = unowned.is_empty()
-        && module_unowned_routes.is_empty()
-        && duplicate_owner_routes.is_empty()
-        && ownership.len() == EXPECTED_REMAINING_ROUTE_COUNT
-        && owner_modules.len() == EXPECTED_REMAINING_ROUTE_COUNT;
+    let promoted_set_equality = report.state == InventoryState::Promoted
+        && report.native_count == EXPECTED_PUBLIC_ROUTE_COUNT
+        && report.public_routes.len() == EXPECTED_PUBLIC_ROUTE_COUNT as usize
+        && routes.is_empty();
+    let ok = match report.state {
+        InventoryState::Frozen => {
+            unowned.is_empty()
+                && module_unowned_routes.is_empty()
+                && duplicate_owner_routes.is_empty()
+                && ownership.len() == FROZEN_REMAINING_ROUTE_COUNT
+                && owner_modules.len() == FROZEN_REMAINING_ROUTE_COUNT
+        }
+        InventoryState::Promoted => promoted_set_equality,
+    };
+
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
             "ok": ok,
-            "authority": "tools/report_missing_native_public_routes.py missing_routes",
-            "module_authority": "production Rust modules' supports() predicates",
+            "authority": "tools/report_missing_native_public_routes.py canonical report",
+            "module_authority": "production Rust modules' supports() predicates for frozen remaining routes",
+            "inventory_state": report.state.label(),
             "public_route_count": EXPECTED_PUBLIC_ROUTE_COUNT,
-            "frozen_native_route_count": EXPECTED_NATIVE_ROUTE_COUNT,
+            "native_route_count": report.native_count,
             "report_derived_remaining_count": routes.len(),
+            "promoted_public_native_set_equality": promoted_set_equality,
             "owned_count": ownership.values().filter(|value| **value).count(),
             "unowned_count": unowned.len(),
             "unowned_routes": unowned,
@@ -281,7 +399,7 @@ fn main() -> ExitCode {
             "duplicate_owner_count": duplicate_owner_routes.len(),
             "duplicate_owner_routes": duplicate_owner_routes,
             "probe_environment": "SYNTAVRA_BULK_PARITY_PROBE=1",
-            "claim_boundary": "selector and lower-module ownership only; behavioral parity still requires differential execution",
+            "claim_boundary": "selector/lower-module ownership in the frozen state and exact public/native set equality in the promoted state; behavioral parity still requires differential execution",
         }))
         .unwrap_or_else(|_| "{\"ok\":false}".to_owned())
     );
@@ -295,7 +413,21 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{remaining71_owner_modules, selector_path};
+    use super::{inventory_state, remaining71_owner_modules, selector_path, InventoryState};
+
+    #[test]
+    fn inventory_state_accepts_only_atomic_endpoints() {
+        assert_eq!(inventory_state(245, 174, 71), Ok(InventoryState::Frozen));
+        assert_eq!(inventory_state(245, 245, 0), Ok(InventoryState::Promoted));
+        for (native, remaining) in [(175, 70), (200, 45), (244, 1), (245, 1), (244, 0)] {
+            assert!(
+                inventory_state(245, native, remaining).is_err(),
+                "unexpected intermediate state accepted: native={native} remaining={remaining}"
+            );
+        }
+        assert!(inventory_state(244, 174, 71).is_err());
+        assert!(inventory_state(246, 245, 0).is_err());
+    }
 
     #[test]
     fn selector_collapses_family_actions_after_two_components() {
