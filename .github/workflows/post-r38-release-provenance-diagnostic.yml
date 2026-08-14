@@ -1,0 +1,220 @@
+name: Post-R38 Release Provenance Diagnostic
+
+on:
+  push:
+    branches:
+      - agent/post-r38-release-provenance
+
+permissions:
+  contents: read
+
+jobs:
+  package-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      TARGET_HEAD: 08763180a4f738298306bab606d451c6ad2d8a8e
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact promoted main head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
+
+      - name: Verify exact product head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            sdk/typescript/package-lock.json
+
+      - name: Install Python build/runtime tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e . build twine
+
+      - name: Install pinned Rust 1.82
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.82.0 --profile minimal
+          rustc +1.82.0 --version
+          cargo +1.82.0 --version
+
+      - name: Prepare evidence directory
+        shell: bash
+        run: mkdir -p /tmp/release-provenance/{python,npm-installer,npm-sdk,vscode,rust-production,rust-legacy,logs}
+
+      - name: Baseline release and manifest validators
+        id: baseline
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/refresh_manifest.py --check 2>&1 | tee /tmp/release-provenance/logs/manifest-check.log
+          python tools/validate.py 2>&1 | tee /tmp/release-provenance/logs/validate.log
+          python tools/validate_release.py --smoke --output /tmp/release-provenance/release-validation.json \
+            2>&1 | tee /tmp/release-provenance/logs/validate-release.log
+
+      - name: Build and inspect Python wheel and sdist
+        id: python_package
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m build --outdir /tmp/release-provenance/python 2>&1 | tee /tmp/release-provenance/logs/python-build.log
+          python -m twine check /tmp/release-provenance/python/* 2>&1 | tee /tmp/release-provenance/logs/twine-check.log
+          python - <<'PY' | tee /tmp/release-provenance/logs/python-artifacts.log
+          from pathlib import Path
+          root = Path('/tmp/release-provenance/python')
+          files = sorted(p.name for p in root.iterdir() if p.is_file())
+          assert any(name.endswith('.whl') for name in files), files
+          assert any(name.endswith('.tar.gz') for name in files), files
+          assert all('0.0.1' in name for name in files), files
+          print('\n'.join(files))
+          PY
+
+      - name: Test and pack npm installer without publishing
+        id: npm_installer
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/release-provenance/logs/npm-installer-test.log
+          npm pack --json --pack-destination /tmp/release-provenance/npm-installer \
+            > /tmp/release-provenance/npm-installer/pack.json
+          cat /tmp/release-provenance/npm-installer/pack.json | tee /tmp/release-provenance/logs/npm-installer-pack.log
+
+      - name: Build test and pack TypeScript SDK without publishing
+        id: npm_sdk
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cd sdk/typescript
+          npm install --ignore-scripts --package-lock=false 2>&1 | tee /tmp/release-provenance/logs/npm-sdk-install.log
+          npm run check 2>&1 | tee /tmp/release-provenance/logs/npm-sdk-check.log
+          npm test 2>&1 | tee /tmp/release-provenance/logs/npm-sdk-test.log
+          npm pack --json --pack-destination /tmp/release-provenance/npm-sdk \
+            > /tmp/release-provenance/npm-sdk/pack.json
+          cat /tmp/release-provenance/npm-sdk/pack.json | tee /tmp/release-provenance/logs/npm-sdk-pack.log
+
+      - name: Test and package VS Code extension without publishing
+        id: vscode_package
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cd integrations/vscode-syntavra
+          npm test 2>&1 | tee /tmp/release-provenance/logs/vscode-test.log
+          npx --yes @vscode/vsce ls 2>&1 | tee /tmp/release-provenance/logs/vscode-ls.log
+          npx --yes @vscode/vsce package \
+            --out /tmp/release-provenance/vscode/syntavra-vscode-0.0.1.vsix \
+            2>&1 | tee /tmp/release-provenance/logs/vscode-package.log
+
+      - name: Package production Rust selector crate without publishing
+        id: rust_production
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo +1.82.0 package --locked -p syntavra-cli --allow-dirty --no-verify \
+            2>&1 | tee /tmp/release-provenance/logs/rust-production-package.log
+          find target/package -maxdepth 1 -type f -name 'syntavra-cli-0.0.1.crate' -exec cp {} /tmp/release-provenance/rust-production/ \;
+          test -f /tmp/release-provenance/rust-production/syntavra-cli-0.0.1.crate
+
+      - name: Package legacy publish-readiness native target without publishing
+        id: rust_legacy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo +1.82.0 package \
+            --manifest-path native/syntavra-native/Cargo.toml \
+            --allow-dirty --no-verify \
+            2>&1 | tee /tmp/release-provenance/logs/rust-legacy-package.log
+          find native/syntavra-native/target/package -maxdepth 1 -type f -name 'syntavra-native-0.0.1.crate' -exec cp {} /tmp/release-provenance/rust-legacy/ \;
+          test -f /tmp/release-provenance/rust-legacy/syntavra-native-0.0.1.crate
+
+      - name: Record release identity mapping
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          readiness = json.loads(Path('release/publish-readiness.json').read_text(encoding='utf-8'))
+          production = Path('crates/syntavra-cli/Cargo.toml').read_text(encoding='utf-8')
+          legacy = Path('native/syntavra-native/Cargo.toml').read_text(encoding='utf-8')
+          out = {
+              'target_head': '08763180a4f738298306bab606d451c6ad2d8a8e',
+              'publish_readiness_native': readiness.get('native'),
+              'production_selector_crate': 'syntavra-cli',
+              'production_selector_binary': 'syntavra',
+              'legacy_native_crate': 'syntavra-native',
+              'workspace_excludes_legacy_native': True,
+              'identity_ambiguity': readiness.get('native', {}).get('package') == 'syntavra-native',
+              'production_manifest_mentions_syntavra_cli': 'name = "syntavra-cli"' in production,
+              'legacy_manifest_mentions_syntavra_native': 'name = "syntavra-native"' in legacy,
+          }
+          Path('/tmp/release-provenance/release-identity-mapping.json').write_text(
+              json.dumps(out, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(out, indent=2, sort_keys=True))
+          PY
+
+      - name: Enforce repository cleanliness after non-publishing builds
+        id: clean_tree
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info syntavra_runtime.egg-info
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Upload package provenance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-r38-release-provenance-${{ env.TARGET_HEAD }}
+          path: /tmp/release-provenance
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce diagnostic package readiness
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "baseline=${{ steps.baseline.outcome }}" \
+            "python_package=${{ steps.python_package.outcome }}" \
+            "npm_installer=${{ steps.npm_installer.outcome }}" \
+            "npm_sdk=${{ steps.npm_sdk.outcome }}" \
+            "vscode_package=${{ steps.vscode_package.outcome }}" \
+            "rust_production=${{ steps.rust_production.outcome }}" \
+            "rust_legacy=${{ steps.rust_legacy.outcome }}" \
+            "clean_tree=${{ steps.clean_tree.outcome }}"
+          test "${{ steps.baseline.outcome }}" = success
+          test "${{ steps.python_package.outcome }}" = success
+          test "${{ steps.npm_installer.outcome }}" = success
+          test "${{ steps.npm_sdk.outcome }}" = success
+          test "${{ steps.vscode_package.outcome }}" = success
+          test "${{ steps.rust_production.outcome }}" = success
+          test "${{ steps.rust_legacy.outcome }}" = success
+          test "${{ steps.clean_tree.outcome }}" = success
