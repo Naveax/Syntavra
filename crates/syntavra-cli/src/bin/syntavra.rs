@@ -14,7 +14,7 @@ mod native_product;
 const PRODUCT_VERSION: &str = "0.0.1";
 const RELEASE_CHANNEL: &str = "pre-release";
 const PUBLIC_COMMAND_COUNT: u64 = 245;
-const NATIVE_COMMAND_COUNT: u64 = 170;
+const NATIVE_COMMAND_COUNT: u64 = 245;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Engine {
@@ -216,6 +216,83 @@ fn command_path(arguments: &[String]) -> Vec<String> {
         positional.truncate(2);
     }
     positional
+}
+
+fn capability_missing_positionals(
+    arguments: &[String],
+    path: &[String],
+) -> Option<(&'static str, usize)> {
+    let (action, required) = match path {
+        [root, action] if root == "run" && action == "capability-decide" => {
+            ("capability-decide", 2usize)
+        }
+        [root, action] if root == "run" && action == "capability-issue" => {
+            ("capability-issue", 3usize)
+        }
+        [root, action] if root == "run" && action == "capability-verify" => {
+            ("capability-verify", 3usize)
+        }
+        _ => return None,
+    };
+    let action_index = arguments.iter().position(|value| value == action)?;
+    let mut count = 0usize;
+    let mut index = action_index + 1;
+    while index < arguments.len() {
+        let value = &arguments[index];
+        if matches!(
+            value.as_str(),
+            "--resource" | "--network-host" | "--permission" | "--ttl"
+        ) {
+            index = (index + 2).min(arguments.len());
+            continue;
+        }
+        if value.starts_with("--resource=")
+            || value.starts_with("--network-host=")
+            || value.starts_with("--permission=")
+            || value.starts_with("--ttl=")
+            || matches!(
+                value.as_str(),
+                "--sandboxed" | "--user-authorized" | "--no-consume"
+            )
+        {
+            index += 1;
+            continue;
+        }
+        if value.starts_with('-') {
+            index += 1;
+            continue;
+        }
+        count += 1;
+        index += 1;
+    }
+    (count < required).then_some((action, required - count))
+}
+
+fn capability_parser_error(arguments: &[String], path: &[String]) -> Option<ExitCode> {
+    let (action, missing) = capability_missing_positionals(arguments, path)?;
+    eprintln!("usage: syntavra run {action} [options] ...");
+    eprintln!("syntavra run {action}: error: missing {missing} required positional argument(s)");
+    Some(ExitCode::from(2))
+}
+
+fn python_public_error(path: &[String], error: &str) -> String {
+    if matches!(path, [root, action] if root == "provider" && matches!(action.as_str(), "capabilities" | "prepare"))
+    {
+        if let Some(provider) = error.strip_prefix("PROVIDER_UNSUPPORTED:") {
+            return format!("ValueError: unsupported provider: {provider}");
+        }
+        if error.starts_with("unsupported provider:")
+            || error.starts_with("credential field is transport-only:")
+        {
+            return format!("ValueError: {error}");
+        }
+    }
+    if matches!(path, [root, action] if root == "run" && action == "provider-pool")
+        && error.starts_with("credential_ref must be a non-secret")
+    {
+        return format!("ValueError: {error}");
+    }
+    error.to_owned()
 }
 
 fn executable_exists(path: &Path) -> bool {
@@ -449,22 +526,46 @@ fn run_selected(parsed: &Parsed, selected: Engine) -> ExitCode {
     let path = command_path(&parsed.forwarded);
     match selected {
         Engine::Rust => {
+            if let Some(exit) = capability_parser_error(&parsed.forwarded, &path) {
+                return exit;
+            }
             if native_product::supports(&path) {
                 match native_product::execute(&path, &parsed.project_root, &parsed.state_root) {
                     Ok(Some(value)) => {
+                        let blocked_agent = value["state"].as_str() == Some("blocked")
+                            && matches!(path.as_slice(), [root, action] if
+                                (root == "run" && action == "agent-execute")
+                                    || (root == "agent" && action == "replay"));
+                        let integrity_failure = value["ok"].as_bool() == Some(false)
+                            && matches!(path.as_slice(), [root, action] if
+                                root == "run" && action == "memory-verify");
+                        let proxy_service_verify_failure = value["ok"].as_bool() == Some(false)
+                            && matches!(path.as_slice(), [root, action] if
+                                root == "run" && action == "proxy-service")
+                            && parsed
+                                .forwarded
+                                .windows(2)
+                                .any(|items| items[0] == "proxy-service" && items[1] == "verify");
                         emit(&value);
-                        ExitCode::SUCCESS
+                        if blocked_agent || integrity_failure || proxy_service_verify_failure {
+                            ExitCode::from(3)
+                        } else {
+                            ExitCode::SUCCESS
+                        }
                     }
                     Ok(None) => fail(
                         "RUST_PUBLIC_COMMAND_NOT_IMPLEMENTED",
                         "The selected Rust engine does not implement this public command.",
                         json!({"command_path": path, "fallback": "forbidden"}),
                     ),
-                    Err(error) => fail(
-                        "RUST_PUBLIC_COMMAND_FAILED",
-                        "The selected Rust engine failed while executing the public command.",
-                        json!({"command_path": path, "error": error, "fallback": "forbidden"}),
-                    ),
+                    Err(error) => {
+                        let error = python_public_error(&path, &error);
+                        fail(
+                            "RUST_PUBLIC_COMMAND_FAILED",
+                            "The selected Rust engine failed while executing the public command.",
+                            json!({"command_path": path, "error": error, "fallback": "forbidden"}),
+                        )
+                    }
                 }
             } else {
                 fail(
@@ -562,7 +663,10 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{command_path, engine_command, parse_arguments, Engine};
+    use super::{
+        capability_missing_positionals, command_path, engine_command, parse_arguments,
+        python_public_error, Engine,
+    };
 
     #[test]
     fn parses_command_override() {
@@ -585,6 +689,58 @@ mod tests {
             "cache-health".to_owned(),
         ]);
         assert_eq!(path, vec!["run", "cache-health"]);
+    }
+
+    #[test]
+    fn capability_parser_counts_required_positionals_without_option_values() {
+        let missing = capability_missing_positionals(
+            &[
+                "run".to_owned(),
+                "capability-decide".to_owned(),
+                "repo.read".to_owned(),
+                "--resource".to_owned(),
+                "workspace:/module.py".to_owned(),
+            ],
+            &["run".to_owned(), "capability-decide".to_owned()],
+        );
+        assert_eq!(missing, Some(("capability-decide", 1)));
+
+        let complete = capability_missing_positionals(
+            &[
+                "run".to_owned(),
+                "capability-decide".to_owned(),
+                "repo.read".to_owned(),
+                "{\"path\":\"module.py\"}".to_owned(),
+                "--resource=workspace:/module.py".to_owned(),
+            ],
+            &["run".to_owned(), "capability-decide".to_owned()],
+        );
+        assert_eq!(complete, None);
+    }
+
+    #[test]
+    fn provider_public_errors_match_python_exception_strings() {
+        assert_eq!(
+            python_public_error(
+                &["provider".to_owned(), "capabilities".to_owned()],
+                "PROVIDER_UNSUPPORTED:not-a-provider",
+            ),
+            "ValueError: unsupported provider: not-a-provider",
+        );
+        assert_eq!(
+            python_public_error(
+                &["provider".to_owned(), "prepare".to_owned()],
+                "credential field is transport-only: request.authorization",
+            ),
+            "ValueError: credential field is transport-only: request.authorization",
+        );
+        assert_eq!(
+            python_public_error(
+                &["run".to_owned(), "provider-pool".to_owned()],
+                "credential_ref must be a non-secret env/file/keyring/oauth-profile reference",
+            ),
+            "ValueError: credential_ref must be a non-secret env/file/keyring/oauth-profile reference",
+        );
     }
 
     #[test]

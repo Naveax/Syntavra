@@ -45,6 +45,13 @@ class SessionMemory:
                 """
             )
 
+    @staticmethod
+    def _require_session(db: Any, session_id: str) -> Any:
+        session = db.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+        if not session:
+            raise KeyError(session_id)
+        return session
+
     def open(self, session_id: str | None = None, *, parents: Sequence[str] = (), metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
         session_id = session_id or secrets.token_hex(12)
         now = _now()
@@ -63,9 +70,7 @@ class SessionMemory:
 
     def append(self, session_id: str, event_type: str, payload: Mapping[str, Any]) -> dict[str, Any]:
         with _connect(self.path) as db:
-            session = db.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
-            if not session:
-                raise KeyError(session_id)
+            self._require_session(db, session_id)
             last = db.execute("SELECT sequence,event_hash FROM events WHERE session_id = ? ORDER BY sequence DESC LIMIT 1", (session_id,)).fetchone()
             sequence = int(last["sequence"] + 1) if last else 1
             previous = last["event_hash"] if last else "0" * 64
@@ -81,6 +86,7 @@ class SessionMemory:
 
     def events(self, session_id: str) -> list[dict[str, Any]]:
         with _connect(self.path) as db:
+            self._require_session(db, session_id)
             rows = db.execute("SELECT * FROM events WHERE session_id = ? ORDER BY sequence", (session_id,)).fetchall()
         return [dict(row) | {"payload": json.loads(row["payload_json"])} for row in rows]
 
@@ -114,6 +120,7 @@ class SessionMemory:
             raise ValueError(f"unsupported summary views: {unknown}")
         created: list[dict[str, Any]] = []
         with _connect(self.path) as db:
+            self._require_session(db, session_id)
             for view in views:
                 text = self._summary(view, events)
                 source_sequences = [event["sequence"] for event in events]
@@ -151,6 +158,7 @@ class SessionMemory:
             score = relevance + recency + weight
             candidates.append((score, {"type": "event", "score": score, "sequence": event["sequence"], "event_type": event["event_type"], "payload": payload, "event_hash": event["event_hash"]}))
         with _connect(self.path) as db:
+            self._require_session(db, session_id)
             summaries = db.execute("SELECT * FROM summaries WHERE session_id = ?", (session_id,)).fetchall()
         for row in summaries:
             matched = query_terms & _tokens(f"{row['view']} {row['summary_text']}")
@@ -163,6 +171,7 @@ class SessionMemory:
 
     def checkpoint(self, session_id: str, label: str = "") -> dict[str, Any]:
         with _connect(self.path) as db:
+            self._require_session(db, session_id)
             last = db.execute("SELECT sequence,event_hash FROM events WHERE session_id = ? ORDER BY sequence DESC LIMIT 1", (session_id,)).fetchone()
             sequence = int(last["sequence"]) if last else 0
             event_hash = last["event_hash"] if last else "0" * 64

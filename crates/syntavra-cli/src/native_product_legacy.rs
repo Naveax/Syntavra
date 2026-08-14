@@ -12,6 +12,10 @@ use syntavra_core::sha256_hex;
 
 #[path = "native_delegate.rs"]
 mod native_delegate;
+#[path = "native_provider_gateway_capture.rs"]
+mod native_provider_gateway_capture;
+#[path = "native_provider_gateway_prepare.rs"]
+mod native_provider_gateway_prepare;
 #[path = "native_provider_gateway_read.rs"]
 mod native_provider_gateway_read;
 
@@ -25,7 +29,11 @@ pub fn supports(command: &[String]) -> bool {
                 command[1].as_str(),
                 "cache-health" | "delegate" | "provider-route"
             ))
-            || (command[0] == "provider" && matches!(command[1].as_str(), "stats" | "verify")))
+            || (command[0] == "provider"
+                && matches!(
+                    command[1].as_str(),
+                    "prepare" | "capture" | "stats" | "verify" | "replay"
+                )))
 }
 
 fn number_as_i64(value: Option<&Value>) -> i64 {
@@ -415,8 +423,11 @@ pub fn execute(command: &[String], state_root: &Path) -> Result<Option<Value>, S
     }
     if command[0] == "provider" {
         return match command[1].as_str() {
+            "prepare" => native_provider_gateway_prepare::prepare(state_root).map(Some),
+            "capture" => native_provider_gateway_capture::capture(state_root).map(Some),
             "stats" => native_provider_gateway_read::stats(state_root).map(Some),
             "verify" => native_provider_gateway_read::verify(state_root).map(Some),
+            "replay" => native_provider_gateway_read::replay(state_root).map(Some),
             _ => Ok(None),
         };
     }

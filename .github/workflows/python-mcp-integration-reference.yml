@@ -1,0 +1,104 @@
+name: Python MCP Integration Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-mcp-integration-reference
+  cancel-in-progress: true
+
+jobs:
+  python-mcp-integration-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python MCP/integration regression tests
+        run: python -m unittest tests.runtime.test_python_mcp_integration_reference -v
+
+      - name: Generate exact-head Python MCP/integration evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_mcp_integration_reference.py \
+            --output /tmp/python-mcp-integration-reference.json \
+            > /tmp/python-mcp-integration-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-mcp-integration-reference.log
+          test -f /tmp/python-mcp-integration-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-mcp-integration-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'mcp-integration'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['routes']['route_count'] == 3
+          assert value['tool_inventory']['profile_counts'] == {'minimal': 10, 'balanced': 36}
+          assert value['stdio']['exit'] == 0
+          assert value['stdio']['response_count'] == 10
+          assert value['stdio']['notification_response_count'] == 0
+          assert value['stdio']['initialize']['protocol_version'] == '2025-06-18'
+          assert value['stdio']['initialize']['server_info'] == {'name': 'syntavra', 'version': '0.0.1'}
+          assert value['stdio']['tools_list']['count'] == 10
+          assert value['stdio']['denied_call'] == {'code': -32001, 'reason': 'tool-not-exposed-by-active-profile'}
+          assert value['stdio']['unknown_method'] == {'code': -32601, 'message': 'Method not found'}
+          assert value['stdio']['parse_error'] == {'code': -32700, 'message': 'Parse error'}
+          assert value['stdio']['invalid_request'] == {'code': -32600, 'message': 'Invalid Request'}
+          assert value['stdio']['invalid_parameters'] == {'code': -32602, 'message': 'Invalid params'}
+          assert value['stdio']['post_error_ping_result'] == {}
+          assert value['integrations']['family_filters'] == value['integrations']['family_counts']
+          assert value['integrations']['coverage']['ok'] is True
+          assert value['route_policy']['minimal_read']['allowed'] is True
+          assert value['route_policy']['minimal_read']['category'] == 'read'
+          assert value['route_policy']['unsafe_execute_denied']['reason'] == 'sandbox-required'
+          assert value['route_policy']['balanced_execute_no_auth']['reason'] == 'explicit-user-authorization-required'
+          assert value['route_policy']['balanced_execute_allowed']['allowed'] is True
+          assert value['route_policy']['unknown_tool']['reason'] == 'unknown-tool-fail-closed'
+          assert value['network_boundary'] == 'offline stdio JSON-RPC and local registry fixtures only; no MCP socket/network transport or external service'
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python MCP/integration reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-mcp-integration-reference
+          path: |
+            /tmp/python-mcp-integration-reference.json
+            /tmp/python-mcp-integration-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

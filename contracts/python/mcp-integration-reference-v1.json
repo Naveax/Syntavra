@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "family": "mcp-integration",
+  "public_routes": [
+    "integrations",
+    "mcp",
+    "run route"
+  ],
+  "jsonrpc_methods": [
+    "initialize",
+    "notifications/initialized",
+    "ping",
+    "tools/call",
+    "tools/list"
+  ],
+  "jsonrpc_errors": {
+    "parse_error": -32700,
+    "invalid_request": -32600,
+    "method_not_found": -32601,
+    "invalid_parameters": -32602,
+    "policy_denied": -32001,
+    "tool_execution_failed": -32000
+  },
+  "profiles": {
+    "minimal_exposed_tools": 10,
+    "balanced_exposed_tools": 36,
+    "legacy_alias": {
+      "tiny": "minimal",
+      "optimized": "balanced",
+      "full": "audit"
+    }
+  },
+  "tool_inventory": {
+    "count": 93,
+    "sha256": "6d7bc579b79517441003af0ce2dae2f12727ac7ec4fd785de744f4cb2c574420"
+  },
+  "integration_inventory": {
+    "count": 43,
+    "family_counts": {
+      "framework": 15,
+      "host": 18,
+      "provider": 10
+    },
+    "sha256": "a32641c1a246ecba9491a7e21d1bd585220b09d5de6c8bbc01ef83273312ac81"
+  },
+  "exit_policy": {
+    "success": 0,
+    "argparse_error": 2,
+    "application_error": 4
+  },
+  "network_boundary": "offline stdio JSON-RPC and local registry fixtures only; no MCP socket/network transport or external service",
+  "ownership_notes": {
+    "provider/proxy transport": "owned by I Provider / proxy reference",
+    "setup/host installation": "owned by N Setup / repair / host reference",
+    "capability token issuance/verification": "owned by H Capability / inventory reference"
+  }
+}

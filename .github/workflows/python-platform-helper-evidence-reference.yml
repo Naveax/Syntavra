@@ -1,0 +1,102 @@
+name: Python Platform Helper Evidence Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-platform-helper-evidence-reference
+  cancel-in-progress: true
+
+jobs:
+  python-platform-helper-evidence-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python platform/helper/evidence regression tests
+        run: python -m unittest tests.runtime.test_python_platform_helper_evidence_reference -v
+
+      - name: Generate exact-head Python platform/helper/evidence evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_platform_helper_evidence_reference.py \
+            --output /tmp/python-platform-helper-evidence-reference.json \
+            > /tmp/python-platform-helper-evidence-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-platform-helper-evidence-reference.log
+          test -f /tmp/python-platform-helper-evidence-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-platform-helper-evidence-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'platform-helper-evidence'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['routes']['route_count'] == 19
+          assert value['platform']['compatibility_stable_projection_exact'] is True
+          assert value['artifacts']['capture_kind'] == 'terminal'
+          assert value['artifacts']['capture_exact_recovery'] is True
+          assert value['artifacts']['artifact_stats']['artifacts'] == 2
+          assert value['runtime_evidence']['stats']['nodes'] == 2
+          assert value['runtime_evidence']['stats']['edges'] == 1
+          assert value['encrypted_evidence']['ciphertext_excludes_plaintext'] is True
+          assert value['encrypted_evidence']['rotation']['active_key_version'] == 2
+          assert value['encrypted_evidence']['malformed_handle']['exit'] == 4
+          assert value['encrypted_evidence']['malformed_handle']['error_type'] == 'EvidenceError'
+          assert value['fd3']['applicable'] is False
+          assert value['fd3']['dedicated_channel_hits'] == []
+          assert value['os_variants']['k_owned_os_branch_hits'] == []
+          assert value['network_boundary'] == 'offline; no live external service or remote network required'
+          assert value['exit_policy'] == {
+              'success': 0,
+              'application_error': 4,
+              'integrity_or_result_failure': 3,
+              'argparse_error': 2,
+          }
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python platform/helper/evidence reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-platform-helper-evidence-reference
+          path: |
+            /tmp/python-platform-helper-evidence-reference.json
+            /tmp/python-platform-helper-evidence-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

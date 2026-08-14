@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "family": "phase2-rust-migration-matrix",
+  "phase": "A-B",
+  "claim": "PHASE2_RUST_MIGRATION_MATRIX_BASELINE",
+  "strict": true,
+  "python_reference": {
+    "acceptance_contract": "contracts/python/python-phase1-acceptance-v1.json",
+    "expected_claim": "PYTHON_PHASE1_ACCEPTED",
+    "expected_public_route_count": 245,
+    "expected_route_sha256": "7bd02c46ba9209504c4b1842c9ad30e28151ce14a0f5c5d545daff960f9899aa",
+    "phase1_accepted_head": "50c4bf2566a724344098495a4f2a8da0a6818223"
+  },
+  "rust_baseline": {
+    "surface_contract": "contracts/engine/dual-engine-public-surface-v2.json",
+    "remaining_authority": "tools/report_missing_native_public_routes.py",
+    "ownership_probe_binary": "syntavra-remaining71-ownership",
+    "expected_rust_module_count": 150,
+    "expected_promoted_native": 174,
+    "expected_remaining": 71,
+    "expected_remaining_owned": 71,
+    "expected_unowned": 0,
+    "atomic_promotion_target": 245
+  },
+  "policy": {
+    "hardcoded_remaining_route_list_forbidden": true,
+    "route_identity_authority_single_source": true,
+    "combined_selector_and_lower_module_ownership_probe": true,
+    "selector_ownership_is_not_behavioral_parity": true,
+    "lower_rust_owner_module_must_be_resolved_before_section_a_closure": true,
+    "old_family_certifications_are_not_final_head_certifications": true,
+    "no_native_counter_change_in_this_gate": true
+  },
+  "family_programs": [
+    {
+      "family": "agent",
+      "validator": "tools/validate_remaining71_agent_differential.py",
+      "workflow": ".github/workflows/remaining71-agent-differential.yml",
+      "state": "existing-needs-final-head-recertification"
+    },
+    {
+      "family": "headless",
+      "validator": "tools/validate_remaining71_headless_differential.py",
+      "workflow": ".github/workflows/remaining71-headless-differential.yml",
+      "state": "existing-needs-final-head-recertification"
+    },
+    {
+      "family": "graph-language-semantic",
+      "validator": "tools/validate_remaining71_graph_language_core_differential.py",
+      "workflow": ".github/workflows/remaining71-graph-language-core-differential.yml",
+      "state": "existing-needs-final-head-recertification"
+    },
+    {
+      "family": "memory-intelligence",
+      "validator": "tools/validate_remaining71_memory_intelligence_differential.py",
+      "workflow": ".github/workflows/remaining71-memory-intelligence-differential.yml",
+      "secondary": [
+        {
+          "validator": "tools/validate_remaining71_session_memory_differential.py",
+          "workflow": ".github/workflows/remaining71-session-memory-differential.yml"
+        }
+      ],
+      "state": "existing-needs-final-head-recertification"
+    },
+    {
+      "family": "capability-inventory",
+      "validator": "tools/validate_remaining71_capability_differential.py",
+      "workflow": ".github/workflows/remaining71-capability-differential.yml",
+      "state": "existing-needs-final-head-recertification"
+    },
+    {
+      "family": "provider-proxy",
+      "validator": "tools/validate_remaining71_provider_proxy_differential.py",
+      "workflow": ".github/workflows/remaining71-provider-proxy-differential.yml",
+      "state": "existing-needs-final-head-recertification"
+    },
+    {
+      "family": "sandbox-security",
+      "validator": "tools/validate_remaining71_sandbox_differential.py",
+      "workflow": ".github/workflows/remaining71-sandbox-differential.yml",
+      "state": "existing-needs-final-head-recertification"
+    },
+    {
+      "family": "core-legacy-route-reference",
+      "validator": "tools/validate_remaining71_competitive_core_differential.py",
+      "workflow": ".github/workflows/remaining71-competitive-core-differential.yml",
+      "state": "partial-existing-validator"
+    },
+    {
+      "family": "platform-helper-evidence",
+      "validator": null,
+      "workflow": null,
+      "state": "pending-family-differential"
+    },
+    {
+      "family": "benchmark-proof",
+      "validator": null,
+      "workflow": null,
+      "state": "pending-family-differential"
+    },
+    {
+      "family": "context-compaction",
+      "validator": null,
+      "workflow": null,
+      "state": "pending-family-differential"
+    },
+    {
+      "family": "setup-host",
+      "validator": null,
+      "workflow": null,
+      "state": "pending-family-differential"
+    },
+    {
+      "family": "mcp-integration",
+      "validator": null,
+      "workflow": null,
+      "state": "pending-family-differential"
+    },
+    {
+      "family": "publication-registry",
+      "validator": null,
+      "workflow": null,
+      "state": "no-public-route-family"
+    }
+  ]
+}
