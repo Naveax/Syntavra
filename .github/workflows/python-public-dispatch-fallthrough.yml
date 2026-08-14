@@ -1,0 +1,63 @@
+name: Python Public Dispatch Fallthrough
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  python-public-dispatch-fallthrough:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Run Python dispatch fallthrough regression tests
+        run: python -m unittest discover -s tests -p 'test_python_public_dispatch_fallthrough.py' -v
+
+      - name: Derive exact-head Python dispatch fallthrough contract
+        run: |
+          set +e
+          python tools/report_python_public_dispatch_fallthrough.py > /tmp/python-public-dispatch-fallthrough.json
+          report_exit=$?
+          set -e
+          cat /tmp/python-public-dispatch-fallthrough.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-public-dispatch-fallthrough.json').read_text(encoding='utf-8'))
+          python = value['python']
+          assert value['ok'] is True, value
+          assert value['base_execution_contract_ok'] is True, value
+          assert python['route_count'] == 245, python['route_count']
+          assert python['handler_count'] == 245, python['handler_failures']
+          assert python['handler_failure_count'] == 0, python['handler_failures']
+          assert python['legacy_exact_argparse_handler_count'] > 0
+          assert python['dispatcher_audit_count'] == 4, python['dispatchers']
+          assert python['dispatcher_failure_count'] == 0, python['dispatcher_failures']
+          PY
+          exit "$report_exit"
+
+      - name: Upload exact-head Python dispatch evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-public-dispatch-fallthrough
+          path: /tmp/python-public-dispatch-fallthrough.json
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean tree
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"

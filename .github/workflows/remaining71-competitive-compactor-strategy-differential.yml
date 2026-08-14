@@ -1,0 +1,86 @@
+name: Remaining 71 Competitive Compactor Strategy Differential
+
+on:
+  push:
+    branches: [agent/r31-provider-capture-native]
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  strategy-differential:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+      SYNTAVRA_BULK_PARITY_PROBE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Prepare Rust 1.82 and build exact-head CLI
+        run: |
+          rustup toolchain install 1.82.0 --profile minimal --component rustfmt
+          cargo +1.82.0 fmt --all -- --check
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
+      - name: Run ten-strategy public differential
+        run: |
+          python - <<'PY' > /tmp/competitive-compactor-strategy.log 2>&1
+          import json, os, subprocess, sys, tempfile
+          from pathlib import Path
+          repo=Path.cwd(); rust=(repo/'target/debug/syntavra').resolve()
+          contract=json.loads((repo/'contracts/engine/remaining71-competitive-compactor-strategy-v1.json').read_text())
+          def fixture(kind):
+              if kind=='git-status': return '\n'.join(['On branch main',' M src/a.py']+[f'noise {i}' for i in range(120)])
+              if kind=='git-diff': return '\n'.join(['diff --git a/a b/a','index 1..2 100644','--- a/a','+++ b/a','@@ -1 +1 @@','-old','+new']+[f'noise {i}' for i in range(160)])
+              if kind=='git-log': return '\n'.join(['commit abc','Author: A','Date: now','    msg']+[f'noise {i}' for i in range(160)])
+              if kind=='search': return '\n'.join(f'f{i%100}.txt:{i}:needle' for i in range(1000))
+              if kind=='table': return '\n'.join(f'row {i}' for i in range(160))
+              if kind=='test': return '\n'.join([f'noise {i}' for i in range(180)]+['1 passed in 0.01s'])
+              if kind=='lint': return '\n'.join([f'noise {i}' for i in range(180)]+['a.py:1: error: bad','Found 1 problem'])
+              if kind=='json-or-table': return json.dumps({'items':list(range(100))},separators=(',',':'))
+              if kind=='docker-build': return '\n'.join([f'noise {i}' for i in range(180)]+['#1 [internal] load build definition','#1 DONE 0.1s'])
+              if kind=='head-tail': return '\n'.join(f'line {i}' for i in range(160))
+              raise KeyError(kind)
+          def run(engine, command, output, root):
+              project=root/'project'; state=root/'state'; project.mkdir(parents=True); state.mkdir(parents=True)
+              source=project/'t.json'; source.write_text(json.dumps([{'command':command,'output':output}],ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+              common=['--project',str(project),'--state-root',str(state),'run','transcript-mine',str(source)]
+              cmd=[sys.executable,'-m','syntavra_runtime.engine_entry','--engine','python',*common] if engine=='python' else [str(rust),'--engine','rust',*common]
+              env=os.environ.copy(); env.update({'PYTHONPATH':str(repo),'PYTHONUTF8':'1','PYTHONIOENCODING':'utf-8','SYNTAVRA_BULK_PARITY_PROBE':'1'})
+              done=subprocess.run(cmd,cwd=repo,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace',timeout=90)
+              try: value=json.loads(done.stdout)
+              except json.JSONDecodeError: value=None
+              return {'exit':done.returncode,'value':value,'stdout':done.stdout,'stderr':done.stderr}
+          mismatches=[]; receipts={'python':{},'rust':{}}
+          with tempfile.TemporaryDirectory(prefix='syntavra-compactor-strategy-') as tmp:
+              base=Path(tmp)
+              for case in contract['cases']:
+                  out=fixture(case['fixture']); py=run('python',case['command'],out,base/f"py-{case['id']}"); rs=run('rust',case['command'],out,base/f"rs-{case['id']}")
+                  receipts['python'][case['id']]=py; receipts['rust'][case['id']]=rs
+                  a={'exit':py['exit'],'value':py['value']}; b={'exit':rs['exit'],'value':rs['value']}
+                  if a!=b: mismatches.append({'id':case['id'],'strategy':case['strategy'],'python':a,'rust':b})
+          report={'ok':not mismatches,'contract':contract['contract'],'head':os.environ.get('GITHUB_SHA'),'strategy_count':len(contract['cases']),'mismatch_count':len(mismatches),'mismatches':mismatches,'receipts':receipts,'claim_boundary':contract['authority']['claim_boundary']}
+          Path('/tmp/competitive-compactor-strategy.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True),encoding='utf-8')
+          print(json.dumps({'ok':report['ok'],'strategy_count':report['strategy_count'],'mismatch_count':report['mismatch_count']},sort_keys=True))
+          for row in mismatches: print('STRATEGY_MISMATCH '+json.dumps({'id':row['id'],'strategy':row['strategy']},sort_keys=True))
+          raise SystemExit(0 if report['ok'] else 1)
+          PY
+      - name: Upload strategy differential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: competitive-compactor-strategy-differential
+          path: |
+            /tmp/competitive-compactor-strategy.json
+            /tmp/competitive-compactor-strategy.log
+          if-no-files-found: warn
+      - name: Enforce clean exact-head tree
+        if: always()
+        run: |
+          git status --porcelain=v1
+          test -z "$(git status --porcelain=v1)"

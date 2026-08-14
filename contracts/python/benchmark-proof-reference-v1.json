@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "public_routes": [
+    "benchmark compare",
+    "benchmark generate-config",
+    "benchmark generate-repo",
+    "benchmark validate-config",
+    "proof status",
+    "prove benchmark",
+    "prove external-suite",
+    "prove integrations",
+    "prove long-context",
+    "prove maturity",
+    "prove plan",
+    "prove provider-billed",
+    "prove readiness",
+    "prove receipts",
+    "prove schema",
+    "prove suites",
+    "signalbench gate",
+    "signalbench plan",
+    "signalbench2 gate",
+    "signalbench2 plan"
+  ],
+  "thresholds": {
+    "signalbench": {
+      "required_tasks": 150,
+      "required_repetitions": 30,
+      "minimum_success": 0.985,
+      "maximum_token_ratio": 0.18,
+      "maximum_wall_ratio": 0.15,
+      "maximum_security_regressions": 0
+    },
+    "measured_benchmark": {
+      "minimum_pairs": 30,
+      "minimum_repositories": 5,
+      "minimum_tasks": 10,
+      "minimum_workload_families": 3,
+      "quality_non_inferiority_margin": 0.01,
+      "success_non_inferiority_margin": 0.02
+    },
+    "external_suite": {
+      "minimum_pairs": 30,
+      "quality_non_inferiority_margin": 0.01,
+      "success_non_inferiority_margin": 0.02
+    },
+    "live_integration": {
+      "minimum_receipts_per_integration": 3,
+      "minimum_operating_systems": 2
+    },
+    "provider_billed": {
+      "minimum_provider_observed_runs": 10,
+      "minimum_cost_ratio_lcb": 1.0
+    }
+  },
+  "ordering": {
+    "reasons": "sorted-or-declaration-order-as-produced-by-owning-gate",
+    "external_suites": "registry-declaration-order",
+    "duplicate_receipt_ids": "sorted",
+    "benchmark_comparison_arms": "sorted-by-arm-name"
+  },
+  "exit_policy": {
+    "success": 0,
+    "result_not_proven": 4,
+    "benchmark_compare_not_claimable": 3,
+    "application_error": 4,
+    "argparse_error": 2
+  },
+  "network_boundary": "offline deterministic fixtures only; no live provider, repository benchmark, or SaaS execution"
+}
