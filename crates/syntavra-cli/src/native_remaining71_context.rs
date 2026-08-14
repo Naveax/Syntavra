@@ -6,6 +6,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::Path;
 
+use regex::Regex;
 use serde_json::{json, Map, Value};
 use syntavra_core::sha256_hex;
 
@@ -152,13 +153,10 @@ fn compile(
         item.priority = item.priority.clamp(0.0, 1.0);
 
         if item.content.len() > EXTERNALIZE_THRESHOLD_BYTES {
-            let record = store.put(
-                item.content.as_bytes(),
-                "text/plain",
-                "tool-output:shell",
-                &json!({"tool":item.source,"exit_code":0,"duration_ms":0.0}),
-            )?;
-            artifact_ids.insert(record.artifact_id);
+            let (artifact_id, compact_view) =
+                context_externalize(&store, &item.source, &item.content)?;
+            artifact_ids.insert(artifact_id);
+            item.content = compact_view;
         }
         normalized.push(item);
     }
@@ -288,14 +286,210 @@ fn infer_kind(content: &str, source: &str) -> String {
 }
 
 fn delta(previous: &str, current: &str) -> String {
-    // The canonical Python path keeps identical/first-seen content verbatim.
-    // A later differential hardening fixture covers non-trivial unified-diff
-    // compaction; retaining the current value here is fail-safe and lossless.
     if previous.is_empty() || previous == current {
-        current.to_owned()
+        return current.to_owned();
+    }
+    let rendered = single_hunk_unified_diff(previous, current);
+    let rendered_chars = rendered.chars().count();
+    let current_chars = current.chars().count();
+    if !rendered.is_empty()
+        && rendered_chars.saturating_mul(4) < current_chars.saturating_mul(3)
+    {
+        rendered
     } else {
         current.to_owned()
     }
+}
+
+fn single_hunk_unified_diff(previous: &str, current: &str) -> String {
+    let old = previous.lines().collect::<Vec<_>>();
+    let new = current.lines().collect::<Vec<_>>();
+    let mut prefix = 0usize;
+    while prefix < old.len() && prefix < new.len() && old[prefix] == new[prefix] {
+        prefix += 1;
+    }
+    let mut suffix = 0usize;
+    while suffix < old.len().saturating_sub(prefix)
+        && suffix < new.len().saturating_sub(prefix)
+        && old[old.len() - 1 - suffix] == new[new.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+    if prefix == old.len() && prefix == new.len() {
+        return String::new();
+    }
+    let old_change_end = old.len().saturating_sub(suffix);
+    let new_change_end = new.len().saturating_sub(suffix);
+    let old_start = prefix.saturating_sub(2);
+    let new_start = prefix.saturating_sub(2);
+    let old_end = old_change_end.saturating_add(2).min(old.len());
+    let new_end = new_change_end.saturating_add(2).min(new.len());
+    let mut lines = vec![
+        "--- ".to_owned(),
+        "+++ ".to_owned(),
+        format!(
+            "@@ -{} +{} @@",
+            unified_range(old_start, old_end.saturating_sub(old_start)),
+            unified_range(new_start, new_end.saturating_sub(new_start))
+        ),
+    ];
+    for line in &old[old_start..prefix] {
+        lines.push(format!(" {line}"));
+    }
+    for line in &old[prefix..old_change_end] {
+        lines.push(format!("-{line}"));
+    }
+    for line in &new[prefix..new_change_end] {
+        lines.push(format!("+{line}"));
+    }
+    for line in &old[old_change_end..old_end] {
+        lines.push(format!(" {line}"));
+    }
+    lines.join("\n")
+}
+
+fn unified_range(start: usize, count: usize) -> String {
+    let mut beginning = start.saturating_add(1);
+    if count == 1 {
+        return beginning.to_string();
+    }
+    if count == 0 {
+        beginning = beginning.saturating_sub(1);
+    }
+    format!("{beginning},{count}")
+}
+
+fn context_externalize(
+    store: &super::native_artifact_store::NativeArtifactStore,
+    source: &str,
+    content: &str,
+) -> Result<(String, String), String> {
+    let kind = context_output_kind(source, content);
+    let record = store.put(
+        content.as_bytes(),
+        "text/plain",
+        &format!("tool-output:{kind}"),
+        &json!({"tool":source,"exit_code":0,"duration_ms":0.0}),
+    )?;
+    let clean = context_redact(content)?;
+    let compact = if kind == "shell" {
+        compact_shell(&clean)?
+    } else {
+        clean.clone()
+    };
+    let view = format!(
+        "Tool: {source}\nParser: {kind}\nExit code: 0\nExact output: artifact://{}\n{compact}",
+        record.artifact_id
+    );
+    let visible = if view.as_bytes().len() >= clean.as_bytes().len() {
+        clean
+    } else {
+        view
+    };
+    Ok((record.artifact_id, visible))
+}
+
+fn context_output_kind(source: &str, content: &str) -> String {
+    let lower = source.to_lowercase();
+    if serde_json::from_str::<Value>(content).is_ok() {
+        return "json".to_owned();
+    }
+    if lower.contains("diff") || content.starts_with("diff --git") {
+        return "diff".to_owned();
+    }
+    if ["pytest", "unittest", "jest", "vitest", "cargo test", "go test"]
+        .iter()
+        .any(|token| lower.contains(token))
+    {
+        return "test".to_owned();
+    }
+    if ["grep", "rg", "search", "find"]
+        .iter()
+        .any(|token| lower.contains(token))
+    {
+        return "search".to_owned();
+    }
+    if ["read", "cat", "source", "file"]
+        .iter()
+        .any(|token| lower.contains(token))
+    {
+        return "source".to_owned();
+    }
+    "shell".to_owned()
+}
+
+fn context_redact(value: &str) -> Result<String, String> {
+    let secret = Regex::new(
+        r"(?i)(?:api[_-]?key|authorization|access[_-]?token|password|secret|bearer)\s*[:=]\s*([^\s,;]+)",
+    )
+    .map_err(|error| format!("CONTEXT_SECRET_REGEX_FAILED:{error}"))?;
+    Ok(secret
+        .replace_all(value, |captures: &regex::Captures<'_>| {
+            let whole = captures.get(0).map_or("", |value| value.as_str());
+            let secret_value = captures.get(1).map_or("", |value| value.as_str());
+            let prefix_len = whole.len().saturating_sub(secret_value.len());
+            format!("{}<redacted>", &whole[..prefix_len])
+        })
+        .into_owned())
+}
+
+fn compact_shell(clean: &str) -> Result<String, String> {
+    let error_re = Regex::new(
+        r"(?i)\b(error|failed|failure|panic|assertion|traceback|exception|fatal|denied|timeout)\b",
+    )
+    .map_err(|error| format!("CONTEXT_ERROR_REGEX_FAILED:{error}"))?;
+    let location_re = Regex::new(
+        r"(?:[A-Za-z]:)?[^\s:]+\.(?:py|rs|ts|tsx|js|jsx|go|java|cs|cpp|c|h|rb|php):\d+(?::\d+)?",
+    )
+    .map_err(|error| format!("CONTEXT_LOCATION_REGEX_FAILED:{error}"))?;
+    let lines = clean.lines().map(str::to_owned).collect::<Vec<_>>();
+    let mut critical = Vec::<String>::new();
+    for line in &lines {
+        if (error_re.is_match(line) || location_re.is_match(line)) && !critical.contains(line) {
+            critical.push(line.clone());
+            if critical.len() >= 30 {
+                break;
+            }
+        }
+    }
+
+    let mut counts = Vec::<(String, usize, usize)>::new();
+    for (index, line) in lines.iter().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Some(row) = counts.iter_mut().find(|row| row.0 == *line) {
+            row.1 += 1;
+        } else {
+            counts.push((line.clone(), 1, index));
+        }
+    }
+    counts.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.2.cmp(&right.2)));
+    let repeated = counts
+        .into_iter()
+        .take(15)
+        .filter(|row| row.1 > 2)
+        .map(|row| format!("[{}x] {}", row.1, row.0))
+        .collect::<Vec<_>>();
+
+    let mut candidates = Vec::<String>::new();
+    candidates.extend(critical);
+    candidates.extend(repeated);
+    candidates.extend(lines.iter().take(8).cloned());
+    candidates.extend(lines.iter().skip(lines.len().saturating_sub(12)).cloned());
+    let mut selected = Vec::<String>::new();
+    let mut seen = HashSet::<String>::new();
+    for line in candidates {
+        let normalized = line.trim().to_owned();
+        if normalized.is_empty() || !seen.insert(normalized) {
+            continue;
+        }
+        selected.push(line);
+        if selected.len() >= 60 {
+            break;
+        }
+    }
+    Ok(selected.join("\n"))
 }
 
 fn estimate_tokens(text: &str, provider: &str) -> Result<i64, String> {
