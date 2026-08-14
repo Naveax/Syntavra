@@ -1,5 +1,6 @@
 [package]
 name = "syntavra-contracts"
+description = "Shared public contracts for the Syntavra Python/Rust runtime"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
