@@ -1,0 +1,40 @@
+name: Persist Post-R38 Manifest
+
+on:
+  push:
+    branches:
+      - agent/post-r38-release-provenance
+
+permissions:
+  contents: write
+
+jobs:
+  persist-manifest:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: agent/post-r38-release-provenance
+          fetch-depth: 0
+
+      - name: Refresh and persist manifest only
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="$(git rev-parse HEAD)"
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -n "$status"
+          test "$(printf '%s\n' "$status" | wc -l)" -eq 1
+          printf '%s\n' "$status" | grep -Eq '^ M MANIFEST\.sha256$'
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.sha256
+          git commit -m "Refresh post-R38 release manifest"
+          test "$(git rev-parse HEAD^)" = "$before"
+          git push origin HEAD:agent/post-r38-release-provenance
