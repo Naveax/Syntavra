@@ -75,12 +75,12 @@ def check_repository() -> dict:
         ".github/ISSUE_TEMPLATE/bug_report.yml",
         ".github/ISSUE_TEMPLATE/feature_request.yml",
         ".github/dependabot.yml",
-        ".github/workflows/codeql.yml",
-        ".github/workflows/dependency-review.yml",
-        ".github/workflows/validate.yml",
-        ".github/workflows/validate-fusion-runtime.yml",
-        ".github/workflows/portable-runtime.yml",
-        ".github/workflows/pre-release-artifacts.yml",
+        ".github/workflows/codex-integration-closure.yml",
+        ".github/workflows/dual-engine-promotion-boundary.yml",
+        ".github/workflows/phase2-rust-migration-matrix.yml",
+        ".github/workflows/remaining71-capability-differential.yml",
+        ".github/workflows/remaining71-inventory-observe.yml",
+        ".github/workflows/post-r38-release-provenance-diagnostic.yml",
         "docs/001_PRE_RELEASE.md",
         "docs/ARCHITECTURE.md",
         "docs/UNIFIED_PLAN.md",
@@ -113,7 +113,7 @@ def check_repository() -> dict:
         failures.append("npm-ci-not-enforced")
     if "npm test" not in workflow_text:
         failures.append("npm-tests-not-enforced")
-    if "attest-build-provenance" not in workflow_text:
+    if "actions/attest@v4" not in workflow_text:
         failures.append("artifact-provenance-not-enforced")
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")

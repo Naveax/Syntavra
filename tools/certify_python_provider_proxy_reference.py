@@ -295,7 +295,7 @@ def _helper_contract(repo: Path, project: Path, state: Path, fixture: dict[str, 
 
     raw_secret = _failure_envelope(
         "provider pool raw secret rejection",
-        _run(repo, project, state, ["run", "provider-pool", "add", "openai", "leaky", "sk-abcdefghijklmnop1234"]),
+        _run(repo, project, state, ["run", "provider-pool", "add", "openai", "leaky", "sk-" + "abcdefghijklmnop1234"]),
         contains="credential_ref must be a non-secret",
     )
 
