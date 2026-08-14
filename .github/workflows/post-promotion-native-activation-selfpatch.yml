@@ -15,78 +15,55 @@ concurrency:
 jobs:
   repair:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: "1"
+      CERTIFIED_PREIMAGE: 20bfa000fa330ea4aff7e6018284bfca72e54705
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Require exact current authority lineage
+      - name: Require exact promoted product preimage
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "b15a5c5a7a69de42324fa103dc38e1a93c504759"
           test -z "$(git status --porcelain --untracked-files=all)"
+          git diff --exit-code "$CERTIFIED_PREIMAGE" -- \
+            crates/syntavra-cli/src/native_product.rs \
+            crates/syntavra-cli/src/bin/syntavra.rs \
+            crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs \
+            tools/report_phase2_rust_migration_transition.py \
+            tests/runtime/test_phase2_rust_migration_transition.py \
+            .github/workflows/phase2-rust-migration-matrix.yml \
+            .github/workflows/remaining71-capability-differential.yml
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('contracts/engine/dual-engine-public-surface-v2.json').read_text(encoding='utf-8'))
+          assert value['claim'] == 'FULL_DUAL_ENGINE_PARITY_PROVEN', value
+          assert value['python_surface']['public_command_count'] == 245, value
+          assert value['rust_surface']['native_public_command_count'] == 245, value
+          assert value['rust_surface']['missing_native_public_command_count'] == 0, value
+          assert value['rust_surface']['native_coverage_ppm'] == 1_000_000, value
+          assert value['rust_surface']['python_launcher_bridge_command_count'] == 0, value
+          assert len(value['rust_surface']['native_public_commands']) == 245, value
+          PY
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Apply extracted fail-closed repair
+      - name: Apply fail-closed production activation repair
         shell: bash
         run: |
           set -euo pipefail
           python tools/apply_post_promotion_native_activation.py
-
-          # The extracted patcher predates the exact one-component selector roots in
-          # syntavra.rs::command_path(). Repair the generated ownership probe so the
-          # audit mirrors the production selector grammar exactly, not approximately.
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs')
-          text = path.read_text(encoding='utf-8')
-          start = text.index('fn selector_path(route: &str) -> Vec<String> {')
-          end = text.index('\nfn remaining71_owner_modules', start)
-          replacement = '''fn selector_path(route: &str) -> Vec<String> {
-              let mut positional = route
-                  .split_whitespace()
-                  .map(str::to_owned)
-                  .collect::<Vec<_>>();
-              if matches!(
-                  positional.first().map(String::as_str),
-                  Some("rollout-tail" | "context-stress" | "claim" | "context" | "init" | "hook" | "mcp")
-              ) {
-                  positional.truncate(1);
-              } else if positional.first().map(String::as_str) == Some("engine")
-                  && positional.get(1).map(String::as_str) == Some("route")
-              {
-                  positional.truncate(3);
-              } else {
-                  positional.truncate(2);
-              }
-              positional
-          }
-          '''
-          text = text[:start] + replacement + text[end:]
-          anchor = '''        assert_eq!(
-              selector_path("engine route config.show"),
-              vec!["engine", "route", "config.show"]
-          );
-          '''
-          if text.count(anchor) != 1:
-              raise SystemExit('ownership selector test anchor drift')
-          text = text.replace(
-              anchor,
-              anchor + '        assert_eq!(selector_path("context evaluate"), vec!["context"]);\n',
-              1,
-          )
-          path.write_text(text, encoding='utf-8', newline='\n')
-          PY
+          git diff --check
+          test -z "$(grep -R --line-number 'bulk_parity_probe_enabled\|SYNTAVRA_BULK_PARITY_PROBE' crates/syntavra-cli/src/native_product.rs || true)"
 
       - name: Install runtime and pinned Rust 1.82
         shell: bash
@@ -98,7 +75,7 @@ jobs:
           rustc +1.82.0 --version
           cargo +1.82.0 --version
 
-      - name: Format compile and unit-test repaired selector
+      - name: Format compile and test repaired production selector
         shell: bash
         run: |
           set -euo pipefail
@@ -108,7 +85,7 @@ jobs:
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra --bin syntavra-remaining71-ownership
           cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra --bin syntavra-remaining71-ownership
 
-      - name: Prove all canonical routes are production-selector-owned without probe flag
+      - name: Prove all 245 canonical routes are production-selector-owned
         shell: bash
         run: |
           set -euo pipefail
@@ -123,13 +100,12 @@ jobs:
           inventory = json.loads(Path('/tmp/native-inventory.json').read_text(encoding='utf-8'))
           ownership = json.loads(Path('/tmp/native-ownership.json').read_text(encoding='utf-8'))
           status = json.loads(Path('/tmp/engine-status.json').read_text(encoding='utf-8'))
-
           assert inventory['ok'] is True, inventory
           assert inventory['python']['derived_count'] == 245, inventory
           assert inventory['rust']['native_count'] == 245, inventory
           assert inventory['rust']['missing_count'] == 0, inventory
           assert inventory['missing_routes'] == [], inventory
-
+          assert inventory['rust']['extra_native_routes'] == [], inventory
           assert ownership['ok'] is True, ownership
           assert ownership['inventory_state'] == 'promoted-245-0', ownership
           assert ownership['owned_count'] == 245, ownership
@@ -139,18 +115,16 @@ jobs:
           manifest_routes = {row['route'] for row in inventory['python']['manifest']}
           assert set(ownership['selector_paths']) == manifest_routes, ownership
           assert ownership['probe_environment'] == 'production selector; no activation probe flag', ownership
-
           rust = status['engines']['rust']
           assert rust['native_public_commands'] == 245, status
           assert rust['missing_public_commands'] == 0, status
-
           print(json.dumps({
               'ok': True,
-              'canonical_public_routes': 245,
-              'production_selector_owned': ownership['owned_count'],
-              'production_selector_unowned': ownership['unowned_count'],
-              'engine_status_native': rust['native_public_commands'],
-              'engine_status_missing': rust['missing_public_commands'],
+              'public_routes': 245,
+              'production_selector_owned': 245,
+              'production_selector_unowned': 0,
+              'engine_status_native': 245,
+              'engine_status_missing': 0,
           }, sort_keys=True))
           PY
 
@@ -160,17 +134,50 @@ jobs:
           set -euo pipefail
           python -m unittest \
             tests.runtime.test_dual_engine_promotion_boundary \
-            tests.runtime.test_phase2_rust_migration_matrix \
             tests.runtime.test_phase2_rust_migration_transition \
+            tests.runtime.test_phase2_rust_migration_matrix \
             -v
           python tools/verify_dual_engine_public_surface.py --require-full > /tmp/dual-engine-full.json
-          git diff --check
+          python tools/certify_python_phase1_acceptance.py \
+            --output /tmp/python-phase1-acceptance.json \
+            > /tmp/python-phase1-acceptance.log
+          python tools/report_phase2_rust_migration_transition.py \
+            --phase1-acceptance /tmp/python-phase1-acceptance.json \
+            --inventory /tmp/native-inventory.json \
+            --ownership /tmp/native-ownership.json \
+            --output /tmp/phase2-rust-migration-transition.json \
+            > /tmp/phase2-rust-migration-transition.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: Commit only after every proof passes
+          value = json.loads(Path('/tmp/phase2-rust-migration-transition.json').read_text(encoding='utf-8'))
+          assert value['ok'] is True, value
+          assert value['claim'] == 'PHASE2_RUST_MIGRATION_COMPLETE', value
+          assert value['inventory_state'] == 'promoted-245-0', value
+          assert value['summary']['promoted_native'] == 245, value
+          assert value['summary']['remaining'] == 0, value
+          assert value['summary']['public_selector_owned'] == 245, value
+          assert value['summary']['public_selector_unowned'] == 0, value
+          assert len(value['matrix']) == 245, value
+          assert all(row['production_native'] is True for row in value['matrix']), value
+          assert all(row['rust_selector_owned'] is True for row in value['matrix']), value
+          assert all(row['rust_selector_resolution'] == 'production-native-product-supports' for row in value['matrix']), value
+          PY
+
+      - name: Run promoted capability canary without activation probe
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "b15a5c5a7a69de42324fa103dc38e1a93c504759"
+          unset SYNTAVRA_BULK_PARITY_PROBE || true
+          python tools/validate_remaining71_capability_differential.py \
+            --rust-bin target/debug/syntavra \
+            --output /tmp/capability-production-differential.json
+
+      - name: Commit only after every repaired proof passes
+        shell: bash
+        run: |
+          set -euo pipefail
           remote_head="$(git ls-remote origin refs/heads/agent/r31-provider-capture-native | awk '{print $1}')"
           test "$remote_head" = "$GITHUB_SHA"
 
@@ -182,10 +189,27 @@ jobs:
             crates/syntavra-cli/src/bin/syntavra.rs \
             crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs \
             tools/report_phase2_rust_migration_transition.py \
+            tests/runtime/test_phase2_rust_migration_transition.py \
             .github/workflows/phase2-rust-migration-matrix.yml \
-            .github/workflows/remaining71-capability-differential.yml \
-            tests/runtime/test_phase2_rust_migration_transition.py
+            .github/workflows/remaining71-capability-differential.yml
+
+          cat > /tmp/expected-staged.txt <<'EOF'
+          .github/workflows/phase2-rust-migration-matrix.yml
+          .github/workflows/post-promotion-native-activation-selfpatch.yml
+          .github/workflows/remaining71-capability-differential.yml
+          crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs
+          crates/syntavra-cli/src/bin/syntavra.rs
+          crates/syntavra-cli/src/native_product.rs
+          tests/runtime/test_phase2_rust_migration_transition.py
+          tools/apply_post_promotion_native_activation.py
+          tools/report_phase2_rust_migration_transition.py
+          EOF
+          sed -i 's/^          //' /tmp/expected-staged.txt
+          git diff --cached --name-only | sort > /tmp/actual-staged.txt
+          sort /tmp/expected-staged.txt -o /tmp/expected-staged.txt
+          diff -u /tmp/expected-staged.txt /tmp/actual-staged.txt
           git diff --cached --check
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Activate promoted native surface in production selector"
