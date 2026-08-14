@@ -1,0 +1,120 @@
+name: R38 Parent Current 245 Exact-Head Probe
+
+on:
+  push:
+    branches:
+      - agent/r38-parent-probe-current-245
+
+permissions:
+  contents: read
+
+jobs:
+  parent-probe:
+    name: ${{ matrix.os }} / Python 3.11 / Rust 1.82.0
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout exact aggregate parent-fix candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: d59bfafc91263af7977b5f5efdca139888a66cf9
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Install canonical Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal --component clippy --component rustfmt
+
+      - name: Verify exact head
+        shell: bash
+        run: |
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "d59bfafc91263af7977b5f5efdca139888a66cf9"
+
+      - name: Product runtime validator
+        id: runtime
+        continue-on-error: true
+        run: python tools/validate_runtime.py
+
+      - name: Competitive gap validator detail
+        id: competitive
+        if: always()
+        continue-on-error: true
+        run: python tools/validate_competitive_gap_closure.py
+
+      - name: State snapshot contract unit tests
+        id: state_contract
+        if: always()
+        continue-on-error: true
+        run: cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra-rs state_snapshot_contract
+
+      - name: R25-R37 Python/Rust differential parity
+        id: parity
+        if: always()
+        continue-on-error: true
+        run: python tools/verify_r25_r37_full_parity.py
+
+      - name: Native selector cargo check
+        id: cargo_check
+        if: always()
+        continue-on-error: true
+        run: cargo +1.82.0 check --locked -p syntavra-cli --bin syntavra
+
+      - name: Rustfmt check
+        id: rustfmt
+        if: always()
+        continue-on-error: true
+        run: cargo +1.82.0 fmt --all -- --check
+
+      - name: Clippy canonical warning policy
+        id: clippy
+        if: always()
+        continue-on-error: true
+        run: cargo +1.82.0 clippy --locked --workspace --all-targets
+
+      - name: Working tree integrity
+        id: tree
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          git status --porcelain=v1 --untracked-files=all
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Parent probe summary
+        if: always()
+        shell: bash
+        env:
+          RUNTIME: ${{ steps.runtime.outcome }}
+          COMPETITIVE: ${{ steps.competitive.outcome }}
+          STATE_CONTRACT: ${{ steps.state_contract.outcome }}
+          PARITY: ${{ steps.parity.outcome }}
+          CARGO_CHECK: ${{ steps.cargo_check.outcome }}
+          RUSTFMT: ${{ steps.rustfmt.outcome }}
+          CLIPPY: ${{ steps.clippy.outcome }}
+          TREE: ${{ steps.tree.outcome }}
+        run: |
+          printf 'runtime=%s\ncompetitive=%s\nstate_contract=%s\nparity=%s\ncargo_check=%s\nrustfmt=%s\nclippy=%s\ntree=%s\n' \
+            "$RUNTIME" "$COMPETITIVE" "$STATE_CONTRACT" "$PARITY" "$CARGO_CHECK" "$RUSTFMT" "$CLIPPY" "$TREE"
+          failed=0
+          for value in "$RUNTIME" "$COMPETITIVE" "$STATE_CONTRACT" "$PARITY" "$CARGO_CHECK" "$RUSTFMT" "$CLIPPY" "$TREE"; do
+            if [ "$value" != "success" ]; then
+              failed=1
+            fi
+          done
+          exit "$failed"
