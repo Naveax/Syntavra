@@ -104,11 +104,112 @@ jobs:
       - name: Prove all 245 canonical routes are production-selector-owned
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           unset SYNTAVRA_BULK_PARITY_PROBE || true
-          python tools/report_missing_native_public_routes.py > /tmp/native-inventory.json
-          target/debug/syntavra-remaining71-ownership /tmp/native-inventory.json > /tmp/native-ownership.json
-          target/debug/syntavra --engine rust engine status > /tmp/engine-status.json
+
+          set +e
+          python tools/report_missing_native_public_routes.py > /tmp/native-inventory.json 2> /tmp/native-inventory.err
+          inventory_rc=$?
+
+          ownership_rc=125
+          : > /tmp/native-ownership.json
+          : > /tmp/native-ownership.err
+          if [ "$inventory_rc" -eq 0 ]; then
+            target/debug/syntavra-remaining71-ownership /tmp/native-inventory.json > /tmp/native-ownership.json 2> /tmp/native-ownership.err
+            ownership_rc=$?
+          fi
+
+          target/debug/syntavra --engine rust engine status > /tmp/engine-status.json 2> /tmp/engine-status.err
+          status_rc=$?
+          set -e
+
+          echo "=== production ownership command return codes ==="
+          echo "inventory_rc=$inventory_rc"
+          echo "ownership_rc=$ownership_rc"
+          echo "engine_status_rc=$status_rc"
+
+          echo "=== stderr: inventory ==="
+          sed -n '1,160p' /tmp/native-inventory.err || true
+          echo "=== stderr: ownership ==="
+          sed -n '1,160p' /tmp/native-ownership.err || true
+          echo "=== stderr: engine status ==="
+          sed -n '1,160p' /tmp/engine-status.err || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def load(path):
+              p = Path(path)
+              try:
+                  return json.loads(p.read_text(encoding='utf-8'))
+              except Exception as exc:
+                  print(json.dumps({
+                      'diagnostic': 'json-load-failed',
+                      'path': path,
+                      'error': repr(exc),
+                      'prefix': p.read_text(encoding='utf-8', errors='replace')[:4000] if p.exists() else None,
+                  }, sort_keys=True))
+                  return None
+
+          inventory = load('/tmp/native-inventory.json')
+          ownership = load('/tmp/native-ownership.json')
+          status = load('/tmp/engine-status.json')
+
+          diagnostic = {'inventory': None, 'ownership': None, 'engine_status': None}
+          if isinstance(inventory, dict):
+              diagnostic['inventory'] = {
+                  'ok': inventory.get('ok'),
+                  'python_derived_count': inventory.get('python', {}).get('derived_count'),
+                  'rust_native_count': inventory.get('rust', {}).get('native_count'),
+                  'rust_missing_count': inventory.get('rust', {}).get('missing_count'),
+                  'missing_routes': inventory.get('missing_routes'),
+                  'extra_native_routes': inventory.get('rust', {}).get('extra_native_routes'),
+              }
+          if isinstance(ownership, dict):
+              diagnostic['ownership'] = {
+                  'ok': ownership.get('ok'),
+                  'inventory_state': ownership.get('inventory_state'),
+                  'owned_count': ownership.get('owned_count'),
+                  'unowned_count': ownership.get('unowned_count'),
+                  'unowned_routes': ownership.get('unowned_routes'),
+                  'selector_paths_count': len(ownership.get('selector_paths', {})),
+                  'probe_environment': ownership.get('probe_environment'),
+              }
+          if isinstance(status, dict):
+              rust = status.get('engines', {}).get('rust', {})
+              diagnostic['engine_status'] = {
+                  'native_public_commands': rust.get('native_public_commands'),
+                  'missing_public_commands': rust.get('missing_public_commands'),
+              }
+
+          if isinstance(inventory, dict) and isinstance(ownership, dict):
+              manifest_routes = {row['route'] for row in inventory.get('python', {}).get('manifest', []) if isinstance(row, dict) and 'route' in row}
+              selector_paths = set(ownership.get('selector_paths', {}))
+              diagnostic['route_set'] = {
+                  'manifest_count': len(manifest_routes),
+                  'selector_path_count': len(selector_paths),
+                  'manifest_minus_selector': sorted(manifest_routes - selector_paths),
+                  'selector_minus_manifest': sorted(selector_paths - manifest_routes),
+              }
+
+          print('=== compact production ownership diagnostic ===')
+          print(json.dumps(diagnostic, indent=2, sort_keys=True))
+          PY
+
+          if [ "$inventory_rc" -ne 0 ]; then
+            echo "inventory reporter failed before ownership proof"
+            exit "$inventory_rc"
+          fi
+          if [ "$ownership_rc" -ne 0 ]; then
+            echo "ownership probe failed after emitting exact diagnostic"
+            exit "$ownership_rc"
+          fi
+          if [ "$status_rc" -ne 0 ]; then
+            echo "engine status failed after emitting exact diagnostic"
+            exit "$status_rc"
+          fi
+
           python - <<'PY'
           import json
           from pathlib import Path
