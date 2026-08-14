@@ -14,7 +14,7 @@ class DualEnginePromotionBoundaryTests(unittest.TestCase):
             self.assertFalse(result["full"])
             self.assertEqual(result["claim"], surface.INCOMPLETE_CLAIM)
             self.assertEqual(result["rust"]["native_public_command_count"], 174)
-            self.assertEqual(result["rust"]["launcher_bridge_command_count"], 71)
+            self.assertEqual(result["rust"]["launcher_bridge_command_count"], 0)
             self.assertEqual(result["rust"]["missing_native_public_command_count"], 71)
             self.assertEqual(result["rust"]["native_coverage_ppm"], 710_204)
         else:
@@ -26,13 +26,13 @@ class DualEnginePromotionBoundaryTests(unittest.TestCase):
             self.assertEqual(result["rust"]["native_coverage_ppm"], 1_000_000)
 
     def test_inventory_state_accepts_only_atomic_endpoints(self) -> None:
-        self.assertEqual(surface._inventory_state(245, 174, 71), "frozen")
+        self.assertEqual(surface._inventory_state(245, 174, 0), "frozen")
         self.assertEqual(surface._inventory_state(245, 245, 0), "promoted")
-        for native, bridge in [(175, 70), (200, 45), (244, 1), (245, 1), (244, 0)]:
+        for native, bridge in [(175, 0), (200, 0), (244, 0), (174, 1), (245, 1)]:
             with self.assertRaisesRegex(RuntimeError, "must remain atomic"):
                 surface._inventory_state(245, native, bridge)
         with self.assertRaisesRegex(RuntimeError, "public command count drift"):
-            surface._inventory_state(244, 174, 70)
+            surface._inventory_state(244, 174, 0)
 
     def test_require_full_remains_fail_closed_until_promotion(self) -> None:
         result = surface.verify()
