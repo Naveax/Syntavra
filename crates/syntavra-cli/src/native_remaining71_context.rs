@@ -292,9 +292,7 @@ fn delta(previous: &str, current: &str) -> String {
     let rendered = single_hunk_unified_diff(previous, current);
     let rendered_chars = rendered.chars().count();
     let current_chars = current.chars().count();
-    if !rendered.is_empty()
-        && rendered_chars.saturating_mul(4) < current_chars.saturating_mul(3)
-    {
+    if !rendered.is_empty() && rendered_chars.saturating_mul(4) < current_chars.saturating_mul(3) {
         rendered
     } else {
         current.to_owned()
@@ -397,9 +395,16 @@ fn context_output_kind(source: &str, content: &str) -> String {
     if lower.contains("diff") || content.starts_with("diff --git") {
         return "diff".to_owned();
     }
-    if ["pytest", "unittest", "jest", "vitest", "cargo test", "go test"]
-        .iter()
-        .any(|token| lower.contains(token))
+    if [
+        "pytest",
+        "unittest",
+        "jest",
+        "vitest",
+        "cargo test",
+        "go test",
+    ]
+    .iter()
+    .any(|token| lower.contains(token))
     {
         return "test".to_owned();
     }
