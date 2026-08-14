@@ -1,0 +1,428 @@
+name: Guarded Post-Promotion Native Activation Repair
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+
+permissions:
+  contents: write
+
+concurrency:
+  group: post-promotion-native-activation-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Require exact pre-repair authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "20bfa000fa330ea4aff7e6018284bfca72e54705"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply fail-closed production activation repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path: str) -> str:
+              return Path(path).read_text(encoding="utf-8")
+
+          def write(path: str, text: str) -> None:
+              Path(path).write_text(text, encoding="utf-8", newline="\n")
+
+          native_path = "crates/syntavra-cli/src/native_product.rs"
+          native = read(native_path)
+          old_flag = '''fn bulk_parity_probe_enabled() -> bool {
+              std::env::var_os("SYNTAVRA_BULK_PARITY_PROBE").is_some_and(|value| value == "1")
+          }
+
+          '''
+          if native.count(old_flag) != 1:
+              raise SystemExit("native_product bulk probe helper drift")
+          native = native.replace(old_flag, "", 1)
+
+          support_pattern = re.compile(
+              r"\(bulk_parity_probe_enabled\(\) && (native_remaining71_[a-z_]+::supports\(command\))\)"
+          )
+          native, support_count = support_pattern.subn(r"\1", native)
+          if support_count != 12:
+              raise SystemExit(f"expected 12 gated supports predicates, got {support_count}")
+
+          old_checkpoint = "if bulk_parity_probe_enabled() && cc_checkpoint_supports(command) {"
+          if native.count(old_checkpoint) != 1:
+              raise SystemExit("checkpoint activation guard drift")
+          native = native.replace(old_checkpoint, "if cc_checkpoint_supports(command) {", 1)
+
+          execute_pattern = re.compile(
+              r"if bulk_parity_probe_enabled\(\) && (native_remaining71_[a-z_]+::supports\(command\))"
+          )
+          native, execute_count = execute_pattern.subn(r"if \1", native)
+          if execute_count != 12:
+              raise SystemExit(f"expected 12 gated execute predicates, got {execute_count}")
+          if "bulk_parity_probe_enabled" in native:
+              raise SystemExit("bulk parity activation guard survived production promotion")
+          write(native_path, native)
+
+          selector_path = "crates/syntavra-cli/src/bin/syntavra.rs"
+          selector = read(selector_path)
+          old_count = "const NATIVE_COMMAND_COUNT: u64 = 170;"
+          if selector.count(old_count) != 1:
+              raise SystemExit("native selector status counter drift")
+          selector = selector.replace(old_count, "const NATIVE_COMMAND_COUNT: u64 = 245;", 1)
+          write(selector_path, selector)
+
+          ownership_path = "crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs"
+          ownership = read(ownership_path)
+          old_selector_path = '''fn selector_path(route: &str) -> Vec<String> {
+              // The public selector owns these remaining routes at two components. The
+              // third component on language/proxy-service routes is an action consumed by
+              // the already-selected native family, not a separate engine selector path.
+              route
+                  .split_whitespace()
+                  .take(2)
+                  .map(str::to_owned)
+                  .collect()
+          }
+          '''
+          new_selector_path = '''fn selector_path(route: &str) -> Vec<String> {
+              // Mirror syntavra.rs command_path() for canonical route identities: engine
+              // route dispatch keeps its third route key, while other families select at
+              // one or two components and consume deeper actions inside the native owner.
+              let mut components = route
+                  .split_whitespace()
+                  .map(str::to_owned)
+                  .collect::<Vec<_>>();
+              let limit = if components.first().map(String::as_str) == Some("engine")
+                  && components.get(1).map(String::as_str) == Some("route")
+              {
+                  3
+              } else {
+                  2
+              };
+              components.truncate(limit);
+              components
+          }
+          '''
+          if ownership.count(old_selector_path) != 1:
+              raise SystemExit("ownership selector_path drift")
+          ownership = ownership.replace(old_selector_path, new_selector_path, 1)
+
+          set_probe = '    std::env::set_var("SYNTAVRA_BULK_PARITY_PROBE", "1");\n\n'
+          if ownership.count(set_probe) != 1:
+              raise SystemExit("ownership probe environment setter drift")
+          ownership = ownership.replace(set_probe, "", 1)
+
+          loop_start = ownership.index("    let routes = &report.remaining_routes;\n")
+          loop_end = ownership.index("    let promoted_set_equality =", loop_start)
+          new_loops = '''    let selector_routes = match report.state {
+              InventoryState::Frozen => &report.remaining_routes,
+              InventoryState::Promoted => &report.public_routes,
+          };
+          let lower_module_routes = &report.remaining_routes;
+
+          let mut unowned = Vec::<String>::new();
+          let mut ownership = BTreeMap::<String, bool>::new();
+          let mut selector_paths = BTreeMap::<String, Vec<String>>::new();
+          let mut owner_modules = BTreeMap::<String, String>::new();
+          let mut owner_candidates = BTreeMap::<String, Vec<&'static str>>::new();
+          let mut duplicate_owner_routes = Vec::<String>::new();
+          let mut module_unowned_routes = Vec::<String>::new();
+
+          for route in selector_routes {
+              let path = selector_path(route);
+              let owned = native_product::supports(&path);
+              ownership.insert(route.clone(), owned);
+              selector_paths.insert(route.clone(), path);
+              if !owned {
+                  unowned.push(route.clone());
+              }
+          }
+
+          for route in lower_module_routes {
+              let path = selector_path(route);
+              let candidates = remaining71_owner_modules(&path);
+              owner_candidates.insert(route.clone(), candidates.clone());
+              match candidates.as_slice() {
+                  [owner] => {
+                      owner_modules.insert(route.clone(), (*owner).to_owned());
+                  }
+                  [] => module_unowned_routes.push(route.clone()),
+                  _ => duplicate_owner_routes.push(route.clone()),
+              }
+          }
+
+          '''
+          ownership = ownership[:loop_start] + new_loops + ownership[loop_end:]
+
+          old_promoted = '''    let promoted_set_equality = report.state == InventoryState::Promoted
+              && report.native_count == EXPECTED_PUBLIC_ROUTE_COUNT
+              && report.public_routes.len() == EXPECTED_PUBLIC_ROUTE_COUNT as usize
+              && routes.is_empty();
+          '''
+          new_promoted = '''    let promoted_set_equality = report.state == InventoryState::Promoted
+              && report.native_count == EXPECTED_PUBLIC_ROUTE_COUNT
+              && report.public_routes.len() == EXPECTED_PUBLIC_ROUTE_COUNT as usize
+              && report.remaining_routes.is_empty()
+              && ownership.len() == EXPECTED_PUBLIC_ROUTE_COUNT as usize
+              && unowned.is_empty();
+          '''
+          if ownership.count(old_promoted) != 1:
+              raise SystemExit("promoted ownership boundary drift")
+          ownership = ownership.replace(old_promoted, new_promoted, 1)
+          ownership = ownership.replace(
+              '"report_derived_remaining_count": routes.len(),',
+              '"report_derived_remaining_count": report.remaining_routes.len(),',
+              1,
+          )
+          ownership = ownership.replace(
+              '"probe_environment": "SYNTAVRA_BULK_PARITY_PROBE=1",',
+              '"probe_environment": "production selector; no activation probe flag",',
+              1,
+          )
+          old_boundary = "selector/lower-module ownership in the frozen state and exact public/native set equality in the promoted state; behavioral parity still requires differential execution"
+          new_boundary = "production selector ownership for the canonical route set, plus lower-module ownership for frozen remaining routes; behavioral parity still requires differential execution"
+          if ownership.count(old_boundary) != 2:
+              raise SystemExit("ownership claim boundary drift")
+          ownership = ownership.replace(old_boundary, new_boundary)
+          test_anchor = '''        assert_eq!(selector_path("provider proxy"), vec!["provider", "proxy"]);
+          '''
+          test_add = '''        assert_eq!(selector_path("provider proxy"), vec!["provider", "proxy"]);
+              assert_eq!(
+                  selector_path("engine route config.show"),
+                  vec!["engine", "route", "config.show"]
+              );
+          '''
+          if ownership.count(test_anchor) != 1:
+              raise SystemExit("selector path test anchor drift")
+          ownership = ownership.replace(test_anchor, test_add, 1)
+          write(ownership_path, ownership)
+
+          transition_path = "tools/report_phase2_rust_migration_transition.py"
+          transition = read(transition_path)
+          if transition.count('"owned_count": 0,') != 1:
+              raise SystemExit("transition promoted owned_count drift")
+          transition = transition.replace('"owned_count": 0,', '"owned_count": 245,', 1)
+          old_empty_maps = '''    for key in ("selector_paths", "owner_modules", "owner_candidates"):
+              if ownership.get(key) != {}:
+                  raise AssertionError(f"promoted ownership {key} must be empty")
+          '''
+          new_empty_maps = '''    selector_paths = ownership.get("selector_paths")
+              if not isinstance(selector_paths, dict) or len(selector_paths) != 245:
+                  raise AssertionError("promoted ownership selector_paths must prove all 245 routes")
+              for key in ("owner_modules", "owner_candidates"):
+                  if ownership.get(key) != {}:
+                      raise AssertionError(f"promoted ownership {key} must be empty")
+          '''
+          if transition.count(old_empty_maps) != 1:
+              raise SystemExit("transition promoted map validation drift")
+          transition = transition.replace(old_empty_maps, new_empty_maps, 1)
+          old_call = '''    _validate_promoted_ownership(ownership)
+
+              manifest = list(python.get("manifest") or [])
+          '''
+          new_call = '''    _validate_promoted_ownership(ownership)
+
+              selector_paths = ownership["selector_paths"]
+              if set(selector_paths) != canonical_routes:
+                  raise AssertionError("promoted production selector proof must cover the exact canonical route set")
+
+              manifest = list(python.get("manifest") or [])
+          '''
+          if transition.count(old_call) != 1:
+              raise SystemExit("transition promoted ownership call anchor drift")
+          transition = transition.replace(old_call, new_call, 1)
+          transition = transition.replace(
+              '"rust_selector_components": route.split(),',
+              '"rust_selector_components": selector_paths[route],',
+              1,
+          )
+          transition = transition.replace(
+              '"rust_selector_resolution": "promoted-contract-route-identity",',
+              '"rust_selector_resolution": "production-native-product-supports",',
+              1,
+          )
+          transition = transition.replace(
+              '"rust_owner_boundary": "dual-engine-public-surface-v2.native_public_commands",',
+              '"rust_owner_boundary": "native_product::supports",',
+              1,
+          )
+          transition = transition.replace(
+              '"rust_owner_module": "promoted-native-contract",',
+              '"rust_owner_module": "production-selector",',
+              1,
+          )
+          transition = transition.replace(
+              '"promoted_set_equality": "tools/report_missing_native_public_routes.py + syntavra-remaining71-ownership",',
+              '"promoted_set_equality": "canonical inventory + production native_product::supports audit",',
+              1,
+          )
+          transition = transition.replace(
+              '"atomic_promotion_target": 245,',
+              '"atomic_promotion_target": 245,\n            "public_selector_owned": 245,\n            "public_selector_unowned": 0,',
+              1,
+          )
+          old_claim = '''            "This transition receipt proves the canonical 245-route Python identity is exactly the "
+              "promoted native set with zero bridge/missing/extra routes. Behavioral parity still "
+              "requires the final exact-head family differential gates."
+          '''
+          new_claim = '''            "This transition receipt proves the canonical 245-route Python identity is exactly the "
+              "promoted native set with zero bridge/missing/extra routes and that all 245 canonical "
+              "routes are owned by the production Rust selector without an activation probe flag. "
+              "Behavioral parity still requires the final exact-head family differential gates."
+          '''
+          if transition.count(old_claim) != 1:
+              raise SystemExit("transition claim boundary drift")
+          transition = transition.replace(old_claim, new_claim, 1)
+          write(transition_path, transition)
+
+          phase2_path = ".github/workflows/phase2-rust-migration-matrix.yml"
+          phase2 = read(phase2_path)
+          old_promoted_checks = '''              assert value['owned_count'] == 0
+              assert value['unowned_count'] == 0
+              assert value['selector_paths'] == {}
+              assert value['owner_module_count'] == 0
+          '''
+          new_promoted_checks = '''              assert value['owned_count'] == 245
+              assert value['unowned_count'] == 0
+              assert len(value['selector_paths']) == 245
+              manifest_routes = {row['route'] for row in inventory['python']['manifest']}
+              assert set(value['selector_paths']) == manifest_routes
+              assert value['owner_module_count'] == 0
+          '''
+          if phase2.count(old_promoted_checks) != 1:
+              raise SystemExit("phase2 promoted ownership assertions drift")
+          phase2 = phase2.replace(old_promoted_checks, new_promoted_checks, 1)
+          write(phase2_path, phase2)
+
+          capability_path = ".github/workflows/remaining71-capability-differential.yml"
+          capability = read(capability_path)
+          old_cap = '''          elif state == 'promoted-245-0':
+              assert ownership.get('native_route_count') == 245, ownership
+              assert ownership.get('report_derived_remaining_count') == 0, ownership
+              assert ownership.get('promoted_public_native_set_equality') is True, ownership
+              boundary = 'promoted-public-native-set-equality'
+          '''
+          new_cap = '''          elif state == 'promoted-245-0':
+              assert ownership.get('native_route_count') == 245, ownership
+              assert ownership.get('report_derived_remaining_count') == 0, ownership
+              assert ownership.get('promoted_public_native_set_equality') is True, ownership
+              assert ownership.get('owned_count') == 245, ownership
+              assert len(ownership.get('selector_paths') or {}) == 245, ownership
+              boundary = 'promoted-production-selector-ownership'
+          '''
+          if capability.count(old_cap) != 1:
+              raise SystemExit("capability promoted ownership assertions drift")
+          capability = capability.replace(old_cap, new_cap, 1)
+          write(capability_path, capability)
+          PY
+
+      - name: Install runtime and pinned Rust 1.82
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          rustup toolchain uninstall 1.82.0 || true
+          rustup toolchain install 1.82.0 --profile minimal
+          rustc +1.82.0 --version
+          cargo +1.82.0 --version
+
+      - name: Format and compile repaired production selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.82.0 fmt --all
+          cargo +1.82.0 fmt --all -- --check
+          cargo +1.82.0 check --locked -p syntavra-cli --bins
+          cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra --bin syntavra-remaining71-ownership
+          cargo +1.82.0 test --locked -p syntavra-cli --bin syntavra --bin syntavra-remaining71-ownership
+
+      - name: Prove canonical 245 routes are production-selector-owned without probe flag
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset SYNTAVRA_BULK_PARITY_PROBE || true
+          python tools/report_missing_native_public_routes.py > /tmp/native-inventory.json
+          target/debug/syntavra-remaining71-ownership /tmp/native-inventory.json > /tmp/native-ownership.json
+          target/debug/syntavra --engine rust engine status > /tmp/engine-status.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          inventory = json.loads(Path('/tmp/native-inventory.json').read_text(encoding='utf-8'))
+          ownership = json.loads(Path('/tmp/native-ownership.json').read_text(encoding='utf-8'))
+          status = json.loads(Path('/tmp/engine-status.json').read_text(encoding='utf-8'))
+          assert inventory['ok'] is True, inventory
+          assert inventory['python']['derived_count'] == 245, inventory
+          assert inventory['rust']['native_count'] == 245, inventory
+          assert inventory['rust']['missing_count'] == 0, inventory
+          assert inventory['missing_routes'] == [], inventory
+          assert ownership['ok'] is True, ownership
+          assert ownership['inventory_state'] == 'promoted-245-0', ownership
+          assert ownership['owned_count'] == 245, ownership
+          assert ownership['unowned_count'] == 0, ownership
+          assert ownership['unowned_routes'] == [], ownership
+          assert len(ownership['selector_paths']) == 245, ownership
+          manifest_routes = {row['route'] for row in inventory['python']['manifest']}
+          assert set(ownership['selector_paths']) == manifest_routes, ownership
+          assert ownership['probe_environment'] == 'production selector; no activation probe flag', ownership
+          rust = status['engines']['rust']
+          assert rust['native_public_commands'] == 245, status
+          assert rust['missing_public_commands'] == 0, status
+          print(json.dumps({
+              'ok': True,
+              'public_routes': 245,
+              'production_selector_owned': ownership['owned_count'],
+              'production_selector_unowned': ownership['unowned_count'],
+              'engine_status_native': rust['native_public_commands'],
+              'engine_status_missing': rust['missing_public_commands'],
+          }, sort_keys=True))
+          PY
+
+      - name: Run promotion boundary regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v
+          python tools/verify_dual_engine_public_surface.py --require-full > /tmp/dual-engine-full.json
+          git diff --check
+
+      - name: Commit only after all repaired proofs pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "20bfa000fa330ea4aff7e6018284bfca72e54705"
+          remote_head="$(git ls-remote origin refs/heads/agent/r31-provider-capture-native | awk '{print $1}')"
+          test "$remote_head" = "$GITHUB_SHA"
+          git rm .github/workflows/post-promotion-native-activation-selfpatch.yml
+          git add \
+            crates/syntavra-cli/src/native_product.rs \
+            crates/syntavra-cli/src/bin/syntavra.rs \
+            crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs \
+            tools/report_phase2_rust_migration_transition.py \
+            .github/workflows/phase2-rust-migration-matrix.yml \
+            .github/workflows/remaining71-capability-differential.yml
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Activate promoted native surface in production selector"
+          git push origin HEAD:agent/r31-provider-capture-native
