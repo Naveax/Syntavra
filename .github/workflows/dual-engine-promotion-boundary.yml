@@ -1,0 +1,105 @@
+name: Dual Engine Promotion Boundary
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dual-engine-promotion-boundary
+  cancel-in-progress: true
+
+jobs:
+  dual-engine-promotion-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run atomic promotion-boundary unit tests
+        run: python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v
+
+      - name: Verify public-surface contract and canonical inventory agree
+        run: |
+          python tools/verify_dual_engine_public_surface.py > /tmp/dual-engine-boundary.json
+          python tools/report_missing_native_public_routes.py > /tmp/native-inventory.json
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          boundary = json.loads(Path('/tmp/dual-engine-boundary.json').read_text(encoding='utf-8'))
+          inventory = json.loads(Path('/tmp/native-inventory.json').read_text(encoding='utf-8'))
+          assert boundary['ok'] is True, boundary
+          assert inventory['ok'] is True, inventory
+          assert boundary['python']['public_command_count'] == inventory['python']['derived_count'] == 245
+          assert boundary['python']['command_paths_sha256'] == inventory['python']['derived_sha256']
+          assert inventory['rust']['extra_native_routes'] == []
+          assert boundary['rust']['native_public_command_count'] == inventory['rust']['native_count']
+          assert boundary['rust']['missing_native_public_command_count'] == inventory['rust']['missing_count']
+
+          if boundary['inventory_state'] == 'frozen':
+              assert boundary['claim'] == 'DUAL_ENGINE_PARITY_INCOMPLETE'
+              assert boundary['full'] is False
+              assert inventory['rust']['native_count'] == 174
+              assert inventory['rust']['missing_count'] == 71
+              proc = subprocess.run(
+                  [sys.executable, 'tools/verify_dual_engine_public_surface.py', '--require-full'],
+                  cwd='.',
+                  text=True,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+                  check=False,
+              )
+              assert proc.returncode != 0, proc.stdout
+              assert 'full dual-engine parity not reached' in proc.stderr, proc.stderr
+          elif boundary['inventory_state'] == 'promoted':
+              assert boundary['claim'] == 'FULL_DUAL_ENGINE_PARITY_PROVEN'
+              assert boundary['full'] is True
+              assert inventory['rust']['native_count'] == 245
+              assert inventory['rust']['missing_count'] == 0
+              assert inventory['missing_routes'] == []
+              subprocess.run(
+                  [sys.executable, 'tools/verify_dual_engine_public_surface.py', '--require-full'],
+                  cwd='.',
+                  check=True,
+              )
+          else:
+              raise AssertionError(f"unexpected inventory state: {boundary['inventory_state']}")
+          PY
+
+      - name: Upload atomic promotion evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dual-engine-promotion-boundary
+          path: |
+            /tmp/dual-engine-boundary.json
+            /tmp/native-inventory.json
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
