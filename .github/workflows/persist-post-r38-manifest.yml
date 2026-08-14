@@ -1,4 +1,4 @@
-name: Persist Post-R38 Manifest
+name: Finalize Post-R38 Manifest
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  persist-manifest:
+  finalize-manifest:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact branch head
@@ -18,23 +18,26 @@ jobs:
           ref: agent/post-r38-release-provenance
           fetch-depth: 0
 
-      - name: Refresh and persist manifest only
+      - name: Remove finalizer and persist exact manifest
         shell: bash
         run: |
           set -euo pipefail
           before="$(git rev-parse HEAD)"
+          workflow=.github/workflows/persist-post-r38-manifest.yml
+
+          rm -f "$workflow"
           python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
 
           status="$(git status --porcelain --untracked-files=all)"
           printf '%s\n' "$status"
-          test -n "$status"
-          test "$(printf '%s\n' "$status" | wc -l)" -eq 1
-          printf '%s\n' "$status" | grep -Eq '^ M MANIFEST\.sha256$'
+          test "$(printf '%s\n' "$status" | wc -l)" -eq 2
+          printf '%s\n' "$status" | grep -Fx ' D .github/workflows/persist-post-r38-manifest.yml'
+          printf '%s\n' "$status" | grep -Fx ' M MANIFEST.sha256'
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MANIFEST.sha256
-          git commit -m "Refresh post-R38 release manifest"
+          git add MANIFEST.sha256 "$workflow"
+          git commit -m "Finalize post-R38 release manifest"
           test "$(git rev-parse HEAD^)" = "$before"
           git push origin HEAD:agent/post-r38-release-provenance
