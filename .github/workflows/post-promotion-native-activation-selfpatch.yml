@@ -62,6 +62,22 @@ jobs:
         run: |
           set -euo pipefail
           python tools/apply_post_promotion_native_activation.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/syntavra-cli/src/bin/syntavra-remaining71-ownership.rs')
+          text = path.read_text(encoding='utf-8')
+          replacements = (
+              ('            "run benchmark-gate",\n', '            "benchmark compare",\n'),
+              ('            "run context evaluate",\n', '            "run context-compile",\n'),
+          )
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'ownership smoke fixture drift: expected one {old.strip()!r}, got {count}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
           git diff --check
           test -z "$(grep -R --line-number 'bulk_parity_probe_enabled\|SYNTAVRA_BULK_PARITY_PROBE' crates/syntavra-cli/src/native_product.rs || true)"
 
