@@ -35,7 +35,13 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run atomic promotion-boundary unit tests
-        run: python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v
+        shell: bash
+        run: |
+          set +e
+          python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v 2>&1 | tee /tmp/dual-engine-promotion-boundary-tests.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > /tmp/dual-engine-promotion-boundary-tests.exit
+          exit "$status"
 
       - name: Verify public-surface contract and canonical inventory agree
         run: |
@@ -88,10 +94,13 @@ jobs:
           PY
 
       - name: Upload atomic promotion evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dual-engine-promotion-boundary
           path: |
+            /tmp/dual-engine-promotion-boundary-tests.log
+            /tmp/dual-engine-promotion-boundary-tests.exit
             /tmp/dual-engine-boundary.json
             /tmp/native-inventory.json
           if-no-files-found: error
