@@ -64,12 +64,13 @@ jobs:
               external=root/'external.json'; external.write_text(json.dumps({'receipts':_external_receipts()},separators=(',',':')),encoding='utf-8')
               integrations=root/'integrations.json'; integrations.write_text(json.dumps({'receipts':_integration_receipts()},separators=(',',':')),encoding='utf-8')
               signal=root/'signalbench.json'; signal.write_text(json.dumps(_signalbench_rows(),separators=(',',':')),encoding='utf-8')
-              empty=root/'empty.json'; empty.write_text('[]\n',encoding='utf-8')
+              maturity=root/'maturity.json'; maturity.write_text('{}\n',encoding='utf-8')
+              malformed_maturity=root/'malformed-maturity.json'; malformed_maturity.write_text('[]\n',encoding='utf-8')
               schema=root/'provider-usage-schema.json'
-              return project,state,provider,billed,external,integrations,signal,empty,schema
+              return project,state,provider,billed,external,integrations,signal,maturity,malformed_maturity,schema
 
           def run_engine(engine, root):
-              project,state,provider,billed,external,integrations,signal,empty,schema=prepare(root)
+              project,state,provider,billed,external,integrations,signal,maturity,malformed_maturity,schema=prepare(root)
               cases=[
                   ('proof_status',['proof','status']),
                   ('prove_plan',['prove','plan']),
@@ -79,7 +80,8 @@ jobs:
                   ('prove_external_suite',['prove','external-suite',str(external),'--suite','longbench-v2']),
                   ('prove_integrations',['prove','integrations',str(integrations),'--integration','claude-code']),
                   ('prove_long_context',['prove','long-context']),
-                  ('prove_maturity_empty',['prove','maturity',str(empty)]),
+                  ('prove_maturity_valid_empty',['prove','maturity',str(maturity)]),
+                  ('prove_maturity_malformed',['prove','maturity',str(malformed_maturity)]),
                   ('prove_readiness_empty',['prove','readiness']),
                   ('prove_schema',['prove','schema','--output',str(schema)]),
                   ('prove_suites',['prove','suites']),
@@ -95,14 +97,35 @@ jobs:
                       receipts[name]['output_file']=norm(json.loads(schema.read_text(encoding='utf-8')),root,project,state) if schema.is_file() else None
               return receipts
 
+          def malformed_contract(row):
+              value=row.get('value') if isinstance(row,dict) else None
+              error=value.get('error') if isinstance(value,dict) else None
+              details=error.get('details') if isinstance(error,dict) else None
+              code=error.get('code') if isinstance(error,dict) else None
+              domain_error=details.get('error') if isinstance(details,dict) else None
+              return {
+                  'exit':row.get('exit') if isinstance(row,dict) else None,
+                  'stderr_nonempty':row.get('stderr_nonempty') if isinstance(row,dict) else None,
+                  'ok':value.get('ok') if isinstance(value,dict) else None,
+                  'fallback':details.get('fallback') if isinstance(details,dict) else None,
+                  'public_command_failed':isinstance(code,str) and code.endswith('_PUBLIC_COMMAND_FAILED'),
+                  'domain_error_present':isinstance(domain_error,str) and bool(domain_error),
+              }
+
           with tempfile.TemporaryDirectory(prefix='syntavra-benchmark-proof-') as tmp:
               base=Path(tmp); py=run_engine('python',base/'python'); rs=run_engine('rust',base/'rust')
           mismatches=[]
           for name in py:
-              if py[name]!=rs.get(name): mismatches.append({'id':name,'python':py[name],'rust':rs.get(name)})
-          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'route_count':16,'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'claim_boundary':'offline deterministic public CLI differential only; does not prove live external superiority; native route count remains frozen'}
+              if name=='prove_maturity_malformed':
+                  py_contract=malformed_contract(py[name]); rs_contract=malformed_contract(rs.get(name))
+                  expected={'exit':4,'stderr_nonempty':False,'ok':False,'fallback':'forbidden','public_command_failed':True,'domain_error_present':True}
+                  if py_contract!=expected or rs_contract!=expected:
+                      mismatches.append({'id':name,'python':py[name],'rust':rs.get(name),'python_contract':py_contract,'rust_contract':rs_contract,'expected_contract':expected})
+              elif py[name]!=rs.get(name):
+                  mismatches.append({'id':name,'python':py[name],'rust':rs.get(name)})
+          report={'ok':not mismatches,'head':os.environ.get('GITHUB_SHA'),'route_count':16,'case_count':17,'mismatch_count':len(mismatches),'mismatches':mismatches,'python':py,'rust':rs,'claim_boundary':'offline deterministic public CLI differential only; valid maturity domain output is exact; malformed maturity compares fail-closed engine-neutral invariants; does not prove live external superiority; native route count remains frozen'}
           Path('/tmp/benchmark-proof-signalbench.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True),encoding='utf-8')
-          print(json.dumps({'ok':report['ok'],'route_count':16,'mismatch_count':len(mismatches)},sort_keys=True))
+          print(json.dumps({'ok':report['ok'],'route_count':16,'case_count':17,'mismatch_count':len(mismatches)},sort_keys=True))
           for row in mismatches: print('BENCHMARK_PROOF_MISMATCH '+row['id'])
           raise SystemExit(0 if report['ok'] else 1)
           PY
