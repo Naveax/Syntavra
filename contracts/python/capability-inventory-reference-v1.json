@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "canonical_surface_contract": "contracts/engine/dual-engine-public-surface-v2.json",
+  "capability": {
+    "public_routes": [
+      "run capability-decide",
+      "run capability-issue",
+      "run capability-verify"
+    ],
+    "category_vocabulary": [
+      "execute",
+      "network",
+      "read",
+      "unknown",
+      "write"
+    ],
+    "decision_reason_vocabulary": [
+      "authorization-required",
+      "destructive-command-denied",
+      "network-host-not-allowlisted",
+      "policy-allowed",
+      "resource-outside-workspace",
+      "sandbox-required",
+      "unknown-tool-fail-closed"
+    ],
+    "requirement_vocabulary": [
+      "exact-evidence",
+      "explicit-user-authorization",
+      "sandbox",
+      "signed-capability"
+    ],
+    "verification_reason_vocabulary": [
+      "already-consumed",
+      "binding-mismatch",
+      "expired",
+      "invalid-signature",
+      "malformed-token",
+      "verified"
+    ]
+  },
+  "inventory": {
+    "manifest_record_keys": [
+      "route",
+      "sources"
+    ],
+    "execution_record_keys": [
+      "entrypoint",
+      "entrypoints",
+      "parser_error_exit",
+      "parser_owned",
+      "route",
+      "sources",
+      "success_exit",
+      "unknown_sources"
+    ],
+    "source_vocabulary": [
+      "core",
+      "engine",
+      "engine-installed-read-only",
+      "external-benchmark",
+      "legacy",
+      "prerelease",
+      "unified-direct"
+    ],
+    "entrypoint_vocabulary": [
+      "syntavra_runtime.cli.main",
+      "syntavra_runtime.engine_cli.main",
+      "syntavra_runtime.external_benchmark_cli.main",
+      "syntavra_runtime.prerelease_cli.main",
+      "syntavra_runtime.unified_cli._core_main",
+      "syntavra_runtime.unified_cli.main"
+    ]
+  }
+}

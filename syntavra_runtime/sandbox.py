@@ -130,6 +130,7 @@ class SandboxManager:
             if any(marker in key.casefold() for marker in ("token", "secret", "password", "credential", "api_key")):
                 allowed.pop(key, None)
         allowed["SYNTAVRA_SANDBOX"] = "1"
+        allowed["SYNTAVRA_WORKSPACE"] = str(self.project)
         # Numerical libraries may otherwise spawn one worker per host CPU before
         # user code starts. Keep local-restricted execution bounded and portable.
         allowed.setdefault("OPENBLAS_NUM_THREADS", "1")

@@ -76,7 +76,7 @@ struct CachePlanInfo {
     reordered: bool,
 }
 
-fn now_seconds() -> Result<f64, String> {
+pub(super) fn now_seconds() -> Result<f64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs_f64())
@@ -122,7 +122,7 @@ fn canonical_write(value: &Value, output: &mut Vec<u8>) -> Result<(), String> {
     Ok(())
 }
 
-fn canonical_json(value: &Value) -> Result<Vec<u8>, String> {
+pub(super) fn canonical_json(value: &Value) -> Result<Vec<u8>, String> {
     let mut output = Vec::new();
     canonical_write(value, &mut output)?;
     Ok(output)
@@ -153,7 +153,7 @@ fn py_string(value: Option<&Value>, default: &str) -> String {
     }
 }
 
-fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
+pub(super) fn option_value(arguments: &[String], flag: &str) -> Result<Option<String>, String> {
     let mut found = None;
     let mut index = 0usize;
     while index < arguments.len() {
@@ -710,7 +710,7 @@ fn temperature(request: &Value) -> f64 {
     }
 }
 
-fn initialize_gateway(state_root: &Path) -> Result<Connection, String> {
+pub(super) fn initialize_gateway(state_root: &Path) -> Result<Connection, String> {
     fs::create_dir_all(state_root)
         .map_err(|error| format!("PROVIDER_GATEWAY_STATE_CREATE_FAILED:{error}"))?;
     let connection = Connection::open(state_root.join(PROVIDER_DB))
@@ -805,7 +805,7 @@ fn initialize_gateway(state_root: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn initialize_usage_ledger(state_root: &Path) -> Result<(), String> {
+pub(super) fn initialize_usage_ledger(state_root: &Path) -> Result<(), String> {
     let connection = Connection::open(state_root.join("usage-receipts.sqlite3"))
         .map_err(|error| format!("PROVIDER_USAGE_DB_OPEN_FAILED:{error}"))?;
     connection
@@ -905,12 +905,12 @@ fn replay_lookup(state_root: &Path, cache_key: &str) -> Result<String, String> {
     Ok(handle.unwrap_or_default())
 }
 
-fn project_root(arguments: &[String]) -> Result<PathBuf, String> {
+pub(super) fn project_root(arguments: &[String]) -> Result<PathBuf, String> {
     let raw = option_value(arguments, "--project")?.unwrap_or_else(|| ".".to_owned());
     fs::canonicalize(raw).map_err(|error| format!("PROVIDER_PROJECT_RESOLVE_FAILED:{error}"))
 }
 
-fn stable_project_id(project: &Path) -> Result<String, String> {
+pub(super) fn stable_project_id(project: &Path) -> Result<String, String> {
     let raw = project
         .to_str()
         .ok_or_else(|| "PROVIDER_PROJECT_UTF8_INVALID".to_owned())?;
@@ -953,7 +953,7 @@ fn read_request(arguments: &[String]) -> Result<Value, String> {
     Ok(value)
 }
 
-fn output_value(value: &Value, arguments: &[String]) -> Result<Value, String> {
+pub(super) fn output_value(value: &Value, arguments: &[String]) -> Result<Value, String> {
     let Some(path) = option_value(arguments, "--output")? else {
         return Ok(value.clone());
     };
@@ -1204,11 +1204,5 @@ fn prepare_impl(state_root: &Path) -> Result<Value, String> {
 }
 
 pub(crate) fn prepare(state_root: &Path) -> Result<Value, String> {
-    match prepare_impl(state_root) {
-        Ok(value) => Ok(value),
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(1);
-        }
-    }
+    prepare_impl(state_root)
 }

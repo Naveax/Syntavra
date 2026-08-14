@@ -147,6 +147,26 @@ class ProviderProxyV6CompatibilityTests(unittest.TestCase):
         self.assertEqual(_UpstreamHandler.calls, 1)
         self.assertTrue(self.proxy.verify()["ok"])
 
+    def test_cached_replay_cannot_bypass_absolute_target_rejection(self) -> None:
+        status, headers, raw = self.request(self.payload())
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["X-Syntavra-Replay"], "miss")
+        self.assertEqual(json.loads(raw)["output_text"], "answer")
+        self.assertEqual(_UpstreamHandler.calls, 1)
+
+        connection = http.client.HTTPConnection(self.host, self.port, timeout=5)
+        connection.putrequest("POST", "http://attacker.invalid/v1/responses", skip_host=True)
+        body = json.dumps(self.payload()).encode("utf-8")
+        connection.putheader("Host", "attacker.invalid")
+        connection.putheader("Content-Type", "application/json")
+        connection.putheader("Content-Length", str(len(body)))
+        connection.endheaders(body)
+        response = connection.getresponse()
+        response.read()
+        self.assertEqual(response.status, 502)
+        connection.close()
+        self.assertEqual(_UpstreamHandler.calls, 1)
+
     def test_control_endpoints_require_token_even_on_loopback(self) -> None:
         status, payload = self.control("/_syntavra/health")
         self.assertEqual(status, 401)

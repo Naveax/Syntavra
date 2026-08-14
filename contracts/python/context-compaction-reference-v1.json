@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "family": "context-compaction",
+  "public_routes": [
+    "compress describe",
+    "compress get",
+    "compress put",
+    "compress verify",
+    "context",
+    "context evaluate",
+    "context pack",
+    "fabric compact",
+    "run rewrite",
+    "run session-append",
+    "run session-compact",
+    "run session-continuity",
+    "run session-open",
+    "run session-status",
+    "session append",
+    "session checkpoint",
+    "session close",
+    "session compact",
+    "session context",
+    "session export",
+    "session fork",
+    "session import",
+    "session list",
+    "session merge",
+    "session open",
+    "session recover",
+    "session verify"
+  ],
+  "context_thresholds": [
+    [0.5, ["evict_duplicates", "drop_raw_success_logs"]],
+    [0.6, ["externalize_evidence"]],
+    [0.7, ["write_phase_capsule"]],
+    [0.78, ["update_context_dag"]],
+    [0.84, ["prepare_controlled_handoff"]],
+    [0.88, ["mandatory_session_split"]]
+  ],
+  "rewrite": {
+    "manifest_fail_closed": true,
+    "shell_composition_rewritten": false,
+    "safe_wrappers": ["command", "env", "sudo", "time"]
+  },
+  "exit_policy": {
+    "success": 0,
+    "argparse_error": 2,
+    "integrity_failure": 3,
+    "application_or_malformed_input": 4
+  },
+  "ordering": {
+    "context_pack_selected": "stable-first then role then item_id",
+    "session_events": "ascending sequence",
+    "compression_chunks": "ascending chunk_index"
+  },
+  "network_boundary": "offline deterministic local filesystem/SQLite fixtures only; no external service",
+  "ownership_notes": {
+    "output compact": "owned by K Platform / helper / evidence reference",
+    "prove long-context": "owned by L Benchmark / proof reference",
+    "memory/session-memory": "owned by G Memory / intelligence reference"
+  }
+}

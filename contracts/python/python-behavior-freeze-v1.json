@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "family": "python-behavior-freeze",
+  "phase": "S",
+  "claim": "PYTHON_REFERENCE_BEHAVIOR_FROZEN",
+  "strict": true,
+  "public_surface": {
+    "authority": "tools/report_missing_native_public_routes.py",
+    "expected_route_count": 245,
+    "expected_route_sha256": "7bd02c46ba9209504c4b1842c9ad30e28151ce14a0f5c5d545daff960f9899aa",
+    "duplicate_route_list_forbidden": true
+  },
+  "execution_contract": {
+    "authority": "tools/report_python_public_execution_contract.py",
+    "expected_schema_version": 2,
+    "expected_unique_owner_count": 245,
+    "expected_success_exit": 0,
+    "expected_parser_error_exit": 2
+  },
+  "fixture_catalog": {
+    "path": "contracts/python/fixture-golden-catalog-v1.json",
+    "expected_file_sha256": "2c9b07c903df7df5dea239c7dd8b49566950e6378c08014b589f49baee0a06e5",
+    "expected_semantic_sha256": "eee73a7cba7120fbf51c09896310b6d4c9dcb98e8bc974704892fd2b0d1a1b4d",
+    "expected_family_count": 14,
+    "expected_fixture_case_count": 70
+  },
+  "reference_suite": {
+    "contract_path": "contracts/python/python-reference-suite-v1.json",
+    "expected_contract_sha256": "2d32749d1a2694ac69f2601c7e3f8619e4f17e5e39a3c6b8696fc2d6292cc6b3",
+    "expected_total_certifiers": 15,
+    "expected_failed": 0,
+    "expected_skipped": 0,
+    "must_be_offline": true,
+    "must_preserve_clean_tree": true
+  },
+  "derived_freeze": {
+    "expected_family_schema_sha256": "93d07d59de8f30794cbd96b1a95ca3f11b14da9480538a50615ef10cf2e37088",
+    "expected_behavior_policy_sha256": "eae1c1601656e1874138541420ca718c3f97fff5176fff117e593cbf2a7f5538",
+    "expected_error_exit_policy_sha256": "c85f15172c16803c3e42d101c4d80b5f270558c2340e962e8e958893104a7628",
+    "expected_nondeterminism_sha256": "d2ffbab872ce4f880504ebb5666b9bd45efb88ab4540640b91b0f6e5cf0f3e8f",
+    "expected_side_effect_sha256": "1534dd516d939b205021bc488b0e522d44d7cb125050d4fa773d3e18e937965e"
+  },
+  "policy": {
+    "family_schema_source": "exact-head Python Reference Suite family JSON artifacts",
+    "behavior_policy_source": "Q fixture/golden catalog plus exact-head family reports",
+    "error_exit_policy_source": "245-route execution manifest plus family exit policies and Q malformed/domain fixtures",
+    "nondeterminism_source": "Q per-family nondeterministic_fields only",
+    "side_effect_source": "Q per-family side_effect fixture",
+    "full_route_manifest_in_certification_artifact": true,
+    "static_route_manifest_copy": false,
+    "rust_python_required_for_fixture_consumption": false,
+    "rust_native_promotion_credit": false,
+    "frozen_rust_native_count": 174
+  }
+}

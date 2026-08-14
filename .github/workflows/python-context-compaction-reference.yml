@@ -1,0 +1,104 @@
+name: Python Context Compaction Reference Contract
+
+on:
+  push:
+    branches:
+      - agent/r31-provider-capture-native
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-context-compaction-reference
+  cancel-in-progress: true
+
+jobs:
+  python-context-compaction-reference:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Python context/compaction regression tests
+        run: python -m unittest tests.runtime.test_python_context_compaction_reference -v
+
+      - name: Generate exact-head Python context/compaction evidence
+        if: always()
+        run: |
+          set +e
+          python tools/certify_python_context_compaction_reference.py \
+            --output /tmp/python-context-compaction-reference.json \
+            > /tmp/python-context-compaction-reference.log 2>&1
+          report_exit=$?
+          set -e
+          cat /tmp/python-context-compaction-reference.log
+          test -f /tmp/python-context-compaction-reference.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/python-context-compaction-reference.json').read_text(encoding='utf-8'))
+          checkout_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert value['ok'] is True, value
+          assert value['family'] == 'context-compaction'
+          assert value['engine'] == 'python'
+          assert value['exact_head'] == checkout_head, (value['exact_head'], checkout_head)
+          assert value['routes']['route_count'] == 27
+          assert len(value['routes']['ownership']) == 27
+          assert value['context']['implicit_alias_equal'] is True
+          assert value['context']['pack']['used'] == 75
+          assert value['context']['pack']['selected_ids'] == ['dep', 'sys', 'task']
+          assert value['context']['malformed_item'] == {'exit': 4, 'error_type': 'TypeError'}
+          assert value['legacy_session']['context']['exact_history_events'] == 30
+          assert value['legacy_session']['compact_idempotent'] is True
+          assert value['legacy_session']['verify'] == {'ok': True, 'events': 30, 'reasons': []}
+          assert value['continuity']['resume']['continuity_restored'] is True
+          assert value['continuity']['append_sequence'] == 31
+          assert value['continuity']['continuity']['exact_recovery'] is True
+          assert value['continuity']['continuity']['claim'] == 'SESSION_CONTINUITY_INTERNALLY_VERIFIED'
+          assert value['rewrite']['manifest']['fail_closed'] is True
+          assert value['rewrite']['git_status']['rewritten'] == ['git', 'status', '--porcelain=v2', '--branch']
+          assert value['rewrite']['unsafe_shell']['safe'] is False
+          assert value['compression']['restore_exact'] is True
+          assert value['compression']['tampered_verify'] == {'exit': 3, 'ok': False}
+          assert value['compression']['invalid_chunk'] == {'exit': 4, 'error_type': 'IndexError'}
+          assert value['fabric']['deterministic'] is True
+          assert value['fabric']['exact_required'] is True
+          assert value['fabric']['insight_compact_events'] == 2
+          assert value['network_boundary'] == 'offline deterministic local filesystem/SQLite fixtures only; no external service'
+          PY
+          exit "$report_exit"
+
+      - name: Upload Python context/compaction reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-context-compaction-reference
+          path: |
+            /tmp/python-context-compaction-reference.json
+            /tmp/python-context-compaction-reference.log
+          if-no-files-found: error
+
+      - name: Show exact head and enforce clean repository tree
+        if: always()
+        run: |
+          echo "head=$(git rev-parse HEAD)"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
