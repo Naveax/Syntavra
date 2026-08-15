@@ -26,10 +26,13 @@ class PreReleasePublishWorkflowContractTests(unittest.TestCase):
         self.assertIn("- publish", text)
         self.assertGreaterEqual(text.count("github.event_name == 'workflow_dispatch'"), 8)
         self.assertGreaterEqual(text.count("inputs.mode == 'publish'"), 7)
+        self.assertIn("tests/runtime/test_pre_release_registry_availability.py", text)
+        self.assertIn("tools/check_pre_release_registry_availability.py", text)
 
     def test_publish_mode_requires_exact_head_and_independent_arming(self) -> None:
         text = self.text
         self.assertIn("Exact 40-character main SHA to publish", text)
+        self.assertIn('[[ "$TARGET_HEAD" =~ ^[0-9a-fA-F]{40}$ ]]', text)
         self.assertIn('repos/$GITHUB_REPOSITORY/branches/main', text)
         self.assertIn('test "$TARGET_HEAD" = "$current_main"', text)
         self.assertIn("PUBLISH_0_0_1_PRE_RELEASE", text)
@@ -60,6 +63,23 @@ class PreReleasePublishWorkflowContractTests(unittest.TestCase):
             "receipts['legacy_native_companion'] is None",
         ):
             self.assertIn(receipt, text)
+
+    def test_live_registry_preflight_is_fail_closed_for_publish_mode(self) -> None:
+        text = self.text
+        self.assertIn("Probe live registry version availability", text)
+        self.assertIn("python tools/check_pre_release_registry_availability.py", text)
+        self.assertIn("--output /tmp/pre-release-registry-preflight.json", text)
+        self.assertIn("--require-production-available", text)
+        self.assertIn("--require-legacy-available", text)
+        self.assertIn("if [ \"$MODE\" = 'publish' ]; then", text)
+        self.assertIn("if [ \"$PUBLISH_LEGACY_NATIVE\" = 'true' ]; then", text)
+        self.assertIn("pre-release-registry-preflight-${{ steps.authority.outputs.target_head }}-${{ github.run_id }}", text)
+        self.assertIn("live_registry_version_preflight': True", text)
+        self.assertIn("production_versions_must_be_available': True", text)
+        self.assertRegex(
+            text,
+            r"(?s)actions/setup-node@v4.*?node-version: '22'.*?Probe live registry version availability",
+        )
 
     def test_current_release_targets_and_publish_commands_are_explicit(self) -> None:
         text = self.text
