@@ -1,0 +1,34 @@
+name: Dispatch Canonical Publisher Prerequisite Audit
+
+on:
+  push:
+    branches:
+      - agent/pre-release-publisher-prerequisites
+    paths:
+      - '.github/workflows/dispatch-canonical-publisher-prerequisite-audit.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: f9aa5f4d327b7d85a857db555042eb65db8b967b
+    steps:
+      - name: Verify canonical main is still the intended target
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          test "$current_main" = "$TARGET_HEAD"
+      - name: Dispatch zero-write publisher prerequisite audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/pre-release-publisher-prerequisites.yml/dispatches" \
+            -f ref=main \
+            -f "inputs[exact_head]=$TARGET_HEAD" \
+            -f 'inputs[enforce_github_ready]=false'
