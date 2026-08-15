@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Any
 
 PYPI_BASE = "https://pypi.org"
+NPM_REGISTRY_BASE = "https://registry.npmjs.org"
+NPM_SCOPE = "syntavra"
+NPM_ORG_PUBLISH_ROLES = frozenset({"owner", "admin", "member", "developer"})
 MARKETPLACE_BASE = "https://marketplace.visualstudio.com"
 MARKETPLACE_AUDIENCE = "marketplace.visualstudio.com"
 MARKETPLACE_PUBLISHER = "naveax"
@@ -96,6 +99,55 @@ def _github_oidc_token(audience: str) -> str:
     return token
 
 
+def verify_npm_scope_authorization(npm_identity: str) -> dict[str, Any]:
+    identity = npm_identity.strip()
+    if not identity:
+        raise CredentialPreflightError("npm identity is required for scope authorization")
+
+    if identity.casefold() == NPM_SCOPE.casefold():
+        return {
+            "verified": True,
+            "scope": f"@{NPM_SCOPE}",
+            "scope_kind": "user",
+            "identity": identity,
+            "organization_role": None,
+            "verification_endpoint": None,
+            "credential_persisted": False,
+            "publication_performed": False,
+        }
+
+    token = os.environ.get("NODE_AUTH_TOKEN", "").strip()
+    if not token:
+        raise CredentialPreflightError("NODE_AUTH_TOKEN is unavailable for npm organization scope verification")
+
+    endpoint = f"{NPM_REGISTRY_BASE}/-/org/{NPM_SCOPE}/user"
+    response = _request_json(
+        endpoint,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "Syntavra credential preflight/0.0.1",
+        },
+    )
+    members = {str(name).casefold(): role for name, role in response.value.items()}
+    role = members.get(identity.casefold())
+    if not isinstance(role, str) or role.casefold() not in NPM_ORG_PUBLISH_ROLES:
+        raise CredentialPreflightError(
+            f"npm identity {identity!r} is not a publish-capable member of @{NPM_SCOPE}"
+        )
+
+    return {
+        "verified": True,
+        "scope": f"@{NPM_SCOPE}",
+        "scope_kind": "organization",
+        "identity": identity,
+        "organization_role": role.casefold(),
+        "verification_endpoint": endpoint,
+        "credential_persisted": False,
+        "publication_performed": False,
+    }
+
+
 def verify_pypi_trusted_publisher() -> dict[str, Any]:
     audience_response = _request_json(f"{PYPI_BASE}/_/oidc/audience")
     audience = audience_response.value.get("audience")
@@ -154,6 +206,7 @@ def build_report(
     exact_head: str,
     npm_authenticated: bool,
     npm_identity: str,
+    npm_scope: dict[str, Any],
     crates_token_present: bool,
     pypi: dict[str, Any],
     marketplace: dict[str, Any],
@@ -167,6 +220,7 @@ def build_report(
     ready = all(
         (
             npm_authenticated,
+            npm_scope.get("verified") is True,
             crates_token_present,
             pypi.get("verified") is True,
             marketplace.get("verified") is True,
@@ -186,14 +240,16 @@ def build_report(
         "npm": {
             "authenticated": npm_authenticated,
             "identity": npm_identity if npm_authenticated else None,
-            "registry": "https://registry.npmjs.org",
-            "scope_publish_rights_verified": False,
-            "note": "npm whoami proves token authentication; first-package scope publish authorization is still enforced by npm at publication time.",
+            "registry": NPM_REGISTRY_BASE,
+            "scope": f"@{NPM_SCOPE}",
+            "scope_publish_rights_verified": npm_scope.get("verified") is True,
+            "scope_authorization": npm_scope,
+            "note": "npm token authentication and @syntavra namespace authorization are verified with read-only registry operations before publication.",
         },
         "crates_io": {
             "token_present": crates_token_present,
             "remote_token_validation_performed": False,
-            "note": "The initial publication uses an API token because the target crates do not yet exist; no safe scope-neutral read endpoint is used to over-claim remote publish authorization.",
+            "note": "The initial publication uses an API token because the target crates do not yet exist; no documented scope-neutral authenticated read endpoint is used to over-claim remote publish authorization.",
         },
         "publish_auth_ready": ready,
         "claim": "ZERO_WRITE_PUBLISH_AUTH_READY" if ready else "ZERO_WRITE_PUBLISH_AUTH_INCOMPLETE",
@@ -213,6 +269,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    npm_scope = verify_npm_scope_authorization(args.npm_identity)
     if args.skip_live_oidc:
         pypi = {"verified": False, "skipped": True, "publication_performed": False}
         marketplace = {"verified": False, "skipped": True, "publication_performed": False}
@@ -224,6 +281,7 @@ def main() -> int:
         exact_head=args.exact_head,
         npm_authenticated=args.npm_authenticated == "true",
         npm_identity=args.npm_identity,
+        npm_scope=npm_scope,
         crates_token_present=args.crates_token_present == "true",
         pypi=pypi,
         marketplace=marketplace,
