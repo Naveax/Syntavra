@@ -24,28 +24,34 @@ def patch_job(text: str, name: str, transform) -> str:
     return text[:start] + updated + text[end:]
 
 
-def add_predecessor(block: str, predecessor: str) -> str:
-    old = '    needs:\n      - authority\n      - credential-preflight\n'
-    new = old + f'      - {predecessor}\n'
-    if block.count(old) != 1:
-        raise SystemExit(f'expected one standard needs block, found {block.count(old)}')
+def replace_once(block: str, old: str, new: str, label: str) -> str:
+    count = block.count(old)
+    if count != 1:
+        raise SystemExit(f'{label}: expected exactly one match, found {count}')
     return block.replace(old, new, 1)
 
 
-def add_checkout_before(block: str, needle: str) -> str:
-    checkout = (
-        '      - uses: actions/checkout@v4\n'
-        '        with:\n'
-        '          ref: ${{ env.TARGET_HEAD }}\n'
-        '          fetch-depth: 0\n'
+def add_predecessor(block: str, predecessor: str) -> str:
+    old = '    needs:\n      - authority\n      - credential-preflight\n'
+    return replace_once(
+        block,
+        old,
+        old + f'      - {predecessor}\n',
+        'standard needs block',
     )
-    if block.count(needle) != 1:
-        raise SystemExit(f'expected one checkout insertion point, found {block.count(needle)}')
-    return block.replace(needle, checkout + needle, 1)
+
+
+def add_checkout_before(block: str, needle: str) -> str:
+    checkout = '''      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
+'''
+    return replace_once(block, needle, checkout + needle, 'checkout insertion point')
 
 
 def append_steps(block: str, steps: str) -> str:
-    return block.rstrip('\n') + '\n' + steps + '\n\n'
+    return block.rstrip('\n') + '\n' + steps.rstrip('\n') + '\n\n'
 
 
 def main() -> None:
@@ -87,19 +93,17 @@ def main() -> None:
           name: pre-release-publication-visibility-python-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-python.json
           if-no-files-found: warn
-          retention-days: 90'''
+          retention-days: 90
+'''
     text = patch_job(text, 'publish-pypi', lambda block: append_steps(block, pypi_steps))
 
     def npm_installer(block: str) -> str:
         old = '          npm publish "$package" --tag next --access public --provenance\n'
-        new = old + (
-            '          python3 tools/check_pre_release_publication_visibility.py \\\n'
-            '            --target npm \\\n'
-            '            --output /tmp/publication-visibility-npm.json\n'
-        )
-        if block.count(old) != 1:
-            raise SystemExit('npm installer publish command drift')
-        block = block.replace(old, new, 1)
+        verify = '''          python3 tools/check_pre_release_publication_visibility.py \\
+            --target npm \\
+            --output /tmp/publication-visibility-npm.json
+'''
+        block = replace_once(block, old, old + verify, 'npm installer publish command')
         return append_steps(block, '''      - name: Upload npm installer publication visibility evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -107,20 +111,18 @@ def main() -> None:
           name: pre-release-publication-visibility-npm-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-npm.json
           if-no-files-found: warn
-          retention-days: 90''')
+          retention-days: 90
+''')
 
     text = patch_job(text, 'publish-npm-installer', npm_installer)
 
     def npm_sdk(block: str) -> str:
         old = '          npm publish "$package" --tag next --access public --provenance\n'
-        new = old + (
-            '          python3 tools/check_pre_release_publication_visibility.py \\\n'
-            '            --target npm_sdk \\\n'
-            '            --output /tmp/publication-visibility-npm-sdk.json\n'
-        )
-        if block.count(old) != 1:
-            raise SystemExit('npm SDK publish command drift')
-        block = block.replace(old, new, 1)
+        verify = '''          python3 tools/check_pre_release_publication_visibility.py \\
+            --target npm_sdk \\
+            --output /tmp/publication-visibility-npm-sdk.json
+'''
+        block = replace_once(block, old, old + verify, 'npm SDK publish command')
         return append_steps(block, '''      - name: Upload npm SDK publication visibility evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,7 +130,8 @@ def main() -> None:
           name: pre-release-publication-visibility-npm-sdk-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-npm-sdk.json
           if-no-files-found: warn
-          retention-days: 90''')
+          retention-days: 90
+''')
 
     text = patch_job(text, 'publish-npm-sdk', npm_sdk)
 
@@ -150,9 +153,7 @@ def main() -> None:
             --target rust_cli \\
             --output /tmp/publication-visibility-rust/rust-cli.json
 '''
-        if block.count(old) != 1:
-            raise SystemExit('Rust publish sequence drift')
-        block = block.replace(old, new, 1)
+        block = replace_once(block, old, new, 'Rust publish sequence')
         return append_steps(block, '''      - name: Upload Rust publication visibility evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -160,20 +161,18 @@ def main() -> None:
           name: pre-release-publication-visibility-rust-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-rust
           if-no-files-found: warn
-          retention-days: 90''')
+          retention-days: 90
+''')
 
     text = patch_job(text, 'publish-rust-production', rust)
 
     def vscode(block: str) -> str:
         old = '          npx --yes @vscode/vsce publish --oidc --pre-release --packagePath "$package"\n'
-        new = old + (
-            '          python3 tools/check_pre_release_publication_visibility.py \\\n'
-            '            --target vscode \\\n'
-            '            --output /tmp/publication-visibility-vscode.json\n'
-        )
-        if block.count(old) != 1:
-            raise SystemExit('VS Code publish command drift')
-        block = block.replace(old, new, 1)
+        verify = '''          python3 tools/check_pre_release_publication_visibility.py \\
+            --target vscode \\
+            --output /tmp/publication-visibility-vscode.json
+'''
+        block = replace_once(block, old, old + verify, 'VS Code publish command')
         return append_steps(block, '''      - name: Upload VS Code publication visibility evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -181,20 +180,18 @@ def main() -> None:
           name: pre-release-publication-visibility-vscode-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-vscode.json
           if-no-files-found: warn
-          retention-days: 90''')
+          retention-days: 90
+''')
 
     text = patch_job(text, 'publish-vscode', vscode)
 
     def legacy(block: str) -> str:
         old = '          cargo +1.82.0 publish --manifest-path native/syntavra-native/Cargo.toml\n'
-        new = old + (
-            '          python3 tools/check_pre_release_publication_visibility.py \\\n'
-            '            --target legacy_native_companion \\\n'
-            '            --output /tmp/publication-visibility-legacy-native.json\n'
-        )
-        if block.count(old) != 1:
-            raise SystemExit('legacy native publish command drift')
-        block = block.replace(old, new, 1)
+        verify = '''          python3 tools/check_pre_release_publication_visibility.py \\
+            --target legacy_native_companion \\
+            --output /tmp/publication-visibility-legacy-native.json
+'''
+        block = replace_once(block, old, old + verify, 'legacy native publish command')
         return append_steps(block, '''      - name: Upload legacy native publication visibility evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -202,7 +199,8 @@ def main() -> None:
           name: pre-release-publication-visibility-legacy-native-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-legacy-native.json
           if-no-files-found: warn
-          retention-days: 90''')
+          retention-days: 90
+''')
 
     text = patch_job(text, 'publish-legacy-native', legacy)
 
@@ -216,16 +214,15 @@ def main() -> None:
     text = text.replace(gates_old, gates_new, 1)
 
     order_anchor = "              'publication_steps': [\n"
-    order_block = (
-        "              'publication_order': [\n"
-        "                  'native',\n"
-        "                  'npm',\n"
-        "                  'npm_sdk',\n"
-        "                  'python',\n"
-        "                  'vscode',\n"
-        "                  'legacy_native_companion',\n"
-        "              ],\n"
-    )
+    order_block = '''              'publication_order': [
+                  'native',
+                  'npm',
+                  'npm_sdk',
+                  'python',
+                  'vscode',
+                  'legacy_native_companion',
+              ],
+'''
     if text.count(order_anchor) != 1:
         raise SystemExit('publication_steps anchor drift')
     text = text.replace(order_anchor, order_block + order_anchor, 1)
