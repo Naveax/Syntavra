@@ -1,0 +1,62 @@
+name: Release Main Merge Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  release-main-merge-gate:
+    name: release-main-merge-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Verify release-main merge authority contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_release_main_protection -v
+          python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
+          python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
+          python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+          python -m unittest tests.runtime.test_python_publication_registry_reference -v
+          python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
+          python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+          python tools/refresh_manifest.py --check
+
+      - name: Enforce exact clean pull request head
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
