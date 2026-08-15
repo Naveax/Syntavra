@@ -23,6 +23,7 @@ REQUIRED_RULE_TYPES = frozenset(
         "deletion",
     }
 )
+REQUIRED_STATUS_CONTEXTS = frozenset({"release-main-merge-gate"})
 
 
 def _load_json(path: Path) -> Any:
@@ -74,9 +75,12 @@ def build_report(*, exact_head: str, branch: dict[str, Any], rules: Any) -> dict
     active_types = _rule_types(rules)
     missing_types = sorted(REQUIRED_RULE_TYPES - active_types)
     status_contexts = _status_contexts(rules)
+    missing_status_contexts = sorted(REQUIRED_STATUS_CONTEXTS - set(status_contexts))
 
     exact_head_matches = branch_name == "main" and observed_head == expected_head
-    required_status_checks_present = "required_status_checks" in active_types and bool(status_contexts)
+    required_status_checks_present = (
+        "required_status_checks" in active_types and not missing_status_contexts
+    )
     effective_rules_ready = not missing_types and required_status_checks_present
     release_main_ready = exact_head_matches and protected and effective_rules_ready
 
@@ -96,7 +100,9 @@ def build_report(*, exact_head: str, branch: dict[str, Any], rules: Any) -> dict
         "required_rule_types": sorted(REQUIRED_RULE_TYPES),
         "active_rule_types": sorted(active_types),
         "missing_rule_types": missing_types,
+        "required_status_check_contract": sorted(REQUIRED_STATUS_CONTEXTS),
         "required_status_check_contexts": status_contexts,
+        "missing_required_status_check_contexts": missing_status_contexts,
         "required_status_checks_present": required_status_checks_present,
         "release_main_ready": release_main_ready,
         "claim": (
@@ -105,8 +111,9 @@ def build_report(*, exact_head: str, branch: dict[str, Any], rules: Any) -> dict
             else "RELEASE_MAIN_PROTECTION_INCOMPLETE"
         ),
         "next_authority": (
-            "Configure active main-branch rules that require pull requests, required status checks, "
-            "prevent force pushes, and prevent deletion; then rerun the zero-write authority check."
+            "Configure active main-branch rules that require pull requests, the exact "
+            "release-main-merge-gate status check, prevent force pushes, and prevent deletion; "
+            "then rerun the zero-write authority check."
         ),
     }
 
