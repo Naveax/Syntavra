@@ -9,6 +9,7 @@ on:
       - 'tests/runtime/test_pre_release_publish_credentials.py'
       - 'tests/runtime/test_pre_release_publication_visibility.py'
       - 'tests/runtime/test_pre_release_publication_attempt_ledger.py'
+      - 'tests/runtime/test_pre_release_secret_scope.py'
       - 'tests/runtime/test_release_main_protection.py'
       - 'release/publish-readiness.json'
       - 'tools/build_pre_release_candidate_receipt_plan.py'
@@ -73,6 +74,7 @@ jobs:
           python -m unittest tests.runtime.test_pre_release_publish_credentials -v
           python -m unittest tests.runtime.test_pre_release_publication_visibility -v
           python -m unittest tests.runtime.test_pre_release_publication_attempt_ledger -v
+          python -m unittest tests.runtime.test_pre_release_secret_scope -v
           python -m unittest tests.runtime.test_release_main_protection -v
       - name: Enforce exact clean PR head
         shell: bash
@@ -98,7 +100,6 @@ jobs:
       TARGET_HEAD: ${{ inputs.exact_head }}
       MODE: ${{ inputs.mode }}
       CONFIRMATION: ${{ inputs.confirmation }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
     steps:
@@ -260,6 +261,8 @@ jobs:
 
       - name: Arm publish mode only with independent gates
         if: inputs.mode == 'publish'
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
         shell: bash
         run: |
           set -euo pipefail
@@ -349,6 +352,7 @@ jobs:
                   'release_main_protection': True,
                   'serialized_publication_chain': True,
                   'post_write_public_visibility_verification': True,
+                  'step_scoped_publisher_secrets': True,
               },
               'publication_order': [
                   'native',
@@ -394,14 +398,15 @@ jobs:
       id-token: write
     env:
       TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
     steps:
       - name: Re-arm protected zero-write credential preflight
         shell: bash
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
@@ -424,6 +429,8 @@ jobs:
 
       - name: Verify npm token authentication without publication
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           npm_identity="$(npm whoami --registry=https://registry.npmjs.org)"
@@ -432,6 +439,8 @@ jobs:
 
       - name: Exchange trusted-publisher credentials without publication
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           python tools/check_pre_release_publish_credentials.py \
@@ -492,9 +501,10 @@ jobs:
     env:
       TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
       PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
     steps:
       - name: Re-arm irreversible publication
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
         run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
       - uses: actions/checkout@v4
         with:
@@ -551,11 +561,12 @@ jobs:
     env:
       TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
       PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
     steps:
       - name: Re-arm irreversible publication
         shell: bash
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
@@ -576,6 +587,8 @@ jobs:
           run-id: ${{ env.PROVENANCE_RUN_ID }}
       - name: Publish npm installer with provenance
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           package="$(find /tmp/provenance -type f -path '*/npm-installer/*.tgz' -print -quit)"
@@ -608,11 +621,12 @@ jobs:
     env:
       TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
       PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
     steps:
       - name: Re-arm irreversible publication
         shell: bash
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
@@ -633,6 +647,8 @@ jobs:
           run-id: ${{ env.PROVENANCE_RUN_ID }}
       - name: Publish npm TypeScript SDK with provenance
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           package="$(find /tmp/provenance -type f -path '*/npm-sdk/*.tgz' -print -quit)"
@@ -661,11 +677,12 @@ jobs:
       contents: read
     env:
       TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
     steps:
       - name: Re-arm irreversible publication
         shell: bash
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
@@ -683,6 +700,8 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=all)"
       - name: Publish production Rust graph in dependency order
         shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -euo pipefail
           cargo +1.82.0 publish --locked -p syntavra-contracts
@@ -721,9 +740,10 @@ jobs:
     env:
       TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
       PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
     steps:
       - name: Re-arm irreversible publication
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
         run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
       - uses: actions/checkout@v4
         with:
@@ -769,11 +789,12 @@ jobs:
       contents: read
     env:
       TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
     steps:
       - name: Re-arm irreversible optional companion publication
         shell: bash
+        env:
+          SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
@@ -786,6 +807,8 @@ jobs:
         run: rustup toolchain install 1.82.0 --profile minimal
       - name: Publish legacy non-production native companion
         shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
