@@ -9,7 +9,7 @@ on:
       - 'tools/bootstrap_patch_release_main_protection.py'
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -126,6 +126,31 @@ jobs:
           mkdir -p /tmp/main-protection-authority/.github/workflows
           cp .github/workflows/publish-pre-release.yml /tmp/main-protection-authority/.github/workflows/publish-pre-release.yml
           cp MANIFEST.sha256 /tmp/main-protection-authority/MANIFEST.sha256
+
+      - name: Create validated Git blobs without moving refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow_b64="$(base64 -w0 .github/workflows/publish-pre-release.yml)"
+          manifest_b64="$(base64 -w0 MANIFEST.sha256)"
+          workflow_sha="$(jq -n --arg content "$workflow_b64" '{content:$content,encoding:"base64"}' | gh api --method POST "repos/$GITHUB_REPOSITORY/git/blobs" --input - --jq '.sha')"
+          manifest_sha="$(jq -n --arg content "$manifest_b64" '{content:$content,encoding:"base64"}' | gh api --method POST "repos/$GITHUB_REPOSITORY/git/blobs" --input - --jq '.sha')"
+          test -n "$workflow_sha"
+          test -n "$manifest_sha"
+          jq -n \
+            --arg workflow_sha "$workflow_sha" \
+            --arg manifest_sha "$manifest_sha" \
+            '{workflow_sha:$workflow_sha,manifest_sha:$manifest_sha,refs_moved:false}' \
+            > /tmp/validated-main-protection-git-blobs.json
+          cat /tmp/validated-main-protection-git-blobs.json
+
+      - name: Upload validated Git blob authority
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-main-protection-git-blobs-${{ github.sha }}
+          path: /tmp/validated-main-protection-git-blobs.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload validated main protection patch
         uses: actions/upload-artifact@v4
