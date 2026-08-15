@@ -9,11 +9,13 @@ on:
       - 'tools/bootstrap_patch_immutable_publish_actions.py'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate-and-stage:
     runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -71,13 +73,40 @@ jobs:
           cp .github/workflows/publish-pre-release.yml /tmp/candidate/publish-pre-release.yml
           cp tests/runtime/test_pre_release_publish_workflow_contract.py /tmp/candidate/tests/runtime/
           cp MANIFEST.sha256 /tmp/candidate/
-          {
-            printf 'workflow_blob=%s\n' "$(git hash-object .github/workflows/publish-pre-release.yml)"
-            printf 'test_blob=%s\n' "$(git hash-object tests/runtime/test_pre_release_publish_workflow_contract.py)"
-            printf 'manifest_blob=%s\n' "$(git hash-object MANIFEST.sha256)"
-            printf 'base_head=%s\n' '6b7e2d628a50ec42206006bc56df6c309f025617'
-            printf 'refs_moved=false\n'
-          } > /tmp/candidate/validated-meta.txt
+      - name: Create validated Git blobs without moving refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          create_blob() {
+            local label="$1"
+            local file="$2"
+            local payload
+            payload="$(mktemp)"
+            python - "$file" "$payload" <<'PY'
+          import base64
+          import json
+          import sys
+          from pathlib import Path
+
+          source = Path(sys.argv[1]).read_bytes()
+          Path(sys.argv[2]).write_text(
+              json.dumps({"content": base64.b64encode(source).decode("ascii"), "encoding": "base64"}),
+              encoding="utf-8",
+          )
+          PY
+            local remote_sha
+            remote_sha="$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/blobs" --input "$payload" --jq '.sha')"
+            local local_sha
+            local_sha="$(git hash-object "$file")"
+            test "$remote_sha" = "$local_sha"
+            printf '%s=%s\n' "$label" "$remote_sha" >> /tmp/candidate/validated-meta.txt
+          }
+          : > /tmp/candidate/validated-meta.txt
+          create_blob workflow_blob .github/workflows/publish-pre-release.yml
+          create_blob test_blob tests/runtime/test_pre_release_publish_workflow_contract.py
+          create_blob manifest_blob MANIFEST.sha256
+          printf 'base_head=%s\n' '6b7e2d628a50ec42206006bc56df6c309f025617' >> /tmp/candidate/validated-meta.txt
+          printf 'refs_moved=false\n' >> /tmp/candidate/validated-meta.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: validated-immutable-publish-actions-${{ github.sha }}
