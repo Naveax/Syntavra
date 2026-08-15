@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - agent/publication-registry-authority
   pull_request:
   workflow_dispatch:
 
@@ -66,8 +65,14 @@ jobs:
           assert value['release']['identity']['channel'] == 'pre-release'
           assert value['release']['repository_identity']['ok'] is True
           assert value['release']['pre_release']['claim_boundaries']['registry_publication'] == 'REGISTRY_PUBLICATION_NOT_PERFORMED'
-          for target in ('python', 'npm', 'vscode', 'native', 'legacy_native_companion'):
+          for target in ('python', 'npm', 'npm_sdk', 'vscode', 'native', 'legacy_native_companion'):
               assert value['release']['publish_readiness'][target]['published'] is False
+          npm_sdk = value['release']['publish_readiness']['npm_sdk']
+          assert npm_sdk['package'] == '@syntavra/sdk'
+          assert npm_sdk['tag'] == 'next'
+          assert value['release']['package_metadata']['typescript_sdk_name'] == '@syntavra/sdk'
+          assert value['release']['package_metadata']['typescript_tag'] == 'next'
+          assert value['release']['package_metadata']['typescript_provenance'] is True
           native = value['release']['publish_readiness']['native']
           assert native['package'] == 'syntavra-cli'
           assert native['binary'] == 'syntavra'
