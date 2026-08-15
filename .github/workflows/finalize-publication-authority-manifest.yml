@@ -1,0 +1,42 @@
+name: Finalize Publication Authority Manifest
+
+on:
+  push:
+    branches:
+      - agent/publication-registry-authority
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-manifest:
+    if: github.event.head_commit.message == 'Bootstrap final publication authority manifest'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/publication-registry-authority
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Refresh manifest for exact final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/finalize-publication-authority-manifest.yml
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          git diff --check
+          git restore --staged .github/workflows/finalize-publication-authority-manifest.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add MANIFEST.sha256
+          git commit --only MANIFEST.sha256 -m 'Refresh publication registry authority manifest'
+          git push origin HEAD:agent/publication-registry-authority
