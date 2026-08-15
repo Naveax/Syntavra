@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf syntavra_runtime.egg-info
-          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json release-smoke.json
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
