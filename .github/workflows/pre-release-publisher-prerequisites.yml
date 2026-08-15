@@ -1,0 +1,173 @@
+name: Pre-Release Publisher Prerequisites Audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pre-release-publisher-prerequisites.yml'
+      - 'tools/check_pre_release_publisher_prerequisites.py'
+      - 'tests/runtime/test_pre_release_publisher_prerequisites.py'
+  workflow_dispatch:
+    inputs:
+      exact_head:
+        description: Exact 40-character canonical main SHA to audit
+        required: true
+        type: string
+      enforce_github_ready:
+        description: Fail the audit if checkable GitHub-side prerequisites are incomplete
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify publisher prerequisite audit contract
+        run: python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
+      - name: Enforce exact clean PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  audit:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      deployments: read
+    outputs:
+      target_head: ${{ steps.authority.outputs.target_head }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: ${{ inputs.exact_head }}
+      ENFORCE_GITHUB_READY: ${{ inputs.enforce_github_ready }}
+      SYNTAVRA_PUBLISH_ARMED_VALUE: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+      NPM_TOKEN_VALUE: ${{ secrets.NPM_TOKEN }}
+      CRATES_IO_TOKEN_VALUE: ${{ secrets.CRATES_IO_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Validate exact canonical main authority
+        id: authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$TARGET_HEAD" <<'PY'
+          import re
+          import sys
+          if not re.fullmatch(r'[0-9a-fA-F]{40}', sys.argv[1]):
+              raise SystemExit('exact_head must be exactly 40 hexadecimal characters')
+          PY
+          TARGET_HEAD="$(printf '%s' "$TARGET_HEAD" | tr 'A-F' 'a-f')"
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          test "$TARGET_HEAD" = "$current_main"
+          echo "target_head=$TARGET_HEAD" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.authority.outputs.target_head }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Observe pre-release environment protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/environments/pre-release" > /tmp/pre-release-environment.json 2> /tmp/pre-release-environment.err; then
+            :
+          else
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          Path('/tmp/pre-release-environment.json').write_text(
+              json.dumps({'missing': True}, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+          fi
+
+      - name: Build zero-write publisher prerequisite report
+        shell: bash
+        run: |
+          set -euo pipefail
+          arming_present=false
+          arming_matches=false
+          npm_present=false
+          crates_present=false
+
+          if test -n "${SYNTAVRA_PUBLISH_ARMED_VALUE:-}"; then
+            arming_present=true
+            if test "$SYNTAVRA_PUBLISH_ARMED_VALUE" = 'PUBLISH_0_0_1_PRE_RELEASE'; then
+              arming_matches=true
+            fi
+          fi
+          if test -n "${NPM_TOKEN_VALUE:-}"; then npm_present=true; fi
+          if test -n "${CRATES_IO_TOKEN_VALUE:-}"; then crates_present=true; fi
+
+          args=(
+            --exact-head "${{ steps.authority.outputs.target_head }}"
+            --environment-json /tmp/pre-release-environment.json
+            --arming-secret-present "$arming_present"
+            --arming-secret-matches "$arming_matches"
+            --npm-token-present "$npm_present"
+            --crates-token-present "$crates_present"
+            --output /tmp/pre-release-publisher-prerequisites.json
+          )
+          if test "$ENFORCE_GITHUB_READY" = 'true'; then
+            args+=(--require-github-ready)
+          fi
+          python tools/check_pre_release_publisher_prerequisites.py "${args[@]}"
+
+      - name: Verify report never exposes secret values
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('/tmp/pre-release-publisher-prerequisites.json').read_text(encoding='utf-8'))
+          assert value['publication_performed'] is False
+          assert value['secret_values_exposed'] is False
+          assert value['exact_head'] == '${{ steps.authority.outputs.target_head }}'
+          assert value['external_bindings_verified'] is False
+          for credential in value['credentials'].values():
+              assert credential.get('value_exposed') is False
+          PY
+
+      - name: Upload publisher prerequisite evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publisher-prerequisites-${{ steps.authority.outputs.target_head }}
+          path: /tmp/pre-release-publisher-prerequisites.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce exact clean authority head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ steps.authority.outputs.target_head }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
