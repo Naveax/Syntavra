@@ -1,0 +1,125 @@
+name: Finalize Immutable Action Visibility Contract
+
+on:
+  push:
+    branches:
+      - agent/pre-release-immutable-action-pins-finalizer
+    paths:
+      - '.github/workflows/finalize-immutable-action-visibility-contract.yml'
+      - 'tools/finalize_immutable_action_visibility_contract.py'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Apply visibility contract repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/finalize_immutable_action_visibility_contract.py
+          python tools/finalize_immutable_action_visibility_contract.py
+      - name: Remove helper-only files from candidate tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/finalize-immutable-action-visibility-contract.yml
+          rm tools/finalize_immutable_action_visibility_contract.py
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Run canonical release merge contract suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_release_main_protection -v
+          python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_publication_visibility -v
+          python -m unittest tests.runtime.test_pre_release_publication_attempt_ledger -v
+          python -m unittest tests.runtime.test_pre_release_secret_scope -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
+          python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
+          python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+          python -m unittest tests.runtime.test_python_publication_registry_reference -v
+          python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
+          python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+      - name: Refresh and verify final manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+      - name: Enforce exact repair diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(git diff --name-only 67e8b889a78f7bfeeb983e52293fb886b50d24b5 -- | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=(
+            'MANIFEST.sha256'
+            'tests/runtime/test_pre_release_publication_visibility.py'
+          )
+          test "${#changed[@]}" -eq "${#expected[@]}"
+          for i in "${!expected[@]}"; do
+            test "${changed[$i]}" = "${expected[$i]}"
+          done
+      - name: Create validated repair blobs without moving refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/candidate/tests/runtime
+          cp tests/runtime/test_pre_release_publication_visibility.py /tmp/candidate/tests/runtime/
+          cp MANIFEST.sha256 /tmp/candidate/
+          create_blob() {
+            local label="$1"
+            local file="$2"
+            local payload
+            payload="$(mktemp)"
+            python - "$file" "$payload" <<'PY'
+          import base64
+          import json
+          import sys
+          from pathlib import Path
+
+          source = Path(sys.argv[1]).read_bytes()
+          Path(sys.argv[2]).write_text(
+              json.dumps({"content": base64.b64encode(source).decode("ascii"), "encoding": "base64"}),
+              encoding="utf-8",
+          )
+          PY
+            local remote_sha
+            remote_sha="$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/blobs" --input "$payload" --jq '.sha')"
+            local local_sha
+            local_sha="$(git hash-object "$file")"
+            test "$remote_sha" = "$local_sha"
+            printf '%s=%s\n' "$label" "$remote_sha" >> /tmp/candidate/validated-meta.txt
+          }
+          : > /tmp/candidate/validated-meta.txt
+          create_blob visibility_test_blob tests/runtime/test_pre_release_publication_visibility.py
+          create_blob manifest_blob MANIFEST.sha256
+          printf 'base_head=%s\n' '67e8b889a78f7bfeeb983e52293fb886b50d24b5' >> /tmp/candidate/validated-meta.txt
+          printf 'refs_moved=false\n' >> /tmp/candidate/validated-meta.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validated-immutable-visibility-repair-${{ github.sha }}
+          path: /tmp/candidate
+          if-no-files-found: error
+          retention-days: 7
