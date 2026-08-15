@@ -74,6 +74,16 @@ class ReleaseActionPinContractTests(unittest.TestCase):
         self.assertIn("tests.runtime.test_release_action_pins", text)
         self.assertIn("'immutable_release_action_pins': True", text)
 
+    def test_provenance_final_readiness_revalidates_exact_checked_out_head(self) -> None:
+        text = (ROOT / ".github/workflows/post-r38-release-provenance-diagnostic.yml").read_text(encoding="utf-8")
+        self.assertIn('ACTUAL_HEAD="$(git rev-parse HEAD)"', text)
+        self.assertIn('[[ "$TARGET_HEAD" =~ ^[0-9a-f]{40}$ ]]', text)
+        self.assertIn('test "$ACTUAL_HEAD" = "$TARGET_HEAD"', text)
+        self.assertIn('BASELINE_OUTCOME: ${{ steps.baseline.outcome }}', text)
+        self.assertIn('ATTESTATION_OUTCOME: ${{ steps.attestation.outcome }}', text)
+        self.assertIn('if [ "$GITHUB_EVENT_NAME" = "push" ]; then', text)
+        self.assertIn('test "$ATTESTATION_OUTCOME" = skipped', text)
+
 
 if __name__ == "__main__":
     unittest.main()
