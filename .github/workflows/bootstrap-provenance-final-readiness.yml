@@ -1,0 +1,144 @@
+name: Bootstrap Provenance Final Readiness
+
+on:
+  push:
+    branches:
+      - agent/release-authority-provenance-readiness-finalizer
+    paths:
+      - '.github/workflows/bootstrap-provenance-final-readiness.yml'
+      - 'tools/bootstrap_patch_provenance_final_readiness.py'
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Apply final readiness patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/bootstrap_patch_provenance_final_readiness.py
+          python tools/bootstrap_patch_provenance_final_readiness.py
+          python -m py_compile tests/runtime/test_release_action_pins.py
+
+      - name: Remove bootstrap-only files from final candidate tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/bootstrap-provenance-final-readiness.yml
+          rm tools/bootstrap_patch_provenance_final_readiness.py
+
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Run canonical release contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_release_action_pins -v
+          python -m unittest tests.runtime.test_release_main_protection -v
+          python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_publication_visibility -v
+          python -m unittest tests.runtime.test_pre_release_publication_attempt_ledger -v
+          python -m unittest tests.runtime.test_pre_release_secret_scope -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
+          python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
+          python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+          python -m unittest tests.runtime.test_python_publication_registry_reference -v
+          python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
+          python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+          git diff --check
+
+      - name: Refresh bootstrap-free final manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          git checkout -- release-smoke.json 2>/dev/null || true
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          git diff --check
+
+      - name: Enforce exact permanent diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only 67ece8d4cf1132f776f34185a9317ca9982d9ba3 -- | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=(
+            '.github/workflows/post-r38-release-provenance-diagnostic.yml'
+            'MANIFEST.sha256'
+            'tests/runtime/test_release_action_pins.py'
+          )
+          test "${#changed[@]}" -eq "${#expected[@]}"
+          for i in "${!expected[@]}"; do
+            test "${changed[$i]}" = "${expected[$i]}"
+          done
+
+      - name: Create validated Git blobs without moving refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/candidate
+          create_blob() {
+            local label="$1"
+            local file="$2"
+            local payload
+            payload="$(mktemp)"
+            python - "$file" "$payload" <<'PY'
+          import base64
+          import json
+          import sys
+          from pathlib import Path
+
+          source = Path(sys.argv[1]).read_bytes()
+          Path(sys.argv[2]).write_text(
+              json.dumps({"content": base64.b64encode(source).decode("ascii"), "encoding": "base64"}),
+              encoding="utf-8",
+          )
+          PY
+            local remote_sha
+            remote_sha="$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/blobs" --input "$payload" --jq '.sha')"
+            local local_sha
+            local_sha="$(git hash-object "$file")"
+            test "$remote_sha" = "$local_sha"
+            printf '%s=%s\n' "$label" "$remote_sha" >> /tmp/candidate/validated-meta.txt
+          }
+          : > /tmp/candidate/validated-meta.txt
+          create_blob provenance_workflow .github/workflows/post-r38-release-provenance-diagnostic.yml
+          create_blob action_pin_test tests/runtime/test_release_action_pins.py
+          create_blob manifest MANIFEST.sha256
+          printf 'base_head=%s\n' '67ece8d4cf1132f776f34185a9317ca9982d9ba3' >> /tmp/candidate/validated-meta.txt
+          printf 'refs_moved=false\n' >> /tmp/candidate/validated-meta.txt
+          cat /tmp/candidate/validated-meta.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validated-provenance-final-readiness-${{ github.sha }}
+          path: /tmp/candidate
+          if-no-files-found: error
+          retention-days: 7
