@@ -145,7 +145,7 @@ class SerializedPublicationWorkflowContractTests(unittest.TestCase):
                 body = self._job(job)
                 self.assertIn("check_pre_release_publication_visibility.py", body)
                 self.assertIn(target, body)
-                self.assertIn("actions/upload-artifact@v4", body)
+                self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", body)
                 self.assertIn("if: always()", body)
 
     def test_rust_dependency_chain_waits_for_each_exact_crate(self) -> None:
@@ -160,7 +160,7 @@ class SerializedPublicationWorkflowContractTests(unittest.TestCase):
         )
         positions = [body.index(token) for token in sequence]
         self.assertEqual(positions, sorted(positions))
-        self.assertIn("actions/upload-artifact@v4", body)
+        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", body)
         self.assertIn("if: always()", body)
 
     def test_visibility_checker_contains_no_registry_write_command(self) -> None:
