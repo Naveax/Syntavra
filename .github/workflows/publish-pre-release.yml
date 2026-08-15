@@ -341,7 +341,17 @@ jobs:
                   'production_versions_must_be_available': True,
                   'zero_write_publish_credential_preflight': True,
                   'release_main_protection': True,
+                  'serialized_publication_chain': True,
+                  'post_write_public_visibility_verification': True,
               },
+              'publication_order': [
+                  'native',
+                  'npm',
+                  'npm_sdk',
+                  'python',
+                  'vscode',
+                  'legacy_native_companion',
+              ],
               'publication_steps': [
                   {'target': 'python', 'registry': 'PyPI', 'auth': 'OIDC trusted publisher', 'command': 'pypa/gh-action-pypi-publish@release/v1'},
                   {'target': 'npm', 'registry': 'npm', 'auth': 'NPM_TOKEN + GitHub OIDC provenance', 'command': 'npm publish <installer.tgz> --tag next --access public --provenance'},
@@ -466,6 +476,7 @@ jobs:
     needs:
       - authority
       - credential-preflight
+      - publish-npm-sdk
     runs-on: ubuntu-24.04
     environment: pre-release
     permissions:
@@ -479,6 +490,10 @@ jobs:
     steps:
       - name: Re-arm irreversible publication
         run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
@@ -499,12 +514,28 @@ jobs:
         with:
           packages-dir: dist/
           skip-existing: false
+      - name: Verify PyPI public version visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target python \
+            --output /tmp/publication-visibility-python.json
+      - name: Upload PyPI publication visibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publication-visibility-python-${{ env.TARGET_HEAD }}-${{ github.run_id }}
+          path: /tmp/publication-visibility-python.json
+          if-no-files-found: warn
+          retention-days: 90
 
   publish-npm-installer:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
     needs:
       - authority
       - credential-preflight
+      - publish-rust-production
     runs-on: ubuntu-24.04
     environment: pre-release
     permissions:
@@ -523,6 +554,10 @@ jobs:
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
           test -n "$NODE_AUTH_TOKEN"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -540,12 +575,24 @@ jobs:
           package="$(find /tmp/provenance -type f -path '*/npm-installer/*.tgz' -print -quit)"
           test -n "$package"
           npm publish "$package" --tag next --access public --provenance
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target npm \
+            --output /tmp/publication-visibility-npm.json
+      - name: Upload npm installer publication visibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publication-visibility-npm-${{ env.TARGET_HEAD }}-${{ github.run_id }}
+          path: /tmp/publication-visibility-npm.json
+          if-no-files-found: warn
+          retention-days: 90
 
   publish-npm-sdk:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
     needs:
       - authority
       - credential-preflight
+      - publish-npm-installer
     runs-on: ubuntu-24.04
     environment: pre-release
     permissions:
@@ -564,6 +611,10 @@ jobs:
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
           test -n "$NODE_AUTH_TOKEN"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -581,6 +632,17 @@ jobs:
           package="$(find /tmp/provenance -type f -path '*/npm-sdk/*.tgz' -print -quit)"
           test -n "$package"
           npm publish "$package" --tag next --access public --provenance
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target npm_sdk \
+            --output /tmp/publication-visibility-npm-sdk.json
+      - name: Upload npm SDK publication visibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publication-visibility-npm-sdk-${{ env.TARGET_HEAD }}-${{ github.run_id }}
+          path: /tmp/publication-visibility-npm-sdk.json
+          if-no-files-found: warn
+          retention-days: 90
 
   publish-rust-production:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
@@ -618,14 +680,32 @@ jobs:
         run: |
           set -euo pipefail
           cargo +1.82.0 publish --locked -p syntavra-contracts
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target rust_contracts \
+            --output /tmp/publication-visibility-rust/rust-contracts.json
           cargo +1.82.0 publish --locked -p syntavra-core
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target rust_core \
+            --output /tmp/publication-visibility-rust/rust-core.json
           cargo +1.82.0 publish --locked -p syntavra-cli
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target rust_cli \
+            --output /tmp/publication-visibility-rust/rust-cli.json
+      - name: Upload Rust publication visibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publication-visibility-rust-${{ env.TARGET_HEAD }}-${{ github.run_id }}
+          path: /tmp/publication-visibility-rust
+          if-no-files-found: warn
+          retention-days: 90
 
   publish-vscode:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
     needs:
       - authority
       - credential-preflight
+      - publish-pypi
     runs-on: ubuntu-24.04
     environment: pre-release
     permissions:
@@ -639,6 +719,10 @@ jobs:
     steps:
       - name: Re-arm irreversible publication
         run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -655,12 +739,24 @@ jobs:
           package="$(find /tmp/provenance -type f -path '*/vscode/*.vsix' -print -quit)"
           test -n "$package"
           npx --yes @vscode/vsce publish --oidc --pre-release --packagePath "$package"
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target vscode \
+            --output /tmp/publication-visibility-vscode.json
+      - name: Upload VS Code publication visibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publication-visibility-vscode-${{ env.TARGET_HEAD }}-${{ github.run_id }}
+          path: /tmp/publication-visibility-vscode.json
+          if-no-files-found: warn
+          retention-days: 90
 
   publish-legacy-native:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish' && inputs.publish_legacy_native
     needs:
       - authority
       - credential-preflight
+      - publish-vscode
     runs-on: ubuntu-24.04
     environment: pre-release
     permissions:
@@ -689,6 +785,17 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
           test -z "$(git status --porcelain --untracked-files=all)"
           cargo +1.82.0 publish --manifest-path native/syntavra-native/Cargo.toml
+          python3 tools/check_pre_release_publication_visibility.py \
+            --target legacy_native_companion \
+            --output /tmp/publication-visibility-legacy-native.json
+      - name: Upload legacy native publication visibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publication-visibility-legacy-native-${{ env.TARGET_HEAD }}-${{ github.run_id }}
+          path: /tmp/publication-visibility-legacy-native.json
+          if-no-files-found: warn
+          retention-days: 90
 
   publication-attempt-boundary:
     if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
