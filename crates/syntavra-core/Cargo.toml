@@ -1,5 +1,6 @@
 [package]
 name = "syntavra-core"
+description = "Core native primitives for the Syntavra Python/Rust runtime"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
