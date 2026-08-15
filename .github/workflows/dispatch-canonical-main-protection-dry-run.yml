@@ -1,0 +1,35 @@
+name: Dispatch Canonical Main Protection Dry Run
+
+on:
+  push:
+    branches:
+      - agent/release-main-protection-authority
+    paths:
+      - '.github/workflows/dispatch-canonical-main-protection-dry-run.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_HEAD: 2a49701b13ef4e0d93b93f8c73269f908ab164d4
+    steps:
+      - name: Verify canonical main is still the intended target
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          test "$actual" = "$EXPECTED_HEAD"
+      - name: Dispatch zero-write publication dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg head "$EXPECTED_HEAD" \
+            '{ref:$ref,inputs:{exact_head:$head,mode:"dry-run",confirmation:"",publish_legacy_native:"false"}}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/publish-pre-release.yml/dispatches" --input -
