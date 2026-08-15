@@ -1,0 +1,87 @@
+name: Bootstrap Immutable Publish Actions
+
+on:
+  push:
+    branches:
+      - agent/pre-release-immutable-action-pins
+    paths:
+      - '.github/workflows/bootstrap-immutable-publish-actions.yml'
+      - 'tools/bootstrap_patch_immutable_publish_actions.py'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Apply immutable action pin patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/bootstrap_patch_immutable_publish_actions.py
+          python tools/bootstrap_patch_immutable_publish_actions.py
+      - name: Remove bootstrap-only files from candidate tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/bootstrap-immutable-publish-actions.yml
+          rm tools/bootstrap_patch_immutable_publish_actions.py
+      - name: Verify immutable publish action contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_secret_scope -v
+          python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_release_main_protection -v
+      - name: Refresh bootstrap-free final manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+      - name: Enforce exact permanent diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(git diff --name-only 6b7e2d628a50ec42206006bc56df6c309f025617 -- | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=(
+            '.github/workflows/publish-pre-release.yml'
+            'MANIFEST.sha256'
+            'tests/runtime/test_pre_release_publish_workflow_contract.py'
+          )
+          test "${#changed[@]}" -eq "${#expected[@]}"
+          for i in "${!expected[@]}"; do
+            test "${changed[$i]}" = "${expected[$i]}"
+          done
+          test -z "$(git status --porcelain --untracked-files=all | grep -E 'bootstrap-immutable-publish-actions|bootstrap_patch_immutable_publish_actions' || true)"
+      - name: Build validated candidate bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/candidate/.github/workflows /tmp/candidate/tests/runtime
+          cp .github/workflows/publish-pre-release.yml /tmp/candidate/.github/workflows/
+          cp tests/runtime/test_pre_release_publish_workflow_contract.py /tmp/candidate/tests/runtime/
+          cp MANIFEST.sha256 /tmp/candidate/
+          {
+            printf 'workflow_blob=%s\n' "$(git hash-object .github/workflows/publish-pre-release.yml)"
+            printf 'test_blob=%s\n' "$(git hash-object tests/runtime/test_pre_release_publish_workflow_contract.py)"
+            printf 'manifest_blob=%s\n' "$(git hash-object MANIFEST.sha256)"
+            printf 'base_head=%s\n' '6b7e2d628a50ec42206006bc56df6c309f025617'
+            printf 'refs_moved=false\n'
+          } > /tmp/candidate/validated-meta.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validated-immutable-publish-actions-${{ github.sha }}
+          path: /tmp/candidate
+          if-no-files-found: error
+          retention-days: 7
