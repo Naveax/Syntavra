@@ -28,10 +28,13 @@ replace_once(
     "      - 'tools/check_pre_release_publish_credentials.py'\n",
     'pull request credential checker path',
 )
-replace_once(
-    "          python -m unittest tests.runtime.test_pre_release_registry_availability -v\n",
+contract_tests = (
+    "          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v\n"
     "          python -m unittest tests.runtime.test_pre_release_registry_availability -v\n"
-    "          python -m unittest tests.runtime.test_pre_release_publish_credentials -v\n",
+)
+replace_once(
+    contract_tests,
+    contract_tests + "          python -m unittest tests.runtime.test_pre_release_publish_credentials -v\n",
     'contract credential test',
 )
 replace_once(
