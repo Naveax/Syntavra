@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -97,7 +98,7 @@ class PublishCredentialSourceContractTests(unittest.TestCase):
         self.assertIn("/_/oidc/mint-token", text)
         self.assertIn("ACTIONS_ID_TOKEN_REQUEST_URL", text)
         self.assertIn("ACTIONS_ID_TOKEN_REQUEST_TOKEN", text)
-        self.assertIn("credential_persisted\": False", text)
+        self.assertIn('"credential_persisted": False', text)
 
     def test_marketplace_exchange_is_zero_write(self) -> None:
         text = self.checker
@@ -123,10 +124,12 @@ class PublishCredentialSourceContractTests(unittest.TestCase):
             "publish-vscode",
             "publish-legacy-native",
         ):
-            block_start = text.index(f"  {job}:")
-            next_job = text.find("\n  ", block_start + 3)
-            block = text[block_start:] if next_job < 0 else text[block_start:next_job]
-            self.assertIn("credential-preflight", block, job)
+            match = re.search(
+                rf"(?ms)^  {re.escape(job)}:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+                text,
+            )
+            self.assertIsNotNone(match, job)
+            self.assertIn("credential-preflight", match.group("body"), job)
 
     def test_preflight_has_no_registry_write_command(self) -> None:
         text = self.workflow
