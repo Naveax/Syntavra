@@ -1,0 +1,214 @@
+name: Pre-Release Candidate Receipt Plan
+
+on:
+  pull_request:
+  workflow_run:
+    workflows:
+      - Release Package Provenance
+    types:
+      - completed
+
+concurrency:
+  group: pre-release-candidate-receipt-${{ github.event.workflow_run.id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify receipt-plan contract tests
+        run: python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+
+      - name: Enforce exact clean head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  build-plan:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TARGET_HEAD: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Verify trusted provenance source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event.workflow_run.name }}" = "Release Package Provenance"
+          test "${{ github.event.workflow_run.conclusion }}" = "success"
+          test "${{ github.event.workflow_run.head_repository.full_name }}" = "${{ github.repository }}"
+          test -n "$TARGET_HEAD"
+          test -n "$SOURCE_RUN_ID"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify receipt-plan contract tests
+        run: python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+
+      - name: Download exact-head provenance artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-package-provenance-${{ env.TARGET_HEAD }}
+          path: /tmp/source-provenance
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Build machine-readable candidate receipt plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(find /tmp/source-provenance -type f -name rust-production-state.json -print -quit)"
+          test -n "$state"
+          artifact_root="$(dirname "$state")"
+          python tools/build_pre_release_candidate_receipt_plan.py \
+            --artifact-root "$artifact_root" \
+            --exact-head "$TARGET_HEAD" \
+            --output /tmp/pre-release-candidate-receipt-plan.json
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path('/tmp/pre-release-candidate-receipt-plan.json')
+          value = json.loads(path.read_text(encoding='utf-8'))
+          value['source_provenance'] = {
+              'workflow': 'Release Package Provenance',
+              'run_id': int(os.environ['SOURCE_RUN_ID']),
+              'artifact_name': f"release-package-provenance-{os.environ['TARGET_HEAD']}",
+          }
+          path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Enforce unpublished receipt boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value = json.loads(Path('/tmp/pre-release-candidate-receipt-plan.json').read_text(encoding='utf-8'))
+          assert value['exact_head'] == os.environ['TARGET_HEAD']
+          assert value['publication_performed'] is False
+          assert value['claim_boundary'] == 'REGISTRY_PUBLICATION_NOT_PERFORMED'
+          assert tuple(value['targets']) == (
+              'legacy_native_companion',
+              'native',
+              'npm',
+              'npm_sdk',
+              'python',
+              'vscode',
+          )
+          assert value['targets']['npm_sdk']['readiness']['package'] == '@syntavra/sdk'
+          assert value['targets']['native']['readiness']['package'] == 'syntavra-cli'
+          assert value['registry_receipts']['pypi'] is None
+          assert value['registry_receipts']['npm_installer'] is None
+          assert value['registry_receipts']['npm_sdk'] is None
+          assert value['registry_receipts']['vscode_marketplace'] is None
+          assert all(receipt is None for receipt in value['registry_receipts']['crates_io'].values())
+          assert value['registry_receipts']['legacy_native_companion'] is None
+          assert value['source_provenance']['run_id'] == int(os.environ['SOURCE_RUN_ID'])
+          for target in value['targets'].values():
+              for artifact in target['artifacts']:
+                  assert artifact['bytes'] > 0
+                  assert len(artifact['sha256']) == 64
+          PY
+
+      - name: Upload pre-release candidate receipt plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-candidate-receipt-plan-${{ env.TARGET_HEAD }}
+          path: /tmp/pre-release-candidate-receipt-plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce exact clean head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  attest-plan:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    needs: build-plan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      TARGET_HEAD: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Download candidate receipt plan
+        uses: actions/download-artifact@v4
+        with:
+          name: pre-release-candidate-receipt-plan-${{ env.TARGET_HEAD }}
+          path: /tmp/receipt-plan
+
+      - name: Re-verify immutable receipt boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path('/tmp/receipt-plan/pre-release-candidate-receipt-plan.json')
+          value = json.loads(path.read_text(encoding='utf-8'))
+          assert value['exact_head'] == os.environ['TARGET_HEAD']
+          assert value['publication_performed'] is False
+          assert value['claim_boundary'] == 'REGISTRY_PUBLICATION_NOT_PERFORMED'
+          assert value['source_provenance']['run_id'] == int(os.environ['SOURCE_RUN_ID'])
+          assert value['registry_receipts']['pypi'] is None
+          assert value['registry_receipts']['npm_installer'] is None
+          assert value['registry_receipts']['npm_sdk'] is None
+          assert value['registry_receipts']['vscode_marketplace'] is None
+          assert all(receipt is None for receipt in value['registry_receipts']['crates_io'].values())
+          assert value['registry_receipts']['legacy_native_companion'] is None
+          PY
+
+      - name: Attest non-published candidate receipt plan
+        uses: actions/attest@v4
+        with:
+          subject-path: /tmp/receipt-plan/pre-release-candidate-receipt-plan.json

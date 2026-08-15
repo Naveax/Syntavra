@@ -139,7 +139,7 @@ def _release_contract(repo: Path, fixture: dict[str, Any], temp_root: Path) -> d
     if pre_release.get("claim_boundaries", {}).get("registry_publication") != expected_identity["registry_publication_claim"]:
         raise AssertionError("registry publication claim boundary drift")
 
-    target_names = ["python", "npm", "vscode", "native", "legacy_native_companion"]
+    target_names = ["python", "npm", "npm_sdk", "vscode", "native", "legacy_native_companion"]
     if set(readiness) != {"version", "channel", *target_names, "claim_boundary"}:
         raise AssertionError(f"publish-readiness key drift: {sorted(readiness)}")
     if readiness.get("version") != expected_identity["version"] or readiness.get("channel") != expected_identity["channel"]:
@@ -151,6 +151,10 @@ def _release_contract(repo: Path, fixture: dict[str, Any], temp_root: Path) -> d
             raise AssertionError(f"publication target drift for {name}: {observed} != {expected}")
         if observed.get("published") is not False:
             raise AssertionError(f"publication target {name} must remain unclaimed/unpublished")
+    npm_sdk = readiness["npm_sdk"]
+    if npm_sdk.get("package") != "@syntavra/sdk" or npm_sdk.get("tag") != "next":
+        raise AssertionError(f"TypeScript SDK publication identity drift: {npm_sdk}")
+
     native = readiness["native"]
     legacy_native = readiness["legacy_native_companion"]
     if native.get("package") != "syntavra-cli" or native.get("binary") != "syntavra":

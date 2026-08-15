@@ -1,13 +1,33 @@
 {
   "version": "0.0.1",
   "channel": "pre-release",
-  "python": {"package": "syntavra-runtime", "uvx": "uvx --from syntavra-runtime syntavra", "published": false},
-  "npm": {"package": "@syntavra/install", "tag": "next", "published": false},
-  "vscode": {"package": "syntavra-vscode", "published": false},
+  "python": {
+    "package": "syntavra-runtime",
+    "uvx": "uvx --from syntavra-runtime syntavra",
+    "published": false
+  },
+  "npm": {
+    "package": "@syntavra/install",
+    "tag": "next",
+    "published": false
+  },
+  "npm_sdk": {
+    "package": "@syntavra/sdk",
+    "tag": "next",
+    "published": false
+  },
+  "vscode": {
+    "package": "syntavra-vscode",
+    "published": false
+  },
   "native": {
     "package": "syntavra-cli",
     "binary": "syntavra",
-    "publish_order": ["syntavra-contracts", "syntavra-core", "syntavra-cli"],
+    "publish_order": [
+      "syntavra-contracts",
+      "syntavra-core",
+      "syntavra-cli"
+    ],
     "published": false
   },
   "legacy_native_companion": {

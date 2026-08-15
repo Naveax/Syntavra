@@ -30,8 +30,12 @@ class PythonPublicationRegistryReferenceTests(unittest.TestCase):
             release["pre_release"]["claim_boundaries"]["registry_publication"],
             "REGISTRY_PUBLICATION_NOT_PERFORMED",
         )
-        for target in ("python", "npm", "vscode", "native", "legacy_native_companion"):
+        for target in ("python", "npm", "npm_sdk", "vscode", "native", "legacy_native_companion"):
             self.assertFalse(release["publish_readiness"][target]["published"])
+        npm_sdk = release["publish_readiness"]["npm_sdk"]
+        self.assertEqual(npm_sdk["package"], "@syntavra/sdk")
+        self.assertEqual(npm_sdk["tag"], "next")
+        self.assertFalse(npm_sdk["published"])
         native = release["publish_readiness"]["native"]
         self.assertEqual(native["package"], "syntavra-cli")
         self.assertEqual(native["binary"], "syntavra")
