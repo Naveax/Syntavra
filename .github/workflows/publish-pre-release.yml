@@ -7,10 +7,12 @@ on:
       - 'tests/runtime/test_pre_release_publish_workflow_contract.py'
       - 'tests/runtime/test_pre_release_registry_availability.py'
       - 'tests/runtime/test_pre_release_publish_credentials.py'
+      - 'tests/runtime/test_release_main_protection.py'
       - 'release/publish-readiness.json'
       - 'tools/build_pre_release_candidate_receipt_plan.py'
       - 'tools/check_pre_release_registry_availability.py'
       - 'tools/check_pre_release_publish_credentials.py'
+      - 'tools/check_release_main_protection.py'
   workflow_dispatch:
     inputs:
       exact_head:
@@ -65,6 +67,7 @@ jobs:
           python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
           python -m unittest tests.runtime.test_pre_release_registry_availability -v
           python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_release_main_protection -v
       - name: Enforce exact clean PR head
         shell: bash
         run: |
@@ -160,6 +163,7 @@ jobs:
           PY
           python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
           python -m unittest tests.runtime.test_pre_release_registry_availability -v
+          python -m unittest tests.runtime.test_release_main_protection -v
 
       - name: Download exact-head candidate receipt authority
         uses: actions/download-artifact@v4
@@ -197,6 +201,32 @@ jobs:
           assert receipts['legacy_native_companion'] is None
           assert all(v is None for v in receipts['crates_io'].values())
           PY
+
+      - name: Probe release main protection authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/branches/main" > /tmp/release-main-branch.json
+          gh api "repos/$GITHUB_REPOSITORY/rules/branches/main" > /tmp/release-main-rules.json
+          protection_args=(
+            --exact-head "$TARGET_HEAD"
+            --branch-json /tmp/release-main-branch.json
+            --rules-json /tmp/release-main-rules.json
+            --output /tmp/release-main-protection.json
+          )
+          if [ "$MODE" = 'publish' ]; then
+            protection_args+=(--require-ready)
+          fi
+          python tools/check_release_main_protection.py "${protection_args[@]}"
+
+      - name: Upload release main protection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-main-protection-${{ steps.authority.outputs.target_head }}-${{ github.run_id }}
+          path: /tmp/release-main-protection.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Probe live registry version availability
         shell: bash
@@ -310,6 +340,7 @@ jobs:
                   'live_registry_version_preflight': True,
                   'production_versions_must_be_available': True,
                   'zero_write_publish_credential_preflight': True,
+                  'release_main_protection': True,
               },
               'publication_steps': [
                   {'target': 'python', 'registry': 'PyPI', 'auth': 'OIDC trusted publisher', 'command': 'pypa/gh-action-pypi-publish@release/v1'},
