@@ -3,11 +3,16 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from tools.check_release_main_protection import REQUIRED_RULE_TYPES, build_report
+from tools.check_release_main_protection import (
+    REQUIRED_RULE_TYPES,
+    REQUIRED_STATUS_CONTEXTS,
+    build_report,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "publish-pre-release.yml"
+PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish-pre-release.yml"
+MERGE_GATE_WORKFLOW = ROOT / ".github" / "workflows" / "release-main-merge-gate.yml"
 HEAD = "c" * 40
 
 
@@ -15,17 +20,16 @@ def branch(*, protected: bool = True, sha: str = HEAD) -> dict:
     return {"name": "main", "commit": {"sha": sha}, "protected": protected}
 
 
-def required_rules() -> list[dict]:
+def required_rules(*, contexts: list[str] | None = None) -> list[dict]:
+    if contexts is None:
+        contexts = sorted(REQUIRED_STATUS_CONTEXTS)
     return [
         {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
         {
             "type": "required_status_checks",
             "parameters": {
                 "strict_required_status_checks_policy": True,
-                "required_status_checks": [
-                    {"context": "package-provenance"},
-                    {"context": "python-publication-registry-reference"},
-                ],
+                "required_status_checks": [{"context": context} for context in contexts],
             },
         },
         {"type": "non_fast_forward"},
@@ -39,6 +43,10 @@ class ReleaseMainProtectionReportTests(unittest.TestCase):
         self.assertTrue(report["release_main_ready"])
         self.assertEqual(report["claim"], "RELEASE_MAIN_PROTECTION_READY")
         self.assertEqual(set(report["active_rule_types"]), set(REQUIRED_RULE_TYPES))
+        self.assertEqual(
+            set(report["required_status_check_contract"]), set(REQUIRED_STATUS_CONTEXTS)
+        )
+        self.assertEqual(report["missing_required_status_check_contexts"], [])
         self.assertTrue(report["required_status_checks_present"])
         self.assertFalse(report["publication_performed"])
         self.assertFalse(report["repository_mutated"])
@@ -55,13 +63,31 @@ class ReleaseMainProtectionReportTests(unittest.TestCase):
         self.assertIn("pull_request", report["missing_rule_types"])
 
     def test_status_rule_without_contexts_fails_closed(self) -> None:
-        rules = required_rules()
-        for rule in rules:
-            if rule["type"] == "required_status_checks":
-                rule["parameters"]["required_status_checks"] = []
-        report = build_report(exact_head=HEAD, branch=branch(), rules=rules)
+        report = build_report(exact_head=HEAD, branch=branch(), rules=required_rules(contexts=[]))
         self.assertFalse(report["release_main_ready"])
         self.assertFalse(report["required_status_checks_present"])
+        self.assertEqual(
+            set(report["missing_required_status_check_contexts"]), set(REQUIRED_STATUS_CONTEXTS)
+        )
+
+    def test_random_required_check_does_not_satisfy_release_contract(self) -> None:
+        report = build_report(
+            exact_head=HEAD,
+            branch=branch(),
+            rules=required_rules(contexts=["package-provenance"]),
+        )
+        self.assertFalse(report["release_main_ready"])
+        self.assertFalse(report["required_status_checks_present"])
+        self.assertIn("release-main-merge-gate", report["missing_required_status_check_contexts"])
+
+    def test_extra_status_checks_are_allowed_when_exact_gate_is_present(self) -> None:
+        report = build_report(
+            exact_head=HEAD,
+            branch=branch(),
+            rules=required_rules(contexts=["release-main-merge-gate", "package-provenance"]),
+        )
+        self.assertTrue(report["required_status_checks_present"])
+        self.assertTrue(report["release_main_ready"])
 
     def test_force_push_and_deletion_guards_are_required(self) -> None:
         rules = [
@@ -86,25 +112,44 @@ class ReleaseMainProtectionReportTests(unittest.TestCase):
 class ReleaseMainProtectionWorkflowContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.text = WORKFLOW.read_text(encoding="utf-8")
+        cls.publish_text = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+        cls.merge_gate_text = MERGE_GATE_WORKFLOW.read_text(encoding="utf-8")
 
     def test_publish_authority_observes_effective_main_rules(self) -> None:
-        text = self.text
+        text = self.publish_text
         self.assertIn("rules/branches/main", text)
         self.assertIn("check_release_main_protection.py", text)
         self.assertIn("pre-release-main-protection", text)
         self.assertIn("--require-ready", text)
 
     def test_publish_mode_requires_protection_but_dry_run_only_records_it(self) -> None:
-        text = self.text
+        text = self.publish_text
         self.assertIn("if [ \"$MODE\" = 'publish' ]; then", text)
         self.assertIn("protection_args+=(--require-ready)", text)
         self.assertIn("release_main_protection", text)
 
     def test_pr_contract_covers_release_main_protection_tests(self) -> None:
-        text = self.text
+        text = self.publish_text
         self.assertIn("tests.runtime.test_release_main_protection", text)
         self.assertIn("tools/check_release_main_protection.py", text)
+
+    def test_merge_gate_is_always_on_for_main_pull_requests(self) -> None:
+        text = self.merge_gate_text
+        self.assertIn("pull_request:", text)
+        self.assertIn("branches:", text)
+        self.assertIn("- main", text)
+        self.assertNotIn("paths:", text)
+        self.assertIn("name: release-main-merge-gate", text)
+
+    def test_merge_gate_runs_release_contracts_and_manifest_check(self) -> None:
+        text = self.merge_gate_text
+        self.assertIn("tests.runtime.test_release_main_protection", text)
+        self.assertIn("tests.runtime.test_pre_release_publish_credentials", text)
+        self.assertIn("tests.runtime.test_pre_release_publish_workflow_contract", text)
+        self.assertIn("tests.runtime.test_pre_release_candidate_receipt_plan", text)
+        self.assertIn("tests.runtime.test_python_publication_registry_reference", text)
+        self.assertIn("tools/validate_release.py --smoke", text)
+        self.assertIn("tools/refresh_manifest.py --check", text)
 
 
 if __name__ == "__main__":
