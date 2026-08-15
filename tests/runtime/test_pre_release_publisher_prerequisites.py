@@ -154,7 +154,7 @@ class PublisherPrerequisiteWorkflowContractTests(unittest.TestCase):
     def test_environment_is_observed_without_binding_job_to_it(self) -> None:
         text = self.text
         self.assertIn('environments/pre-release', text)
-        self.assertIn("required_reviewers", text)
+        self.assertIn("tools/check_pre_release_publisher_prerequisites.py", text)
         self.assertNotIn("environment: pre-release", text)
         self.assertIn("deployments: read", text)
 
