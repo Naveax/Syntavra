@@ -440,6 +440,8 @@ jobs:
           assert value['pypi_trusted_publisher']['verified'] is True
           assert value['vscode_marketplace_trusted_publisher']['verified'] is True
           assert value['npm']['authenticated'] is True
+          assert value['npm']['scope_publish_rights_verified'] is True
+          assert value['npm']['scope_authorization']['verified'] is True
           assert value['crates_io']['token_present'] is True
           PY
 
