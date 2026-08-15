@@ -1,0 +1,165 @@
+name: Bootstrap Immutable Release Action Pins
+
+on:
+  push:
+    branches:
+      - agent/release-action-sha-pins
+    paths:
+      - '.github/workflows/bootstrap-release-action-pins.yml'
+      - 'tools/bootstrap_patch_release_action_pins.py'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  validate-and-stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: agent/release-action-sha-pins
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Compile action-pin authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/bootstrap_patch_release_action_pins.py
+          python -m py_compile tests/runtime/test_release_action_pins.py
+
+      - name: Apply exact release action pin patch
+        run: python tools/bootstrap_patch_release_action_pins.py
+
+      - name: Remove bootstrap-only files from final candidate tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/bootstrap-release-action-pins.yml
+          rm tools/bootstrap_patch_release_action_pins.py
+
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Verify immutable action pins and release authority contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_release_action_pins -v
+          python -m unittest tests.runtime.test_pre_release_secret_scope -v
+          python -m unittest tests.runtime.test_pre_release_publication_attempt_ledger -v
+          python -m unittest tests.runtime.test_pre_release_publication_visibility -v
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_release_main_protection -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
+          python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
+          python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+          python -m unittest tests.runtime.test_python_publication_registry_reference -v
+          python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
+          python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+          git diff --check
+
+      - name: Refresh bootstrap-free final manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          git checkout -- release-smoke.json 2>/dev/null || true
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          git diff --check
+
+      - name: Enforce exact patched worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git status --short | sed -E 's/^.. //')"
+          printf '%s\n' "$actual"
+          for path in \
+            '.github/workflows/bootstrap-release-action-pins.yml' \
+            '.github/workflows/publish-pre-release.yml' \
+            '.github/workflows/post-r38-release-provenance-diagnostic.yml' \
+            '.github/workflows/pre-release-candidate-receipt-plan.yml' \
+            '.github/workflows/python-publication-registry-reference.yml' \
+            '.github/workflows/pre-release-publisher-prerequisites.yml' \
+            '.github/workflows/release-main-merge-gate.yml' \
+            'MANIFEST.sha256' \
+            'tools/bootstrap_patch_release_action_pins.py'
+          do
+            printf '%s\n' "$actual" | grep -Fx "$path"
+          done
+          test "$(printf '%s\n' "$actual" | sed '/^$/d' | wc -l)" -eq 9
+
+      - name: Create validated Git blobs without moving refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          files = (
+              ('publish_workflow_sha', Path('.github/workflows/publish-pre-release.yml')),
+              ('provenance_workflow_sha', Path('.github/workflows/post-r38-release-provenance-diagnostic.yml')),
+              ('receipt_workflow_sha', Path('.github/workflows/pre-release-candidate-receipt-plan.yml')),
+              ('publication_registry_workflow_sha', Path('.github/workflows/python-publication-registry-reference.yml')),
+              ('publisher_audit_workflow_sha', Path('.github/workflows/pre-release-publisher-prerequisites.yml')),
+              ('merge_gate_sha', Path('.github/workflows/release-main-merge-gate.yml')),
+              ('manifest_sha', Path('MANIFEST.sha256')),
+          )
+          result = {'refs_moved': False}
+          for key, path in files:
+              payload = json.dumps({
+                  'content': base64.b64encode(path.read_bytes()).decode('ascii'),
+                  'encoding': 'base64',
+              }).encode('utf-8')
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/git/blobs',
+                  data=payload,
+                  method='POST',
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  result[key] = json.load(response)['sha']
+          Path('/tmp/release-action-pin-blobs.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(result, indent=2, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validated-release-action-pins-${{ github.sha }}
+          path: /tmp/release-action-pin-blobs.json
+          if-no-files-found: error
+          retention-days: 7
