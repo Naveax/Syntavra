@@ -5,8 +5,10 @@ on:
     paths:
       - '.github/workflows/publish-pre-release.yml'
       - 'tests/runtime/test_pre_release_publish_workflow_contract.py'
+      - 'tests/runtime/test_pre_release_registry_availability.py'
       - 'release/publish-readiness.json'
       - 'tools/build_pre_release_candidate_receipt_plan.py'
+      - 'tools/check_pre_release_registry_availability.py'
   workflow_dispatch:
     inputs:
       exact_head:
@@ -57,7 +59,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Verify guarded publication workflow contract
-        run: python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+        run: |
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
       - name: Enforce exact clean PR head
         shell: bash
         run: |
@@ -83,6 +87,7 @@ jobs:
       MODE: ${{ inputs.mode }}
       CONFIRMATION: ${{ inputs.confirmation }}
       SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+      PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
     steps:
       - name: Validate exact canonical main authority
@@ -90,11 +95,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "$TARGET_HEAD" in
-            [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]* ) ;;
-            * ) echo 'exact_head is not hexadecimal' >&2; exit 2 ;;
-          esac
-          test "${#TARGET_HEAD}" -eq 40
+          [[ "$TARGET_HEAD" =~ ^[0-9a-fA-F]{40}$ ]] || {
+            echo 'exact_head must be exactly 40 hexadecimal characters' >&2
+            exit 2
+          }
           TARGET_HEAD="$(printf '%s' "$TARGET_HEAD" | tr 'A-F' 'a-f')"
           current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
           test "$TARGET_HEAD" = "$current_main"
@@ -124,6 +128,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Verify locked release metadata
         shell: bash
         run: |
@@ -148,6 +156,7 @@ jobs:
           assert value['legacy_native_companion']['production_selector'] is False
           PY
           python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
 
       - name: Download exact-head candidate receipt authority
         uses: actions/download-artifact@v4
@@ -185,6 +194,30 @@ jobs:
           assert receipts['legacy_native_companion'] is None
           assert all(v is None for v in receipts['crates_io'].values())
           PY
+
+      - name: Probe live registry version availability
+        shell: bash
+        env:
+          PUBLISH_LEGACY_NATIVE: ${{ inputs.publish_legacy_native }}
+        run: |
+          set -euo pipefail
+          args=(--output /tmp/pre-release-registry-preflight.json)
+          if [ "$MODE" = 'publish' ]; then
+            args+=(--require-production-available)
+            if [ "$PUBLISH_LEGACY_NATIVE" = 'true' ]; then
+              args+=(--require-legacy-available)
+            fi
+          fi
+          python tools/check_pre_release_registry_availability.py "${args[@]}"
+
+      - name: Upload live registry preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-registry-preflight-${{ steps.authority.outputs.target_head }}-${{ github.run_id }}
+          path: /tmp/pre-release-registry-preflight.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Arm publish mode only with independent gates
         if: inputs.mode == 'publish'
@@ -271,6 +304,8 @@ jobs:
                   'arming_secret': 'SYNTAVRA_PUBLISH_ARMED',
                   'environment': 'pre-release',
                   'environment_required_reviewers': True,
+                  'live_registry_version_preflight': True,
+                  'production_versions_must_be_available': True,
               },
               'publication_steps': [
                   {'target': 'python', 'registry': 'PyPI', 'auth': 'OIDC trusted publisher', 'command': 'pypa/gh-action-pypi-publish@release/v1'},
