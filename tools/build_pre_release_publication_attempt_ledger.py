@@ -161,6 +161,7 @@ def build_ledger(
         "channel": CHANNEL,
         "exact_head": exact_head.lower(),
         "authority": "pre-release-publication-attempt-ledger",
+        "publication_mode_requested": True,
         "canonical_readiness_mutated": False,
         "registry_receipts_admitted": False,
         "claim_boundary": "PUBLIC_VISIBILITY_EVIDENCE_ONLY_NOT_CANONICAL_REGISTRY_RECEIPT_ADMISSION",
