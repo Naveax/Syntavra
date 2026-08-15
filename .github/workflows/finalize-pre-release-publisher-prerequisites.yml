@@ -1,0 +1,122 @@
+name: Finalize Pre-Release Publisher Prerequisites
+
+on:
+  push:
+    branches:
+      - agent/pre-release-publisher-prerequisites
+
+permissions:
+  contents: write
+  deployments: read
+
+jobs:
+  finalize:
+    if: github.event.head_commit.message == 'Bootstrap publisher prerequisite final validation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+      SYNTAVRA_PUBLISH_ARMED_VALUE: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+      NPM_TOKEN_VALUE: ${{ secrets.NPM_TOKEN }}
+      CRATES_IO_TOKEN_VALUE: ${{ secrets.CRATES_IO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pre-release-publisher-prerequisites
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Remove bootstrap-only workflow from final candidate tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/finalize-pre-release-publisher-prerequisites.yml
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Verify publisher and release authority contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+          python -m unittest tests.runtime.test_python_publication_registry_reference -v
+          python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
+          python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+      - name: Observe current GitHub publisher prerequisites without exposing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/environments/pre-release" > /tmp/pre-release-environment.json 2>/tmp/pre-release-environment.err; then
+            :
+          else
+            printf '%s\n' '{"missing":true}' > /tmp/pre-release-environment.json
+          fi
+
+          arming_present=false
+          arming_matches=false
+          npm_present=false
+          crates_present=false
+          if test -n "${SYNTAVRA_PUBLISH_ARMED_VALUE:-}"; then
+            arming_present=true
+            if test "$SYNTAVRA_PUBLISH_ARMED_VALUE" = 'PUBLISH_0_0_1_PRE_RELEASE'; then
+              arming_matches=true
+            fi
+          fi
+          if test -n "${NPM_TOKEN_VALUE:-}"; then npm_present=true; fi
+          if test -n "${CRATES_IO_TOKEN_VALUE:-}"; then crates_present=true; fi
+
+          python tools/check_pre_release_publisher_prerequisites.py \
+            --exact-head "$(git rev-parse HEAD)" \
+            --environment-json /tmp/pre-release-environment.json \
+            --arming-secret-present "$arming_present" \
+            --arming-secret-matches "$arming_matches" \
+            --npm-token-present "$npm_present" \
+            --crates-token-present "$crates_present" \
+            --output /tmp/pre-release-publisher-prerequisites.json
+      - name: Upload current publisher prerequisite evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publisher-prerequisite-bootstrap-${{ github.sha }}
+          path: /tmp/pre-release-publisher-prerequisites.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Reconfirm live registry availability remains zero-write
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/check_pre_release_registry_availability.py \
+            --require-production-available \
+            --output /tmp/pre-release-registry-preflight.json
+      - name: Refresh manifest from bootstrap-free final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          git checkout -- release-smoke.json 2>/dev/null || true
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          git diff --check
+      - name: Persist only final manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add MANIFEST.sha256
+          test "$(git diff --cached --name-only)" = 'MANIFEST.sha256'
+          git commit -m 'Refresh publisher prerequisite manifest'
+          git push origin HEAD:agent/pre-release-publisher-prerequisites
