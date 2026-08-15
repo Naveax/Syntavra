@@ -60,11 +60,11 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Verify guarded publication workflow contract
@@ -132,16 +132,16 @@ jobs:
           echo "provenance_run_id=$provenance_run_id" >> "$GITHUB_OUTPUT"
           echo "receipt_run_id=$receipt_run_id" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ steps.authority.outputs.target_head }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 
@@ -173,7 +173,7 @@ jobs:
           python -m unittest tests.runtime.test_release_main_protection -v
 
       - name: Download exact-head candidate receipt authority
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pre-release-candidate-receipt-plan-${{ steps.authority.outputs.target_head }}
           path: /tmp/candidate-receipt
@@ -228,7 +228,7 @@ jobs:
 
       - name: Upload release main protection evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-main-protection-${{ steps.authority.outputs.target_head }}-${{ github.run_id }}
           path: /tmp/release-main-protection.json
@@ -252,7 +252,7 @@ jobs:
 
       - name: Upload live registry preflight evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-registry-preflight-${{ steps.authority.outputs.target_head }}-${{ github.run_id }}
           path: /tmp/pre-release-registry-preflight.json
@@ -302,7 +302,7 @@ jobs:
       RECEIPT_RUN_ID: ${{ needs.authority.outputs.receipt_run_id }}
     steps:
       - name: Download exact-head provenance bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -310,7 +310,7 @@ jobs:
           run-id: ${{ env.PROVENANCE_RUN_ID }}
 
       - name: Download exact-head candidate receipt plan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pre-release-candidate-receipt-plan-${{ env.TARGET_HEAD }}
           path: /tmp/receipt
@@ -353,6 +353,7 @@ jobs:
                   'serialized_publication_chain': True,
                   'post_write_public_visibility_verification': True,
                   'step_scoped_publisher_secrets': True,
+                  'immutable_external_action_pins': True,
               },
               'publication_order': [
                   'native',
@@ -363,7 +364,7 @@ jobs:
                   'legacy_native_companion',
               ],
               'publication_steps': [
-                  {'target': 'python', 'registry': 'PyPI', 'auth': 'OIDC trusted publisher', 'command': 'pypa/gh-action-pypi-publish@release/v1'},
+                  {'target': 'python', 'registry': 'PyPI', 'auth': 'OIDC trusted publisher', 'command': 'pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1'},
                   {'target': 'npm', 'registry': 'npm', 'auth': 'NPM_TOKEN + GitHub OIDC provenance', 'command': 'npm publish <installer.tgz> --tag next --access public --provenance'},
                   {'target': 'npm_sdk', 'registry': 'npm', 'auth': 'NPM_TOKEN + GitHub OIDC provenance', 'command': 'npm publish <sdk.tgz> --tag next --access public --provenance'},
                   {'target': 'native', 'registry': 'crates.io', 'auth': 'CARGO_REGISTRY_TOKEN', 'commands': [
@@ -381,7 +382,7 @@ jobs:
           PY
 
       - name: Upload zero-write publication plan
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publish-dry-run-${{ env.TARGET_HEAD }}
           path: /tmp/publish-execution-plan.json
@@ -413,16 +414,16 @@ jobs:
           test -n "$NODE_AUTH_TOKEN"
           test -n "$CRATES_IO_TOKEN"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           registry-url: https://registry.npmjs.org
@@ -471,7 +472,7 @@ jobs:
           PY
 
       - name: Upload zero-write publish credential evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publish-credentials-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/pre-release-publish-credentials.json
@@ -506,11 +507,11 @@ jobs:
         env:
           SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
         run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -526,7 +527,7 @@ jobs:
           cp "$source_root"/*.whl "$source_root"/*.tar.gz dist/
           test "$(find dist -maxdepth 1 -type f | wc -l)" -ge 2
       - name: Publish Python distributions through PyPI trusted publishing
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: dist/
           skip-existing: false
@@ -539,7 +540,7 @@ jobs:
             --output /tmp/publication-visibility-python.json
       - name: Upload PyPI publication visibility evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publication-visibility-python-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-python.json
@@ -571,15 +572,15 @@ jobs:
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
           test -n "$NODE_AUTH_TOKEN"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           registry-url: https://registry.npmjs.org
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -599,7 +600,7 @@ jobs:
             --output /tmp/publication-visibility-npm.json
       - name: Upload npm installer publication visibility evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publication-visibility-npm-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-npm.json
@@ -631,15 +632,15 @@ jobs:
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
           test -n "$NODE_AUTH_TOKEN"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           registry-url: https://registry.npmjs.org
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -659,7 +660,7 @@ jobs:
             --output /tmp/publication-visibility-npm-sdk.json
       - name: Upload npm SDK publication visibility evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publication-visibility-npm-sdk-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-npm-sdk.json
@@ -687,7 +688,7 @@ jobs:
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
           test -n "$CARGO_REGISTRY_TOKEN"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
@@ -718,7 +719,7 @@ jobs:
             --output /tmp/publication-visibility-rust/rust-cli.json
       - name: Upload Rust publication visibility evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publication-visibility-rust-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-rust
@@ -745,14 +746,14 @@ jobs:
         env:
           SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
         run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -770,7 +771,7 @@ jobs:
             --output /tmp/publication-visibility-vscode.json
       - name: Upload VS Code publication visibility evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publication-visibility-vscode-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-vscode.json
@@ -799,7 +800,7 @@ jobs:
           set -euo pipefail
           test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
           test -n "$CARGO_REGISTRY_TOKEN"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
@@ -819,7 +820,7 @@ jobs:
             --output /tmp/publication-visibility-legacy-native.json
       - name: Upload legacy native publication visibility evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publication-visibility-legacy-native-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-visibility-legacy-native.json
@@ -846,7 +847,7 @@ jobs:
       PUBLISH_LEGACY_NATIVE: ${{ inputs.publish_legacy_native }}
     steps:
       - name: Checkout publication ledger authority
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -854,7 +855,7 @@ jobs:
       - name: Download same-run public visibility evidence
         if: always()
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: pre-release-publication-visibility-*
           path: /tmp/publication-visibility-artifacts
@@ -898,7 +899,7 @@ jobs:
 
       - name: Upload publication attempt ledger
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-publication-attempt-ledger-${{ env.TARGET_HEAD }}-${{ github.run_id }}
           path: /tmp/publication-attempt-ledger.json

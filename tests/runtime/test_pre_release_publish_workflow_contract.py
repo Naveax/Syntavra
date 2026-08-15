@@ -78,8 +78,42 @@ class PreReleasePublishWorkflowContractTests(unittest.TestCase):
         self.assertIn("production_versions_must_be_available': True", text)
         self.assertRegex(
             text,
-            r"(?s)actions/setup-node@v4.*?node-version: '22'.*?Probe live registry version availability",
+            r"(?s)actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020.*?node-version: '22'.*?Probe live registry version availability",
         )
+
+    def test_external_actions_are_immutable_full_sha_pins(self) -> None:
+        text = self.text
+        refs = re.findall(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)", text)
+        self.assertTrue(refs)
+        external = [ref for ref in refs if not ref.startswith("./")]
+        self.assertTrue(external)
+
+        expected = {
+            "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
+            "actions/setup-python": "a26af69be951a213d495a4c3e4e4022e16d87065",
+            "actions/setup-node": "49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "actions/download-artifact": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
+            "pypa/gh-action-pypi-publish": "dc37677b2e1c63e2034f94d8a5b11f265b73ba33",
+        }
+        observed: dict[str, set[str]] = {}
+        for ref in external:
+            self.assertRegex(
+                ref,
+                r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}$",
+                ref,
+            )
+            action, sha = ref.rsplit("@", 1)
+            observed.setdefault(action, set()).add(sha)
+
+        self.assertEqual(set(observed), set(expected))
+        for action, sha in expected.items():
+            self.assertEqual(observed[action], {sha}, action)
+
+        joined = "\n".join(external)
+        for mutable in ("@v4", "@v5", "@release/v1", "@main", "@master"):
+            self.assertNotIn(mutable, joined)
+        self.assertIn("immutable_external_action_pins': True", text)
 
     def test_current_release_targets_and_publish_commands_are_explicit(self) -> None:
         text = self.text
@@ -93,7 +127,7 @@ class PreReleasePublishWorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(target, text)
 
-        self.assertIn("pypa/gh-action-pypi-publish@release/v1", text)
+        self.assertIn("pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33", text)
         self.assertGreaterEqual(text.count("npm publish \"$package\" --tag next --access public --provenance"), 2)
         rust_commands = (
             "cargo +1.82.0 publish --locked -p syntavra-contracts",
