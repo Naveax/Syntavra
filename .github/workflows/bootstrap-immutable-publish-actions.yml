@@ -67,8 +67,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/candidate/.github/workflows /tmp/candidate/tests/runtime
-          cp .github/workflows/publish-pre-release.yml /tmp/candidate/.github/workflows/
+          mkdir -p /tmp/candidate/tests/runtime
+          cp .github/workflows/publish-pre-release.yml /tmp/candidate/publish-pre-release.yml
           cp tests/runtime/test_pre_release_publish_workflow_contract.py /tmp/candidate/tests/runtime/
           cp MANIFEST.sha256 /tmp/candidate/
           {
