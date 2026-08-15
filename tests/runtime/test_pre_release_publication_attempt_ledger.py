@@ -194,7 +194,7 @@ class PublicationAttemptLedgerWorkflowContractTests(unittest.TestCase):
         start = text.index("  publication-attempt-boundary:")
         block = text[start:]
         self.assertIn("actions: read", block)
-        self.assertIn("actions/download-artifact@v4", block)
+        self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", block)
         self.assertIn("pattern: pre-release-publication-visibility-*", block)
         self.assertIn("path: /tmp/publication-visibility-artifacts", block)
         self.assertIn("continue-on-error: true", block)
