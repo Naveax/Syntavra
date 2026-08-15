@@ -37,7 +37,19 @@
       "published": false
     },
     "native": {
+      "package": "syntavra-cli",
+      "binary": "syntavra",
+      "publish_order": [
+        "syntavra-contracts",
+        "syntavra-core",
+        "syntavra-cli"
+      ],
+      "published": false
+    },
+    "legacy_native_companion": {
       "package": "syntavra-native",
+      "workspace_member": false,
+      "production_selector": false,
       "published": false
     }
   },
@@ -53,7 +65,10 @@
   },
   "schema_registry": {
     "fixture_name": "publication.metadata",
-    "versions": [1, 2],
+    "versions": [
+      1,
+      2
+    ],
     "latest": 2,
     "errors": {
       "invalid_identity": "invalid schema identity",
@@ -69,7 +84,7 @@
     }
   },
   "frozen_snapshots": {
-    "release_metadata_sha256": "305ac3fe93935f740a7c28bdd775adf94d54346328cea2680cafa102c53a6f89",
+    "release_metadata_sha256": "9d97e710839c4c37bf13f6877005524b38a1b0d4381efe31e85a41be6b4ef939",
     "schema_registry_sha256": "9d8a6184762918ec5eb0c7898c8d76bf3e455f6fd80f00501be0f84b04487aa0"
   },
   "network_boundary": "offline repository metadata and temporary local registry fixtures only; no PyPI, npm, VS Code Marketplace, package registry, signing service, or credential use",
