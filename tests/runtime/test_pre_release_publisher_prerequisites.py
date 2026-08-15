@@ -162,7 +162,7 @@ class PublisherPrerequisiteWorkflowContractTests(unittest.TestCase):
         text = self.text
         self.assertIn("pre-release-publisher-prerequisites-${{ steps.authority.outputs.target_head }}", text)
         self.assertIn("pre-release-publisher-prerequisites.json", text)
-        self.assertIn("actions/upload-artifact@v4", text)
+        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", text)
         self.assertIn("--require-github-ready", text)
 
 
