@@ -7,11 +7,15 @@ on:
       - 'tests/runtime/test_pre_release_publish_workflow_contract.py'
       - 'tests/runtime/test_pre_release_registry_availability.py'
       - 'tests/runtime/test_pre_release_publish_credentials.py'
+      - 'tests/runtime/test_pre_release_publication_visibility.py'
+      - 'tests/runtime/test_pre_release_publication_attempt_ledger.py'
       - 'tests/runtime/test_release_main_protection.py'
       - 'release/publish-readiness.json'
       - 'tools/build_pre_release_candidate_receipt_plan.py'
       - 'tools/check_pre_release_registry_availability.py'
       - 'tools/check_pre_release_publish_credentials.py'
+      - 'tools/check_pre_release_publication_visibility.py'
+      - 'tools/build_pre_release_publication_attempt_ledger.py'
       - 'tools/check_release_main_protection.py'
   workflow_dispatch:
     inputs:
@@ -67,6 +71,8 @@ jobs:
           python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
           python -m unittest tests.runtime.test_pre_release_registry_availability -v
           python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_pre_release_publication_visibility -v
+          python -m unittest tests.runtime.test_pre_release_publication_attempt_ledger -v
           python -m unittest tests.runtime.test_release_main_protection -v
       - name: Enforce exact clean PR head
         shell: bash
@@ -811,45 +817,67 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
     env:
-      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      TARGET_HEAD: ${{ inputs.exact_head }}
+      PUBLISH_LEGACY_NATIVE: ${{ inputs.publish_legacy_native }}
     steps:
-      - name: Record attempt outcomes without claiming registry receipts
+      - name: Checkout publication ledger authority
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Download same-run public visibility evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pre-release-publication-visibility-*
+          path: /tmp/publication-visibility-artifacts
+          merge-multiple: false
+
+      - name: Record publication job outcomes
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
-          import os
           from pathlib import Path
 
           value = {
-              'schema_version': 1,
-              'product': 'Syntavra',
-              'version': '0.0.1',
-              'channel': 'pre-release',
-              'exact_head': os.environ.get('TARGET_HEAD', ''),
-              'publication_mode_requested': True,
-              'canonical_readiness_mutated': False,
-              'registry_receipts_admitted': False,
-              'claim_boundary': 'REGISTRY_PUBLICATION_RECEIPTS_NOT_YET_ADMITTED',
-              'job_results': {
-                  'credential_preflight': '${{ needs.credential-preflight.result }}',
-                  'pypi': '${{ needs.publish-pypi.result }}',
-                  'npm_installer': '${{ needs.publish-npm-installer.result }}',
-                  'npm_sdk': '${{ needs.publish-npm-sdk.result }}',
-                  'rust_production': '${{ needs.publish-rust-production.result }}',
-                  'vscode': '${{ needs.publish-vscode.result }}',
-                  'legacy_native_companion': '${{ needs.publish-legacy-native.result }}',
-              },
-              'next_authority': 'Independently verify public registry receipts, then admit published state through a separate exact-head reviewed change.',
+              'authority': '${{ needs.authority.result }}',
+              'credential_preflight': '${{ needs.credential-preflight.result }}',
+              'pypi': '${{ needs.publish-pypi.result }}',
+              'npm_installer': '${{ needs.publish-npm-installer.result }}',
+              'npm_sdk': '${{ needs.publish-npm-sdk.result }}',
+              'rust_production': '${{ needs.publish-rust-production.result }}',
+              'vscode': '${{ needs.publish-vscode.result }}',
+              'legacy_native_companion': '${{ needs.publish-legacy-native.result }}',
           }
-          Path('/tmp/publication-attempt-boundary.json').write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(json.dumps(value, indent=2, sort_keys=True))
+          Path('/tmp/publication-job-results.json').write_text(
+              json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
           PY
-      - uses: actions/upload-artifact@v4
+
+      - name: Build non-canonical publication attempt ledger
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/build_pre_release_publication_attempt_ledger.py \
+            --exact-head "$TARGET_HEAD" \
+            --visibility-root /tmp/publication-visibility-artifacts \
+            --job-results-json /tmp/publication-job-results.json \
+            --legacy-requested "$PUBLISH_LEGACY_NATIVE" \
+            --output /tmp/publication-attempt-ledger.json
+
+      - name: Upload publication attempt ledger
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: pre-release-publication-attempt-${{ env.TARGET_HEAD }}
-          path: /tmp/publication-attempt-boundary.json
+          name: pre-release-publication-attempt-ledger-${{ env.TARGET_HEAD }}-${{ github.run_id }}
+          path: /tmp/publication-attempt-ledger.json
           if-no-files-found: error
           retention-days: 90

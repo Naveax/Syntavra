@@ -125,10 +125,13 @@ class PreReleasePublishWorkflowContractTests(unittest.TestCase):
 
     def test_post_publish_job_never_claims_canonical_registry_receipts(self) -> None:
         text = self.text
-        self.assertIn("canonical_readiness_mutated': False", text)
-        self.assertIn("registry_receipts_admitted': False", text)
-        self.assertIn("REGISTRY_PUBLICATION_RECEIPTS_NOT_YET_ADMITTED", text)
-        self.assertIn("separate exact-head reviewed change", text)
+        ledger = (ROOT / "tools" / "build_pre_release_publication_attempt_ledger.py").read_text(encoding="utf-8")
+        self.assertIn("build_pre_release_publication_attempt_ledger.py", text)
+        self.assertIn("pre-release-publication-attempt-ledger-${{ env.TARGET_HEAD }}", text)
+        self.assertIn('"canonical_readiness_mutated": False', ledger)
+        self.assertIn('"registry_receipts_admitted": False', ledger)
+        self.assertIn("PUBLIC_VISIBILITY_EVIDENCE_ONLY_NOT_CANONICAL_REGISTRY_RECEIPT_ADMISSION", ledger)
+        self.assertIn("separate exact-head reviewed change", ledger)
         self.assertNotRegex(text, r"(?m)^\s*git\s+(commit|push)\b")
 
 
