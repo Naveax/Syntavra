@@ -139,7 +139,7 @@ def _release_contract(repo: Path, fixture: dict[str, Any], temp_root: Path) -> d
     if pre_release.get("claim_boundaries", {}).get("registry_publication") != expected_identity["registry_publication_claim"]:
         raise AssertionError("registry publication claim boundary drift")
 
-    target_names = ["python", "npm", "vscode", "native"]
+    target_names = ["python", "npm", "vscode", "native", "legacy_native_companion"]
     if set(readiness) != {"version", "channel", *target_names, "claim_boundary"}:
         raise AssertionError(f"publish-readiness key drift: {sorted(readiness)}")
     if readiness.get("version") != expected_identity["version"] or readiness.get("channel") != expected_identity["channel"]:
@@ -151,6 +151,17 @@ def _release_contract(repo: Path, fixture: dict[str, Any], temp_root: Path) -> d
             raise AssertionError(f"publication target drift for {name}: {observed} != {expected}")
         if observed.get("published") is not False:
             raise AssertionError(f"publication target {name} must remain unclaimed/unpublished")
+    native = readiness["native"]
+    legacy_native = readiness["legacy_native_companion"]
+    if native.get("package") != "syntavra-cli" or native.get("binary") != "syntavra":
+        raise AssertionError(f"production native publication identity drift: {native}")
+    if native.get("publish_order") != ["syntavra-contracts", "syntavra-core", "syntavra-cli"]:
+        raise AssertionError(f"production native publish order drift: {native}")
+    if legacy_native.get("package") != "syntavra-native":
+        raise AssertionError(f"legacy native companion identity drift: {legacy_native}")
+    if legacy_native.get("workspace_member") is not False or legacy_native.get("production_selector") is not False:
+        raise AssertionError(f"legacy native companion boundary drift: {legacy_native}")
+
     expected_boundary = "Registry publication requires owner credentials and successful release receipts."
     if readiness.get("claim_boundary") != expected_boundary:
         raise AssertionError("publish-readiness claim boundary drift")

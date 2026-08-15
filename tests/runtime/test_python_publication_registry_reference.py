@@ -30,8 +30,16 @@ class PythonPublicationRegistryReferenceTests(unittest.TestCase):
             release["pre_release"]["claim_boundaries"]["registry_publication"],
             "REGISTRY_PUBLICATION_NOT_PERFORMED",
         )
-        for target in ("python", "npm", "vscode", "native"):
+        for target in ("python", "npm", "vscode", "native", "legacy_native_companion"):
             self.assertFalse(release["publish_readiness"][target]["published"])
+        native = release["publish_readiness"]["native"]
+        self.assertEqual(native["package"], "syntavra-cli")
+        self.assertEqual(native["binary"], "syntavra")
+        self.assertEqual(native["publish_order"], ["syntavra-contracts", "syntavra-core", "syntavra-cli"])
+        legacy_native = release["publish_readiness"]["legacy_native_companion"]
+        self.assertEqual(legacy_native["package"], "syntavra-native")
+        self.assertFalse(legacy_native["workspace_member"])
+        self.assertFalse(legacy_native["production_selector"])
         self.assertEqual(len(release["snapshot_sha256"]), 64)
 
     def test_package_publication_metadata_is_exact(self) -> None:
