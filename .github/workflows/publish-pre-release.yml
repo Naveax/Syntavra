@@ -1,0 +1,571 @@
+name: Publish Syntavra 0.0.1 Pre-Release
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/publish-pre-release.yml'
+      - 'tests/runtime/test_pre_release_publish_workflow_contract.py'
+      - 'release/publish-readiness.json'
+      - 'tools/build_pre_release_candidate_receipt_plan.py'
+  workflow_dispatch:
+    inputs:
+      exact_head:
+        description: Exact 40-character main SHA to publish
+        required: true
+        type: string
+      mode:
+        description: Build a publication execution plan or perform guarded publication
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - publish
+      confirmation:
+        description: Publish mode requires PUBLISH_0_0_1_PRE_RELEASE
+        required: false
+        default: ''
+        type: string
+      publish_legacy_native:
+        description: Also publish the non-production syntavra-native companion
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: syntavra-0.0.1-pre-release-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify guarded publication workflow contract
+        run: python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+      - name: Enforce exact clean PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  authority:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+    outputs:
+      target_head: ${{ steps.authority.outputs.target_head }}
+      provenance_run_id: ${{ steps.authority.outputs.provenance_run_id }}
+      receipt_run_id: ${{ steps.authority.outputs.receipt_run_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: ${{ inputs.exact_head }}
+      MODE: ${{ inputs.mode }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Validate exact canonical main authority
+        id: authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$TARGET_HEAD" in
+            [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]* ) ;;
+            * ) echo 'exact_head is not hexadecimal' >&2; exit 2 ;;
+          esac
+          test "${#TARGET_HEAD}" -eq 40
+          TARGET_HEAD="$(printf '%s' "$TARGET_HEAD" | tr 'A-F' 'a-f')"
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          test "$TARGET_HEAD" = "$current_main"
+
+          provenance_run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/post-r38-release-provenance-diagnostic.yml/runs?event=push&status=success&head_sha=$TARGET_HEAD&per_page=100" \
+              --jq '[.workflow_runs[] | select(.head_sha == env.TARGET_HEAD and .head_branch == "main" and .conclusion == "success")] | first | .id // empty'
+          )"
+          test -n "$provenance_run_id"
+
+          receipt_run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pre-release-candidate-receipt-plan.yml/runs?event=workflow_run&status=success&head_sha=$TARGET_HEAD&per_page=100" \
+              --jq '[.workflow_runs[] | select(.head_sha == env.TARGET_HEAD and .head_branch == "main" and .conclusion == "success")] | first | .id // empty'
+          )"
+          test -n "$receipt_run_id"
+
+          echo "target_head=$TARGET_HEAD" >> "$GITHUB_OUTPUT"
+          echo "provenance_run_id=$provenance_run_id" >> "$GITHUB_OUTPUT"
+          echo "receipt_run_id=$receipt_run_id" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.authority.outputs.target_head }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify locked release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ steps.authority.outputs.target_head }}"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('release/publish-readiness.json').read_text(encoding='utf-8'))
+          assert value['version'] == '0.0.1'
+          assert value['channel'] == 'pre-release'
+          expected = ('python', 'npm', 'npm_sdk', 'vscode', 'native', 'legacy_native_companion')
+          for name in expected:
+              assert value[name]['published'] is False, (name, value[name])
+          assert value['python']['package'] == 'syntavra-runtime'
+          assert value['npm']['package'] == '@syntavra/install'
+          assert value['npm_sdk']['package'] == '@syntavra/sdk'
+          assert value['vscode']['package'] == 'syntavra-vscode'
+          assert value['native']['package'] == 'syntavra-cli'
+          assert value['native']['publish_order'] == ['syntavra-contracts', 'syntavra-core', 'syntavra-cli']
+          assert value['legacy_native_companion']['production_selector'] is False
+          PY
+          python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+
+      - name: Download exact-head candidate receipt authority
+        uses: actions/download-artifact@v4
+        with:
+          name: pre-release-candidate-receipt-plan-${{ steps.authority.outputs.target_head }}
+          path: /tmp/candidate-receipt
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.authority.outputs.receipt_run_id }}
+
+      - name: Re-verify source provenance and empty receipt boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path('/tmp/candidate-receipt/pre-release-candidate-receipt-plan.json')
+          value = json.loads(path.read_text(encoding='utf-8'))
+          target = os.environ['TARGET_HEAD'].lower()
+          assert value['exact_head'] == target
+          assert value['version'] == '0.0.1'
+          assert value['channel'] == 'pre-release'
+          assert value['publication_performed'] is False
+          assert value['claim_boundary'] == 'REGISTRY_PUBLICATION_NOT_PERFORMED'
+          assert value['source_provenance']['workflow'] == 'Release Package Provenance'
+          expected_source = int('${{ steps.authority.outputs.provenance_run_id }}')
+          assert value['source_provenance']['run_id'] == expected_source
+          receipts = value['registry_receipts']
+          assert receipts['pypi'] is None
+          assert receipts['npm_installer'] is None
+          assert receipts['npm_sdk'] is None
+          assert receipts['vscode_marketplace'] is None
+          assert receipts['legacy_native_companion'] is None
+          assert all(v is None for v in receipts['crates_io'].values())
+          PY
+
+      - name: Arm publish mode only with independent gates
+        if: inputs.mode == 'publish'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = 'PUBLISH_0_0_1_PRE_RELEASE'
+          test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+
+          environment_json="$(mktemp)"
+          gh api "repos/$GITHUB_REPOSITORY/environments/pre-release" > "$environment_json"
+          python - "$environment_json" <<'PY'
+          import json
+          import sys
+
+          value = json.load(open(sys.argv[1], encoding='utf-8'))
+          rules = value.get('protection_rules') or []
+          reviewers = [rule for rule in rules if rule.get('type') == 'required_reviewers']
+          if not reviewers:
+              raise SystemExit('pre-release environment must have a required-reviewers protection rule')
+          PY
+
+      - name: Enforce clean authority checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  dry-run:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run'
+    needs: authority
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
+      RECEIPT_RUN_ID: ${{ needs.authority.outputs.receipt_run_id }}
+    steps:
+      - name: Download exact-head provenance bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: release-package-provenance-${{ env.TARGET_HEAD }}
+          path: /tmp/provenance
+          github-token: ${{ github.token }}
+          run-id: ${{ env.PROVENANCE_RUN_ID }}
+
+      - name: Download exact-head candidate receipt plan
+        uses: actions/download-artifact@v4
+        with:
+          name: pre-release-candidate-receipt-plan-${{ env.TARGET_HEAD }}
+          path: /tmp/receipt
+          github-token: ${{ github.token }}
+          run-id: ${{ env.RECEIPT_RUN_ID }}
+
+      - name: Generate zero-write publication execution plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          receipt = json.loads(Path('/tmp/receipt/pre-release-candidate-receipt-plan.json').read_text(encoding='utf-8'))
+          target = os.environ['TARGET_HEAD']
+          assert receipt['exact_head'] == target
+          assert receipt['publication_performed'] is False
+
+          plan = {
+              'schema_version': 1,
+              'product': 'Syntavra',
+              'version': '0.0.1',
+              'channel': 'pre-release',
+              'exact_head': target,
+              'mode': 'dry-run',
+              'registry_writes_performed': False,
+              'source_provenance_run_id': int(os.environ['PROVENANCE_RUN_ID']),
+              'source_receipt_run_id': int(os.environ['RECEIPT_RUN_ID']),
+              'required_publish_gates': {
+                  'confirmation': 'PUBLISH_0_0_1_PRE_RELEASE',
+                  'arming_secret': 'SYNTAVRA_PUBLISH_ARMED',
+                  'environment': 'pre-release',
+                  'environment_required_reviewers': True,
+              },
+              'publication_steps': [
+                  {'target': 'python', 'registry': 'PyPI', 'auth': 'OIDC trusted publisher', 'command': 'pypa/gh-action-pypi-publish@release/v1'},
+                  {'target': 'npm', 'registry': 'npm', 'auth': 'NPM_TOKEN + GitHub OIDC provenance', 'command': 'npm publish <installer.tgz> --tag next --access public --provenance'},
+                  {'target': 'npm_sdk', 'registry': 'npm', 'auth': 'NPM_TOKEN + GitHub OIDC provenance', 'command': 'npm publish <sdk.tgz> --tag next --access public --provenance'},
+                  {'target': 'native', 'registry': 'crates.io', 'auth': 'CARGO_REGISTRY_TOKEN', 'commands': [
+                      'cargo +1.82.0 publish --locked -p syntavra-contracts',
+                      'cargo +1.82.0 publish --locked -p syntavra-core',
+                      'cargo +1.82.0 publish --locked -p syntavra-cli',
+                  ]},
+                  {'target': 'vscode', 'registry': 'VS Code Marketplace', 'auth': 'OIDC trusted publisher', 'command': 'npx --yes @vscode/vsce publish --oidc --pre-release --packagePath <extension.vsix>'},
+                  {'target': 'legacy_native_companion', 'registry': 'crates.io', 'auth': 'CARGO_REGISTRY_TOKEN', 'optional': True, 'command': 'cargo +1.82.0 publish --manifest-path native/syntavra-native/Cargo.toml'},
+              ],
+              'post_publish_boundary': 'Successful commands are publication attempts only. Canonical publish-readiness remains unchanged until independently verified public registry receipts are admitted in a later exact-head change.',
+          }
+          Path('/tmp/publish-execution-plan.json').write_text(json.dumps(plan, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(plan, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload zero-write publication plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publish-dry-run-${{ env.TARGET_HEAD }}
+          path: /tmp/publish-execution-plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-pypi:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    needs: authority
+    runs-on: ubuntu-24.04
+    environment: pre-release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
+      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+    steps:
+      - name: Re-arm irreversible publication
+        run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package-provenance-${{ env.TARGET_HEAD }}
+          path: /tmp/provenance
+          github-token: ${{ github.token }}
+          run-id: ${{ env.PROVENANCE_RUN_ID }}
+      - name: Restore exact Python distributions
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="$(find /tmp/provenance -type d -name python -print -quit)"
+          test -n "$source_root"
+          mkdir dist
+          cp "$source_root"/*.whl "$source_root"/*.tar.gz dist/
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -ge 2
+      - name: Publish Python distributions through PyPI trusted publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: false
+
+  publish-npm-installer:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    needs: authority
+    runs-on: ubuntu-24.04
+    environment: pre-release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+    steps:
+      - name: Re-arm irreversible publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+          test -n "$NODE_AUTH_TOKEN"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package-provenance-${{ env.TARGET_HEAD }}
+          path: /tmp/provenance
+          github-token: ${{ github.token }}
+          run-id: ${{ env.PROVENANCE_RUN_ID }}
+      - name: Publish npm installer with provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$(find /tmp/provenance -type f -path '*/npm-installer/*.tgz' -print -quit)"
+          test -n "$package"
+          npm publish "$package" --tag next --access public --provenance
+
+  publish-npm-sdk:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    needs: authority
+    runs-on: ubuntu-24.04
+    environment: pre-release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+    steps:
+      - name: Re-arm irreversible publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+          test -n "$NODE_AUTH_TOKEN"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package-provenance-${{ env.TARGET_HEAD }}
+          path: /tmp/provenance
+          github-token: ${{ github.token }}
+          run-id: ${{ env.PROVENANCE_RUN_ID }}
+      - name: Publish npm TypeScript SDK with provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$(find /tmp/provenance -type f -path '*/npm-sdk/*.tgz' -print -quit)"
+          test -n "$package"
+          npm publish "$package" --tag next --access public --provenance
+
+  publish-rust-production:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    needs: authority
+    runs-on: ubuntu-24.04
+    environment: pre-release
+    permissions:
+      contents: read
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+    steps:
+      - name: Re-arm irreversible publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+          test -n "$CARGO_REGISTRY_TOKEN"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
+      - name: Install pinned Rust 1.82
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.82.0 --profile minimal
+          test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Publish production Rust graph in dependency order
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.82.0 publish --locked -p syntavra-contracts
+          cargo +1.82.0 publish --locked -p syntavra-core
+          cargo +1.82.0 publish --locked -p syntavra-cli
+
+  publish-vscode:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    needs: authority
+    runs-on: ubuntu-24.04
+    environment: pre-release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      PROVENANCE_RUN_ID: ${{ needs.authority.outputs.provenance_run_id }}
+      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+    steps:
+      - name: Re-arm irreversible publication
+        run: test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package-provenance-${{ env.TARGET_HEAD }}
+          path: /tmp/provenance
+          github-token: ${{ github.token }}
+          run-id: ${{ env.PROVENANCE_RUN_ID }}
+      - name: Publish VS Code extension through Marketplace trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$(find /tmp/provenance -type f -path '*/vscode/*.vsix' -print -quit)"
+          test -n "$package"
+          npx --yes @vscode/vsce publish --oidc --pre-release --packagePath "$package"
+
+  publish-legacy-native:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish' && inputs.publish_legacy_native
+    needs: authority
+    runs-on: ubuntu-24.04
+    environment: pre-release
+    permissions:
+      contents: read
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+      SYNTAVRA_PUBLISH_ARMED: ${{ secrets.SYNTAVRA_PUBLISH_ARMED }}
+    steps:
+      - name: Re-arm irreversible optional companion publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SYNTAVRA_PUBLISH_ARMED" = 'PUBLISH_0_0_1_PRE_RELEASE'
+          test -n "$CARGO_REGISTRY_TOKEN"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_HEAD }}
+          fetch-depth: 0
+      - name: Install pinned Rust 1.82
+        run: rustup toolchain install 1.82.0 --profile minimal
+      - name: Publish legacy non-production native companion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          cargo +1.82.0 publish --manifest-path native/syntavra-native/Cargo.toml
+
+  publication-attempt-boundary:
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    needs:
+      - authority
+      - publish-pypi
+      - publish-npm-installer
+      - publish-npm-sdk
+      - publish-rust-production
+      - publish-vscode
+      - publish-legacy-native
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TARGET_HEAD: ${{ needs.authority.outputs.target_head }}
+    steps:
+      - name: Record attempt outcomes without claiming registry receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value = {
+              'schema_version': 1,
+              'product': 'Syntavra',
+              'version': '0.0.1',
+              'channel': 'pre-release',
+              'exact_head': os.environ.get('TARGET_HEAD', ''),
+              'publication_mode_requested': True,
+              'canonical_readiness_mutated': False,
+              'registry_receipts_admitted': False,
+              'claim_boundary': 'REGISTRY_PUBLICATION_RECEIPTS_NOT_YET_ADMITTED',
+              'job_results': {
+                  'pypi': '${{ needs.publish-pypi.result }}',
+                  'npm_installer': '${{ needs.publish-npm-installer.result }}',
+                  'npm_sdk': '${{ needs.publish-npm-sdk.result }}',
+                  'rust_production': '${{ needs.publish-rust-production.result }}',
+                  'vscode': '${{ needs.publish-vscode.result }}',
+                  'legacy_native_companion': '${{ needs.publish-legacy-native.result }}',
+              },
+              'next_authority': 'Independently verify public registry receipts, then admit published state through a separate exact-head reviewed change.',
+          }
+          Path('/tmp/publication-attempt-boundary.json').write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(value, indent=2, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pre-release-publication-attempt-${{ env.TARGET_HEAD }}
+          path: /tmp/publication-attempt-boundary.json
+          if-no-files-found: error
+          retention-days: 90
