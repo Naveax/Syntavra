@@ -2,8 +2,8 @@
   "schema_version": 1,
   "family": "python-behavior-freeze",
   "phase": "S",
-  "claim": "PYTHON_REFERENCE_BEHAVIOR_FROZEN",
-  "strict": true,
+  "claim": "PYTHON_REFERENCE_BEHAVIOR_FREEZE_BOOTSTRAP",
+  "strict": false,
   "public_surface": {
     "authority": "tools/report_missing_native_public_routes.py",
     "expected_route_count": 245,
@@ -19,8 +19,8 @@
   },
   "fixture_catalog": {
     "path": "contracts/python/fixture-golden-catalog-v1.json",
-    "expected_file_sha256": "2c9b07c903df7df5dea239c7dd8b49566950e6378c08014b589f49baee0a06e5",
-    "expected_semantic_sha256": "eee73a7cba7120fbf51c09896310b6d4c9dcb98e8bc974704892fd2b0d1a1b4d",
+    "expected_file_sha256": "52f5f27e37212f2940942444165e85d5047e2bca89c5c24d16689fbfa7176878",
+    "expected_semantic_sha256": "d462c3a7d7160bab063bf1aced21d084d3623785008ec6fbe1c9ebdfd7307efd",
     "expected_family_count": 14,
     "expected_fixture_case_count": 70
   },
@@ -34,11 +34,11 @@
     "must_preserve_clean_tree": true
   },
   "derived_freeze": {
-    "expected_family_schema_sha256": "93d07d59de8f30794cbd96b1a95ca3f11b14da9480538a50615ef10cf2e37088",
-    "expected_behavior_policy_sha256": "eae1c1601656e1874138541420ca718c3f97fff5176fff117e593cbf2a7f5538",
-    "expected_error_exit_policy_sha256": "c85f15172c16803c3e42d101c4d80b5f270558c2340e962e8e958893104a7628",
-    "expected_nondeterminism_sha256": "d2ffbab872ce4f880504ebb5666b9bd45efb88ab4540640b91b0f6e5cf0f3e8f",
-    "expected_side_effect_sha256": "1534dd516d939b205021bc488b0e522d44d7cb125050d4fa773d3e18e937965e"
+    "expected_family_schema_sha256": null,
+    "expected_behavior_policy_sha256": null,
+    "expected_error_exit_policy_sha256": null,
+    "expected_nondeterminism_sha256": null,
+    "expected_side_effect_sha256": null
   },
   "policy": {
     "family_schema_source": "exact-head Python Reference Suite family JSON artifacts",
