@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           python -m pip install -e .
 
-      - name: Apply exact admission migration
+      - name: Apply exact non-workflow admission migration
         shell: bash
         run: |
           set -euo pipefail
@@ -85,17 +85,6 @@ jobs:
           assert text.count(old) == 1, text.count(old)
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          path = root / '.github/workflows/release-main-merge-gate.yml'
-          text = path.read_text(encoding='utf-8')
-          old = '          python -m unittest tests.runtime.test_programmatic_execution -v\n'
-          new = old + '          python -m unittest tests.runtime.test_deferred_tool_discovery -v\n'
-          assert text.count(old) == 1, text.count(old)
-          text = text.replace(old, new, 1)
-          old = '          python tools/certify_programmatic_execution.py --out /tmp/programmatic-execution.json\n'
-          new = old + '          python tools/certify_deferred_tool_discovery.py --out /tmp/deferred-tool-discovery.json\n'
-          assert text.count(old) == 1, text.count(old)
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
           path = root / 'tests/runtime/test_release_action_pins.py'
           text = path.read_text(encoding='utf-8')
           old = '    ".github/workflows/programmatic-execution.yml",\n'
@@ -137,14 +126,13 @@ jobs:
           python tools/certify_programmatic_execution.py --out /tmp/programmatic-after-admission.json
           python tools/certify_deferred_tool_discovery.py --out /tmp/deferred-tool-discovery.json
 
-      - name: Commit migration and remove workflow
+      - name: Commit non-workflow migration
         shell: bash
         run: |
           set -euo pipefail
-          rm .github/workflows/deferred-tool-discovery-state-migrate.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add contracts/python/capability-completeness-registry-v1.json tools/certify_programmatic_execution.py .github/workflows/release-main-merge-gate.yml tests/runtime/test_release_action_pins.py tools/validate.py .github/workflows/deferred-tool-discovery-state-migrate.yml
+          git add contracts/python/capability-completeness-registry-v1.json tools/certify_programmatic_execution.py tests/runtime/test_release_action_pins.py tools/validate.py
           git diff --cached --check
           git commit -m 'Advance Deferred Tool Discovery admission state'
           git push origin HEAD:agent/deferred-tool-discovery-v1
