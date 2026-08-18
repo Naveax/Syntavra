@@ -12,6 +12,7 @@ concurrency:
   group: deferred-checkpoint-append-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
+# one-shot append workflow; connector removes it after the checkpoint commit
 jobs:
   append:
     if: github.actor != 'github-actions[bot]'
