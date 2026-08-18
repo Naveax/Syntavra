@@ -12,6 +12,12 @@ from tools.certify_python_authority import _assert_no_route_identity_copy, certi
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "contracts/python/python-authority-v1.json"
+EXPECTED_ENFORCEMENT = {
+    "repository_validator": "tools/validate.py",
+    "exact_head_workflow": ".github/workflows/python-authority.yml",
+    "release_main_gate": ".github/workflows/release-main-merge-gate.yml",
+    "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py",
+}
 
 
 def _git_head(repo: Path) -> str:
@@ -32,6 +38,7 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertEqual(contract["claim"], "PYTHON_FEATURE_DEVELOPMENT_AUTHORITY")
         self.assertTrue(contract["strict"])
         self.assertEqual(contract["authority"]["feature_development_engine"], "python")
+        self.assertEqual(contract["enforcement"], EXPECTED_ENFORCEMENT)
         self.assertTrue(contract["rust_freeze"]["active"])
         self.assertFalse(contract["rust_freeze"]["feature_development_allowed"])
         self.assertFalse(contract["rust_freeze"]["production_promotion_allowed"])
@@ -59,6 +66,7 @@ class PythonAuthorityTests(unittest.TestCase):
         report = certify(ROOT)
         self.assertTrue(report["ok"])
         self.assertEqual(report["exact_head"], _git_head(ROOT))
+        self.assertEqual(report["enforcement"], EXPECTED_ENFORCEMENT)
         self.assertTrue(report["python"]["feature_development_authority"])
         self.assertEqual(report["python"]["public_route_count"], 245)
         self.assertTrue(report["rust"]["feature_development_frozen"])
@@ -90,6 +98,23 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertEqual(observed["rust_remaining_routes"], 71)
         self.assertFalse(observed["rust_resume_allowed"])
         self.assertIn('checks.append(("python_authority", authority_ok, authority_detail))', inspect.getsource(repository_validate.main))
+
+    def test_enforcement_surfaces_are_bound(self) -> None:
+        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+        for relative in contract["enforcement"].values():
+            self.assertTrue((ROOT / relative).is_file(), relative)
+
+        workflow = (ROOT / EXPECTED_ENFORCEMENT["exact_head_workflow"]).read_text(encoding="utf-8")
+        self.assertIn("python-authority-${{ github.event.pull_request.number || github.ref }}", workflow)
+        self.assertIn("tests.runtime.test_python_authority", workflow)
+        self.assertIn("tools/certify_python_authority.py", workflow)
+
+        release_gate = (ROOT / EXPECTED_ENFORCEMENT["release_main_gate"]).read_text(encoding="utf-8")
+        self.assertIn("tests.runtime.test_python_authority", release_gate)
+        self.assertIn("tools/certify_python_authority.py", release_gate)
+
+        pin_policy = (ROOT / EXPECTED_ENFORCEMENT["immutable_action_pin_policy"]).read_text(encoding="utf-8")
+        self.assertIn('".github/workflows/python-authority.yml"', pin_policy)
 
 
 if __name__ == "__main__":
