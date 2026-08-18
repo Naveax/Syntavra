@@ -80,3 +80,53 @@ BLOCKERS:
 NEXT EXACT TASK:
 - Finish and certify capability_completeness_registry_v1.
 - After admission, advance to rust_feature_freeze_guard_v1.
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — RUST FREEZE GUARD ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+3672b4855a109c04fbad4e50278f941019bfd310
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/rust-feature-freeze-guard-v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — rust_feature_freeze_guard_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; remaining owned 71; unowned 0.
+
+COMPLETED:
+- capability_completeness_registry_v1 exact-head workflow PASS on PR #136.
+- Release Main Merge Gate PASS on PR #136.
+- Release Package Provenance PASS on PR #136.
+- PR #136 merged; capability completeness registry is now recorded as certified.
+- Registry current-milestone logic advanced to the first non-certified milestone.
+
+CURRENT IMPLEMENTATION:
+- Rust feature-freeze guard contract added.
+- PR diff checker added.
+- Rust freeze certifier added.
+- Rust freeze regression suite added.
+- exact-head Rust freeze workflow added with immutable action SHAs and PR/ref-scoped concurrency.
+- ordinary CI has no maintenance-exception bypass.
+- explicit maintenance exceptions are limited to native-only repair and still cannot change Remaining-71 programs or promotion authority.
+- Release Main gate is bound to Rust freeze regression, certifier, and ordinary diff check.
+- immutable action-pin policy covers the Rust freeze workflow.
+
+VERIFIED BASELINE:
+- Python COMPLETE = false.
+- Rust resume allowed = false.
+- Rust implementation coverage = 245/245.
+- Rust production promoted = 174/245.
+- Remaining parity/promotion = 71.
+- Phase 2 migration matrix still forbids native counter changes and separates selector ownership from behavioral parity.
+
+BLOCKERS:
+- None for implementation.
+- Guard still requires branch smoke, registry-state verification, canonical MANIFEST.sha256 refresh, exact-head PR CI, and merge.
+
+NEXT EXACT TASK:
+- Finish and certify rust_feature_freeze_guard_v1.
+- After admission, advance to universal_context_item_v1.
