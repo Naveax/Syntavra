@@ -1,0 +1,35 @@
+CURRENT HEAD AT ROADMAP BRANCH CREATION:
+a5652513fa36932daa34db9540068b8ab9a26339
+
+BASE MAIN:
+ab300e84d39c009b609b78324f7f6e7045408bff
+
+ACTIVE PLANNING BRANCH:
+agent/python-first-roadmap
+
+PYTHON STATUS:
+PYTHON-FIRST mode declared. Product implementation has not started in this documentation branch.
+
+RUST STATUS:
+FROZEN FOR PRODUCT FEATURE DEVELOPMENT — 174/245 promoted, 71 remaining, 71 owned, 0 unowned.
+
+COMPLETED:
+- Python-first operating rules documented.
+- Existing Python implementation baseline reconciled so implemented primitives are not blindly rewritten.
+- Python COMPLETE gate documented.
+- Rust Resume Gate documented.
+- New roadmap capabilities 236–280 documented.
+- Detailed continuation checklist documented.
+
+VERIFIED:
+- main was ab300e84d39c009b609b78324f7f6e7045408bff when this branch was created.
+- PR #132 remains separate release-authority hardening work.
+- Roadmap changes are documentation-only on this branch.
+
+BLOCKERS:
+- PR #132 must be cleanly closed: final MANIFEST.sha256 + exact-head release CI + merge.
+
+NEXT EXACT TASK:
+- Finish PR #132 without mixing Python product features into it.
+- Re-read main after #132 merge.
+- Begin python_authority_v1 as the first Python-first implementation milestone.
