@@ -79,13 +79,17 @@ def certify(repo: Path) -> dict[str, Any]:
     exact_head = _head(repo)
     _require(bool(exact_head), "unable to resolve exact git HEAD")
 
+    # The canonical public-surface report describes implementation coverage, not
+    # production promotion authority. Keeping these separate is the point of
+    # this contract: Rust can have 245 implementations while promotion remains
+    # frozen at the independently certified 174-route baseline.
     surface = public_surface.report()
     _require(surface.get("ok") is True, f"canonical public surface is red: {surface}")
     py_surface = surface.get("python") or {}
     rust_surface = surface.get("rust") or {}
     _require(int(py_surface.get("derived_count", -1)) == int(expected["public_routes"]), "Python public route count drift")
-    _require(int(rust_surface.get("native_count", -1)) == int(expected["rust_promoted_native_routes"]), "Rust promoted-native count drift")
-    _require(int(rust_surface.get("missing_count", -1)) == int(expected["remaining_routes"]), "Rust remaining-route count drift")
+    _require(int(rust_surface.get("native_count", -1)) == int(expected["rust_implemented_native_routes"]), "Rust implementation count drift")
+    _require(int(rust_surface.get("missing_count", -1)) == int(expected["rust_implementation_missing_routes"]), "Rust implementation missing-route count drift")
 
     execution = execution_contract.report()
     _require(execution.get("ok") is True, f"Python public execution contract is red: {execution}")
@@ -123,12 +127,16 @@ def certify(repo: Path) -> dict[str, Any]:
         int(dual_rust.get("native_public_command_count", -1)) == int(expected["rust_implemented_native_routes"]),
         "Rust implementation coverage drift",
     )
+    _require(int(dual_rust.get("missing_native_public_command_count", -1)) == int(expected["rust_implementation_missing_routes"]), "Rust implementation missing count drift")
     _require(int(dual_rust.get("python_launcher_bridge_command_count", -1)) == 0, "Rust launcher bridge reintroduced")
     dual_policy = dual_surface.get("policy") or {}
     _require(dual_policy.get("python_must_remain_independently_runnable") is True, "Python independent runtime policy drift")
     _require(dual_policy.get("rust_must_not_invoke_python") is True, "Rust-to-Python invocation policy drift")
     _require(dual_policy.get("hidden_fallback_forbidden") is True, "hidden fallback policy drift")
 
+    # Promotion authority deliberately remains frozen at 174 even though the
+    # implementation surface is complete. These existing Python/migration
+    # contracts are the current production-promotion boundary.
     migration = _read_json(repo / authority["promotion_baseline"])
     _require(migration.get("strict") is True, "Phase 2 migration baseline is not strict")
     baseline = migration.get("rust_baseline") or {}
@@ -182,6 +190,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "rust": {
             "feature_development_frozen": True,
             "implemented_native_routes": int(expected["rust_implemented_native_routes"]),
+            "implementation_missing_routes": int(expected["rust_implementation_missing_routes"]),
             "production_promoted_routes": int(expected["rust_promoted_native_routes"]),
             "remaining_routes": int(expected["remaining_routes"]),
             "remaining_owned_routes": int(expected["remaining_owned_routes"]),
@@ -193,6 +202,7 @@ def certify(repo: Path) -> dict[str, Any]:
         },
         "claim_boundary": (
             "This certificate establishes Python-first feature-development authority and freezes Rust production promotion at 174/245. "
+            "Rust implementation coverage may be 245/245 without granting production promotion. "
             "It does not claim Python COMPLETE, does not grant Rust promotion credit, and does not certify Remaining-71 behavioral parity."
         ),
     }
