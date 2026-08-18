@@ -1,0 +1,47 @@
+name: Evidence Store Manifest Apply
+
+on:
+  push:
+    branches:
+      - agent/evidence-store-v2
+
+permissions:
+  contents: write
+
+concurrency:
+  group: evidence-store-manifest-apply
+  cancel-in-progress: false
+
+jobs:
+  apply-manifest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/evidence-store-v2
+          fetch-depth: 0
+
+      - name: Remove applicator and refresh canonical manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/evidence-store-manifest-apply.yml
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          git diff --check
+
+      - name: Commit exact Evidence Store manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.sha256 .github/workflows/evidence-store-manifest-apply.yml
+          git commit -m "Refresh Evidence Store v2 manifest"
+          git push origin HEAD:agent/evidence-store-v2
