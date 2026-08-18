@@ -4,9 +4,14 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 import traceback
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tools import report_missing_native_public_routes as public_surface
 from tools import report_python_public_execution_contract as execution_contract
@@ -52,6 +57,9 @@ def _require(value: bool, message: str) -> None:
 
 
 def certify(repo: Path) -> dict[str, Any]:
+    repo = repo.resolve()
+    _require(repo == ROOT, f"Python authority certifier must run against its own checkout: {repo} != {ROOT}")
+
     contract = _read_json(repo / CONTRACT_RELATIVE)
     _require(contract.get("schema_version") == 1, "Python authority schema drift")
     _require(contract.get("family") == "python-authority", "Python authority family drift")
