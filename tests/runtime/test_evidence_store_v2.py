@@ -127,6 +127,10 @@ class EvidenceStoreV2Tests(unittest.TestCase):
         self.assertTrue(receipt["ok"])
         self.assertEqual(self.store.require(item.item_id).content, item.content)
 
+    def test_secret_policy_cannot_be_weakened_by_constructor_flag(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported secret policy"):
+            EvidenceStoreV2(self.path, secret_policy="allow-pre-redacted")
+
     def test_retention_prunes_only_expired_unpinned_items(self) -> None:
         expired = make_item(content={"id": "expired"})
         pinned = make_item(content={"id": "pinned"})

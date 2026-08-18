@@ -53,7 +53,7 @@ class EvidenceStoreV2:
     """
 
     def __init__(self, path: Path, *, secret_policy: str = "reject"):
-        if secret_policy not in {"reject", "allow-pre-redacted"}:
+        if secret_policy != "reject":
             raise ValueError(f"unsupported secret policy: {secret_policy!r}")
         self.path = path
         self.secret_policy = secret_policy
@@ -102,7 +102,7 @@ class EvidenceStoreV2:
 
     def _secret_receipt(self, item: UniversalContextItem) -> dict[str, Any]:
         _redacted, receipt = self._redactor.redact(item.to_dict())
-        if receipt["redacted"] and self.secret_policy == "reject":
+        if receipt["redacted"]:
             raise ValueError(
                 "evidence item contains secret-like material; create an explicit sanitized UniversalContextItem before storage"
             )
