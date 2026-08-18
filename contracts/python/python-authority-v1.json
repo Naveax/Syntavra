@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "family": "python-authority",
+  "phase": "python-first",
+  "claim": "PYTHON_FEATURE_DEVELOPMENT_AUTHORITY",
+  "strict": true,
+  "authority": {
+    "product_behavior_engine": "python",
+    "feature_development_engine": "python",
+    "route_identity": "tools/report_missing_native_public_routes.py",
+    "behavior_freeze": "contracts/python/python-behavior-freeze-v1.json",
+    "phase1_acceptance": "contracts/python/python-phase1-acceptance-v1.json",
+    "implementation_surface": "contracts/engine/dual-engine-public-surface-v2.json",
+    "promotion_baseline": "contracts/engine/phase2-rust-migration-matrix-v1.json"
+  },
+  "enforcement": {
+    "repository_validator": "tools/validate.py",
+    "exact_head_workflow": ".github/workflows/python-authority.yml",
+    "release_main_gate": ".github/workflows/release-main-merge-gate.yml",
+    "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py"
+  },
+  "expected": {
+    "public_routes": 245,
+    "python_execution_owners": 245,
+    "rust_implemented_native_routes": 245,
+    "rust_implementation_missing_routes": 0,
+    "rust_promoted_native_routes": 174,
+    "remaining_routes": 71,
+    "remaining_owned_routes": 71,
+    "unowned_routes": 0,
+    "atomic_promotion_target": 245
+  },
+  "rust_freeze": {
+    "active": true,
+    "feature_development_allowed": false,
+    "production_promotion_allowed": false,
+    "native_counter_change_allowed": false,
+    "allowed_maintenance": [
+      "build-blocker",
+      "security",
+      "data-loss",
+      "contract-blocker"
+    ],
+    "resume_requires": "contracts/python/python-completion-v1.json",
+    "resume_claim": "PYTHON_COMPLETE"
+  },
+  "policy": {
+    "route_identity_authority_single_source": true,
+    "duplicate_route_list_forbidden": true,
+    "native_implementation_is_not_production_promotion": true,
+    "selector_ownership_is_not_behavioral_parity": true,
+    "old_family_certifications_are_not_final_head_certifications": true,
+    "python_must_remain_independently_runnable": true,
+    "rust_must_not_invoke_python": true,
+    "hidden_fallback_forbidden": true,
+    "no_silent_fallback": true
+  }
+}

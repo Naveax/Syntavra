@@ -27,6 +27,7 @@ REQUIRED = [
     ROOT / "llms.txt",
     ROOT / "gemini-extension.json",
     ROOT / ".claude-plugin" / "marketplace.json",
+    ROOT / ".github" / "workflows" / "python-authority.yml",
     ROOT / "pyproject.toml",
     ROOT / "package.json",
     ROOT / "sdk" / "typescript" / "package.json",
@@ -100,12 +101,14 @@ REQUIRED = [
     ROOT / "integrations" / "vscode-syntavra" / "extension.js",
     ROOT / "integrations" / "vscode-syntavra" / "extension.test.mjs",
     ROOT / "release" / "publish-readiness.json",
+    ROOT / "contracts" / "python" / "python-authority-v1.json",
     ROOT / "syntavra_runtime" / "release_identity.py",
     ROOT / "syntavra_runtime" / "bundled_skill" / "SKILL.md",
     ROOT / "syntavra_runtime" / "bundled_skill" / "hosts.json",
     ROOT / "tests" / "runtime" / "test_syntavra_unified_platform.py",
     ROOT / "tests" / "runtime" / "test_token_saver_unification_v001.py",
     ROOT / "tests" / "runtime" / "test_complete_competitive_features_v001.py",
+    ROOT / "tests" / "runtime" / "test_python_authority.py",
     SKILL / "SKILL.md",
     SKILL / "data" / "platforms.json",
     SKILL / "scripts" / "platforms.py",
@@ -114,6 +117,7 @@ REQUIRED = [
     ROOT / "tools" / "validate_release.py",
     ROOT / "tools" / "validate_competitive_gap_closure.py",
     ROOT / "tools" / "check_repository_hygiene.py",
+    ROOT / "tools" / "certify_python_authority.py",
 ]
 
 ACTUAL_SECRET = re.compile(r"(?<![A-Za-z0-9_])(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,})")
@@ -210,6 +214,25 @@ def _verify_manifest() -> tuple[bool, str]:
     failures.extend(f"unlisted:{relative}" for relative in sorted(expected - present))
     failures.extend(f"unexpected:{relative}" for relative in sorted(present - expected))
     return not failures, ", ".join(failures[:30])
+
+
+def _python_authority_check() -> tuple[bool, str]:
+    try:
+        from tools.certify_python_authority import certify
+
+        report = certify(ROOT)
+        summary = {
+            "claim": report.get("claim"),
+            "exact_head": report.get("exact_head"),
+            "python_public_routes": (report.get("python") or {}).get("public_route_count"),
+            "rust_implemented_native_routes": (report.get("rust") or {}).get("implemented_native_routes"),
+            "rust_promoted_native_routes": (report.get("rust") or {}).get("production_promoted_routes"),
+            "rust_remaining_routes": (report.get("rust") or {}).get("remaining_routes"),
+            "rust_resume_allowed": (report.get("rust") or {}).get("resume_allowed"),
+        }
+        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
 
 
 def main() -> int:
@@ -321,6 +344,9 @@ def main() -> int:
     from tools.check_repository_hygiene import check_repository
     hygiene = check_repository()
     checks.append(("repository_hygiene", bool(hygiene.get("ok")), ", ".join(hygiene.get("failures", []))))
+
+    authority_ok, authority_detail = _python_authority_check()
+    checks.append(("python_authority", authority_ok, authority_detail))
 
     result = {
         "ok": all(passed for _, passed, _ in checks),

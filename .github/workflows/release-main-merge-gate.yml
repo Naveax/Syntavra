@@ -50,8 +50,10 @@ jobs:
           python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
           python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
           python -m unittest tests.runtime.test_python_publication_registry_reference -v
+          python -m unittest tests.runtime.test_python_authority -v
           python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
           python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
+          python tools/certify_python_authority.py --out /tmp/python-authority.json
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
           python tools/refresh_manifest.py --check
 
