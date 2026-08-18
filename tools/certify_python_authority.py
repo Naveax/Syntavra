@@ -69,6 +69,7 @@ def certify(repo: Path) -> dict[str, Any]:
     _assert_no_route_identity_copy(contract)
 
     authority = contract.get("authority") or {}
+    enforcement = contract.get("enforcement") or {}
     expected = contract.get("expected") or {}
     rust_freeze = contract.get("rust_freeze") or {}
     policy = contract.get("policy") or {}
@@ -84,8 +85,41 @@ def certify(repo: Path) -> dict[str, Any]:
     }
     _require(authority == expected_authorities, f"Python authority source map drift: {authority!r}")
 
+    expected_enforcement = {
+        "repository_validator": "tools/validate.py",
+        "exact_head_workflow": ".github/workflows/python-authority.yml",
+        "release_main_gate": ".github/workflows/release-main-merge-gate.yml",
+        "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py",
+    }
+    _require(enforcement == expected_enforcement, f"Python authority enforcement map drift: {enforcement!r}")
+
     exact_head = _head(repo)
     _require(bool(exact_head), "unable to resolve exact git HEAD")
+
+    validator_text = (repo / enforcement["repository_validator"]).read_text(encoding="utf-8")
+    _require("def _python_authority_check()" in validator_text, "repository validator lost Python authority helper")
+    _require(
+        'checks.append(("python_authority", authority_ok, authority_detail))' in validator_text,
+        "repository validator no longer gates Python authority",
+    )
+
+    workflow_text = (repo / enforcement["exact_head_workflow"]).read_text(encoding="utf-8")
+    _require(
+        "group: python-authority-${{ github.event.pull_request.number || github.ref }}" in workflow_text,
+        "Python authority workflow concurrency is not PR/ref scoped",
+    )
+    _require("tests.runtime.test_python_authority" in workflow_text, "Python authority workflow lost regression suite")
+    _require("tools/certify_python_authority.py" in workflow_text, "Python authority workflow lost exact-head certifier")
+
+    release_gate_text = (repo / enforcement["release_main_gate"]).read_text(encoding="utf-8")
+    _require("tests.runtime.test_python_authority" in release_gate_text, "release-main gate lost Python authority regression")
+    _require("tools/certify_python_authority.py" in release_gate_text, "release-main gate lost Python authority certifier")
+
+    pin_policy_text = (repo / enforcement["immutable_action_pin_policy"]).read_text(encoding="utf-8")
+    _require(
+        '".github/workflows/python-authority.yml"' in pin_policy_text,
+        "immutable action pin policy does not cover Python authority workflow",
+    )
 
     # The canonical public-surface report describes implementation coverage, not
     # production promotion authority. Keeping these separate is the point of
@@ -189,6 +223,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "claim": contract["claim"],
         "exact_head": exact_head,
         "authority": authority,
+        "enforcement": enforcement,
         "python": {
             "feature_development_authority": True,
             "product_behavior_authority": True,
