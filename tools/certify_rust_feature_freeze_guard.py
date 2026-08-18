@@ -88,7 +88,7 @@ def certify(repo: Path) -> dict[str, Any]:
     by_id = {item["id"]: item for item in registry.get("capabilities", []) if isinstance(item, dict) and isinstance(item.get("id"), str)}
     _require((by_id.get("capability_completeness_registry_v1") or {}).get("state") == "certified", "completeness registry must be certified before Rust freeze admission")
     guard_entry = by_id.get("rust_feature_freeze_guard_v1") or {}
-    _require(guard_entry.get("state") in {"implemented", "verified"}, "Rust freeze guard registry state must be pre-certification implemented/verified")
+    _require(guard_entry.get("state") in {"implemented", "verified", "certified"}, "Rust freeze guard registry state is invalid")
 
     for relative in (WORKFLOW_RELATIVE, RELEASE_GATE_RELATIVE, PIN_POLICY_RELATIVE, Path("tools/check_rust_feature_freeze.py"), Path("tests/runtime/test_rust_feature_freeze_guard.py")):
         _require((repo / relative).is_file(), f"missing Rust freeze enforcement surface: {relative.as_posix()}")

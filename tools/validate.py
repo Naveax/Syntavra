@@ -102,6 +102,8 @@ REQUIRED = [
     ROOT / "integrations" / "vscode-syntavra" / "extension.test.mjs",
     ROOT / "release" / "publish-readiness.json",
     ROOT / "contracts" / "python" / "python-authority-v1.json",
+    ROOT / "contracts" / "python" / "universal-context-item-v1.json",
+    ROOT / "syntavra_runtime" / "universal_context_item.py",
     ROOT / "syntavra_runtime" / "release_identity.py",
     ROOT / "syntavra_runtime" / "bundled_skill" / "SKILL.md",
     ROOT / "syntavra_runtime" / "bundled_skill" / "hosts.json",
@@ -109,6 +111,7 @@ REQUIRED = [
     ROOT / "tests" / "runtime" / "test_token_saver_unification_v001.py",
     ROOT / "tests" / "runtime" / "test_complete_competitive_features_v001.py",
     ROOT / "tests" / "runtime" / "test_python_authority.py",
+    ROOT / "tests" / "runtime" / "test_universal_context_item.py",
     SKILL / "SKILL.md",
     SKILL / "data" / "platforms.json",
     SKILL / "scripts" / "platforms.py",
@@ -118,6 +121,8 @@ REQUIRED = [
     ROOT / "tools" / "validate_competitive_gap_closure.py",
     ROOT / "tools" / "check_repository_hygiene.py",
     ROOT / "tools" / "certify_python_authority.py",
+    ROOT / "tools" / "certify_universal_context_item.py",
+    ROOT / ".github" / "workflows" / "universal-context-item.yml",
 ]
 
 ACTUAL_SECRET = re.compile(r"(?<![A-Za-z0-9_])(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,})")
@@ -229,6 +234,25 @@ def _python_authority_check() -> tuple[bool, str]:
             "rust_promoted_native_routes": (report.get("rust") or {}).get("production_promoted_routes"),
             "rust_remaining_routes": (report.get("rust") or {}).get("remaining_routes"),
             "rust_resume_allowed": (report.get("rust") or {}).get("resume_allowed"),
+        }
+        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _universal_context_item_check() -> tuple[bool, str]:
+    try:
+        from tools.certify_universal_context_item import certify
+
+        report = certify(ROOT)
+        summary = {
+            "claim": report.get("claim"),
+            "exact_head": report.get("exact_head"),
+            "admission_ready": report.get("admission_ready"),
+            "roundtrip": (report.get("runtime") or {}).get("roundtrip"),
+            "tamper_fail_closed": (report.get("runtime") or {}).get("tamper_fail_closed"),
+            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),
+            "rust_resume_allowed": report.get("rust_resume_allowed"),
         }
         return bool(report.get("ok")), json.dumps(summary, sort_keys=True)
     except Exception as exc:
@@ -347,6 +371,9 @@ def main() -> int:
 
     authority_ok, authority_detail = _python_authority_check()
     checks.append(("python_authority", authority_ok, authority_detail))
+
+    universal_ok, universal_detail = _universal_context_item_check()
+    checks.append(("universal_context_item", universal_ok, universal_detail))
 
     result = {
         "ok": all(passed for _, passed, _ in checks),
