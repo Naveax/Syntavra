@@ -100,7 +100,7 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertGreater(report["uncertified_required_count"], 0)
         self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])
         self.assertNotIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
-        self.assertIn("universal_context_item_v1", report["uncertified_required"])
+        self.assertIn(report["current_milestone"], report["uncertified_required"])
 
     def test_certifier_rejects_foreign_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

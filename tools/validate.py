@@ -103,7 +103,9 @@ REQUIRED = [
     ROOT / "release" / "publish-readiness.json",
     ROOT / "contracts" / "python" / "python-authority-v1.json",
     ROOT / "contracts" / "python" / "universal-context-item-v1.json",
+    ROOT / "contracts" / "python" / "evidence-store-v2.json",
     ROOT / "syntavra_runtime" / "universal_context_item.py",
+    ROOT / "syntavra_runtime" / "evidence_store.py",
     ROOT / "syntavra_runtime" / "release_identity.py",
     ROOT / "syntavra_runtime" / "bundled_skill" / "SKILL.md",
     ROOT / "syntavra_runtime" / "bundled_skill" / "hosts.json",
@@ -112,6 +114,7 @@ REQUIRED = [
     ROOT / "tests" / "runtime" / "test_complete_competitive_features_v001.py",
     ROOT / "tests" / "runtime" / "test_python_authority.py",
     ROOT / "tests" / "runtime" / "test_universal_context_item.py",
+    ROOT / "tests" / "runtime" / "test_evidence_store_v2.py",
     SKILL / "SKILL.md",
     SKILL / "data" / "platforms.json",
     SKILL / "scripts" / "platforms.py",
@@ -122,7 +125,9 @@ REQUIRED = [
     ROOT / "tools" / "check_repository_hygiene.py",
     ROOT / "tools" / "certify_python_authority.py",
     ROOT / "tools" / "certify_universal_context_item.py",
+    ROOT / "tools" / "certify_evidence_store_v2.py",
     ROOT / ".github" / "workflows" / "universal-context-item.yml",
+    ROOT / ".github" / "workflows" / "evidence-store-v2.yml",
 ]
 
 ACTUAL_SECRET = re.compile(r"(?<![A-Za-z0-9_])(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,})")
@@ -259,6 +264,26 @@ def _universal_context_item_check() -> tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc}"
 
 
+def _evidence_store_v2_check() -> tuple[bool, str]:
+    try:
+        from tools.certify_evidence_store_v2 import certify
+
+        report = certify(ROOT)
+        summary = {
+            "claim": report.get("claim"),
+            "exact_head": report.get("exact_head"),
+            "admission_ready": report.get("admission_ready"),
+            "content_addressed_roundtrip": (report.get("runtime") or {}).get("content_addressed_roundtrip"),
+            "journal_chain": (report.get("runtime") or {}).get("journal_chain"),
+            "secret_reject_default": (report.get("runtime") or {}).get("secret_reject_default"),
+            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),
+            "rust_resume_allowed": report.get("rust_resume_allowed"),
+        }
+        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
 def main() -> int:
     checks: list[tuple[str, bool, str]] = []
     missing = [str(path.relative_to(ROOT)) for path in REQUIRED if not path.is_file()]
@@ -374,6 +399,9 @@ def main() -> int:
 
     universal_ok, universal_detail = _universal_context_item_check()
     checks.append(("universal_context_item", universal_ok, universal_detail))
+
+    evidence_ok, evidence_detail = _evidence_store_v2_check()
+    checks.append(("evidence_store_v2", evidence_ok, evidence_detail))
 
     result = {
         "ok": all(passed for _, passed, _ in checks),

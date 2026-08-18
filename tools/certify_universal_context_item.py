@@ -188,7 +188,6 @@ def certify(repo: Path) -> dict[str, Any]:
 
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
-    _require(completeness.get("current_milestone") == "universal_context_item_v1", "registry has not advanced to universal_context_item_v1")
     _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
     _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
 
@@ -206,7 +205,10 @@ def certify(repo: Path) -> dict[str, Any]:
     registry = _read_json(repo / REGISTRY_RELATIVE)
     by_id = {row["id"]: row for row in registry.get("capabilities", []) if isinstance(row, dict) and isinstance(row.get("id"), str)}
     _require((by_id.get("rust_feature_freeze_guard_v1") or {}).get("state") == "certified", "Rust freeze guard must be certified before Universal Context Item admission")
-    _require((by_id.get("universal_context_item_v1") or {}).get("state") in {"implemented", "verified"}, "Universal Context Item registry state must be pre-certification implemented/verified")
+    universal_state = (by_id.get("universal_context_item_v1") or {}).get("state")
+    _require(universal_state in {"implemented", "verified", "certified"}, "Universal Context Item registry state is invalid")
+    if universal_state != "certified":
+        _require(completeness.get("current_milestone") == "universal_context_item_v1", "registry has not advanced to Universal Context Item")
 
     return {
         "ok": True,
