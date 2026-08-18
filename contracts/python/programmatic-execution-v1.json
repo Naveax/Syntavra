@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "family": "programmatic-execution",
+  "phase": "python-first",
+  "claim": "PROGRAMMATIC_EXECUTION_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/programmatic_execution.py",
+  "execution_plane": "ProgrammaticExecutionPlane",
+  "function_registry": "ProgrammaticFunctionRegistry",
+  "artifact_authority": "syntavra_runtime/artifacts.py:ArtifactStore",
+  "operations": [
+    "call",
+    "map",
+    "parallel",
+    "filter",
+    "reduce"
+  ],
+  "function_policy": {
+    "explicit_registration_required": true,
+    "dynamic_import_forbidden": true,
+    "eval_forbidden": true,
+    "implicit_discovery_forbidden": true,
+    "parallel_requires_pure_callable": true,
+    "unknown_function_fails_closed": true
+  },
+  "result_policy": {
+    "canonical_json_required": true,
+    "sha256_result_identity": true,
+    "bounded_inline_result": true,
+    "large_result_externalized": true,
+    "existing_artifact_store_required": true,
+    "parallel_result_order_matches_input": true,
+    "artifact_exact_recovery_required": true,
+    "preview_bounded": true,
+    "no_silent_fallback": true
+  },
+  "receipt_policy": {
+    "content_addressed_receipt_identity": true,
+    "step_digest_required": true,
+    "result_digest_required_on_success": true,
+    "error_type_required_on_failure": true,
+    "error_message_bounded": true,
+    "secret_redaction_required": true,
+    "duration_is_observational_not_identity": true
+  },
+  "limits": {
+    "max_workers_hard_limit": 64,
+    "item_limit_required": true,
+    "inline_byte_limit_required": true,
+    "preview_byte_limit_required": true
+  },
+  "integration": {
+    "execution_sandbox_preserved": true,
+    "autonomous_agent_preserved": true,
+    "parallel_database_forbidden": true,
+    "public_cli_route_added": false,
+    "rust_promotion_credit": false
+  }
+}
