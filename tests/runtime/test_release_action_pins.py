@@ -17,6 +17,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/python-capability-completeness.yml",
     ".github/workflows/rust-feature-freeze-guard.yml",
     ".github/workflows/universal-context-item.yml",
+    ".github/workflows/evidence-store-v2.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
