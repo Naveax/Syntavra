@@ -17,6 +17,7 @@
     "public_routes": 245,
     "python_execution_owners": 245,
     "rust_implemented_native_routes": 245,
+    "rust_implementation_missing_routes": 0,
     "rust_promoted_native_routes": 174,
     "remaining_routes": 71,
     "remaining_owned_routes": 71,
