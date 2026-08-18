@@ -52,6 +52,10 @@ jobs:
           assert report['ok'] is True, report
           assert report['claim'] == 'PYTHON_FEATURE_DEVELOPMENT_AUTHORITY'
           assert report['exact_head'] == head, (report['exact_head'], head)
+          assert report['enforcement']['repository_validator'] == 'tools/validate.py'
+          assert report['enforcement']['exact_head_workflow'] == '.github/workflows/python-authority.yml'
+          assert report['enforcement']['release_main_gate'] == '.github/workflows/release-main-merge-gate.yml'
+          assert report['enforcement']['immutable_action_pin_policy'] == 'tests/runtime/test_release_action_pins.py'
           assert report['python']['feature_development_authority'] is True
           assert report['python']['product_behavior_authority'] is True
           assert report['python']['public_route_count'] == 245
@@ -71,6 +75,8 @@ jobs:
       - name: Enforce clean exact-head repository
         if: always()
         run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
           git diff --check
           status="$(git status --porcelain --untracked-files=all)"
           printf '%s\n' "$status"
