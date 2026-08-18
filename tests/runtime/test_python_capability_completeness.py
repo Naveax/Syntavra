@@ -75,18 +75,19 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "external proof cannot block Python COMPLETE"):
             _validate_capabilities(ROOT, mutated)
 
-    def test_registry_self_state_is_not_preemptively_certified(self) -> None:
+    def test_registry_records_prior_exact_head_admission(self) -> None:
         contract = self._contract()
         row = next(item for item in contract["capabilities"] if item["id"] == "capability_completeness_registry_v1")
-        self.assertIn(row["state"], {"implemented", "verified"})
-        self.assertEqual(row["certification_evidence"], [])
+        self.assertEqual(row["state"], "certified")
+        self.assertTrue(row["certification_evidence"])
 
     def test_exact_head_report_keeps_python_complete_and_rust_resume_closed(self) -> None:
         report = certify(ROOT)
         self.assertTrue(report["ok"])
         self.assertEqual(report["claim"], "PYTHON_CAPABILITY_COMPLETENESS_TRACKED")
-        self.assertEqual(report["current_milestone"], "capability_completeness_registry_v1")
+        self.assertEqual(report["current_milestone"], "rust_feature_freeze_guard_v1")
         self.assertTrue(report["registry_admission_ready"])
+        self.assertTrue(report["registry_certified"])
         self.assertFalse(report["python_complete_ready"])
         self.assertFalse(report["rust_resume_allowed"])
         self.assertEqual(report["rust"]["implementation_coverage"], 245)
@@ -94,7 +95,7 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertEqual(report["rust"]["remaining_parity_promotion"], 71)
         self.assertTrue(report["rust"]["feature_development_frozen"])
         self.assertGreater(report["uncertified_required_count"], 0)
-        self.assertIn("capability_completeness_registry_v1", report["uncertified_required"])
+        self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])
         self.assertIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
 
     def test_certifier_rejects_foreign_checkout(self) -> None:

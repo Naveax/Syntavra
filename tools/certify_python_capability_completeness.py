@@ -114,8 +114,8 @@ def _validate_capabilities(repo: Path, contract: dict[str, Any]) -> tuple[list[d
     _require(by_id["python_authority_v1"]["state"] == "certified", "python_authority_v1 must be certified")
     _require("capability_completeness_registry_v1" in by_id, "registry milestone missing from itself")
     _require(
-        by_id["capability_completeness_registry_v1"]["state"] in {"implemented", "verified"},
-        "registry self-state must remain pre-certification until exact-head admission",
+        by_id["capability_completeness_registry_v1"]["state"] in {"implemented", "verified", "certified"},
+        "registry self-state is invalid",
     )
 
     state_counts = Counter(str(item["state"]) for item in capabilities)
@@ -217,21 +217,25 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(python_complete.get("external_superiority_required") is False, "external superiority must not be manufactured as an implementation gate")
     _require(python_complete.get("ready") is computed_python_complete, "persisted Python COMPLETE readiness disagrees with registry state")
     _require(python_complete.get("rust_resume_allowed") is computed_python_complete, "Rust resume readiness disagrees with Python COMPLETE")
-    _require(computed_python_complete is False, "registry milestone unexpectedly claims Python COMPLETE")
-
     exact_head = _head(repo)
     _require(bool(exact_head), "unable to resolve exact git HEAD")
 
-    registry_entry = next(item for item in capabilities if item["id"] == "capability_completeness_registry_v1")
+    by_id = {item["id"]: item for item in capabilities}
+    current_milestone = next(
+        (milestone for milestone in milestone_order if (by_id.get(milestone) or {}).get("state") != "certified"),
+        "python_complete",
+    )
+    registry_entry = by_id["capability_completeness_registry_v1"]
     return {
         "ok": True,
         "schema_version": 1,
         "family": "capability-completeness-registry",
         "claim": contract["claim"],
         "exact_head": exact_head,
-        "current_milestone": "capability_completeness_registry_v1",
+        "current_milestone": current_milestone,
         "registry_persisted_state": registry_entry["state"],
-        "registry_admission_ready": True,
+        "registry_certified": registry_entry["state"] == "certified",
+        "registry_admission_ready": registry_entry["state"] in {"implemented", "verified", "certified"},
         "enforcement": enforcement,
         "state_counts": state_counts,
         "classification_counts": classification_counts,

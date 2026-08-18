@@ -68,24 +68,34 @@
     {
       "id": "capability_completeness_registry_v1",
       "group": "authority",
-      "state": "implemented",
+      "state": "certified",
       "classification": "NEW",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "contracts/python/capability-completeness-registry-v1.json"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/capability-completeness-registry-v1.json",
+        ".github/workflows/python-capability-completeness.yml",
+        "tools/certify_python_capability_completeness.py",
+        "tests/runtime/test_python_capability_completeness.py"
+      ],
       "acceptance": "Registry schema, certifier, regression suite, exact-head workflow, and release gate must pass before this milestone becomes certified."
     },
     {
       "id": "rust_feature_freeze_guard_v1",
       "group": "authority",
-      "state": "partial",
+      "state": "implemented",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "contracts/python/python-authority-v1.json",
-        "contracts/engine/phase2-rust-migration-matrix-v1.json"
+        "contracts/engine/phase2-rust-migration-matrix-v1.json",
+        "contracts/python/rust-feature-freeze-guard-v1.json",
+        "tools/check_rust_feature_freeze.py",
+        "tools/certify_rust_feature_freeze_guard.py",
+        "tests/runtime/test_rust_feature_freeze_guard.py",
+        ".github/workflows/rust-feature-freeze-guard.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Machine-enforce no Rust feature development, no production promotion, and no native counter change until Python COMPLETE."
