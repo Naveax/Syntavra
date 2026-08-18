@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "family": "unified-context-namespace",
+  "phase": "python-first",
+  "claim": "UNIFIED_CONTEXT_NAMESPACE_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/context_namespace.py",
+  "content_authority": "syntavra_runtime/universal_context_item.py:UniversalContextItem",
+  "scheme": "syntavra",
+  "roots": [
+    "repo",
+    "evidence",
+    "memory",
+    "task",
+    "tool",
+    "artifact",
+    "context"
+  ],
+  "levels": {
+    "L0": "identity and navigation only; exact payload and selection reason are not disclosed",
+    "L1": "reason, provenance, trust, taint, freshness and recovery availability without exact payload",
+    "L2": "bounded structural shape and metadata keys without scalar payload disclosure",
+    "L3": "integrity-checked exact UniversalContextItem payload and recovery handles"
+  },
+  "progressive_repository_descent": [
+    "repo",
+    "directory",
+    "file",
+    "symbol",
+    "lines"
+  ],
+  "namespace_policy": {
+    "canonical_uri_required": true,
+    "parent_traversal_forbidden": true,
+    "query_fragment_credentials_port_forbidden": true,
+    "registered_parent_required": true,
+    "duplicate_uri_fails_closed": true,
+    "resolver_backed_identity_required": true,
+    "resolver_identity_drift_fails_closed": true,
+    "universal_item_integrity_required_on_every_access": true,
+    "parallel_persistent_store_forbidden": true,
+    "public_cli_route_added": false
+  },
+  "disclosure_policy": {
+    "l0_exact_payload_forbidden": true,
+    "l1_exact_payload_forbidden": true,
+    "l2_scalar_payload_forbidden": true,
+    "l2_structure_bounded": true,
+    "l3_exact_payload_requires_integrity": true,
+    "recovery_availability_explicit": true,
+    "browser_child_count_bounded": true
+  },
+  "explanation_policy": {
+    "why_required": true,
+    "why_payload_free": true,
+    "selection_reason_required": true,
+    "provenance_required": true,
+    "trust_taint_freshness_required": true
+  },
+  "trajectory_policy": {
+    "record_browse": true,
+    "record_why": true,
+    "record_reveal": true,
+    "sequence_monotonic": true,
+    "operation_receipts_content_addressed": true,
+    "trajectory_receipt_content_addressed": true,
+    "timestamps_forbidden_from_deterministic_identity": true
+  },
+  "rust": {
+    "feature_development_frozen": true,
+    "production_promoted": 174,
+    "remaining_parity_promotion": 71,
+    "rust_resume_allowed": false
+  },
+  "claim_boundary": "This contract admits only the Python unified syntavra:// context namespace, progressive L0-L3 disclosure, why/reveal behavior, and retrieval trajectory receipts. It does not claim Multi-Graph Retrieval, Adaptive Context Policy, Python COMPLETE, external superiority, or Rust parity/promotion."
+}
