@@ -109,7 +109,7 @@
     {
       "id": "universal_context_item_v1",
       "group": "evidence-context",
-      "state": "implemented",
+      "state": "certified",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -121,17 +121,29 @@
         "tests/runtime/test_universal_context_item.py",
         ".github/workflows/universal-context-item.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/universal-context-item-v1.json",
+        "syntavra_runtime/universal_context_item.py",
+        "tools/certify_universal_context_item.py",
+        "tests/runtime/test_universal_context_item.py",
+        ".github/workflows/universal-context-item.yml"
+      ],
       "acceptance": "Unify context/evidence identity, provenance, trust, taint, freshness, recovery handles, and deterministic serialization behind one contract."
     },
     {
       "id": "evidence_store_v2",
       "group": "evidence-context",
-      "state": "partial",
+      "state": "implemented",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
-        "syntavra_runtime/runtime_evidence.py"
+        "syntavra_runtime/runtime_evidence.py",
+        "syntavra_runtime/universal_context_item.py",
+        "syntavra_runtime/evidence_store.py",
+        "contracts/python/evidence-store-v2.json",
+        "tools/certify_evidence_store_v2.py",
+        "tests/runtime/test_evidence_store_v2.py",
+        ".github/workflows/evidence-store-v2.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Content-addressed evidence, lineage, mutation journal, retention, trust/taint, recovery integrity, and secret-aware storage policy."

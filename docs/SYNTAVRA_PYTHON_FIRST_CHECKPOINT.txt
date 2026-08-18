@@ -130,3 +130,96 @@ BLOCKERS:
 NEXT EXACT TASK:
 - Finish and certify rust_feature_freeze_guard_v1.
 - After admission, advance to universal_context_item_v1.
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — UNIVERSAL CONTEXT ITEM ADMITTED
+======================================================================
+
+CURRENT ADMITTED MAIN:
+dece5dfd99f831e1046ecedf885bed0e9a0f3bca
+
+ADMITTED IMPLEMENTATION:
+universal_context_item_v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — universal_context_item_v1 is certified; evidence_store_v2 is next.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.
+
+COMPLETED:
+- UniversalContextItem canonical additive envelope implemented.
+- Existing ContextPackItem, EvidenceNode and EvidenceEdge field/serialization schemas preserved.
+- deterministic content hash and stable item identity implemented.
+- provenance, trust, taint, freshness, parent lineage and recovery handles implemented.
+- additive adapters implemented for ContextPackItem, EvidenceNode and EvidenceEdge.
+- tamper-fail-closed roundtrip/integrity semantics implemented.
+- Universal Context Item exact-head workflow PASS on PR #138.
+- Python Capability Completeness PASS on PR #138.
+- Rust Feature Freeze Guard PASS on PR #138.
+- Python Authority PASS on PR #138.
+- Release Main Merge Gate PASS on PR #138.
+- Release Package Provenance PASS on PR #138.
+- canonical candidate MANIFEST.sha256 matched tracked manifest byte-for-byte before merge.
+- PR #138 merged as dece5dfd99f831e1046ecedf885bed0e9a0f3bca.
+
+VERIFIED DESIGN BOUNDARY:
+- trust/freshness evaluation does not alter stable evidence identity.
+- content/provenance/recovery changes alter stable identity.
+- legacy context/evidence serialization remains unchanged.
+- Python COMPLETE remains false.
+- Rust resume remains false.
+
+NEXT EXACT TASK:
+- Implement and certify evidence_store_v2.
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — EVIDENCE STORE V2 ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+dece5dfd99f831e1046ecedf885bed0e9a0f3bca
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/evidence-store-v2
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — evidence_store_v2 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.
+
+CURRENT IMPLEMENTATION:
+- EvidenceStoreV2 SQLite/WAL/FULL-sync store added using the existing platform database primitive.
+- UniversalContextItem is the canonical storage identity and envelope.
+- stable evidence payload is immutable; trust/freshness are journaled evaluation layers.
+- first-class DERIVED_FROM lineage added with external-parent support.
+- hash-chained mutation journal added.
+- explicit expiry, pin/unpin and expired-unpinned GC added.
+- recovery handle integrity proof surface added.
+- SecretRedactor-backed default reject policy added; silent at-rest redaction is forbidden and constructor flags cannot weaken the policy.
+- Evidence Store v2 contract, regression suite, certifier and exact-head workflow added.
+- Release Main, repository validator and immutable action-pin policy are bound to Evidence Store v2.
+- legacy RuntimeEvidenceGraph node/edge field schemas remain unchanged.
+
+VERIFIED:
+- Evidence Store v2 exact-head runtime regression PASS on draft PR #139 pre-seal head.
+- Evidence Store v2 exact-head certificate PASS on draft PR #139 pre-seal head.
+- clean-tree enforcement PASS on the same pre-seal head.
+- secret-policy constructor-bypass hardening applied after static security review.
+
+VERIFIED DESIGN BOUNDARY:
+- trust/freshness updates do not create a new stable evidence identity.
+- content/provenance/recovery mutation requires a new UniversalContextItem identity.
+- secret-bearing exact evidence is rejected before persistence by default.
+- pruning is explicit, only expired+unpinned, and tombstoned in the journal before deletion.
+- Python COMPLETE remains false.
+- Rust resume remains false.
+
+BLOCKERS:
+- exact final-tree MANIFEST.sha256 still needs canonical seal.
+- final exact-head scoped CI and merge still required before Evidence Store v2 is admitted as certified.
+
+NEXT EXACT TASK:
+- generate exact-tree candidate manifest, apply tracked manifest byte-for-byte, run final CI, merge PR #139.
+- after admission advance to typed_context_object_store_v1.

@@ -1,0 +1,79 @@
+{
+  "schema_version": 2,
+  "family": "evidence-store",
+  "phase": "python-first",
+  "claim": "EVIDENCE_STORE_V2",
+  "strict": true,
+  "runtime": "syntavra_runtime/evidence_store.py",
+  "canonical_item": "syntavra_runtime/universal_context_item.py:UniversalContextItem",
+  "storage": {
+    "backend": "sqlite",
+    "wal": true,
+    "synchronous_full": true,
+    "content_addressed_by_universal_item_id": true,
+    "stable_evidence_immutable": true,
+    "trust_freshness_evaluation_mutable": true
+  },
+  "tables": [
+    "evidence_items",
+    "evidence_lineage",
+    "evidence_journal"
+  ],
+  "lineage": {
+    "relation": "DERIVED_FROM",
+    "parent_may_be_external": true,
+    "child_must_exist": true,
+    "duplicate_edges_deduplicated": true
+  },
+  "journal": {
+    "append_only": true,
+    "hash_chained": true,
+    "previous_hash_required_after_first_event": true,
+    "tamper_detection_required": true,
+    "actions": [
+      "put-new",
+      "observe-existing",
+      "evaluation-update",
+      "pin",
+      "unpin",
+      "retention-update",
+      "prune-expired"
+    ]
+  },
+  "retention": {
+    "explicit_expiry": true,
+    "pinned_items_survive_gc": true,
+    "only_expired_unpinned_items_are_prunable": true,
+    "prune_is_journaled_before_delete": true
+  },
+  "security": {
+    "default_secret_policy": "reject",
+    "secret_detector": "syntavra_runtime.secret_redaction.SecretRedactor",
+    "silent_redaction_forbidden": true,
+    "pre_redacted_items_may_be_stored": true,
+    "secret_scan_receipt_journaled": true
+  },
+  "integrity": {
+    "universal_item_integrity_required_before_put": true,
+    "universal_item_integrity_required_after_get": true,
+    "stable_projection_collision_fails_closed": true,
+    "recovery_handle_integrity_shape_verified": true,
+    "journal_chain_verifiable": true
+  },
+  "compatibility": {
+    "runtime_evidence_graph_retained": true,
+    "evidence_node_schema_unchanged": true,
+    "evidence_edge_schema_unchanged": true,
+    "universal_context_item_is_storage_envelope": true,
+    "no_duplicate_route_identity": true
+  },
+  "policy": {
+    "no_silent_fallback": true,
+    "no_secret_bearing_exact_evidence_at_rest_by_default": true,
+    "trust_updates_do_not_change_stable_item_identity": true,
+    "content_or_provenance_change_requires_new_item_identity": true,
+    "lineage_is_first_class": true,
+    "retention_is_explicit": true,
+    "mutation_journal_is_first_class": true
+  }
+}
