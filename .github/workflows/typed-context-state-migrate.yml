@@ -1,0 +1,160 @@
+name: Typed Context Object Store State Migration
+
+on:
+  push:
+    branches:
+      - agent/typed-context-object-store-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: typed-context-object-store-state-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/typed-context-object-store-v1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Apply exact Typed Context transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry_path = Path('contracts/python/capability-completeness-registry-v1.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          rows = {row['id']: row for row in registry['capabilities']}
+
+          evidence = rows['evidence_store_v2']
+          assert evidence['state'] == 'implemented', evidence
+          evidence['state'] = 'certified'
+          evidence['certification_evidence'] = [
+              'contracts/python/evidence-store-v2.json',
+              'syntavra_runtime/evidence_store.py',
+              'tools/certify_evidence_store_v2.py',
+              'tests/runtime/test_evidence_store_v2.py',
+              '.github/workflows/evidence-store-v2.yml',
+          ]
+
+          typed = rows['typed_context_object_store_v1']
+          assert typed['state'] == 'planned', typed
+          typed['state'] = 'implemented'
+          typed['implementation_evidence'] = [
+              'syntavra_runtime/typed_context_objects.py',
+              'contracts/python/typed-context-object-store-v1.json',
+              'tools/certify_typed_context_object_store.py',
+              'tests/runtime/test_typed_context_object_store.py',
+              '.github/workflows/typed-context-object-store.yml',
+              'syntavra_runtime/universal_context_item.py',
+              'syntavra_runtime/evidence_store.py',
+          ]
+          typed['certification_evidence'] = []
+          registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          evidence_cert_path = Path('tools/certify_evidence_store_v2.py')
+          cert = evidence_cert_path.read_text(encoding='utf-8')
+          old = '''    _require(completeness.get("current_milestone") == "evidence_store_v2", "registry has not advanced to evidence_store_v2")\n    _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")\n'''
+          new = '''    _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")\n'''
+          assert cert.count(old) == 1, cert.count(old)
+          cert = cert.replace(old, new, 1)
+          old = '''    _require((by_id.get("evidence_store_v2") or {}).get("state") in {"implemented", "verified"}, "Evidence Store registry state must be pre-certification implemented/verified")\n'''
+          new = '''    evidence_state = (by_id.get("evidence_store_v2") or {}).get("state")\n    _require(evidence_state in {"implemented", "verified", "certified"}, "Evidence Store registry state is invalid")\n    if evidence_state != "certified":\n        _require(completeness.get("current_milestone") == "evidence_store_v2", "registry has not advanced to Evidence Store v2")\n'''
+          assert cert.count(old) == 1, cert.count(old)
+          cert = cert.replace(old, new, 1)
+          evidence_cert_path.write_text(cert, encoding='utf-8')
+
+          pin_path = Path('tests/runtime/test_release_action_pins.py')
+          pin = pin_path.read_text(encoding='utf-8')
+          old = '    ".github/workflows/evidence-store-v2.yml",\n)'
+          new = '    ".github/workflows/evidence-store-v2.yml",\n    ".github/workflows/typed-context-object-store.yml",\n)'
+          assert pin.count(old) == 1, pin.count(old)
+          pin_path.write_text(pin.replace(old, new, 1), encoding='utf-8')
+
+          release_path = Path('.github/workflows/release-main-merge-gate.yml')
+          release = release_path.read_text(encoding='utf-8')
+          old = '''          python -m unittest tests.runtime.test_evidence_store_v2 -v\n          python tools/certify_python_publication_registry_reference.py'''
+          new = '''          python -m unittest tests.runtime.test_evidence_store_v2 -v\n          python -m unittest tests.runtime.test_typed_context_object_store -v\n          python tools/certify_python_publication_registry_reference.py'''
+          assert release.count(old) == 1, release.count(old)
+          release = release.replace(old, new, 1)
+          old = '''          python tools/certify_evidence_store_v2.py --out /tmp/evidence-store-v2.json\n          python tools/check_rust_feature_freeze.py'''
+          new = '''          python tools/certify_evidence_store_v2.py --out /tmp/evidence-store-v2.json\n          python tools/certify_typed_context_object_store.py --out /tmp/typed-context-object-store.json\n          python tools/check_rust_feature_freeze.py'''
+          assert release.count(old) == 1, release.count(old)
+          release_path.write_text(release.replace(old, new, 1), encoding='utf-8')
+
+          validate_path = Path('tools/validate.py')
+          validate = validate_path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  '    ROOT / "contracts" / "python" / "evidence-store-v2.json",\n    ROOT / "syntavra_runtime" / "universal_context_item.py",',
+                  '    ROOT / "contracts" / "python" / "evidence-store-v2.json",\n    ROOT / "contracts" / "python" / "typed-context-object-store-v1.json",\n    ROOT / "syntavra_runtime" / "universal_context_item.py",',
+              ),
+              (
+                  '    ROOT / "syntavra_runtime" / "evidence_store.py",\n    ROOT / "syntavra_runtime" / "release_identity.py",',
+                  '    ROOT / "syntavra_runtime" / "evidence_store.py",\n    ROOT / "syntavra_runtime" / "typed_context_objects.py",\n    ROOT / "syntavra_runtime" / "release_identity.py",',
+              ),
+              (
+                  '    ROOT / "tests" / "runtime" / "test_evidence_store_v2.py",\n    SKILL / "SKILL.md",',
+                  '    ROOT / "tests" / "runtime" / "test_evidence_store_v2.py",\n    ROOT / "tests" / "runtime" / "test_typed_context_object_store.py",\n    SKILL / "SKILL.md",',
+              ),
+              (
+                  '    ROOT / "tools" / "certify_evidence_store_v2.py",\n    ROOT / ".github" / "workflows" / "universal-context-item.yml",',
+                  '    ROOT / "tools" / "certify_evidence_store_v2.py",\n    ROOT / "tools" / "certify_typed_context_object_store.py",\n    ROOT / ".github" / "workflows" / "universal-context-item.yml",',
+              ),
+              (
+                  '    ROOT / ".github" / "workflows" / "evidence-store-v2.yml",\n]',
+                  '    ROOT / ".github" / "workflows" / "evidence-store-v2.yml",\n    ROOT / ".github" / "workflows" / "typed-context-object-store.yml",\n]',
+              ),
+              (
+                  '\n\ndef main() -> int:\n',
+                  '''\n\ndef _typed_context_object_store_check() -> tuple[bool, str]:\n    try:\n        from tools.certify_typed_context_object_store import certify\n\n        report = certify(ROOT)\n        summary = {\n            "claim": report.get("claim"),\n            "exact_head": report.get("exact_head"),\n            "admission_ready": report.get("admission_ready"),\n            "declared_object_types": (report.get("runtime") or {}).get("declared_object_types"),\n            "all_types_roundtrip": (report.get("runtime") or {}).get("all_types_roundtrip"),\n            "evidence_store_persistence": (report.get("runtime") or {}).get("all_types_persist_via_evidence_store"),\n            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),\n            "rust_resume_allowed": report.get("rust_resume_allowed"),\n        }\n        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)\n    except Exception as exc:\n        return False, f"{type(exc).__name__}: {exc}"\n\n\ndef main() -> int:\n''',
+              ),
+              (
+                  '    evidence_ok, evidence_detail = _evidence_store_v2_check()\n    checks.append(("evidence_store_v2", evidence_ok, evidence_detail))\n\n    result = {',
+                  '    evidence_ok, evidence_detail = _evidence_store_v2_check()\n    checks.append(("evidence_store_v2", evidence_ok, evidence_detail))\n\n    typed_ok, typed_detail = _typed_context_object_store_check()\n    checks.append(("typed_context_object_store", typed_ok, typed_detail))\n\n    result = {',
+              ),
+          ]
+          for old, new in replacements:
+              count = validate.count(old)
+              assert count == 1, (old[:100], count)
+              validate = validate.replace(old, new, 1)
+          validate_path.write_text(validate, encoding='utf-8')
+          PY
+
+          rm .github/workflows/typed-context-state-migrate.yml
+          python -m py_compile \
+            syntavra_runtime/typed_context_objects.py \
+            tools/certify_typed_context_object_store.py \
+            tools/certify_evidence_store_v2.py \
+            tools/validate.py
+          git diff --check
+
+      - name: Commit Typed Context state transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            contracts/python/capability-completeness-registry-v1.json \
+            tools/certify_evidence_store_v2.py \
+            tests/runtime/test_release_action_pins.py \
+            .github/workflows/release-main-merge-gate.yml \
+            tools/validate.py \
+            .github/workflows/typed-context-state-migrate.yml
+          git commit -m "Advance registry to Typed Context Object Store milestone"
+          git push origin HEAD:agent/typed-context-object-store-v1
