@@ -19,6 +19,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/universal-context-item.yml",
     ".github/workflows/evidence-store-v2.yml",
     ".github/workflows/typed-context-object-store.yml",
+    ".github/workflows/programmatic-execution.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",

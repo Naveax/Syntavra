@@ -267,3 +267,44 @@ NEXT EXACT TASK:
 - seal MANIFEST.sha256 from the exact final branch tree.
 - run final exact-head CI for PR #140.
 - after admission advance to programmatic_execution_v1.
+
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — PROGRAMMATIC EXECUTION ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+97546e8a9db34afc308a7a5fa2cc7d604b0b9048
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/programmatic-execution-v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — typed_context_object_store_v1 is admitted; programmatic_execution_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.
+
+CURRENT IMPLEMENTATION:
+- explicit ProgrammaticFunctionRegistry added; no eval, dynamic import, or implicit callable discovery.
+- typed call/map/parallel/filter/reduce execution added.
+- parallel execution is ordered and requires a callable registered as pure.
+- canonical JSON result identity and content-addressed receipts added.
+- small results remain bounded inline; large results externalize to the existing ArtifactStore.
+- artifact references can feed later programmatic calls with exact recovery verification.
+- item, worker, inline-result, preview, and error-message bounds are explicit.
+- failure receipts redact secret-like values.
+- existing execution sandbox and autonomous agent surfaces remain intact.
+- Programmatic Execution contract, regression suite, certifier and exact-head workflow added.
+
+VERIFIED PRE-ADMISSION BOUNDARY:
+- Typed Context Object Store admitted through PR #140 at main 97546e8a9db34afc308a7a5fa2cc7d604b0b9048.
+- Typed Context registry state advances to certified on this milestone branch.
+- Programmatic Execution grants no Rust promotion credit and creates no parallel database.
+- Python COMPLETE remains false; Rust resume remains false.
+
+NEXT EXACT TASK:
+- run Programmatic Execution branch smoke and exact-head certifier.
+- seal MANIFEST.sha256 from the exact final tree.
+- pass Release Main, Package Provenance, Python Capability Completeness, Rust Freeze and Programmatic Execution exact-head gates.
+- merge, then advance to deferred_tool_discovery_v1.

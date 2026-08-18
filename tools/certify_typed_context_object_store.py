@@ -194,7 +194,6 @@ def certify(repo: Path) -> dict[str, Any]:
 
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
-    _require(completeness.get("current_milestone") == "typed_context_object_store_v1", "registry has not advanced to typed_context_object_store_v1")
     _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
     _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
 
@@ -209,7 +208,10 @@ def certify(repo: Path) -> dict[str, Any]:
     registry = _read_json(repo / REGISTRY_RELATIVE)
     by_id = {row["id"]: row for row in registry.get("capabilities", []) if isinstance(row, dict) and isinstance(row.get("id"), str)}
     _require((by_id.get("evidence_store_v2") or {}).get("state") == "certified", "Evidence Store must be certified before Typed Context admission")
-    _require((by_id.get("typed_context_object_store_v1") or {}).get("state") in {"implemented", "verified"}, "Typed Context registry state must be pre-certification implemented/verified")
+    typed_state = (by_id.get("typed_context_object_store_v1") or {}).get("state")
+    _require(typed_state in {"implemented", "verified", "certified"}, "Typed Context registry state is invalid")
+    if typed_state != "certified":
+        _require(completeness.get("current_milestone") == "typed_context_object_store_v1", "registry has not advanced to Typed Context Object Store v1")
 
     runtime = _runtime_smoke()
     enforcement = _validate_enforcement(repo)

@@ -157,7 +157,7 @@
     {
       "id": "typed_context_object_store_v1",
       "group": "evidence-context",
-      "state": "implemented",
+      "state": "certified",
       "classification": "NEW",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -169,18 +169,30 @@
         "syntavra_runtime/universal_context_item.py",
         "syntavra_runtime/evidence_store.py"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/typed-context-object-store-v1.json",
+        "syntavra_runtime/typed_context_objects.py",
+        "tools/certify_typed_context_object_store.py",
+        "tests/runtime/test_typed_context_object_store.py",
+        ".github/workflows/typed-context-object-store.yml"
+      ],
       "acceptance": "Typed exact/structural/semantic/bounded-preview objects with deterministic roundtrip."
     },
     {
       "id": "programmatic_execution_v1",
       "group": "execution",
-      "state": "partial",
+      "state": "implemented",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "syntavra_runtime/autonomous_agent.py",
-        "syntavra_runtime/execution_sandbox.py"
+        "syntavra_runtime/execution_sandbox.py",
+        "syntavra_runtime/programmatic_execution.py",
+        "syntavra_runtime/artifacts.py",
+        "contracts/python/programmatic-execution-v1.json",
+        "tools/certify_programmatic_execution.py",
+        "tests/runtime/test_programmatic_execution.py",
+        ".github/workflows/programmatic-execution.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Typed call/map/parallel/filter/reduce and artifact-reference execution plane with bounded returns and receipts."
