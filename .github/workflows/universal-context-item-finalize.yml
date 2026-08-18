@@ -1,0 +1,134 @@
+name: Universal Context Item Finalize
+
+on:
+  push:
+    branches:
+      - agent/universal-context-item-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: universal-context-item-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/universal-context-item-v1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: python -m pip install -e .
+
+      - name: Append current continuation checkpoint once
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt')
+          marker = 'APPENDED CURRENT CHECKPOINT — 2026-08-18 — UNIVERSAL CONTEXT ITEM ACTIVE'
+          text = path.read_text(encoding='utf-8')
+          assert marker not in text, 'Universal Context Item checkpoint already appended'
+          appendix = '''
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — UNIVERSAL CONTEXT ITEM ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+e799b4a346650783d17d489e7a7d9fb46aa387bf
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/universal-context-item-v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — universal_context_item_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.
+
+COMPLETED:
+- rust_feature_freeze_guard_v1 exact-head regression PASS on PR #137.
+- ordinary PR Rust-freeze diff gate PASS on PR #137.
+- Python Capability Completeness PASS after dynamic milestone assertion repair.
+- Release Main Merge Gate PASS on PR #137.
+- Release Package Provenance PASS on PR #137.
+- PR #137 merged as e799b4a346650783d17d489e7a7d9fb46aa387bf.
+- capability registry records rust_feature_freeze_guard_v1 as certified.
+
+CURRENT IMPLEMENTATION:
+- UniversalContextItem canonical envelope added without changing legacy ContextPackItem/EvidenceNode/EvidenceEdge field schemas.
+- explicit provenance, trust, taint, freshness, lineage, recovery handles, content hash and stable item identity added.
+- deterministic JSON roundtrip and tamper-fail-closed semantics implemented.
+- additive adapters added for ContextPackItem, EvidenceNode and EvidenceEdge.
+- Universal Context Item contract, regression suite, certifier and exact-head workflow added.
+- Release Main gate and repository validator bound to Universal Context Item certification.
+- immutable action-pin policy covers the Universal Context Item workflow.
+
+VERIFIED DESIGN BOUNDARY:
+- trust/freshness evaluation does not change stable evidence identity.
+- content/provenance/recovery changes do change stable identity.
+- legacy serialization shapes remain unchanged.
+- Python COMPLETE remains false.
+- Rust resume remains false.
+
+BLOCKERS:
+- Universal Context Item still requires branch smoke, canonical MANIFEST.sha256 seal, exact-head PR CI and merge before certification is admitted.
+
+NEXT EXACT TASK:
+- Finish and certify universal_context_item_v1.
+- After admission, advance to evidence_store_v2.
+'''
+          path.write_text(text + appendix, encoding='utf-8')
+          PY
+
+      - name: Run Universal Context Item pre-admission smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_universal_context_item -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python -m unittest tests.runtime.test_release_action_pins -v
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          python tools/certify_universal_context_item.py --out /tmp/universal-context-item.json
+
+      - name: Remove finalizer and refresh canonical manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/universal-context-item-finalize.yml
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python tools/validate.py > /tmp/repository-validation.json
+          git diff --check
+
+      - name: Commit final Universal Context Item tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            MANIFEST.sha256 \
+            docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt \
+            .github/workflows/universal-context-item-finalize.yml
+          git commit -m "Seal Universal Context Item milestone"
+          git push origin HEAD:agent/universal-context-item-v1
