@@ -6,6 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from .deferred_tool_discovery import DeferredToolDiscoveryEngine, HostToolCapabilities
 from .mcp_policy import MCPToolPolicy
 from .product_surface import SessionAnalyticsStore
 from .tool_registry import ToolSchemaCompiler, normalize_profile
@@ -16,9 +17,10 @@ from .wire_format import LosslessWireCodec
 class MCPApplicationPipeline:
     """Explicit MCP request pipeline.
 
-    The pipeline owns profile selection, catalog compilation, call authorization,
-    argument alias decoding, result externalization and route receipts. Extension
-    modules may add tools and handlers, but they do not bypass this boundary.
+    The pipeline owns profile selection, deferred discovery, catalog compilation,
+    call authorization, argument alias decoding, result externalization and route
+    receipts. Extension modules may add tools and handlers, but they do not bypass
+    this boundary.
     """
 
     def __init__(self, state_root: Path) -> None:
@@ -31,6 +33,7 @@ class MCPApplicationPipeline:
         if self.wire_mode not in {"off", "auto"}:
             raise ValueError(f"unknown Syntavra wire mode: {self.wire_mode}")
         self.policy = MCPToolPolicy(self._requested_profile())
+        self.discovery = DeferredToolDiscoveryEngine(profile=self.policy.profile)
         self.schema_mode = os.environ.get("SYNTAVRA_SCHEMA_MODE", "compact").strip().casefold() or "compact"
         if self.schema_mode not in {"compact", "raw"}:
             raise ValueError(f"unknown Syntavra schema mode: {self.schema_mode}")
@@ -54,6 +57,35 @@ class MCPApplicationPipeline:
         requested = self._requested_profile()
         if requested != self.policy.profile:
             self.policy = MCPToolPolicy(requested)
+            self.discovery = DeferredToolDiscoveryEngine(profile=requested)
+        elif self.discovery.profile != self.policy.profile:
+            self.discovery = DeferredToolDiscoveryEngine(profile=self.policy.profile)
+
+    def discover_tools(
+        self,
+        catalog: Sequence[dict[str, Any]],
+        *,
+        query: str,
+        selector: str | None = None,
+        host_capabilities: HostToolCapabilities | None = None,
+        token_budget: int | None = None,
+    ) -> dict[str, Any]:
+        """Run additive two-stage discovery without changing tools/list semantics."""
+        self.refresh()
+        host = host_capabilities
+        if selector is None:
+            return self.discovery.stage1(catalog, query=query, host=host)
+        return self.discovery.stage2(
+            catalog,
+            selector=selector,
+            query=query,
+            host=host,
+            token_budget=token_budget,
+        )
+
+    def discovery_status(self) -> dict[str, Any]:
+        self.refresh()
+        return self.discovery.manifest()
 
     def list_tools(self, catalog: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         self.refresh()
@@ -171,6 +203,7 @@ class MCPApplicationPipeline:
         return {
             "pipeline": [
                 "profile-selection",
+                "deferred-discovery",
                 "catalog-filter",
                 "schema-compilation",
                 "authorization",
@@ -185,5 +218,6 @@ class MCPApplicationPipeline:
                 "profile": self.policy.profile,
                 "legacy_profile": self.policy.legacy_profile,
             },
+            "discovery": self.discovery_status(),
             "schema": self.schema_status(),
         }
