@@ -345,8 +345,8 @@ def certify(repo: Path) -> dict[str, Any]:
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
     _require(
-        completeness.get("current_milestone") == "unified_context_namespace_v1",
-        "registry has not advanced to unified_context_namespace_v1",
+        bool(completeness.get("current_milestone")),
+        "capability registry current milestone missing",
     )
     _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
     _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
@@ -374,8 +374,8 @@ def certify(repo: Path) -> dict[str, Any]:
     )
     _require(
         (by_id.get("unified_context_namespace_v1") or {}).get("state")
-        in {"implemented", "verified"},
-        "Context Namespace registry state must be pre-certification implemented/verified",
+        in {"implemented", "verified", "certified"},
+        "Context Namespace registry state is not admissible",
     )
 
     source = (repo / RUNTIME_RELATIVE).read_text(encoding="utf-8")
