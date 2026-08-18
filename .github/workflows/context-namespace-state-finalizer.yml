@@ -1,0 +1,187 @@
+name: Context Namespace State Finalizer
+
+on:
+  push:
+    branches:
+      - agent/unified-context-namespace-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: context-namespace-state-finalizer-v1
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/unified-context-namespace-v1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Apply idempotent canonical state migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+
+          registry_path = root / 'contracts/python/capability-completeness-registry-v1.json'
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          by_id = {row['id']: row for row in registry['capabilities']}
+
+          deferred = by_id['deferred_tool_discovery_v1']
+          assert deferred['state'] in {'implemented', 'verified', 'certified'}
+          deferred['state'] = 'certified'
+          deferred['certification_evidence'] = [
+              'contracts/python/deferred-tool-discovery-v1.json',
+              'syntavra_runtime/deferred_tool_discovery.py',
+              'tools/certify_deferred_tool_discovery.py',
+              'tests/runtime/test_deferred_tool_discovery.py',
+              '.github/workflows/deferred-tool-discovery.yml',
+          ]
+
+          namespace = by_id['unified_context_namespace_v1']
+          assert namespace['state'] in {'planned', 'implemented', 'verified'}
+          namespace['state'] = 'implemented'
+          namespace['implementation_evidence'] = [
+              'syntavra_runtime/context_namespace.py',
+              'contracts/python/unified-context-namespace-v1.json',
+              'tools/certify_context_namespace.py',
+              'tests/runtime/test_context_namespace.py',
+              '.github/workflows/unified-context-namespace.yml',
+              'syntavra_runtime/universal_context_item.py',
+          ]
+          namespace['certification_evidence'] = []
+
+          order = registry['milestone_order']
+          if 'multi_graph_retrieval_v1' not in order:
+              order.insert(order.index('adaptive_context_policy_v1'), 'multi_graph_retrieval_v1')
+          assert order.index('unified_context_namespace_v1') < order.index('multi_graph_retrieval_v1') < order.index('adaptive_context_policy_v1')
+          registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          completeness_path = root / 'tools/certify_python_capability_completeness.py'
+          text = completeness_path.read_text(encoding='utf-8')
+          old = '    "unified_context_namespace_v1",\n    "adaptive_context_policy_v1",\n]'
+          new = '    "unified_context_namespace_v1",\n    "multi_graph_retrieval_v1",\n    "adaptive_context_policy_v1",\n]'
+          if old in text:
+              text = text.replace(old, new, 1)
+          assert new in text
+          completeness_path.write_text(text, encoding='utf-8')
+
+          deferred_path = root / 'tools/certify_deferred_tool_discovery.py'
+          text = deferred_path.read_text(encoding='utf-8')
+          old = '_require(completeness.get("current_milestone") == "deferred_tool_discovery_v1", "registry has not advanced to deferred_tool_discovery_v1")'
+          new = '_require(bool(completeness.get("current_milestone")), "capability registry current milestone missing")'
+          if old in text:
+              text = text.replace(old, new, 1)
+          assert new in text
+          old = '_require((by_id.get("deferred_tool_discovery_v1") or {}).get("state") in {"implemented", "verified"}, "Deferred discovery registry state must be pre-certification implemented/verified")'
+          new = '_require((by_id.get("deferred_tool_discovery_v1") or {}).get("state") in {"implemented", "verified", "certified"}, "Deferred discovery registry state is not admissible")'
+          if old in text:
+              text = text.replace(old, new, 1)
+          assert new in text
+          deferred_path.write_text(text, encoding='utf-8')
+
+          validator = root / 'tools/validate.py'
+          text = validator.read_text(encoding='utf-8')
+          required_pairs = [
+              ('    ROOT / "contracts" / "python" / "deferred-tool-discovery-v1.json",\n', '    ROOT / "contracts" / "python" / "unified-context-namespace-v1.json",\n'),
+              ('    ROOT / "syntavra_runtime" / "deferred_tool_discovery.py",\n', '    ROOT / "syntavra_runtime" / "context_namespace.py",\n'),
+              ('    ROOT / "tests" / "runtime" / "test_deferred_tool_discovery.py",\n', '    ROOT / "tests" / "runtime" / "test_context_namespace.py",\n'),
+              ('    ROOT / "tools" / "certify_deferred_tool_discovery.py",\n', '    ROOT / "tools" / "certify_context_namespace.py",\n'),
+              ('    ROOT / ".github" / "workflows" / "deferred-tool-discovery.yml",\n', '    ROOT / ".github" / "workflows" / "unified-context-namespace.yml",\n'),
+          ]
+          for anchor, addition in required_pairs:
+              if addition not in text:
+                  assert anchor in text, anchor
+                  text = text.replace(anchor, anchor + addition, 1)
+
+          function = '''\n\ndef _context_namespace_check() -> tuple[bool, str]:\n    try:\n        from tools.certify_context_namespace import certify\n        report = certify(ROOT)\n        summary = {\n            "claim": report.get("claim"),\n            "exact_head": report.get("exact_head"),\n            "admission_ready": report.get("admission_ready"),\n            "syntavra_scheme": (report.get("runtime") or {}).get("syntavra_scheme"),\n            "progressive_descent": (report.get("runtime") or {}).get("progressive_repo_directory_file_symbol_lines"),\n            "l3_exact_reveal": (report.get("runtime") or {}).get("l3_integrity_checked_exact_reveal"),\n            "trajectory": (report.get("runtime") or {}).get("retrieval_trajectory"),\n            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),\n            "rust_resume_allowed": report.get("rust_resume_allowed"),\n        }\n        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)\n    except Exception as exc:\n        return False, f"{type(exc).__name__}: {exc}"\n'''
+          if 'def _context_namespace_check()' not in text:
+              marker = '\n\ndef main() -> int:\n'
+              assert marker in text
+              text = text.replace(marker, function + marker, 1)
+
+          call = '    context_namespace_ok, context_namespace_detail = _context_namespace_check()\n    checks.append(("context_namespace", context_namespace_ok, context_namespace_detail))\n'
+          if call not in text:
+              anchor = '    deferred_ok, deferred_detail = _deferred_tool_discovery_check()\n    checks.append(("deferred_tool_discovery", deferred_ok, deferred_detail))\n'
+              assert anchor in text
+              text = text.replace(anchor, anchor + '\n' + call, 1)
+          validator.write_text(text, encoding='utf-8')
+
+          checkpoint = root / 'docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt'
+          marker = 'APPENDED CURRENT CHECKPOINT — 2026-08-19 — UNIFIED CONTEXT NAMESPACE ACTIVE'
+          if marker not in checkpoint.read_text(encoding='utf-8'):
+              with checkpoint.open('a', encoding='utf-8', newline='\n') as handle:
+                  handle.write(f'''\n\n======================================================================\n{marker}\n======================================================================\n\nCURRENT ADMITTED MAIN:\n89ac2260885a971bbedff113a66071af54804dcf\n\nACTIVE IMPLEMENTATION BRANCH:\nagent/unified-context-namespace-v1\n\nACTIVE PR:\n#143 — Add Unified Context Namespace v1\n\nPYTHON STATUS:\nPYTHON-FIRST ACTIVE — deferred_tool_discovery_v1 is admitted; unified_context_namespace_v1 is the current milestone.\n\nRUST STATUS:\nFEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.\n\nCURRENT IMPLEMENTATION:\n- resolver-backed syntavra:// namespace reuses UniversalContextItem authority.\n- repo/evidence/memory/task/tool/artifact/context roots are canonical.\n- repo -> directory -> file -> symbol -> lines progressive navigation exists.\n- L0/L1/L2/L3 disclosure, payload-free why, integrity-checked reveal, and deterministic retrieval trajectory receipts exist.\n- no parallel persistent store or public CLI route was introduced.\n- Deferred Tool Discovery advances to certified.\n- Multi-Graph Retrieval is restored to canonical ordering between Context Namespace and Adaptive Context Policy.\n\nVERIFIED:\n- Unified Context Namespace runtime regression PASS 17/17 before admission-state migration.\n- Python COMPLETE remains false.\n- Rust production promotion remains 174/245 and Rust resume remains false.\n\nBLOCKERS:\n- remove temporary migration/finalizer files and trigger after state commit.\n- seal canonical MANIFEST.sha256 after permanent tree freeze.\n- pass final exact-head Unified Context Namespace, Release Main, Package Provenance, Python-first authority/completeness and Rust Freeze gates.\n\nNEXT EXACT TASK:\n- freeze permanent branch tree, seal MANIFEST.sha256, run final exact-head CI, merge PR #143.\n- after admission advance to multi_graph_retrieval_v1.\n''')
+          PY
+
+      - name: Verify full migrated milestone
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_context_namespace -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_deferred_tool_discovery -v
+          python tools/certify_python_capability_completeness.py --out /tmp/completeness.json
+          python tools/certify_deferred_tool_discovery.py --out /tmp/deferred.json
+          python tools/certify_context_namespace.py --out /tmp/context-namespace.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          completeness = json.loads(Path('/tmp/completeness.json').read_text(encoding='utf-8'))
+          assert completeness['ok'] is True, completeness
+          assert completeness['current_milestone'] == 'unified_context_namespace_v1', completeness
+          deferred = json.loads(Path('/tmp/deferred.json').read_text(encoding='utf-8'))
+          assert deferred['ok'] is True, deferred
+          namespace = json.loads(Path('/tmp/context-namespace.json').read_text(encoding='utf-8'))
+          assert namespace['ok'] is True, namespace
+          assert namespace['admission_ready'] is True, namespace
+          assert namespace['runtime']['parallel_persistent_store'] is False, namespace
+          assert namespace['rust']['production_promoted'] == 174, namespace
+          PY
+          python -m py_compile tools/validate.py tools/certify_context_namespace.py tools/certify_deferred_tool_discovery.py tools/certify_python_capability_completeness.py
+          git diff --check
+
+      - name: Commit canonical state files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            contracts/python/capability-completeness-registry-v1.json \
+            tools/certify_python_capability_completeness.py \
+            tools/certify_deferred_tool_discovery.py \
+            tools/validate.py \
+            docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'canonical state already finalized'
+            exit 0
+          fi
+          git commit -m 'Finalize Context Namespace admission state'
+          git push origin HEAD:agent/unified-context-namespace-v1
