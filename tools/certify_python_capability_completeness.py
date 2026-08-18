@@ -18,6 +18,9 @@ from tools.certify_python_authority import _assert_no_route_identity_copy
 from tools.certify_python_authority import certify as certify_python_authority
 
 CONTRACT_RELATIVE = Path("contracts/python/capability-completeness-registry-v1.json")
+WORKFLOW_RELATIVE = Path(".github/workflows/python-capability-completeness.yml")
+RELEASE_GATE_RELATIVE = Path(".github/workflows/release-main-merge-gate.yml")
+PIN_POLICY_RELATIVE = Path("tests/runtime/test_release_action_pins.py")
 EXPECTED_STATES = ["planned", "partial", "implemented", "verified", "certified", "external"]
 EXPECTED_CLASSIFICATIONS = ["EXISTS", "HARDEN", "UNIFY", "NEW", "CERTIFY", "EXTERNAL"]
 EXPECTED_MILESTONE_PREFIX = [
@@ -120,6 +123,35 @@ def _validate_capabilities(repo: Path, contract: dict[str, Any]) -> tuple[list[d
     return capabilities, dict(sorted(state_counts.items())), dict(sorted(classification_counts.items()))
 
 
+def _validate_enforcement(repo: Path) -> dict[str, str]:
+    for relative in (WORKFLOW_RELATIVE, RELEASE_GATE_RELATIVE, PIN_POLICY_RELATIVE):
+        _require((repo / relative).is_file(), f"missing registry enforcement surface: {relative.as_posix()}")
+
+    workflow = (repo / WORKFLOW_RELATIVE).read_text(encoding="utf-8")
+    _require(
+        "group: python-capability-completeness-${{ github.event.pull_request.number || github.ref }}" in workflow,
+        "capability completeness workflow concurrency is not PR/ref scoped",
+    )
+    _require("tests.runtime.test_python_capability_completeness" in workflow, "capability completeness workflow lost regression suite")
+    _require("tools/certify_python_capability_completeness.py" in workflow, "capability completeness workflow lost certifier")
+    _require("actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in workflow, "capability completeness checkout pin drift")
+    _require("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow, "capability completeness setup-python pin drift")
+    _require("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in workflow, "capability completeness upload pin drift")
+
+    release_gate = (repo / RELEASE_GATE_RELATIVE).read_text(encoding="utf-8")
+    _require("tests.runtime.test_python_capability_completeness" in release_gate, "release-main gate lost completeness regression")
+    _require("tools/certify_python_capability_completeness.py" in release_gate, "release-main gate lost completeness certifier")
+
+    pin_policy = (repo / PIN_POLICY_RELATIVE).read_text(encoding="utf-8")
+    _require('".github/workflows/python-capability-completeness.yml"' in pin_policy, "immutable action policy does not cover completeness workflow")
+
+    return {
+        "exact_head_workflow": WORKFLOW_RELATIVE.as_posix(),
+        "release_main_gate": RELEASE_GATE_RELATIVE.as_posix(),
+        "immutable_action_pin_policy": PIN_POLICY_RELATIVE.as_posix(),
+    }
+
+
 def certify(repo: Path) -> dict[str, Any]:
     repo = repo.resolve()
     _require(repo == ROOT, f"capability completeness certifier must run against its own checkout: {repo} != {ROOT}")
@@ -163,6 +195,8 @@ def certify(repo: Path) -> dict[str, Any]:
     for key in required_true:
         _require(policy.get(key) is True, f"registry policy disabled: {key}")
 
+    enforcement = _validate_enforcement(repo)
+
     python_authority = certify_python_authority(repo)
     _require(python_authority.get("ok") is True, "Python authority is not certified on this exact head")
     _require((python_authority.get("rust") or {}).get("production_promoted_routes") == 174, "Rust promotion baseline drift")
@@ -198,6 +232,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "current_milestone": "capability_completeness_registry_v1",
         "registry_persisted_state": registry_entry["state"],
         "registry_admission_ready": True,
+        "enforcement": enforcement,
         "state_counts": state_counts,
         "classification_counts": classification_counts,
         "required_internal_count": len(required_internal),
