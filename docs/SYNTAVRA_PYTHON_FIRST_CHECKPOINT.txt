@@ -223,3 +223,47 @@ BLOCKERS:
 NEXT EXACT TASK:
 - generate exact-tree candidate manifest, apply tracked manifest byte-for-byte, run final CI, merge PR #139.
 - after admission advance to typed_context_object_store_v1.
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — TYPED CONTEXT OBJECT STORE ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+c782815c63435798319ef6004e8233949a96354d
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/typed-context-object-store-v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — typed_context_object_store_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.
+
+COMPLETED / CURRENT IMPLEMENTATION:
+- Evidence Store v2 was admitted and merged through PR #139.
+- capability registry now records evidence_store_v2 as certified and typed_context_object_store_v1 as implemented.
+- 16 roadmap typed object kinds are validated by one canonical codec registry.
+- exact, structural, semantic and bounded-preview representations are supported.
+- deterministic typed-object canonical JSON and SHA-256 are enforced.
+- typed objects compile into UniversalContextItem and persist only through EvidenceStoreV2.
+- no parallel database, lineage, retention, secret policy or mutation journal was introduced.
+- provenance changes universal identity while typed payload digest remains stable.
+- kind/type, representation, digest and required-field mismatches fail closed.
+- Evidence Store secret rejection is inherited by typed context objects.
+- Typed Context regression, certifier, exact-head workflow, Release Main binding, repository-validator binding and immutable action-pin coverage are present.
+
+VERIFIED:
+- pre-migration Typed Context runtime regression passed 11/11.
+- the prior certifier failure was isolated to stale capability-registry state, not runtime behavior.
+- registry state migration and downstream Evidence Store certifier compatibility were applied.
+- Rust production authority remains 174/245 and Rust resume remains false.
+
+BLOCKERS:
+- canonical final-tree MANIFEST.sha256 still needs exact-tree seal.
+- final exact-head Typed Context, Release Main, Package Provenance and supporting gates must pass before merge.
+
+NEXT EXACT TASK:
+- seal MANIFEST.sha256 from the exact final branch tree.
+- run final exact-head CI for PR #140.
+- after admission advance to programmatic_execution_v1.
