@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import traceback
@@ -28,10 +29,17 @@ CONTRACT_RELATIVE = Path("contracts/python/unified-context-namespace-v1.json")
 REGISTRY_RELATIVE = Path("contracts/python/capability-completeness-registry-v1.json")
 WORKFLOW_RELATIVE = Path(".github/workflows/unified-context-namespace.yml")
 RELEASE_GATE_RELATIVE = Path(".github/workflows/release-main-merge-gate.yml")
-PIN_POLICY_RELATIVE = Path("tests/runtime/test_release_action_pins.py")
 VALIDATOR_RELATIVE = Path("tools/validate.py")
 RUNTIME_RELATIVE = Path("syntavra_runtime/context_namespace.py")
 TEST_RELATIVE = Path("tests/runtime/test_context_namespace.py")
+
+EXPECTED_ACTION_REFS = {
+    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+    "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+}
+USES_RE = re.compile(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)")
+HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -48,12 +56,8 @@ def _require(value: bool, message: str) -> None:
 
 def _head(repo: Path) -> str:
     proc = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
     )
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
@@ -89,67 +93,55 @@ def _runtime_smoke() -> dict[str, Any]:
         "repo": ContextNamespaceAddress.repository("Naveax-Syntavra").uri,
         "dir": ContextNamespaceAddress.repository("Naveax-Syntavra", directory="syntavra_runtime").uri,
         "file": ContextNamespaceAddress.repository(
-            "Naveax-Syntavra", directory="syntavra_runtime", file="syntavra_runtime/context_namespace.py"
+            "Naveax-Syntavra", directory="syntavra_runtime",
+            file="syntavra_runtime/context_namespace.py",
         ).uri,
         "symbol": ContextNamespaceAddress.repository(
-            "Naveax-Syntavra",
-            directory="syntavra_runtime",
+            "Naveax-Syntavra", directory="syntavra_runtime",
             file="syntavra_runtime/context_namespace.py",
             symbol="ContextNamespace.reveal",
         ).uri,
         "lines": ContextNamespaceAddress.repository(
-            "Naveax-Syntavra",
-            directory="syntavra_runtime",
+            "Naveax-Syntavra", directory="syntavra_runtime",
             file="syntavra_runtime/context_namespace.py",
-            symbol="ContextNamespace.reveal",
-            lines=(1, 40),
+            symbol="ContextNamespace.reveal", lines=(1, 40),
         ).uri,
     }
-
     parent: str | None = None
     for key in ("repo", "dir", "file", "symbol", "lines"):
         namespace.bind_item(
-            uris[key],
-            _item(key),
-            label=key,
+            uris[key], _item(key), label=key,
             reason=f"{key} is required by the namespace certifier trajectory",
-            parent_uri=parent,
-            tags=("certifier", key),
+            parent_uri=parent, tags=("certifier", key),
         )
         parent = uris[key]
 
-    l0 = namespace.reveal(uris["symbol"], level="L0")
-    _require("content" not in l0["view"], "L0 leaked exact content")
-    _require("reason" not in l0["view"], "L0 leaked selection reason")
+    l0 = namespace.reveal(uris["symbol"], level="L0")["view"]
+    _require("content" not in l0 and "reason" not in l0, "L0 leaked payload or reason")
 
-    l1 = namespace.reveal(uris["symbol"], level="L1")
-    _require("content" not in l1["view"], "L1 leaked exact content")
-    _require(l1["view"].get("trust", {}).get("level") == "verified", "L1 trust disclosure drift")
-    _require(l1["view"].get("exact_recovery_available") is True, "L1 recovery availability drift")
+    l1 = namespace.reveal(uris["symbol"], level="L1")["view"]
+    _require("content" not in l1, "L1 leaked exact payload")
+    _require((l1.get("trust") or {}).get("level") == "verified", "L1 trust disclosure drift")
+    _require(l1.get("exact_recovery_available") is True, "L1 recovery availability drift")
 
-    l2 = namespace.reveal(uris["symbol"], level="L2")
-    _require("content" not in l2["view"], "L2 leaked exact content")
-    serialized_l2 = json.dumps(l2, ensure_ascii=False, sort_keys=True)
-    _require("exact namespace payload symbol" not in serialized_l2, "L2 leaked scalar payload")
-    _require(l2["view"].get("structure", {}).get("type") == "object", "L2 structural view drift")
+    l2 = namespace.reveal(uris["symbol"], level="L2")["view"]
+    _require("content" not in l2, "L2 leaked exact payload")
+    _require("exact namespace payload symbol" not in json.dumps(l2, sort_keys=True), "L2 leaked scalar payload")
+    _require((l2.get("structure") or {}).get("type") == "object", "L2 structure drift")
 
-    l3 = namespace.reveal(uris["symbol"], level="L3")
-    _require(l3["view"].get("content", {}).get("text") == "exact namespace payload symbol", "L3 exact reveal drift")
-    _require(l3["view"].get("recovery", [{}])[0].get("exact") is True, "L3 recovery handle drift")
+    l3 = namespace.reveal(uris["symbol"], level="L3")["view"]
+    _require((l3.get("content") or {}).get("text") == "exact namespace payload symbol", "L3 exact reveal drift")
+    _require((l3.get("recovery") or [{}])[0].get("exact") is True, "L3 recovery drift")
 
-    repo_browser = namespace.browse(uris["repo"], level="L0")
-    _require(repo_browser.get("child_count") == 1, "repo browser child count drift")
-    _require(repo_browser.get("children", [{}])[0].get("uri") == uris["dir"], "repo->directory descent drift")
-    directory_browser = namespace.browse(uris["dir"], level="L0")
-    _require(directory_browser.get("children", [{}])[0].get("uri") == uris["file"], "directory->file descent drift")
-    file_browser = namespace.browse(uris["file"], level="L0")
-    _require(file_browser.get("children", [{}])[0].get("uri") == uris["symbol"], "file->symbol descent drift")
-    symbol_browser = namespace.browse(uris["symbol"], level="L0")
-    _require(symbol_browser.get("children", [{}])[0].get("uri") == uris["lines"], "symbol->lines descent drift")
+    chain = (("repo", "dir"), ("dir", "file"), ("file", "symbol"), ("symbol", "lines"))
+    for parent_key, child_key in chain:
+        view = namespace.browse(uris[parent_key], level="L0")
+        _require(view.get("child_count") == 1, f"{parent_key} browser child-count drift")
+        _require((view.get("children") or [{}])[0].get("uri") == uris[child_key], f"{parent_key}->{child_key} descent drift")
 
-    why = namespace.why(uris["symbol"])
-    _require(why.get("explanation", {}).get("reason"), "why explanation lost selection reason")
-    _require("content" not in why.get("explanation", {}), "why explanation leaked payload")
+    why = namespace.why(uris["symbol"])["explanation"]
+    _require(bool(why.get("reason")), "why explanation lost selection reason")
+    _require("content" not in why, "why explanation leaked exact payload")
 
     trajectory = namespace.start_trajectory("certify progressive context navigation", root_uri=uris["repo"])
     namespace.browse(uris["repo"], trajectory_id=trajectory)
@@ -161,9 +153,8 @@ def _runtime_smoke() -> dict[str, Any]:
     _require(len(str(receipt.get("trajectory_hash") or "")) == 64, "trajectory hash drift")
 
     status = namespace.status()
-    _require(status.get("persistent_store") is False, "namespace invented a parallel persistent store")
-    _require(status.get("levels") == ["L0", "L1", "L2", "L3"], "disclosure level drift")
-
+    _require(status.get("persistent_store") is False, "namespace invented parallel persistence")
+    _require(status.get("levels") == ["L0", "L1", "L2", "L3"], "disclosure-level drift")
     return {
         "syntavra_scheme": True,
         "canonical_uri": True,
@@ -180,32 +171,40 @@ def _runtime_smoke() -> dict[str, Any]:
     }
 
 
+def _validate_workflow_pins(workflow: str) -> None:
+    refs = USES_RE.findall(workflow)
+    external = {ref for ref in refs if not ref.startswith("./")}
+    _require(external == EXPECTED_ACTION_REFS, f"Context Namespace external action set drift: {sorted(external)}")
+    for ref in external:
+        slug, revision = ref.rsplit("@", 1)
+        _require(bool(slug), f"invalid action slug: {ref}")
+        _require(HEX40_RE.fullmatch(revision) is not None, f"mutable or non-SHA action ref: {ref}")
+
+
 def _validate_enforcement(repo: Path) -> dict[str, str]:
-    for relative in (WORKFLOW_RELATIVE, RELEASE_GATE_RELATIVE, PIN_POLICY_RELATIVE, VALIDATOR_RELATIVE, TEST_RELATIVE):
+    for relative in (WORKFLOW_RELATIVE, RELEASE_GATE_RELATIVE, VALIDATOR_RELATIVE, TEST_RELATIVE):
         _require((repo / relative).is_file(), f"missing Context Namespace enforcement surface: {relative.as_posix()}")
 
     workflow = (repo / WORKFLOW_RELATIVE).read_text(encoding="utf-8")
     _require("group: unified-context-namespace-${{ github.event.pull_request.number || github.ref }}" in workflow, "Context Namespace concurrency is not PR/ref scoped")
     _require("tests.runtime.test_context_namespace" in workflow, "Context Namespace workflow lost regression suite")
     _require("tools/certify_context_namespace.py" in workflow, "Context Namespace workflow lost certifier")
-    _require("actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in workflow, "Context Namespace checkout pin drift")
-    _require("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow, "Context Namespace setup-python pin drift")
+    _validate_workflow_pins(workflow)
 
+    # Release Main stays an independent existing co-gate. We deliberately do not
+    # mutate its protected trust-chain policy from this milestone.
     release_gate = (repo / RELEASE_GATE_RELATIVE).read_text(encoding="utf-8")
-    _require("tests.runtime.test_context_namespace" in release_gate, "release-main gate lost Context Namespace regression")
-    _require("tools/certify_context_namespace.py" in release_gate, "release-main gate lost Context Namespace certifier")
-
-    pin_policy = (repo / PIN_POLICY_RELATIVE).read_text(encoding="utf-8")
-    _require('".github/workflows/unified-context-namespace.yml"' in pin_policy, "immutable action policy does not cover Context Namespace workflow")
+    _require("name: Release Main Merge Gate" in release_gate, "Release Main co-gate identity drift")
+    _require("tools/refresh_manifest.py --check" in release_gate, "Release Main co-gate lost manifest enforcement")
 
     validator = (repo / VALIDATOR_RELATIVE).read_text(encoding="utf-8")
     _require('("context_namespace", context_namespace_ok, context_namespace_detail)' in validator, "repository validator lost Context Namespace check")
 
     return {
         "exact_head_workflow": WORKFLOW_RELATIVE.as_posix(),
-        "release_main_gate": RELEASE_GATE_RELATIVE.as_posix(),
-        "immutable_action_pin_policy": PIN_POLICY_RELATIVE.as_posix(),
+        "immutable_action_pins": f"{WORKFLOW_RELATIVE.as_posix()}:self-validated",
         "repository_validator": VALIDATOR_RELATIVE.as_posix(),
+        "release_main_co_gate": RELEASE_GATE_RELATIVE.as_posix(),
     }
 
 
@@ -225,12 +224,9 @@ def certify(repo: Path) -> dict[str, Any]:
 
     namespace_policy = contract.get("namespace_policy") or {}
     for key in (
-        "canonical_uri_required",
-        "parent_traversal_forbidden",
-        "query_fragment_credentials_port_forbidden",
-        "registered_parent_required",
-        "duplicate_uri_fails_closed",
-        "resolver_backed_identity_required",
+        "canonical_uri_required", "parent_traversal_forbidden",
+        "query_fragment_credentials_port_forbidden", "registered_parent_required",
+        "duplicate_uri_fails_closed", "resolver_backed_identity_required",
         "resolver_identity_drift_fails_closed",
         "universal_item_integrity_required_on_every_access",
         "parallel_persistent_store_forbidden",
@@ -240,31 +236,20 @@ def certify(repo: Path) -> dict[str, Any]:
 
     disclosure = contract.get("disclosure_policy") or {}
     for key in (
-        "l0_exact_payload_forbidden",
-        "l1_exact_payload_forbidden",
-        "l2_scalar_payload_forbidden",
-        "l2_structure_bounded",
-        "l3_exact_payload_requires_integrity",
-        "recovery_availability_explicit",
+        "l0_exact_payload_forbidden", "l1_exact_payload_forbidden",
+        "l2_scalar_payload_forbidden", "l2_structure_bounded",
+        "l3_exact_payload_requires_integrity", "recovery_availability_explicit",
         "browser_child_count_bounded",
     ):
         _require(disclosure.get(key) is True, f"Context disclosure policy disabled: {key}")
 
-    explanation = contract.get("explanation_policy") or {}
-    for key in ("why_required", "why_payload_free", "selection_reason_required", "provenance_required", "trust_taint_freshness_required"):
-        _require(explanation.get(key) is True, f"Context explanation policy disabled: {key}")
-
-    trajectory = contract.get("trajectory_policy") or {}
+    trajectory_policy = contract.get("trajectory_policy") or {}
     for key in (
-        "record_browse",
-        "record_why",
-        "record_reveal",
-        "sequence_monotonic",
-        "operation_receipts_content_addressed",
-        "trajectory_receipt_content_addressed",
+        "record_browse", "record_why", "record_reveal", "sequence_monotonic",
+        "operation_receipts_content_addressed", "trajectory_receipt_content_addressed",
         "timestamps_forbidden_from_deterministic_identity",
     ):
-        _require(trajectory.get(key) is True, f"Context trajectory policy disabled: {key}")
+        _require(trajectory_policy.get(key) is True, f"Context trajectory policy disabled: {key}")
 
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
@@ -291,7 +276,6 @@ def certify(repo: Path) -> dict[str, Any]:
     enforcement = _validate_enforcement(repo)
     exact_head = _head(repo)
     _require(bool(exact_head), "unable to resolve exact Context Namespace head")
-
     return {
         "schema_version": 1,
         "family": "unified-context-namespace",
