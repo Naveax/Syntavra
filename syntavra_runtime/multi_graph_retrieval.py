@@ -257,15 +257,23 @@ class MultiGraphRetrieval:
             ))
         return self.add_layer(name, graph_kind, nodes, edges, source_refs=source_refs)
 
-    def _blocked_identities(self) -> set[str]:
-        blocked: set[str] = set()
-        for layer in self._layers.values():
-            for node in layer.nodes:
-                if node.tainted:
-                    blocked.add(node.identity)
-                if node.graph_kind == "security" and str(node.metadata.get("disposition") or "").casefold() in {"deny", "block", "quarantine"}:
-                    blocked.add(node.identity)
-        return blocked
+    def _tainted_identities(self) -> set[str]:
+        return {
+            node.identity
+            for layer in self._layers.values()
+            for node in layer.nodes
+            if node.tainted
+        }
+
+    def _security_denied_identities(self) -> set[str]:
+        return {
+            node.identity
+            for layer in self._layers.values()
+            for node in layer.nodes
+            if node.graph_kind == "security"
+            and str(node.metadata.get("disposition") or "").casefold()
+            in {"deny", "block", "quarantine"}
+        }
 
     @staticmethod
     def _freshness_weight(node: GraphNode) -> float:
@@ -309,7 +317,9 @@ class MultiGraphRetrieval:
         if missing:
             raise RuntimeError(f"required graph layers unavailable: {sorted(missing)}")
 
-        blocked = set() if include_tainted else self._blocked_identities()
+        security_denied = self._security_denied_identities()
+        tainted = set() if include_tainted else self._tainted_identities()
+        blocked = security_denied | tainted
         task_tokens = set(_tokens(normalized_task))
         node_by_key: dict[str, GraphNode] = {}
         layer_by_key: dict[str, GraphLayer] = {}
