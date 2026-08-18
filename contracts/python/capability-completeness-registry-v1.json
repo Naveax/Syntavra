@@ -181,7 +181,7 @@
     {
       "id": "programmatic_execution_v1",
       "group": "execution",
-      "state": "implemented",
+      "state": "certified",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -194,18 +194,29 @@
         "tests/runtime/test_programmatic_execution.py",
         ".github/workflows/programmatic-execution.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/programmatic-execution-v1.json",
+        "syntavra_runtime/programmatic_execution.py",
+        "tools/certify_programmatic_execution.py",
+        "tests/runtime/test_programmatic_execution.py",
+        ".github/workflows/programmatic-execution.yml"
+      ],
       "acceptance": "Typed call/map/parallel/filter/reduce and artifact-reference execution plane with bounded returns and receipts."
     },
     {
       "id": "deferred_tool_discovery_v1",
       "group": "tools",
-      "state": "partial",
+      "state": "implemented",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "syntavra_runtime/tool_registry.py",
-        "syntavra_runtime/mcp_application.py"
+        "syntavra_runtime/mcp_application.py",
+        "syntavra_runtime/deferred_tool_discovery.py",
+        "contracts/python/deferred-tool-discovery-v1.json",
+        "tools/certify_deferred_tool_discovery.py",
+        "tests/runtime/test_deferred_tool_discovery.py",
+        ".github/workflows/deferred-tool-discovery.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Deferred loading, semantic families, namespace tree, capability fingerprints, negotiation, token budget, and fail-closed ambiguity."
