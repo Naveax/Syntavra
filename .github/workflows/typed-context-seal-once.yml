@@ -1,0 +1,64 @@
+name: Typed Context Seal Once
+
+on:
+  push:
+    branches:
+      - agent/typed-context-object-store-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: typed-context-seal-once
+  cancel-in-progress: false
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/typed-context-object-store-v1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Seal exact final tree and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/typed-context-seal-once.yml
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_typed_context_object_store -v
+          python tools/certify_typed_context_object_store.py --out /tmp/typed-context-object-store.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          python tools/certify_evidence_store_v2.py --out /tmp/evidence-store-v2.json
+          python tools/validate.py > /tmp/repository-validation.json
+          git diff --check
+
+      - name: Commit exact-tree seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.sha256 .github/workflows/typed-context-seal-once.yml
+          git commit -m "Seal Typed Context exact-tree manifest"
+          git push origin HEAD:agent/typed-context-object-store-v1
