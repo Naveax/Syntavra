@@ -108,6 +108,9 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertIn("python-authority-${{ github.event.pull_request.number || github.ref }}", workflow)
         self.assertIn("tests.runtime.test_python_authority", workflow)
         self.assertIn("tools/certify_python_authority.py", workflow)
+        self.assertIn("rm -rf syntavra_runtime.egg-info", workflow)
+        self.assertIn("git diff --check", workflow)
+        self.assertIn('test -z "$status"', workflow)
 
         release_gate = (ROOT / EXPECTED_ENFORCEMENT["release_main_gate"]).read_text(encoding="utf-8")
         self.assertIn("tests.runtime.test_python_authority", release_gate)
