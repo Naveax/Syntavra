@@ -133,7 +133,7 @@
     {
       "id": "evidence_store_v2",
       "group": "evidence-context",
-      "state": "implemented",
+      "state": "certified",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -145,16 +145,30 @@
         "tests/runtime/test_evidence_store_v2.py",
         ".github/workflows/evidence-store-v2.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/evidence-store-v2.json",
+        "syntavra_runtime/evidence_store.py",
+        "tools/certify_evidence_store_v2.py",
+        "tests/runtime/test_evidence_store_v2.py",
+        ".github/workflows/evidence-store-v2.yml"
+      ],
       "acceptance": "Content-addressed evidence, lineage, mutation journal, retention, trust/taint, recovery integrity, and secret-aware storage policy."
     },
     {
       "id": "typed_context_object_store_v1",
       "group": "evidence-context",
-      "state": "planned",
+      "state": "implemented",
       "classification": "NEW",
       "required_for_python_complete": true,
-      "implementation_evidence": [],
+      "implementation_evidence": [
+        "syntavra_runtime/typed_context_objects.py",
+        "contracts/python/typed-context-object-store-v1.json",
+        "tools/certify_typed_context_object_store.py",
+        "tests/runtime/test_typed_context_object_store.py",
+        ".github/workflows/typed-context-object-store.yml",
+        "syntavra_runtime/universal_context_item.py",
+        "syntavra_runtime/evidence_store.py"
+      ],
       "certification_evidence": [],
       "acceptance": "Typed exact/structural/semantic/bounded-preview objects with deterministic roundtrip."
     },
