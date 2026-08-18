@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "family": "deferred-tool-discovery",
+  "phase": "python-first",
+  "claim": "DEFERRED_TOOL_DISCOVERY_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/deferred_tool_discovery.py",
+  "application_pipeline": "syntavra_runtime/mcp_application.py:MCPApplicationPipeline",
+  "policy_authority": "syntavra_runtime/mcp_policy.py:MCPToolPolicy",
+  "schema_compiler_authority": "syntavra_runtime/tool_registry.py:ToolSchemaCompiler",
+  "stages": [
+    "family-virtualization",
+    "explicit-selector-expansion"
+  ],
+  "stage1_policy": {
+    "full_input_schemas_forbidden": true,
+    "namespace_tree_required": true,
+    "semantic_families_required": true,
+    "capability_fingerprints_required": true,
+    "risk_labels_required": true,
+    "no_tool_needed_classifier_required": true,
+    "unknown_query_fails_closed": true,
+    "ambiguous_top_match_fails_closed": true
+  },
+  "stage2_policy": {
+    "explicit_selector_required": true,
+    "existing_schema_compiler_required": true,
+    "existing_profile_policy_required": true,
+    "host_capability_negotiation_required": true,
+    "profile_and_host_token_budget_enforced": true,
+    "max_tool_count_enforced": true,
+    "health_and_compatibility_enforced": true,
+    "unknown_selector_fails_closed": true,
+    "budget_exhaustion_is_explicit": true
+  },
+  "virtualization_policy": {
+    "internal_family_virtualization_only": true,
+    "public_cli_route_added": false,
+    "synthetic_executable_tool_added": false,
+    "existing_tool_identity_preserved": true,
+    "parallel_tool_registry_forbidden": true
+  },
+  "cache_policy": {
+    "bounded": true,
+    "deterministic_key": true,
+    "catalog_hash_bound": true,
+    "profile_bound": true,
+    "host_fingerprint_bound": true,
+    "health_state_bound": true
+  },
+  "receipt_policy": {
+    "deterministic": true,
+    "query_hash_required": true,
+    "catalog_hash_required": true,
+    "host_fingerprint_required": true,
+    "selected_family_or_tools_required_when_applicable": true,
+    "schema_token_usage_required": true,
+    "reason_required": true
+  },
+  "health_policy": {
+    "healthy_and_degraded_may_be_discovered": true,
+    "unavailable_excluded": true,
+    "incompatible_excluded": true
+  },
+  "integration": {
+    "mcp_application_pipeline_preserved": true,
+    "mcp_call_authorization_preserved": true,
+    "deferred_discovery_is_additive": true,
+    "no_rust_promotion_credit": true,
+    "python_complete_claim": false
+  }
+}
