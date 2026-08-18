@@ -1,0 +1,141 @@
+name: Universal Context Item State Migration
+
+on:
+  push:
+    branches:
+      - agent/universal-context-item-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: universal-context-item-state-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/universal-context-item-v1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Apply exact milestone transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry_path = Path('contracts/python/capability-completeness-registry-v1.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          rows = {row['id']: row for row in registry['capabilities']}
+
+          guard = rows['rust_feature_freeze_guard_v1']
+          assert guard['state'] == 'implemented', guard
+          guard['state'] = 'certified'
+          guard['certification_evidence'] = [
+              'contracts/python/rust-feature-freeze-guard-v1.json',
+              'tools/check_rust_feature_freeze.py',
+              'tools/certify_rust_feature_freeze_guard.py',
+              'tests/runtime/test_rust_feature_freeze_guard.py',
+              '.github/workflows/rust-feature-freeze-guard.yml',
+          ]
+
+          universal = rows['universal_context_item_v1']
+          assert universal['state'] == 'partial', universal
+          universal['state'] = 'implemented'
+          universal['implementation_evidence'] = [
+              'syntavra_runtime/context_pack.py',
+              'syntavra_runtime/runtime_evidence.py',
+              'syntavra_runtime/universal_context_item.py',
+              'contracts/python/universal-context-item-v1.json',
+              'tools/certify_universal_context_item.py',
+              'tests/runtime/test_universal_context_item.py',
+              '.github/workflows/universal-context-item.yml',
+          ]
+          universal['certification_evidence'] = []
+          registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          rust_cert_path = Path('tools/certify_rust_feature_freeze_guard.py')
+          rust_cert = rust_cert_path.read_text(encoding='utf-8')
+          old = 'guard_entry.get("state") in {"implemented", "verified"}, "Rust freeze guard registry state must be pre-certification implemented/verified"'
+          new = 'guard_entry.get("state") in {"implemented", "verified", "certified"}, "Rust freeze guard registry state is invalid"'
+          assert rust_cert.count(old) == 1, rust_cert.count(old)
+          rust_cert = rust_cert.replace(old, new, 1)
+          rust_cert_path.write_text(rust_cert, encoding='utf-8')
+
+          completeness_test = Path('tests/runtime/test_python_capability_completeness.py')
+          tests = completeness_test.read_text(encoding='utf-8')
+          old = '''        self.assertEqual(report["current_milestone"], "rust_feature_freeze_guard_v1")\n        self.assertTrue(report["registry_admission_ready"])\n        self.assertTrue(report["registry_certified"])\n'''
+          new = '''        contract = self._contract()\n        by_id = {item["id"]: item for item in contract["capabilities"]}\n        expected_current = next((milestone for milestone in contract["milestone_order"] if (by_id.get(milestone) or {}).get("state") != "certified"), "python_complete")\n        self.assertEqual(report["current_milestone"], expected_current)\n        self.assertTrue(report["registry_admission_ready"])\n        self.assertTrue(report["registry_certified"])\n'''
+          assert tests.count(old) == 1, tests.count(old)
+          tests = tests.replace(old, new, 1)
+          old = '''        self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])\n        self.assertIn("rust_feature_freeze_guard_v1", report["uncertified_required"])\n'''
+          new = '''        self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])\n        self.assertNotIn("rust_feature_freeze_guard_v1", report["uncertified_required"])\n        self.assertIn("universal_context_item_v1", report["uncertified_required"])\n'''
+          assert tests.count(old) == 1, tests.count(old)
+          tests = tests.replace(old, new, 1)
+          completeness_test.write_text(tests, encoding='utf-8')
+
+          validate_path = Path('tools/validate.py')
+          validate = validate_path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  '    ROOT / "contracts" / "python" / "python-authority-v1.json",\n    ROOT / "syntavra_runtime" / "release_identity.py",',
+                  '    ROOT / "contracts" / "python" / "python-authority-v1.json",\n    ROOT / "contracts" / "python" / "universal-context-item-v1.json",\n    ROOT / "syntavra_runtime" / "universal_context_item.py",\n    ROOT / "syntavra_runtime" / "release_identity.py",',
+              ),
+              (
+                  '    ROOT / "tests" / "runtime" / "test_python_authority.py",\n    SKILL / "SKILL.md",',
+                  '    ROOT / "tests" / "runtime" / "test_python_authority.py",\n    ROOT / "tests" / "runtime" / "test_universal_context_item.py",\n    SKILL / "SKILL.md",',
+              ),
+              (
+                  '    ROOT / "tools" / "certify_python_authority.py",\n]',
+                  '    ROOT / "tools" / "certify_python_authority.py",\n    ROOT / "tools" / "certify_universal_context_item.py",\n    ROOT / ".github" / "workflows" / "universal-context-item.yml",\n]',
+              ),
+              (
+                  '\n\ndef main() -> int:\n',
+                  '''\n\ndef _universal_context_item_check() -> tuple[bool, str]:\n    try:\n        from tools.certify_universal_context_item import certify\n\n        report = certify(ROOT)\n        summary = {\n            "claim": report.get("claim"),\n            "exact_head": report.get("exact_head"),\n            "admission_ready": report.get("admission_ready"),\n            "roundtrip": (report.get("runtime") or {}).get("roundtrip"),\n            "tamper_fail_closed": (report.get("runtime") or {}).get("tamper_fail_closed"),\n            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),\n            "rust_resume_allowed": report.get("rust_resume_allowed"),\n        }\n        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)\n    except Exception as exc:\n        return False, f"{type(exc).__name__}: {exc}"\n\n\ndef main() -> int:\n''',
+              ),
+              (
+                  '    authority_ok, authority_detail = _python_authority_check()\n    checks.append(("python_authority", authority_ok, authority_detail))\n\n    result = {',
+                  '    authority_ok, authority_detail = _python_authority_check()\n    checks.append(("python_authority", authority_ok, authority_detail))\n\n    universal_ok, universal_detail = _universal_context_item_check()\n    checks.append(("universal_context_item", universal_ok, universal_detail))\n\n    result = {',
+              ),
+          ]
+          for old, new in replacements:
+              count = validate.count(old)
+              assert count == 1, (old[:100], count)
+              validate = validate.replace(old, new, 1)
+          validate_path.write_text(validate, encoding='utf-8')
+          PY
+
+          rm .github/workflows/universal-context-state-migrate.yml
+          python -m py_compile \
+            syntavra_runtime/universal_context_item.py \
+            tools/certify_universal_context_item.py \
+            tools/certify_rust_feature_freeze_guard.py \
+            tools/validate.py
+          git diff --check
+
+      - name: Commit migrated Universal Context Item state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            contracts/python/capability-completeness-registry-v1.json \
+            tools/certify_rust_feature_freeze_guard.py \
+            tests/runtime/test_python_capability_completeness.py \
+            tools/validate.py \
+            .github/workflows/universal-context-state-migrate.yml
+          git commit -m "Advance registry to Universal Context Item milestone"
+          git push origin HEAD:agent/universal-context-item-v1
