@@ -5,9 +5,8 @@ on:
     branches:
       - main
     types:
-      - opened
-      - reopened
       - synchronize
+      - reopened
 
 permissions:
   contents: write
@@ -21,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Checkout exact implementation branch
+      - name: Checkout implementation branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: agent/programmatic-execution-v1
@@ -32,7 +31,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Apply Programmatic Execution milestone transition
+      - name: Apply non-workflow milestone transition
         shell: bash
         run: |
           set -euo pipefail
@@ -88,17 +87,6 @@ jobs:
           assert pin.count(old) == 1, pin.count(old)
           pin_path.write_text(pin.replace(old, new, 1), encoding='utf-8')
 
-          release_path = Path('.github/workflows/release-main-merge-gate.yml')
-          release = release_path.read_text(encoding='utf-8')
-          old = '''          python -m unittest tests.runtime.test_typed_context_object_store -v\n          python tools/certify_python_publication_registry_reference.py'''
-          new = '''          python -m unittest tests.runtime.test_typed_context_object_store -v\n          python -m unittest tests.runtime.test_programmatic_execution -v\n          python tools/certify_python_publication_registry_reference.py'''
-          assert release.count(old) == 1, release.count(old)
-          release = release.replace(old, new, 1)
-          old = '''          python tools/certify_typed_context_object_store.py --out /tmp/typed-context-object-store.json\n          python tools/check_rust_feature_freeze.py'''
-          new = '''          python tools/certify_typed_context_object_store.py --out /tmp/typed-context-object-store.json\n          python tools/certify_programmatic_execution.py --out /tmp/programmatic-execution.json\n          python tools/check_rust_feature_freeze.py'''
-          assert release.count(old) == 1, release.count(old)
-          release_path.write_text(release.replace(old, new, 1), encoding='utf-8')
-
           validate_path = Path('tools/validate.py')
           validate = validate_path.read_text(encoding='utf-8')
           replacements = [
@@ -124,7 +112,7 @@ jobs:
               ),
               (
                   '\n\ndef main() -> int:\n',
-                  '''\n\ndef _programmatic_execution_check() -> tuple[bool, str]:\n    try:\n        from tools.certify_programmatic_execution import certify\n\n        report = certify(ROOT)\n        summary = {\n            "claim": report.get("claim"),\n            "exact_head": report.get("exact_head"),\n            "admission_ready": report.get("admission_ready"),\n            "operations": (report.get("runtime") or {}).get("operations"),\n            "large_result_externalized": (report.get("runtime") or {}).get("large_result_externalized"),\n            "artifact_exact_recovery": (report.get("runtime") or {}).get("artifact_exact_recovery"),\n            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),\n            "rust_resume_allowed": report.get("rust_resume_allowed"),\n        }\n        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)\n    except Exception as exc:\n        return False, f"{type(exc).__name__}: {exc}"\n\n\ndef main() -> int:\n''',
+                  '''\n\ndef _programmatic_execution_check() -> tuple[bool, str]:\n    try:\n        from tools.certify_programmatic_execution import certify\n        report = certify(ROOT)\n        summary = {\n            "claim": report.get("claim"),\n            "exact_head": report.get("exact_head"),\n            "admission_ready": report.get("admission_ready"),\n            "operations": (report.get("runtime") or {}).get("operations"),\n            "large_result_externalized": (report.get("runtime") or {}).get("large_result_externalized"),\n            "artifact_exact_recovery": (report.get("runtime") or {}).get("artifact_exact_recovery"),\n            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),\n            "rust_resume_allowed": report.get("rust_resume_allowed"),\n        }\n        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)\n    except Exception as exc:\n        return False, f"{type(exc).__name__}: {exc}"\n\n\ndef main() -> int:\n''',
               ),
               (
                   '    typed_ok, typed_detail = _typed_context_object_store_check()\n    checks.append(("typed_context_object_store", typed_ok, typed_detail))\n\n    result = {',
@@ -139,19 +127,15 @@ jobs:
 
           checkpoint_path = Path('docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt')
           checkpoint = checkpoint_path.read_text(encoding='utf-8')
+          marker = 'APPENDED CURRENT CHECKPOINT — 2026-08-18 — PROGRAMMATIC EXECUTION ACTIVE'
+          assert marker not in checkpoint
           checkpoint += '''\n\n======================================================================\nAPPENDED CURRENT CHECKPOINT — 2026-08-18 — PROGRAMMATIC EXECUTION ACTIVE\n======================================================================\n\nCURRENT ADMITTED MAIN:\n97546e8a9db34afc308a7a5fa2cc7d604b0b9048\n\nACTIVE IMPLEMENTATION BRANCH:\nagent/programmatic-execution-v1\n\nPYTHON STATUS:\nPYTHON-FIRST ACTIVE — typed_context_object_store_v1 is admitted; programmatic_execution_v1 is the current milestone.\n\nRUST STATUS:\nFEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.\n\nCURRENT IMPLEMENTATION:\n- explicit ProgrammaticFunctionRegistry added; no eval, dynamic import, or implicit callable discovery.\n- typed call/map/parallel/filter/reduce execution added.\n- parallel execution is ordered and requires a callable registered as pure.\n- canonical JSON result identity and content-addressed receipts added.\n- small results remain bounded inline; large results externalize to the existing ArtifactStore.\n- artifact references can feed later programmatic calls with exact recovery verification.\n- item, worker, inline-result, preview, and error-message bounds are explicit.\n- failure receipts redact secret-like values.\n- existing execution sandbox and autonomous agent surfaces remain intact.\n- Programmatic Execution contract, regression suite, certifier and exact-head workflow added.\n\nVERIFIED PRE-ADMISSION BOUNDARY:\n- Typed Context Object Store admitted through PR #140 at main 97546e8a9db34afc308a7a5fa2cc7d604b0b9048.\n- Typed Context registry state advances to certified on this milestone branch.\n- Programmatic Execution grants no Rust promotion credit and creates no parallel database.\n- Python COMPLETE remains false; Rust resume remains false.\n\nNEXT EXACT TASK:\n- run Programmatic Execution branch smoke and exact-head certifier.\n- seal MANIFEST.sha256 from the exact final tree.\n- pass Release Main, Package Provenance, Python Capability Completeness, Rust Freeze and Programmatic Execution exact-head gates.\n- merge, then advance to deferred_tool_discovery_v1.\n'''
           checkpoint_path.write_text(checkpoint, encoding='utf-8')
           PY
-
-          rm .github/workflows/programmatic-execution-state-migrate.yml
-          python -m py_compile \
-            syntavra_runtime/programmatic_execution.py \
-            tools/certify_programmatic_execution.py \
-            tools/certify_typed_context_object_store.py \
-            tools/validate.py
+          python -m py_compile syntavra_runtime/programmatic_execution.py tools/certify_programmatic_execution.py tools/certify_typed_context_object_store.py tools/validate.py
           git diff --check
 
-      - name: Commit Programmatic Execution state transition
+      - name: Commit non-workflow milestone transition
         shell: bash
         run: |
           set -euo pipefail
@@ -161,9 +145,7 @@ jobs:
             contracts/python/capability-completeness-registry-v1.json \
             tools/certify_typed_context_object_store.py \
             tests/runtime/test_release_action_pins.py \
-            .github/workflows/release-main-merge-gate.yml \
             tools/validate.py \
-            docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt \
-            .github/workflows/programmatic-execution-state-migrate.yml
+            docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt
           git commit -m "Advance registry to Programmatic Execution milestone"
           git push origin HEAD:agent/programmatic-execution-v1
