@@ -29,7 +29,10 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertTrue(contract["strict"])
         self.assertEqual(contract["state_vocabulary"], EXPECTED_STATES)
         self.assertEqual(contract["classification_vocabulary"], EXPECTED_CLASSIFICATIONS)
-        self.assertEqual(contract["milestone_order"][:10], EXPECTED_MILESTONE_PREFIX)
+        self.assertEqual(
+            contract["milestone_order"][: len(EXPECTED_MILESTONE_PREFIX)],
+            EXPECTED_MILESTONE_PREFIX,
+        )
         self.assertEqual(len(contract["milestone_order"]), len(set(contract["milestone_order"])))
 
     def test_registry_does_not_duplicate_route_identity_lists(self) -> None:
