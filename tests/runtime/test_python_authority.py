@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import inspect
 import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from tools import validate as repository_validate
 from tools.certify_python_authority import _assert_no_route_identity_copy, certify
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -67,6 +69,27 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertEqual(report["rust"]["remaining_owned_routes"], 71)
         self.assertEqual(report["rust"]["unowned_routes"], 0)
         self.assertFalse(report["rust"]["resume_allowed"])
+
+    def test_repository_validator_enforces_python_authority(self) -> None:
+        required = {path.relative_to(ROOT).as_posix() for path in repository_validate.REQUIRED}
+        self.assertTrue(
+            {
+                ".github/workflows/python-authority.yml",
+                "contracts/python/python-authority-v1.json",
+                "tests/runtime/test_python_authority.py",
+                "tools/certify_python_authority.py",
+            }.issubset(required)
+        )
+        ok, detail = repository_validate._python_authority_check()
+        self.assertTrue(ok, detail)
+        observed = json.loads(detail)
+        self.assertEqual(observed["claim"], "PYTHON_FEATURE_DEVELOPMENT_AUTHORITY")
+        self.assertEqual(observed["python_public_routes"], 245)
+        self.assertEqual(observed["rust_implemented_native_routes"], 245)
+        self.assertEqual(observed["rust_promoted_native_routes"], 174)
+        self.assertEqual(observed["rust_remaining_routes"], 71)
+        self.assertFalse(observed["rust_resume_allowed"])
+        self.assertIn('checks.append(("python_authority", authority_ok, authority_detail))', inspect.getsource(repository_validate.main))
 
 
 if __name__ == "__main__":
