@@ -53,11 +53,13 @@ jobs:
           python -m unittest tests.runtime.test_python_authority -v
           python -m unittest tests.runtime.test_python_capability_completeness -v
           python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python -m unittest tests.runtime.test_universal_context_item -v
           python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
           python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
           python tools/certify_python_authority.py --out /tmp/python-authority.json
           python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
           python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          python tools/certify_universal_context_item.py --out /tmp/universal-context-item.json
           python tools/check_rust_feature_freeze.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --out /tmp/rust-feature-freeze-diff.json
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
           python tools/refresh_manifest.py --check
