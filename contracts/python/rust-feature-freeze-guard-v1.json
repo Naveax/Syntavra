@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "family": "rust-feature-freeze-guard",
+  "phase": "python-first",
+  "claim": "RUST_FEATURE_FREEZE_ENFORCED",
+  "strict": true,
+  "authority": {
+    "python_authority": "contracts/python/python-authority-v1.json",
+    "capability_registry": "contracts/python/capability-completeness-registry-v1.json",
+    "migration_baseline": "contracts/engine/phase2-rust-migration-matrix-v1.json"
+  },
+  "expected": {
+    "rust_implementation_coverage": 245,
+    "rust_production_promoted": 174,
+    "remaining_parity_promotion": 71,
+    "remaining_owned": 71,
+    "unowned": 0,
+    "atomic_promotion_target": 245,
+    "python_complete": false,
+    "rust_resume_allowed": false
+  },
+  "protected": {
+    "native_path_prefixes": [
+      "native/"
+    ],
+    "remaining71_path_prefixes": [
+      ".github/workflows/remaining71-",
+      "tools/validate_remaining71_"
+    ],
+    "promotion_authority_paths": [
+      ".github/workflows/dual-engine-promotion-boundary.yml",
+      "contracts/engine/dual-engine-public-surface-v2.json",
+      "contracts/engine/phase2-rust-migration-matrix-v1.json",
+      "tests/runtime/test_dual_engine_promotion_boundary.py",
+      "tools/report_missing_native_public_routes.py",
+      "tools/verify_dual_engine_public_surface.py"
+    ]
+  },
+  "maintenance": {
+    "allowed_exception_types": [
+      "build-blocker",
+      "security",
+      "data-loss",
+      "contract-blocker"
+    ],
+    "ordinary_ci_uses_exception": false,
+    "exception_may_change_native_paths": true,
+    "exception_may_change_remaining71_programs": false,
+    "exception_may_change_promotion_authority": false,
+    "explicit_reason_required": true
+  },
+  "policy": {
+    "rust_feature_development_allowed": false,
+    "rust_production_promotion_allowed": false,
+    "native_counter_change_allowed": false,
+    "remaining71_parity_work_allowed": false,
+    "promotion_authority_change_allowed": false,
+    "python_complete_required_for_resume": true,
+    "route_identity_list_must_not_be_duplicated": true,
+    "selector_ownership_is_not_behavioral_parity": true,
+    "no_silent_fallback": true
+  }
+}
