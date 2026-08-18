@@ -107,11 +107,13 @@ REQUIRED = [
     ROOT / "contracts" / "python" / "typed-context-object-store-v1.json",
     ROOT / "contracts" / "python" / "programmatic-execution-v1.json",
     ROOT / "contracts" / "python" / "deferred-tool-discovery-v1.json",
+    ROOT / "contracts" / "python" / "unified-context-namespace-v1.json",
     ROOT / "syntavra_runtime" / "universal_context_item.py",
     ROOT / "syntavra_runtime" / "evidence_store.py",
     ROOT / "syntavra_runtime" / "typed_context_objects.py",
     ROOT / "syntavra_runtime" / "programmatic_execution.py",
     ROOT / "syntavra_runtime" / "deferred_tool_discovery.py",
+    ROOT / "syntavra_runtime" / "context_namespace.py",
     ROOT / "syntavra_runtime" / "release_identity.py",
     ROOT / "syntavra_runtime" / "bundled_skill" / "SKILL.md",
     ROOT / "syntavra_runtime" / "bundled_skill" / "hosts.json",
@@ -124,6 +126,7 @@ REQUIRED = [
     ROOT / "tests" / "runtime" / "test_typed_context_object_store.py",
     ROOT / "tests" / "runtime" / "test_programmatic_execution.py",
     ROOT / "tests" / "runtime" / "test_deferred_tool_discovery.py",
+    ROOT / "tests" / "runtime" / "test_context_namespace.py",
     SKILL / "SKILL.md",
     SKILL / "data" / "platforms.json",
     SKILL / "scripts" / "platforms.py",
@@ -138,11 +141,13 @@ REQUIRED = [
     ROOT / "tools" / "certify_typed_context_object_store.py",
     ROOT / "tools" / "certify_programmatic_execution.py",
     ROOT / "tools" / "certify_deferred_tool_discovery.py",
+    ROOT / "tools" / "certify_context_namespace.py",
     ROOT / ".github" / "workflows" / "universal-context-item.yml",
     ROOT / ".github" / "workflows" / "evidence-store-v2.yml",
     ROOT / ".github" / "workflows" / "typed-context-object-store.yml",
     ROOT / ".github" / "workflows" / "programmatic-execution.yml",
     ROOT / ".github" / "workflows" / "deferred-tool-discovery.yml",
+    ROOT / ".github" / "workflows" / "unified-context-namespace.yml",
 ]
 
 ACTUAL_SECRET = re.compile(r"(?<![A-Za-z0-9_])(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,})")
@@ -357,6 +362,27 @@ def _deferred_tool_discovery_check() -> tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc}"
 
 
+def _context_namespace_check() -> tuple[bool, str]:
+    try:
+        from tools.certify_context_namespace import certify
+
+        report = certify(ROOT)
+        summary = {
+            "claim": report.get("claim"),
+            "exact_head": report.get("exact_head"),
+            "admission_ready": report.get("admission_ready"),
+            "syntavra_scheme": (report.get("runtime") or {}).get("syntavra_scheme"),
+            "progressive_descent": (report.get("runtime") or {}).get("progressive_repo_directory_file_symbol_lines"),
+            "l3_exact_reveal": (report.get("runtime") or {}).get("l3_integrity_checked_exact_reveal"),
+            "trajectory": (report.get("runtime") or {}).get("retrieval_trajectory"),
+            "rust_promoted": (report.get("rust") or {}).get("production_promoted"),
+            "rust_resume_allowed": report.get("rust_resume_allowed"),
+        }
+        return bool(report.get("ok")), json.dumps(summary, sort_keys=True)
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
 def main() -> int:
     checks: list[tuple[str, bool, str]] = []
     missing = [str(path.relative_to(ROOT)) for path in REQUIRED if not path.is_file()]
@@ -484,6 +510,9 @@ def main() -> int:
 
     deferred_ok, deferred_detail = _deferred_tool_discovery_check()
     checks.append(("deferred_tool_discovery", deferred_ok, deferred_detail))
+
+    context_namespace_ok, context_namespace_detail = _context_namespace_check()
+    checks.append(("context_namespace", context_namespace_ok, context_namespace_detail))
 
     result = {
         "ok": all(passed for _, passed, _ in checks),

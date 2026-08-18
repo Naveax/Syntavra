@@ -367,3 +367,53 @@ NEXT EXACT TASK:
 - run final exact-head admission gates for PR #142.
 - merge only after all load-bearing gates pass.
 - after admission advance to unified_context_namespace_v1.
+
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-19 — UNIFIED CONTEXT NAMESPACE ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+89ac2260885a971bbedff113a66071af54804dcf
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/unified-context-namespace-v1
+
+ACTIVE PR:
+#143 — Add Unified Context Namespace v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — deferred_tool_discovery_v1 is admitted; unified_context_namespace_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.
+
+CURRENT IMPLEMENTATION:
+- resolver-backed syntavra:// unified namespace added over UniversalContextItem authority.
+- canonical repo/evidence/memory/task/tool/artifact/context roots added.
+- progressive repo -> directory -> file -> symbol -> lines addressing added.
+- L0 identity, L1 explanation/trust/freshness, L2 bounded structure, and L3 integrity-checked exact payload views added.
+- payload-free why explanation added.
+- browse/why/reveal retrieval trajectory receipts added with deterministic content-addressed identities.
+- namespace stores no parallel persistent database; canonical payload authority remains resolver/EvidenceStore-backed.
+- no public CLI route added.
+- Deferred Tool Discovery lifecycle state advances to certified on this branch.
+- milestone order is corrected so Multi-Graph Retrieval follows Context Namespace before Adaptive Context Policy.
+
+VERIFIED PRE-ADMISSION BOUNDARY:
+- Context Namespace runtime regression suite exists and is exact-head workflow bound.
+- Context Namespace contract and certifier exist.
+- Python COMPLETE remains false.
+- Rust production promotion remains 174/245 and Rust resume remains false.
+
+BLOCKERS:
+- final enforcement integration and exact-head Context Namespace certificate still required.
+- canonical MANIFEST.sha256 seal still required after permanent tree is frozen.
+- final exact-head load-bearing CI and merge required before admission.
+
+NEXT EXACT TASK:
+- finish enforcement integration without weakening immutable action pins.
+- pass Context Namespace runtime/certifier on exact PR head.
+- seal MANIFEST.sha256 from the permanent tree.
+- pass final Release Main + Package Provenance + Python-first gates.
+- merge, then advance to multi_graph_retrieval_v1.

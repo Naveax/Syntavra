@@ -256,7 +256,7 @@ def certify(repo: Path) -> dict[str, Any]:
 
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
-    _require(completeness.get("current_milestone") == "deferred_tool_discovery_v1", "registry has not advanced to deferred_tool_discovery_v1")
+    _require(bool(completeness.get("current_milestone")), "capability registry current milestone missing")
     _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
     _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
 
@@ -271,7 +271,7 @@ def certify(repo: Path) -> dict[str, Any]:
     registry = _read_json(repo / REGISTRY_RELATIVE)
     by_id = {row["id"]: row for row in registry.get("capabilities", []) if isinstance(row, dict) and isinstance(row.get("id"), str)}
     _require((by_id.get("programmatic_execution_v1") or {}).get("state") == "certified", "Programmatic Execution must be certified before Deferred discovery admission")
-    _require((by_id.get("deferred_tool_discovery_v1") or {}).get("state") in {"implemented", "verified"}, "Deferred discovery registry state must be pre-certification implemented/verified")
+    _require((by_id.get("deferred_tool_discovery_v1") or {}).get("state") in {"implemented", "verified", "certified"}, "Deferred discovery registry state is not admissible")
 
     runtime = _runtime_smoke()
     enforcement = _validate_enforcement(repo)

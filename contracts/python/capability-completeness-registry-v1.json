@@ -45,6 +45,7 @@
     "programmatic_execution_v1",
     "deferred_tool_discovery_v1",
     "unified_context_namespace_v1",
+    "multi_graph_retrieval_v1",
     "adaptive_context_policy_v1"
   ],
   "capabilities": [
@@ -206,7 +207,7 @@
     {
       "id": "deferred_tool_discovery_v1",
       "group": "tools",
-      "state": "implemented",
+      "state": "certified",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -218,16 +219,29 @@
         "tests/runtime/test_deferred_tool_discovery.py",
         ".github/workflows/deferred-tool-discovery.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/deferred-tool-discovery-v1.json",
+        "syntavra_runtime/deferred_tool_discovery.py",
+        "tools/certify_deferred_tool_discovery.py",
+        "tests/runtime/test_deferred_tool_discovery.py",
+        ".github/workflows/deferred-tool-discovery.yml"
+      ],
       "acceptance": "Deferred loading, semantic families, namespace tree, capability fingerprints, negotiation, token budget, and fail-closed ambiguity."
     },
     {
       "id": "unified_context_namespace_v1",
       "group": "context-navigation",
-      "state": "planned",
+      "state": "implemented",
       "classification": "NEW",
       "required_for_python_complete": true,
-      "implementation_evidence": [],
+      "implementation_evidence": [
+        "syntavra_runtime/context_namespace.py",
+        "contracts/python/unified-context-namespace-v1.json",
+        "tools/certify_context_namespace.py",
+        "tests/runtime/test_context_namespace.py",
+        ".github/workflows/unified-context-namespace.yml",
+        "syntavra_runtime/universal_context_item.py"
+      ],
       "certification_evidence": [],
       "acceptance": "syntavra:// namespace with progressive L0-L3 disclosure, why/reveal, and retrieval trajectory receipts."
     },
