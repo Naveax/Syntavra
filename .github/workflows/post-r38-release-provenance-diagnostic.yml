@@ -21,7 +21,7 @@ jobs:
       PYTHONUTF8: "1"
     steps:
       - name: Checkout exact candidate head
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
@@ -33,11 +33,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
           test -z "$(git status --porcelain --untracked-files=all)"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'npm'
@@ -275,7 +275,7 @@ jobs:
       - name: Attest non-published package artifacts
         id: attestation
         if: github.event_name == 'push'
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: |
             /tmp/release-provenance/python/*
@@ -290,7 +290,7 @@ jobs:
 
       - name: Upload package provenance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/release-provenance
@@ -300,28 +300,46 @@ jobs:
       - name: Enforce non-publishing release readiness
         if: always()
         shell: bash
+        env:
+          BASELINE_OUTCOME: ${{ steps.baseline.outcome }}
+          PYTHON_PACKAGE_OUTCOME: ${{ steps.python_package.outcome }}
+          NPM_INSTALLER_OUTCOME: ${{ steps.npm_installer.outcome }}
+          NPM_SDK_OUTCOME: ${{ steps.npm_sdk.outcome }}
+          VSCODE_PACKAGE_OUTCOME: ${{ steps.vscode_package.outcome }}
+          RUST_PRODUCTION_OUTCOME: ${{ steps.rust_production.outcome }}
+          RUST_LEGACY_OUTCOME: ${{ steps.rust_legacy.outcome }}
+          IDENTITY_OUTCOME: ${{ steps.identity.outcome }}
+          CLEAN_TREE_OUTCOME: ${{ steps.clean_tree.outcome }}
+          ATTESTATION_OUTCOME: ${{ steps.attestation.outcome }}
         run: |
           set -euo pipefail
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
           printf '%s\n' \
-            "baseline=${{ steps.baseline.outcome }}" \
-            "python_package=${{ steps.python_package.outcome }}" \
-            "npm_installer=${{ steps.npm_installer.outcome }}" \
-            "npm_sdk=${{ steps.npm_sdk.outcome }}" \
-            "vscode_package=${{ steps.vscode_package.outcome }}" \
-            "rust_production=${{ steps.rust_production.outcome }}" \
-            "rust_legacy=${{ steps.rust_legacy.outcome }}" \
-            "identity=${{ steps.identity.outcome }}" \
-            "clean_tree=${{ steps.clean_tree.outcome }}" \
-            "attestation=${{ steps.attestation.outcome }}"
-          test "${{ steps.baseline.outcome }}" = success
-          test "${{ steps.python_package.outcome }}" = success
-          test "${{ steps.npm_installer.outcome }}" = success
-          test "${{ steps.npm_sdk.outcome }}" = success
-          test "${{ steps.vscode_package.outcome }}" = success
-          test "${{ steps.rust_production.outcome }}" = success
-          test "${{ steps.rust_legacy.outcome }}" = success
-          test "${{ steps.identity.outcome }}" = success
-          test "${{ steps.clean_tree.outcome }}" = success
-          if [ "${{ github.event_name }}" = "push" ]; then
-            test "${{ steps.attestation.outcome }}" = success
+            "target_head=$TARGET_HEAD" \
+            "actual_head=$ACTUAL_HEAD" \
+            "baseline=$BASELINE_OUTCOME" \
+            "python_package=$PYTHON_PACKAGE_OUTCOME" \
+            "npm_installer=$NPM_INSTALLER_OUTCOME" \
+            "npm_sdk=$NPM_SDK_OUTCOME" \
+            "vscode_package=$VSCODE_PACKAGE_OUTCOME" \
+            "rust_production=$RUST_PRODUCTION_OUTCOME" \
+            "rust_legacy=$RUST_LEGACY_OUTCOME" \
+            "identity=$IDENTITY_OUTCOME" \
+            "clean_tree=$CLEAN_TREE_OUTCOME" \
+            "attestation=$ATTESTATION_OUTCOME"
+          [[ "$TARGET_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          test "$ACTUAL_HEAD" = "$TARGET_HEAD"
+          test "$BASELINE_OUTCOME" = success
+          test "$PYTHON_PACKAGE_OUTCOME" = success
+          test "$NPM_INSTALLER_OUTCOME" = success
+          test "$NPM_SDK_OUTCOME" = success
+          test "$VSCODE_PACKAGE_OUTCOME" = success
+          test "$RUST_PRODUCTION_OUTCOME" = success
+          test "$RUST_LEGACY_OUTCOME" = success
+          test "$IDENTITY_OUTCOME" = success
+          test "$CLEAN_TREE_OUTCOME" = success
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            test "$ATTESTATION_OUTCOME" = success
+          else
+            test "$ATTESTATION_OUTCOME" = skipped
           fi

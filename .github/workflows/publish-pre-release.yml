@@ -10,6 +10,7 @@ on:
       - 'tests/runtime/test_pre_release_publication_visibility.py'
       - 'tests/runtime/test_pre_release_publication_attempt_ledger.py'
       - 'tests/runtime/test_pre_release_secret_scope.py'
+      - 'tests/runtime/test_release_action_pins.py'
       - 'tests/runtime/test_release_main_protection.py'
       - 'release/publish-readiness.json'
       - 'tools/build_pre_release_candidate_receipt_plan.py'
@@ -75,6 +76,7 @@ jobs:
           python -m unittest tests.runtime.test_pre_release_publication_visibility -v
           python -m unittest tests.runtime.test_pre_release_publication_attempt_ledger -v
           python -m unittest tests.runtime.test_pre_release_secret_scope -v
+          python -m unittest tests.runtime.test_release_action_pins -v
           python -m unittest tests.runtime.test_release_main_protection -v
       - name: Enforce exact clean PR head
         shell: bash
@@ -354,6 +356,7 @@ jobs:
                   'post_write_public_visibility_verification': True,
                   'step_scoped_publisher_secrets': True,
                   'immutable_external_action_pins': True,
+                  'immutable_release_action_pins': True,
               },
               'publication_order': [
                   'native',

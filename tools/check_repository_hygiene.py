@@ -9,9 +9,17 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.0.1"
 CHANNEL = "pre-release"
 
+PINNED_ARTIFACT_ATTESTATION = re.compile(
+    r"(?m)^\s*(?:-\s*)?uses:\s*actions/attest@[0-9a-fA-F]{40}(?:\s+#.*)?\s*$"
+)
+
 
 def load_json(path: str) -> dict:
     return json.loads((ROOT / path).read_text(encoding="utf-8"))
+
+
+def has_immutable_artifact_attestation(workflow_text: str) -> bool:
+    return PINNED_ARTIFACT_ATTESTATION.search(workflow_text) is not None
 
 
 def check_repository() -> dict:
@@ -113,7 +121,7 @@ def check_repository() -> dict:
         failures.append("npm-ci-not-enforced")
     if "npm test" not in workflow_text:
         failures.append("npm-tests-not-enforced")
-    if "actions/attest@v4" not in workflow_text:
+    if not has_immutable_artifact_attestation(workflow_text):
         failures.append("artifact-provenance-not-enforced")
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")

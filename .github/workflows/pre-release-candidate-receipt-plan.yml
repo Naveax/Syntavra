@@ -22,12 +22,12 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
@@ -66,12 +66,12 @@ jobs:
           test -n "$TARGET_HEAD"
           test -n "$SOURCE_RUN_ID"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
@@ -79,7 +79,7 @@ jobs:
         run: python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
 
       - name: Download exact-head provenance artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/source-provenance
@@ -150,7 +150,7 @@ jobs:
           PY
 
       - name: Upload pre-release candidate receipt plan
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-release-candidate-receipt-plan-${{ env.TARGET_HEAD }}
           path: /tmp/pre-release-candidate-receipt-plan.json
@@ -180,7 +180,7 @@ jobs:
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - name: Download candidate receipt plan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pre-release-candidate-receipt-plan-${{ env.TARGET_HEAD }}
           path: /tmp/receipt-plan
@@ -209,6 +209,6 @@ jobs:
           PY
 
       - name: Attest non-published candidate receipt plan
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: /tmp/receipt-plan/pre-release-candidate-receipt-plan.json
