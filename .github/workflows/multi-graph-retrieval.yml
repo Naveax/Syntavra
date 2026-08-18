@@ -45,7 +45,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m unittest tests.runtime.test_multi_graph_retrieval -v
+          python -m unittest \
+            tests.runtime.test_multi_graph_retrieval \
+            tests.runtime.test_multi_graph_security_hardening \
+            -v
 
       - name: Generate exact-head Multi-Graph Retrieval certificate
         shell: bash
