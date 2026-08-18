@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "family": "typed-context-object-store",
+  "phase": "python-first",
+  "claim": "TYPED_CONTEXT_OBJECT_STORE_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/typed_context_objects.py",
+  "canonical_object_type": "TypedContextObject",
+  "storage_facade": "TypedContextObjectStore",
+  "persistence_authority": "syntavra_runtime/evidence_store.py:EvidenceStoreV2",
+  "identity_authority": "syntavra_runtime/universal_context_item.py:UniversalContextItem",
+  "representations": [
+    "exact",
+    "structural",
+    "semantic",
+    "bounded-preview"
+  ],
+  "object_types": {
+    "GitDiff": ["base", "head", "files", "patch"],
+    "TestRun": ["command", "exit_code", "tests"],
+    "CompilerDiagnostics": ["tool", "diagnostics"],
+    "ASTGraph": ["language", "nodes", "edges"],
+    "DependencyGraph": ["nodes", "edges"],
+    "SearchResultSet": ["query", "results"],
+    "LogStream": ["source", "entries"],
+    "BrowserDOM": ["url", "nodes"],
+    "TraceSet": ["traces"],
+    "MetricSeries": ["name", "points"],
+    "DataFrame": ["columns", "rows"],
+    "FileSnapshot": ["path", "content"],
+    "SymbolSnapshot": ["symbol", "kind", "path"],
+    "ToolSchemaSet": ["tools"],
+    "MemoryObservation": ["observation", "scope"],
+    "TaskStateSnapshot": ["task_id", "state"]
+  },
+  "integrity": {
+    "deterministic_canonical_json": true,
+    "typed_object_sha256": true,
+    "universal_item_integrity_required": true,
+    "kind_type_match_required": true,
+    "representation_match_required": true,
+    "typed_digest_match_required": true,
+    "roundtrip_required": true,
+    "tamper_fail_closed": true
+  },
+  "storage": {
+    "parallel_database_forbidden": true,
+    "evidence_store_v2_required": true,
+    "universal_context_item_required": true,
+    "inherits_lineage": true,
+    "inherits_retention_gc": true,
+    "inherits_secret_policy": true,
+    "inherits_mutation_journal": true,
+    "inherits_trust_freshness_evaluation": true
+  },
+  "policy": {
+    "all_declared_object_types_required": true,
+    "payload_required_fields_fail_closed": true,
+    "additional_payload_fields_allowed": true,
+    "representation_is_part_of_identity": true,
+    "provenance_is_part_of_universal_identity": true,
+    "no_silent_fallback": true,
+    "no_duplicate_route_identity": true
+  }
+}
