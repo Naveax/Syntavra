@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -46,6 +47,11 @@ class PythonAuthorityTests(unittest.TestCase):
             _assert_no_route_identity_copy([f"route-{index}" for index in range(245)])
         with self.assertRaisesRegex(AssertionError, "71-route identity list"):
             _assert_no_route_identity_copy([f"route-{index}" for index in range(71)])
+
+    def test_certifier_rejects_foreign_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(AssertionError, "must run against its own checkout"):
+                certify(Path(directory))
 
     def test_certifier_reports_split_between_implementation_and_promotion(self) -> None:
         report = certify(ROOT)
