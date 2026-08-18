@@ -31,11 +31,18 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
       - name: Seal manifest from final tree
         shell: bash
         run: |
           set -euo pipefail
           rm -f .github/workflows/programmatic-execution-manifest-finalizer.yml
+          rm -rf syntavra_runtime.egg-info
           python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
           python -m unittest tests.runtime.test_programmatic_execution -v
