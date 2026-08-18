@@ -85,7 +85,10 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         report = certify(ROOT)
         self.assertTrue(report["ok"])
         self.assertEqual(report["claim"], "PYTHON_CAPABILITY_COMPLETENESS_TRACKED")
-        self.assertEqual(report["current_milestone"], "rust_feature_freeze_guard_v1")
+        contract = self._contract()
+        by_id = {item["id"]: item for item in contract["capabilities"]}
+        expected_current = next((milestone for milestone in contract["milestone_order"] if (by_id.get(milestone) or {}).get("state") != "certified"), "python_complete")
+        self.assertEqual(report["current_milestone"], expected_current)
         self.assertTrue(report["registry_admission_ready"])
         self.assertTrue(report["registry_certified"])
         self.assertFalse(report["python_complete_ready"])
@@ -96,7 +99,8 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertTrue(report["rust"]["feature_development_frozen"])
         self.assertGreater(report["uncertified_required_count"], 0)
         self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])
-        self.assertIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
+        self.assertNotIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
+        self.assertIn("universal_context_item_v1", report["uncertified_required"])
 
     def test_certifier_rejects_foreign_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
