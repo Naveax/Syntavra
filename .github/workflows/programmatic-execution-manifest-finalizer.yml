@@ -1,0 +1,53 @@
+name: Programmatic Execution Manifest Finalizer
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+
+concurrency:
+  group: programmatic-execution-manifest-finalizer-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact implementation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/programmatic-execution-v1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Seal manifest from final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/programmatic-execution-manifest-finalizer.yml
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_programmatic_execution -v
+          python tools/certify_programmatic_execution.py --out /tmp/programmatic-execution.json
+          git diff --check
+
+      - name: Commit exact-tree manifest seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.sha256 .github/workflows/programmatic-execution-manifest-finalizer.yml
+          git commit -m "Seal Programmatic Execution exact-tree manifest"
+          git push origin HEAD:agent/programmatic-execution-v1
