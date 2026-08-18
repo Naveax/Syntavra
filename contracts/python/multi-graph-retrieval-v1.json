@@ -41,7 +41,9 @@
     "temporal_freshness_weighted": true,
     "trust_weighted": true,
     "security_deny_fail_closed": true,
+    "security_deny_alias_closure": true,
     "tainted_context_excluded_by_default": true,
+    "blocked_nodes_cannot_seed_or_propagate": true,
     "evidence_refs_preserved": true,
     "reverse_edge_propagation_bounded": true
   },
@@ -52,7 +54,9 @@
     "candidate_scores_recorded": true,
     "layer_counts_recorded": true,
     "required_graphs_recorded": true,
-    "blocked_identity_count_recorded": true
+    "blocked_identity_count_recorded": true,
+    "blocked_item_id_count_recorded": true,
+    "blocked_namespace_uri_count_recorded": true
   },
   "structural_adapter_policy": {
     "structural_snapshot_is_read_only": true,
