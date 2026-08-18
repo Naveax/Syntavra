@@ -1,0 +1,314 @@
+{
+  "schema_version": 1,
+  "family": "capability-completeness-registry",
+  "phase": "python-first",
+  "claim": "PYTHON_CAPABILITY_COMPLETENESS_TRACKED",
+  "strict": true,
+  "authority": {
+    "python_authority": "contracts/python/python-authority-v1.json",
+    "capability_inventory_reference": "contracts/python/capability-inventory-reference-v1.json",
+    "roadmap_appendix": "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md"
+  },
+  "state_vocabulary": [
+    "planned",
+    "partial",
+    "implemented",
+    "verified",
+    "certified",
+    "external"
+  ],
+  "classification_vocabulary": [
+    "EXISTS",
+    "HARDEN",
+    "UNIFY",
+    "NEW",
+    "CERTIFY",
+    "EXTERNAL"
+  ],
+  "policy": {
+    "route_identity_must_not_be_duplicated": true,
+    "required_internal_capabilities_block_python_complete_until_certified": true,
+    "external_claims_cannot_be_fabricated": true,
+    "external_evidence_is_not_internal_implementation_evidence": true,
+    "rust_resume_requires_python_complete": true,
+    "no_silent_fallback": true,
+    "state_advancement_requires_evidence": true,
+    "certified_state_requires_certification_evidence": true
+  },
+  "milestone_order": [
+    "python_authority_v1",
+    "capability_completeness_registry_v1",
+    "rust_feature_freeze_guard_v1",
+    "universal_context_item_v1",
+    "evidence_store_v2",
+    "typed_context_object_store_v1",
+    "programmatic_execution_v1",
+    "deferred_tool_discovery_v1",
+    "unified_context_namespace_v1",
+    "adaptive_context_policy_v1"
+  ],
+  "capabilities": [
+    {
+      "id": "python_authority_v1",
+      "group": "authority",
+      "state": "certified",
+      "classification": "CERTIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "contracts/python/python-authority-v1.json",
+        "tools/certify_python_authority.py",
+        "tests/runtime/test_python_authority.py",
+        ".github/workflows/python-authority.yml"
+      ],
+      "certification_evidence": [
+        "contracts/python/python-authority-v1.json"
+      ],
+      "acceptance": "Merged exact-head Python Authority, Release Main Merge Gate, and Package Provenance receipts exist."
+    },
+    {
+      "id": "capability_completeness_registry_v1",
+      "group": "authority",
+      "state": "implemented",
+      "classification": "NEW",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "contracts/python/capability-completeness-registry-v1.json"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Registry schema, certifier, regression suite, exact-head workflow, and release gate must pass before this milestone becomes certified."
+    },
+    {
+      "id": "rust_feature_freeze_guard_v1",
+      "group": "authority",
+      "state": "partial",
+      "classification": "HARDEN",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "contracts/python/python-authority-v1.json",
+        "contracts/engine/phase2-rust-migration-matrix-v1.json"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Machine-enforce no Rust feature development, no production promotion, and no native counter change until Python COMPLETE."
+    },
+    {
+      "id": "universal_context_item_v1",
+      "group": "evidence-context",
+      "state": "partial",
+      "classification": "UNIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/context_pack.py",
+        "syntavra_runtime/runtime_evidence.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Unify context/evidence identity, provenance, trust, taint, freshness, recovery handles, and deterministic serialization behind one contract."
+    },
+    {
+      "id": "evidence_store_v2",
+      "group": "evidence-context",
+      "state": "partial",
+      "classification": "HARDEN",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/runtime_evidence.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Content-addressed evidence, lineage, mutation journal, retention, trust/taint, recovery integrity, and secret-aware storage policy."
+    },
+    {
+      "id": "typed_context_object_store_v1",
+      "group": "evidence-context",
+      "state": "planned",
+      "classification": "NEW",
+      "required_for_python_complete": true,
+      "implementation_evidence": [],
+      "certification_evidence": [],
+      "acceptance": "Typed exact/structural/semantic/bounded-preview objects with deterministic roundtrip."
+    },
+    {
+      "id": "programmatic_execution_v1",
+      "group": "execution",
+      "state": "partial",
+      "classification": "UNIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/autonomous_agent.py",
+        "syntavra_runtime/execution_sandbox.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Typed call/map/parallel/filter/reduce and artifact-reference execution plane with bounded returns and receipts."
+    },
+    {
+      "id": "deferred_tool_discovery_v1",
+      "group": "tools",
+      "state": "partial",
+      "classification": "UNIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/tool_registry.py",
+        "syntavra_runtime/mcp_application.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Deferred loading, semantic families, namespace tree, capability fingerprints, negotiation, token budget, and fail-closed ambiguity."
+    },
+    {
+      "id": "unified_context_namespace_v1",
+      "group": "context-navigation",
+      "state": "planned",
+      "classification": "NEW",
+      "required_for_python_complete": true,
+      "implementation_evidence": [],
+      "certification_evidence": [],
+      "acceptance": "syntavra:// namespace with progressive L0-L3 disclosure, why/reveal, and retrieval trajectory receipts."
+    },
+    {
+      "id": "multi_graph_retrieval_v1",
+      "group": "retrieval",
+      "state": "partial",
+      "classification": "UNIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/code_intelligence.py",
+        "syntavra_runtime/semantic_intelligence.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Unify semantic, temporal, causal, entity, code, task, provenance, and security graphs with task-aware retrieval."
+    },
+    {
+      "id": "adaptive_context_policy_v1",
+      "group": "policy",
+      "state": "partial",
+      "classification": "UNIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/context_pack.py",
+        "syntavra_runtime/optimization_modes.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Deterministic explainable KEEP/SUMMARIZE/COMPRESS/EXTERNALIZE/RESET/BRANCH/ABSTAIN policy with shadow mode."
+    },
+    {
+      "id": "context_reset_handoff_v1",
+      "group": "context-lifecycle",
+      "state": "partial",
+      "classification": "HARDEN",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/session_memory.py",
+        "syntavra_runtime/autonomous_agent.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "CONTINUE/COMPACT/RESET/BRANCH decisions and verified structured handoff preserving evidence, git, and security state."
+    },
+    {
+      "id": "memory_retrieval_v1",
+      "group": "memory",
+      "state": "partial",
+      "classification": "HARDEN",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/memory_intelligence.py",
+        "syntavra_runtime/session_memory.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Episodic/semantic/procedural/project/user/temporal memory with provenance, conflict, consolidation, forgetting, reranking, and exact recovery."
+    },
+    {
+      "id": "epistemic_safety_v1",
+      "group": "reliability-safety",
+      "state": "partial",
+      "classification": "HARDEN",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/capability_security.py",
+        "syntavra_runtime/secret_redaction.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Epistemic state, context critic, missing-evidence detection, taint propagation, action commit gate, and abstention."
+    },
+    {
+      "id": "cache_provider_budget_v1",
+      "group": "cost-routing",
+      "state": "partial",
+      "classification": "UNIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/prompt_cache_optimizer.py",
+        "syntavra_runtime/adaptive_provider_router.py",
+        "syntavra_runtime/provider_account_pool.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Provider-aware prompt cache compiler, budget engine, ROI, cache-bust attribution, capability negotiation, and deterministic fallback policy."
+    },
+    {
+      "id": "output_intelligence_v1",
+      "group": "output",
+      "state": "partial",
+      "classification": "HARDEN",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/command_compactors.py",
+        "syntavra_runtime/command_rewriter.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Exact-recoverable bounded output intelligence with semantic preservation verification and no-worse guard."
+    },
+    {
+      "id": "host_adapter_conformance_v1",
+      "group": "integration",
+      "state": "partial",
+      "classification": "CERTIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/host_adapters.py",
+        "syntavra_runtime/adapter_runtime.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Cross-host adapter conformance, capability negotiation, zero-code integration paths, and clean install/fresh repo smoke."
+    },
+    {
+      "id": "observability_attribution_v1",
+      "group": "observability",
+      "state": "partial",
+      "classification": "HARDEN",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "syntavra_runtime/token_attribution.py",
+        "syntavra_runtime/runtime_evidence.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Context/tool/policy decision attribution, provider usage receipts, performance budget, recovery amplification, and quality SLOs."
+    },
+    {
+      "id": "signalbench_python_product_v1",
+      "group": "benchmark",
+      "state": "partial",
+      "classification": "CERTIFY",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "benchmarks/signalbench/README.md",
+        "benchmarks/signalbench/tasks.example.json",
+        "benchmarks/signalbench/arms.example.json"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Frozen-arm Python product suite measures provider-observed cost per verified successful task plus quality/safety/runtime metrics."
+    },
+    {
+      "id": "external_superiority_adoption_evidence",
+      "group": "external-proof",
+      "state": "external",
+      "classification": "EXTERNAL",
+      "required_for_python_complete": false,
+      "implementation_evidence": [],
+      "certification_evidence": [],
+      "acceptance": "External superiority, adoption, marketplace maturity, and long-lived real-world claims require evidence outside repository self-certification."
+    }
+  ],
+  "python_complete": {
+    "claim": "PYTHON_COMPLETE",
+    "ready": false,
+    "requires_all_internal_required_capabilities_certified": true,
+    "rust_resume_allowed": false,
+    "external_superiority_required": false
+  }
+}

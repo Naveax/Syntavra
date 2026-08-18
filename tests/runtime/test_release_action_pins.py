@@ -14,6 +14,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/pre-release-publisher-prerequisites.yml",
     ".github/workflows/release-main-merge-gate.yml",
     ".github/workflows/python-authority.yml",
+    ".github/workflows/python-capability-completeness.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",

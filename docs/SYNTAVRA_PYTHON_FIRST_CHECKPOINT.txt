@@ -1,0 +1,82 @@
+CURRENT HEAD AT ROADMAP BRANCH CREATION:
+a5652513fa36932daa34db9540068b8ab9a26339
+
+BASE MAIN:
+ab300e84d39c009b609b78324f7f6e7045408bff
+
+ACTIVE PLANNING BRANCH:
+agent/python-first-roadmap
+
+PYTHON STATUS:
+PYTHON-FIRST mode declared. Product implementation has not started in this documentation branch.
+
+RUST STATUS:
+FROZEN FOR PRODUCT FEATURE DEVELOPMENT — 174/245 promoted, 71 remaining, 71 owned, 0 unowned.
+
+COMPLETED:
+- Python-first operating rules documented.
+- Existing Python implementation baseline reconciled so implemented primitives are not blindly rewritten.
+- Python COMPLETE gate documented.
+- Rust Resume Gate documented.
+- New roadmap capabilities 236–280 documented.
+- Detailed continuation checklist documented.
+
+VERIFIED:
+- main was ab300e84d39c009b609b78324f7f6e7045408bff when this branch was created.
+- PR #132 remains separate release-authority hardening work.
+- Roadmap changes are documentation-only on this branch.
+
+BLOCKERS:
+- PR #132 must be cleanly closed: final MANIFEST.sha256 + exact-head release CI + merge.
+
+NEXT EXACT TASK:
+- Finish PR #132 without mixing Python product features into it.
+- Re-read main after #132 merge.
+- Begin python_authority_v1 as the first Python-first implementation milestone.
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — CAPABILITY REGISTRY ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+89f05219dbe6cde76232fbb5ea5fc94f3dd4c5b1
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/capability-completeness-registry-v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — capability_completeness_registry_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; remaining owned 71; unowned 0.
+
+COMPLETED:
+- PR #132 merged: release-authority workflows pinned and exact-head release certification closed.
+- python_authority_v1 implemented, exact-head certified, release-main certified, package-provenance certified, and merged via PR #135.
+- Python is now machine-enforced as active feature-development authority.
+- Rust implementation coverage and production-promotion authority are explicitly separated.
+- Superseded roadmap PR #133 closed without merge; its append-only documentation was preserved and carried onto current main-derived work.
+
+VERIFIED:
+- Python Authority exact-head workflow PASS on PR #135.
+- Release Main Merge Gate PASS on PR #135.
+- Release Package Provenance PASS on PR #135.
+- candidate manifest and release validators PASS on PR #135.
+- main after PR #135: 89f05219dbe6cde76232fbb5ea5fc94f3dd4c5b1.
+
+CURRENT IMPLEMENTATION:
+- capability completeness registry contract added.
+- evidence-backed state/classification policy added.
+- registry certifier added.
+- registry regression suite added.
+- registry exact-head workflow added with immutable action SHAs and PR/ref-scoped concurrency.
+- Release Main gate bound to the registry regression suite and certifier.
+- immutable release action-pin policy extended to the registry workflow.
+
+BLOCKERS:
+- None for implementation.
+- Current registry milestone still requires branch smoke, canonical MANIFEST.sha256 refresh, exact-head PR CI, and merge before it can be admitted as certified.
+
+NEXT EXACT TASK:
+- Finish and certify capability_completeness_registry_v1.
+- After admission, advance to rust_feature_freeze_guard_v1.
