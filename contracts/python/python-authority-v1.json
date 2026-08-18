@@ -13,6 +13,12 @@
     "implementation_surface": "contracts/engine/dual-engine-public-surface-v2.json",
     "promotion_baseline": "contracts/engine/phase2-rust-migration-matrix-v1.json"
   },
+  "enforcement": {
+    "repository_validator": "tools/validate.py",
+    "exact_head_workflow": ".github/workflows/python-authority.yml",
+    "release_main_gate": ".github/workflows/release-main-merge-gate.yml",
+    "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py"
+  },
   "expected": {
     "public_routes": 245,
     "python_execution_owners": 245,
