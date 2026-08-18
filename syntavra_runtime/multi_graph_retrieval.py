@@ -91,7 +91,11 @@ class GraphNode:
             parsed = ContextNamespaceAddress.parse(self.namespace_uri)
             if parsed.uri != self.namespace_uri:
                 raise ValueError("namespace_uri must be canonical")
-        object.__setattr__(self, "evidence_refs", tuple(sorted(set(str(value) for value in self.evidence_refs if str(value)))))
+        object.__setattr__(
+            self,
+            "evidence_refs",
+            tuple(sorted(set(str(value) for value in self.evidence_refs if str(value)))),
+        )
         object.__setattr__(self, "metadata", dict(self.metadata))
 
     @property
@@ -104,7 +108,10 @@ class GraphNode:
 
     def searchable_text(self) -> str:
         safe_metadata = _canonical(self.metadata)
-        return f"{self.label} {self.node_type} {self.namespace_uri} {self.item_id} {safe_metadata}".casefold()
+        return (
+            f"{self.label} {self.node_type} {self.namespace_uri} "
+            f"{self.item_id} {safe_metadata}"
+        ).casefold()
 
 
 @dataclass(frozen=True)
@@ -122,7 +129,11 @@ class GraphEdge:
         if not 0.0 <= float(self.confidence) <= 1.0:
             raise ValueError("edge confidence must be within [0,1]")
         _metadata_is_safe(self.metadata)
-        object.__setattr__(self, "evidence_refs", tuple(sorted(set(str(value) for value in self.evidence_refs if str(value)))))
+        object.__setattr__(
+            self,
+            "evidence_refs",
+            tuple(sorted(set(str(value) for value in self.evidence_refs if str(value)))),
+        )
         object.__setattr__(self, "metadata", dict(self.metadata))
 
 
@@ -148,7 +159,11 @@ class GraphLayer:
         for edge in self.edges:
             if edge.source not in known or edge.target not in known:
                 raise ValueError(f"edge endpoint missing from layer {self.name}")
-        object.__setattr__(self, "source_refs", tuple(sorted(set(str(value) for value in self.source_refs if str(value)))))
+        object.__setattr__(
+            self,
+            "source_refs",
+            tuple(sorted(set(str(value) for value in self.source_refs if str(value)))),
+        )
 
 
 class MultiGraphRetrieval:
@@ -191,10 +206,14 @@ class MultiGraphRetrieval:
         *,
         repository_id: str,
         graph_kind: str = "code",
-        source_refs: Iterable[str] = ("syntavra_runtime/structural.py:StructuralIndex",),
+        source_refs: Iterable[str] = (
+            "syntavra_runtime/structural.py:StructuralIndex",
+        ),
     ) -> GraphLayer:
         if graph_kind not in {"code", "semantic"}:
-            raise ValueError("structural snapshots may only populate code/semantic graph views")
+            raise ValueError(
+                "structural snapshots may only populate code/semantic graph views"
+            )
         symbols = list(snapshot.get("symbols") or ())
         nodes: list[GraphNode] = []
         key_by_pair: dict[tuple[str, str], str] = {}
@@ -214,27 +233,47 @@ class MultiGraphRetrieval:
                 symbol=qualified,
             ).uri
             confidence = float(row.get("confidence") or 0.0)
-            trust = "verified" if confidence >= 0.9 else "trusted" if confidence >= 0.7 else "unknown"
+            trust = (
+                "verified"
+                if confidence >= 0.9
+                else "trusted"
+                if confidence >= 0.7
+                else "unknown"
+            )
             parser = str(row.get("parser") or "")
-            nodes.append(GraphNode(
-                graph_kind=graph_kind,
-                node_id=node_id,
-                label=qualified,
-                node_type=str(row.get("kind") or "symbol"),
-                namespace_uri=uri,
-                evidence_refs=tuple(filter(None, (f"repository:{path}", f"parser:{parser}" if parser else ""))),
-                trust_level=trust,
-                metadata={
-                    "path": path,
-                    "line": int(row.get("line") or 1),
-                    "end_line": int(row.get("end_line") or row.get("line") or 1),
-                    "confidence": confidence,
-                    "parser": parser,
-                },
-            ))
+            nodes.append(
+                GraphNode(
+                    graph_kind=graph_kind,
+                    node_id=node_id,
+                    label=qualified,
+                    node_type=str(row.get("kind") or "symbol"),
+                    namespace_uri=uri,
+                    evidence_refs=tuple(
+                        filter(
+                            None,
+                            (
+                                f"repository:{path}",
+                                f"parser:{parser}" if parser else "",
+                            ),
+                        )
+                    ),
+                    trust_level=trust,
+                    metadata={
+                        "path": path,
+                        "line": int(row.get("line") or 1),
+                        "end_line": int(
+                            row.get("end_line") or row.get("line") or 1
+                        ),
+                        "confidence": confidence,
+                        "parser": parser,
+                    },
+                )
+            )
             key_by_pair[(path, qualified)] = node_id
             key_by_pair[(path, name_value)] = node_id
-            short_by_path[(path, qualified.replace("::", ".").rsplit(".", 1)[-1])] = node_id
+            short_by_path[
+                (path, qualified.replace("::", ".").rsplit(".", 1)[-1])
+            ] = node_id
 
         edges: list[GraphEdge] = []
         for row in snapshot.get("edges") or ():
@@ -242,51 +281,109 @@ class MultiGraphRetrieval:
             source_symbol = str(row.get("source_symbol") or "")
             target_path = str(row.get("target_path") or "")
             target = str(row.get("target") or "")
-            source_id = key_by_pair.get((source_path, source_symbol)) or short_by_path.get((source_path, source_symbol.replace("::", ".").rsplit(".", 1)[-1]))
+            source_id = key_by_pair.get((source_path, source_symbol)) or short_by_path.get(
+                (
+                    source_path,
+                    source_symbol.replace("::", ".").rsplit(".", 1)[-1],
+                )
+            )
             target_short = target.replace("::", ".").rsplit(".", 1)[-1]
-            target_id = key_by_pair.get((target_path, target)) or short_by_path.get((target_path, target_short)) if target_path else None
+            target_id = (
+                key_by_pair.get((target_path, target))
+                or short_by_path.get((target_path, target_short))
+                if target_path
+                else None
+            )
             if not source_id or not target_id or source_id == target_id:
                 continue
-            edges.append(GraphEdge(
-                source=source_id,
-                target=target_id,
-                relation=str(row.get("edge_type") or "related"),
-                confidence=max(0.0, min(1.0, float(row.get("confidence") or 0.0))),
-                evidence_refs=(f"edge:{source_path}:{int(row.get('line') or 0)}",),
-                metadata={"target_path": target_path},
-            ))
-        return self.add_layer(name, graph_kind, nodes, edges, source_refs=source_refs)
+            edges.append(
+                GraphEdge(
+                    source=source_id,
+                    target=target_id,
+                    relation=str(row.get("edge_type") or "related"),
+                    confidence=max(
+                        0.0, min(1.0, float(row.get("confidence") or 0.0))
+                    ),
+                    evidence_refs=(
+                        f"edge:{source_path}:{int(row.get('line') or 0)}",
+                    ),
+                    metadata={"target_path": target_path},
+                )
+            )
+        return self.add_layer(
+            name,
+            graph_kind,
+            nodes,
+            edges,
+            source_refs=source_refs,
+        )
 
-    def _tainted_identities(self) -> set[str]:
-        return {
-            node.identity
-            for layer in self._layers.values()
-            for node in layer.nodes
-            if node.tainted
-        }
+    def _blocked_reference_sets(
+        self,
+        *,
+        include_tainted: bool,
+    ) -> tuple[set[str], set[str], set[str]]:
+        identities: set[str] = set()
+        item_ids: set[str] = set()
+        namespace_uris: set[str] = set()
+        for layer in self._layers.values():
+            for node in layer.nodes:
+                security_denied = (
+                    node.graph_kind == "security"
+                    and str(node.metadata.get("disposition") or "").casefold()
+                    in {"deny", "block", "quarantine"}
+                )
+                taint_blocked = node.tainted and not include_tainted
+                if not security_denied and not taint_blocked:
+                    continue
+                identities.add(node.identity)
+                if node.item_id:
+                    item_ids.add(node.item_id)
+                if node.namespace_uri:
+                    namespace_uris.add(node.namespace_uri)
+        return identities, item_ids, namespace_uris
 
-    def _security_denied_identities(self) -> set[str]:
-        return {
-            node.identity
-            for layer in self._layers.values()
-            for node in layer.nodes
-            if node.graph_kind == "security"
-            and str(node.metadata.get("disposition") or "").casefold()
-            in {"deny", "block", "quarantine"}
-        }
+    @staticmethod
+    def _node_is_blocked(
+        node: GraphNode,
+        blocked_identities: set[str],
+        blocked_item_ids: set[str],
+        blocked_namespace_uris: set[str],
+    ) -> bool:
+        if node.identity in blocked_identities:
+            return True
+        if node.item_id and node.item_id in blocked_item_ids:
+            return True
+        if node.namespace_uri and node.namespace_uri in blocked_namespace_uris:
+            return True
+        return False
 
     @staticmethod
     def _freshness_weight(node: GraphNode) -> float:
         value = str(node.metadata.get("freshness") or "current").casefold()
-        return {"current": 1.0, "fresh": 1.0, "aging": 0.82, "stale": 0.55, "expired": 0.0}.get(value, 0.9)
+        return {
+            "current": 1.0,
+            "fresh": 1.0,
+            "aging": 0.82,
+            "stale": 0.55,
+            "expired": 0.0,
+        }.get(value, 0.9)
 
     @staticmethod
-    def _lexical_score(task: str, task_tokens: set[str], node: GraphNode) -> tuple[float, list[str]]:
+    def _lexical_score(
+        task: str,
+        task_tokens: set[str],
+        node: GraphNode,
+    ) -> tuple[float, list[str]]:
         corpus = node.searchable_text()
         corpus_tokens = set(_tokens(corpus))
         matched = sorted(task_tokens & corpus_tokens)
         overlap = len(matched) / max(1, len(task_tokens))
-        phrase = 1.0 if task.casefold().strip() and task.casefold().strip() in corpus else 0.0
+        phrase = (
+            1.0
+            if task.casefold().strip() and task.casefold().strip() in corpus
+            else 0.0
+        )
         score = overlap * 10.0 + phrase * 5.0
         if node.graph_kind == "task" and matched:
             score += 2.0
@@ -312,20 +409,29 @@ class MultiGraphRetrieval:
         required = {str(value) for value in required_graphs}
         unknown_required = required - GRAPH_KINDS
         if unknown_required:
-            raise ValueError(f"unknown required graph kinds: {sorted(unknown_required)}")
+            raise ValueError(
+                f"unknown required graph kinds: {sorted(unknown_required)}"
+            )
         missing = required - available_graphs
         if missing:
-            raise RuntimeError(f"required graph layers unavailable: {sorted(missing)}")
+            raise RuntimeError(
+                f"required graph layers unavailable: {sorted(missing)}"
+            )
 
-        security_denied = self._security_denied_identities()
-        tainted = set() if include_tainted else self._tainted_identities()
-        blocked = security_denied | tainted
+        (
+            blocked_identities,
+            blocked_item_ids,
+            blocked_namespace_uris,
+        ) = self._blocked_reference_sets(include_tainted=include_tainted)
         task_tokens = set(_tokens(normalized_task))
         node_by_key: dict[str, GraphNode] = {}
         layer_by_key: dict[str, GraphLayer] = {}
         lexical_by_key: dict[str, float] = {}
         matched_by_key: dict[str, list[str]] = {}
-        adjacency: dict[str, list[tuple[str, float, str, tuple[str, ...]]]] = defaultdict(list)
+        blocked_keys: set[str] = set()
+        adjacency: dict[str, list[tuple[str, float, str, tuple[str, ...]]]] = (
+            defaultdict(list)
+        )
 
         for layer_name in sorted(self._layers):
             layer = self._layers[layer_name]
@@ -335,73 +441,129 @@ class MultiGraphRetrieval:
                 local_key[node.node_id] = key
                 node_by_key[key] = node
                 layer_by_key[key] = layer
-                lexical, matched = self._lexical_score(normalized_task, task_tokens, node)
+                if self._node_is_blocked(
+                    node,
+                    blocked_identities,
+                    blocked_item_ids,
+                    blocked_namespace_uris,
+                ):
+                    blocked_keys.add(key)
+                    lexical_by_key[key] = 0.0
+                    matched_by_key[key] = []
+                    continue
+                lexical, matched = self._lexical_score(
+                    normalized_task,
+                    task_tokens,
+                    node,
+                )
                 trust = _TRUST_WEIGHT[node.trust_level]
                 freshness = self._freshness_weight(node)
-                lexical_by_key[key] = lexical * _GRAPH_WEIGHT[node.graph_kind] * trust * freshness
+                lexical_by_key[key] = (
+                    lexical
+                    * _GRAPH_WEIGHT[node.graph_kind]
+                    * trust
+                    * freshness
+                )
                 matched_by_key[key] = matched
             for edge in layer.edges:
                 source = local_key[edge.source]
                 target = local_key[edge.target]
-                refs = tuple(sorted(set((*edge.evidence_refs, *layer.source_refs))))
-                adjacency[source].append((target, float(edge.confidence), edge.relation, refs))
-                adjacency[target].append((source, float(edge.confidence) * 0.72, f"reverse:{edge.relation}", refs))
+                if source in blocked_keys or target in blocked_keys:
+                    continue
+                refs = tuple(
+                    sorted(set((*edge.evidence_refs, *layer.source_refs)))
+                )
+                adjacency[source].append(
+                    (target, float(edge.confidence), edge.relation, refs)
+                )
+                adjacency[target].append(
+                    (
+                        source,
+                        float(edge.confidence) * 0.72,
+                        f"reverse:{edge.relation}",
+                        refs,
+                    )
+                )
 
         scores = dict(lexical_by_key)
         reasons: dict[str, list[dict[str, Any]]] = defaultdict(list)
         seeds = sorted(
-            (key for key, score in lexical_by_key.items() if score > 0.0),
+            (
+                key
+                for key, score in lexical_by_key.items()
+                if score > 0.0 and key not in blocked_keys
+            ),
             key=lambda key: (-lexical_by_key[key], key),
         )[: max(limit * 4, 16)]
         queue = deque((key, 0, lexical_by_key[key]) for key in seeds)
         best_depth: dict[tuple[str, str], int] = {}
         for key in seeds:
             if matched_by_key[key]:
-                reasons[key].append({"kind": "lexical", "matched_terms": matched_by_key[key]})
+                reasons[key].append(
+                    {
+                        "kind": "lexical",
+                        "matched_terms": matched_by_key[key],
+                    }
+                )
         while queue:
             source, depth, source_score = queue.popleft()
             if depth >= max_hops:
                 continue
-            for target, confidence, relation, refs in sorted(adjacency.get(source, ()), key=lambda row: (row[0], row[2])):
+            for target, confidence, relation, refs in sorted(
+                adjacency.get(source, ()),
+                key=lambda row: (row[0], row[2]),
+            ):
+                if target in blocked_keys:
+                    continue
                 next_depth = depth + 1
                 pair = (source, target)
                 previous_depth = best_depth.get(pair)
                 if previous_depth is not None and previous_depth <= next_depth:
                     continue
                 best_depth[pair] = next_depth
-                propagated = source_score * confidence * (0.42 ** next_depth)
+                propagated = source_score * confidence * (0.42**next_depth)
                 if propagated <= 0.0:
                     continue
                 scores[target] = scores.get(target, 0.0) + propagated
-                reasons[target].append({
-                    "kind": "graph",
-                    "relation": relation,
-                    "depth": next_depth,
-                    "evidence_refs": list(refs),
-                })
+                reasons[target].append(
+                    {
+                        "kind": "graph",
+                        "relation": relation,
+                        "depth": next_depth,
+                        "evidence_refs": list(refs),
+                    }
+                )
                 queue.append((target, next_depth, propagated))
 
         fused: dict[str, dict[str, Any]] = {}
         for key, score in scores.items():
-            if score <= 0.0:
+            if score <= 0.0 or key in blocked_keys:
                 continue
             node = node_by_key[key]
-            if node.identity in blocked:
+            if self._node_is_blocked(
+                node,
+                blocked_identities,
+                blocked_item_ids,
+                blocked_namespace_uris,
+            ):
                 continue
             layer = layer_by_key[key]
-            candidate = fused.setdefault(node.identity, {
-                "identity": node.identity,
-                "namespace_uri": node.namespace_uri,
-                "item_id": node.item_id,
-                "labels": set(),
-                "node_types": set(),
-                "graph_kinds": set(),
-                "layers": set(),
-                "evidence_refs": set(),
-                "score": 0.0,
-                "reasons": [],
-                "trust_levels": set(),
-            })
+            candidate = fused.setdefault(
+                node.identity,
+                {
+                    "identity": node.identity,
+                    "namespace_uri": node.namespace_uri,
+                    "item_id": node.item_id,
+                    "labels": set(),
+                    "node_types": set(),
+                    "graph_kinds": set(),
+                    "layers": set(),
+                    "evidence_refs": set(),
+                    "score": 0.0,
+                    "reasons": [],
+                    "trust_levels": set(),
+                },
+            )
             candidate["labels"].add(node.label)
             candidate["node_types"].add(node.node_type)
             candidate["graph_kinds"].add(node.graph_kind)
@@ -416,24 +578,31 @@ class MultiGraphRetrieval:
         for candidate in fused.values():
             graph_count = len(candidate["graph_kinds"])
             candidate["score"] += max(0, graph_count - 1) * 1.25
-            rows.append({
-                "identity": candidate["identity"],
-                "namespace_uri": candidate["namespace_uri"],
-                "item_id": candidate["item_id"],
-                "labels": sorted(candidate["labels"]),
-                "node_types": sorted(candidate["node_types"]),
-                "graph_kinds": sorted(candidate["graph_kinds"]),
-                "layers": sorted(candidate["layers"]),
-                "evidence_refs": sorted(candidate["evidence_refs"]),
-                "trust_levels": sorted(candidate["trust_levels"]),
-                "score": round(float(candidate["score"]), 6),
-                "reasons": sorted(candidate["reasons"], key=lambda row: _canonical(row)),
-            })
+            rows.append(
+                {
+                    "identity": candidate["identity"],
+                    "namespace_uri": candidate["namespace_uri"],
+                    "item_id": candidate["item_id"],
+                    "labels": sorted(candidate["labels"]),
+                    "node_types": sorted(candidate["node_types"]),
+                    "graph_kinds": sorted(candidate["graph_kinds"]),
+                    "layers": sorted(candidate["layers"]),
+                    "evidence_refs": sorted(candidate["evidence_refs"]),
+                    "trust_levels": sorted(candidate["trust_levels"]),
+                    "score": round(float(candidate["score"]), 6),
+                    "reasons": sorted(
+                        candidate["reasons"],
+                        key=lambda row: _canonical(row),
+                    ),
+                }
+            )
         rows.sort(key=lambda row: (-row["score"], row["identity"]))
         rows = rows[:limit]
 
         coverage = {
-            graph_kind: sum(1 for row in rows if graph_kind in row["graph_kinds"])
+            graph_kind: sum(
+                1 for row in rows if graph_kind in row["graph_kinds"]
+            )
             for graph_kind in sorted(available_graphs)
         }
         receipt_basis = {
@@ -451,11 +620,16 @@ class MultiGraphRetrieval:
                     "edge_count": len(layer.edges),
                     "source_refs": list(layer.source_refs),
                 }
-                for layer in sorted(self._layers.values(), key=lambda value: value.name)
+                for layer in sorted(
+                    self._layers.values(),
+                    key=lambda value: value.name,
+                )
             ],
             "candidate_identities": [row["identity"] for row in rows],
             "candidate_scores": [row["score"] for row in rows],
-            "blocked_identity_count": len(blocked),
+            "blocked_identity_count": len(blocked_identities),
+            "blocked_item_id_count": len(blocked_item_ids),
+            "blocked_namespace_uri_count": len(blocked_namespace_uris),
         }
         return {
             "schema_version": 1,
@@ -465,7 +639,9 @@ class MultiGraphRetrieval:
             "graph_coverage": coverage,
             "available_graphs": sorted(available_graphs),
             "required_graphs": sorted(required),
-            "blocked_identity_count": len(blocked),
+            "blocked_identity_count": len(blocked_identities),
+            "blocked_item_id_count": len(blocked_item_ids),
+            "blocked_namespace_uri_count": len(blocked_namespace_uris),
             "receipt": {
                 **receipt_basis,
                 "receipt_hash": _hash(receipt_basis),
@@ -482,9 +658,14 @@ class MultiGraphRetrieval:
                     "node_count": len(layer.nodes),
                     "edge_count": len(layer.edges),
                 }
-                for layer in sorted(self._layers.values(), key=lambda value: value.name)
+                for layer in sorted(
+                    self._layers.values(),
+                    key=lambda value: value.name,
+                )
             ],
-            "graph_kinds": sorted({layer.graph_kind for layer in self._layers.values()}),
+            "graph_kinds": sorted(
+                {layer.graph_kind for layer in self._layers.values()}
+            ),
             "persistent_store": False,
             "payload_authority": False,
             "max_query_limit": 100,
