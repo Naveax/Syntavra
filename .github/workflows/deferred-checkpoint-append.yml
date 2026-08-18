@@ -1,6 +1,9 @@
 name: Deferred Tool Discovery Checkpoint Append
 
 on:
+  push:
+    branches:
+      - agent/deferred-tool-discovery-v1
   pull_request:
     branches:
       - main
@@ -9,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: deferred-checkpoint-append-${{ github.event.pull_request.number }}
+  group: deferred-checkpoint-append-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 # one-shot append workflow; connector removes it after the checkpoint commit
