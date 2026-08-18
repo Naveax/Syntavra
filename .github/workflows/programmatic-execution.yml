@@ -1,0 +1,93 @@
+name: Programmatic Execution
+
+on:
+  push:
+    branches:
+      - main
+      - agent/programmatic-execution-v1
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: programmatic-execution-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  programmatic-execution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Run Programmatic Execution regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_programmatic_execution -v
+
+      - name: Generate exact-head Programmatic Execution certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/certify_programmatic_execution.py --out /tmp/programmatic-execution.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          report = json.loads(Path('/tmp/programmatic-execution.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ok'] is True, report
+          assert report['claim'] == 'PROGRAMMATIC_EXECUTION_V1'
+          assert report['exact_head'] == head
+          assert report['admission_ready'] is True
+          assert report['python_complete_ready'] is False
+          assert report['rust_resume_allowed'] is False
+          assert report['runtime']['operations'] == ['call', 'map', 'parallel', 'filter', 'reduce']
+          assert report['runtime']['large_result_externalized'] is True
+          assert report['runtime']['artifact_exact_recovery'] is True
+          assert report['runtime']['parallel_requires_pure'] is True
+          assert report['runtime']['parallel_database'] is False
+          assert report['rust']['production_promoted'] == 174
+          assert report['rust']['remaining_parity_promotion'] == 71
+          PY
+
+      - name: Enforce clean exact-head repository
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload Programmatic Execution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: programmatic-execution-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/programmatic-execution.json
+          if-no-files-found: error
