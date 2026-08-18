@@ -33,6 +33,7 @@ EXPECTED_MILESTONE_PREFIX = [
     "programmatic_execution_v1",
     "deferred_tool_discovery_v1",
     "unified_context_namespace_v1",
+    "multi_graph_retrieval_v1",
     "adaptive_context_policy_v1",
 ]
 ADVANCED_STATES = {"partial", "implemented", "verified", "certified"}
