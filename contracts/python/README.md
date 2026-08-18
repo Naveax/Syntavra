@@ -24,4 +24,4 @@ The important split is:
 
 During the Python-first phase, Python is the feature-development and product-behavior authority. Rust feature development, production promotion, and native promotion-counter changes remain disabled until a later `PYTHON_COMPLETE` certificate explicitly opens the Rust resume gate.
 
-`tools/certify_python_authority.py` certifies this boundary from the existing authorities without persisting another 245-route or 71-route identity list. The corresponding exact-head CI is `.github/workflows/python-authority.yml`.
+`tools/certify_python_authority.py` certifies this boundary from the existing authorities without persisting another 245-route or 71-route identity list. The authority is fail-closed through `tools/validate.py`, the PR/ref-scoped `.github/workflows/python-authority.yml` exact-head workflow, `.github/workflows/release-main-merge-gate.yml`, and the immutable action trust policy in `tests/runtime/test_release_action_pins.py`; the certifier verifies that these enforcement bindings remain present.
