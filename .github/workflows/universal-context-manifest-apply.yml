@@ -1,0 +1,46 @@
+name: Universal Context Item Manifest Apply
+
+on:
+  push:
+    branches:
+      - agent/universal-context-item-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: universal-context-item-manifest-apply
+  cancel-in-progress: false
+
+jobs:
+  apply-manifest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/universal-context-item-v1
+          fetch-depth: 0
+
+      - name: Remove applicator and refresh canonical manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/universal-context-manifest-apply.yml
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          git diff --check
+
+      - name: Commit exact candidate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.sha256 .github/workflows/universal-context-manifest-apply.yml
+          git commit -m "Refresh Universal Context Item manifest"
+          git push origin HEAD:agent/universal-context-item-v1
