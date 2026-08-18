@@ -33,3 +33,50 @@ NEXT EXACT TASK:
 - Finish PR #132 without mixing Python product features into it.
 - Re-read main after #132 merge.
 - Begin python_authority_v1 as the first Python-first implementation milestone.
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-18 — CAPABILITY REGISTRY ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+89f05219dbe6cde76232fbb5ea5fc94f3dd4c5b1
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/capability-completeness-registry-v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — capability_completeness_registry_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; remaining owned 71; unowned 0.
+
+COMPLETED:
+- PR #132 merged: release-authority workflows pinned and exact-head release certification closed.
+- python_authority_v1 implemented, exact-head certified, release-main certified, package-provenance certified, and merged via PR #135.
+- Python is now machine-enforced as active feature-development authority.
+- Rust implementation coverage and production-promotion authority are explicitly separated.
+- Superseded roadmap PR #133 closed without merge; its append-only documentation was preserved and carried onto current main-derived work.
+
+VERIFIED:
+- Python Authority exact-head workflow PASS on PR #135.
+- Release Main Merge Gate PASS on PR #135.
+- Release Package Provenance PASS on PR #135.
+- candidate manifest and release validators PASS on PR #135.
+- main after PR #135: 89f05219dbe6cde76232fbb5ea5fc94f3dd4c5b1.
+
+CURRENT IMPLEMENTATION:
+- capability completeness registry contract added.
+- evidence-backed state/classification policy added.
+- registry certifier added.
+- registry regression suite added.
+- registry exact-head workflow added with immutable action SHAs and PR/ref-scoped concurrency.
+- Release Main gate bound to the registry regression suite and certifier.
+- immutable release action-pin policy extended to the registry workflow.
+
+BLOCKERS:
+- None for implementation.
+- Current registry milestone still requires branch smoke, canonical MANIFEST.sha256 refresh, exact-head PR CI, and merge before it can be admitted as certified.
+
+NEXT EXACT TASK:
+- Finish and certify capability_completeness_registry_v1.
+- After admission, advance to rust_feature_freeze_guard_v1.
