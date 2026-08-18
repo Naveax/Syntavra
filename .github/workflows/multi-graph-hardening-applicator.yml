@@ -1,0 +1,125 @@
+name: Multi-Graph Security Hardening Applicator
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: multi-graph-hardening-applicator-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]' && github.event.pull_request.head.ref == 'agent/multi-graph-retrieval-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/multi-graph-retrieval-v1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Apply fail-closed security deny separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          runtime_path = Path('syntavra_runtime/multi_graph_retrieval.py')
+          text = runtime_path.read_text(encoding='utf-8')
+          old = '''    def _blocked_identities(self) -> set[str]:
+              blocked: set[str] = set()
+              for layer in self._layers.values():
+                  for node in layer.nodes:
+                      if node.tainted:
+                          blocked.add(node.identity)
+                      if node.graph_kind == "security" and str(node.metadata.get("disposition") or "").casefold() in {"deny", "block", "quarantine"}:
+                          blocked.add(node.identity)
+              return blocked
+          '''.replace('          ', '')
+          new = '''    def _tainted_identities(self) -> set[str]:
+              return {
+                  node.identity
+                  for layer in self._layers.values()
+                  for node in layer.nodes
+                  if node.tainted
+              }
+
+              def _security_denied_identities(self) -> set[str]:
+                  return {
+                      node.identity
+                      for layer in self._layers.values()
+                      for node in layer.nodes
+                      if node.graph_kind == "security"
+                      and str(node.metadata.get("disposition") or "").casefold()
+                      in {"deny", "block", "quarantine"}
+                  }
+          '''.replace('          ', '')
+          assert text.count(old) == 1, text.count(old)
+          text = text.replace(old, new)
+          old = '        blocked = set() if include_tainted else self._blocked_identities()\n'
+          new = '''        security_denied = self._security_denied_identities()
+              tainted = set() if include_tainted else self._tainted_identities()
+              blocked = security_denied | tainted
+          '''.replace('          ', '')
+          assert text.count(old) == 1, text.count(old)
+          runtime_path.write_text(text.replace(old, new), encoding='utf-8')
+
+          test_path = Path('tests/runtime/test_multi_graph_retrieval.py')
+          text = test_path.read_text(encoding='utf-8')
+          anchor = '''    def test_tainted_identity_is_excluded_unless_explicitly_requested(self) -> None:
+          '''
+          addition = '''    def test_include_tainted_never_bypasses_security_deny(self) -> None:
+              engine = MultiGraphRetrieval()
+              engine.add_layer("code", "code", [node("code", "code", "credential repair", uri=REPO_URI, tainted=True)])
+              engine.add_layer(
+                  "security",
+                  "security",
+                  [node("security", "deny", "credential deny", uri=REPO_URI, metadata={"disposition": "deny"})],
+              )
+              result = engine.retrieve("credential repair", include_tainted=True)
+              self.assertEqual(result["candidate_count"], 0)
+              self.assertEqual(result["blocked_identity_count"], 1)
+
+          '''.replace('          ', '')
+          assert text.count(anchor) == 1, text.count(anchor)
+          test_path.write_text(text.replace(anchor, addition + anchor), encoding='utf-8')
+          PY
+
+      - name: Run focused regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m unittest tests.runtime.test_multi_graph_retrieval -v
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+
+      - name: Commit hardened permanent tree and remove applicator
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/multi-graph-hardening-applicator.yml
+          git add syntavra_runtime/multi_graph_retrieval.py tests/runtime/test_multi_graph_retrieval.py
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          test "${#changed[@]}" -eq 3
+          test "${changed[0]}" = ".github/workflows/multi-graph-hardening-applicator.yml"
+          test "${changed[1]}" = "syntavra_runtime/multi_graph_retrieval.py"
+          test "${changed[2]}" = "tests/runtime/test_multi_graph_retrieval.py"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Harden Multi-Graph security deny semantics"
+          git push origin HEAD:agent/multi-graph-retrieval-v1
