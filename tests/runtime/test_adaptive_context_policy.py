@@ -166,7 +166,7 @@ class AdaptiveContextPolicyTests(unittest.TestCase):
             "fit context",
             [
                 self.signal("high", token_count=220, relevance=1.0, exact_required=True),
-                self.signal("low", token_count=400, relevance=0.45, trust=0.8),
+                self.signal("low", token_count=700, relevance=0.45, trust=0.8),
             ],
         )
         by_id = {row["identity"]: row for row in result["decisions"]}
