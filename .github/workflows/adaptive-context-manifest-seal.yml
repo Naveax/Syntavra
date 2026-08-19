@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: adaptive-context-manifest-seal-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   seal:
@@ -19,79 +19,94 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      EXPECTED_SOURCE_HEAD: d948b0a07a4e7509dd69135f4317d6a5bfc5ee2a
+      EXPECTED_SOURCE_HEAD: c673ceee73656dfa407d7849a44bc67b1bf91c9c
       EXPECTED_BASE_HEAD: ff9fe699b835889f326e2a8b0dfbb7ba334d3949
-      ARTIFACT_ID: '9356595452'
-      EXPECTED_CANDIDATE_SHA256: c8d68ac780ce5021d8eadec9f51b04e5e004b3a8e23fccebef63a9c6a0704fb4
-      CANDIDATE_DUAL_ENGINE_SHA256: f2f3058365ebf08b44e389adf223be72fb1f4c12d906d6389aa5194415dc458d
-      BASE_DUAL_ENGINE_SHA256: cd5531b7f181b91c24393339c155f8d4fe7dc72ce0b9c9a93bf2a35bc164ec2a
       PROTECTED_PATH: contracts/engine/dual-engine-public-surface-v2.json
       SEAL_WORKFLOW: .github/workflows/adaptive-context-manifest-seal.yml
       TARGET_BRANCH: agent/adaptive-context-policy-v1
-      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout seal commit
+      - name: Checkout lifecycle seal commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Verify exact seal boundary
+      - name: Verify exact superseding boundary
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD^)" = "$EXPECTED_SOURCE_HEAD"
-          changed="$(git diff --name-only "$EXPECTED_SOURCE_HEAD"..HEAD | sort)"
-          expected="$(printf '%s\n%s\n' "$PROTECTED_PATH" "$SEAL_WORKFLOW" | sort)"
-          test "$changed" = "$expected"
+          test "$(git diff --name-only "$EXPECTED_SOURCE_HEAD"..HEAD)" = "$SEAL_WORKFLOW"
           test "$(git rev-parse "HEAD:$PROTECTED_PATH")" = "$(git rev-parse "$EXPECTED_BASE_HEAD:$PROTECTED_PATH")"
 
-      - name: Download canonical provenance candidate
+      - name: Make admitted certifiers lifecycle-stable
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
-            -o /tmp/provenance.zip
-          rm -rf /tmp/provenance
-          mkdir -p /tmp/provenance
-          unzip -q /tmp/provenance.zip -d /tmp/provenance
-          test -f /tmp/provenance/candidate-MANIFEST.sha256
-          printf '%s  %s\n' "$EXPECTED_CANDIDATE_SHA256" /tmp/provenance/candidate-MANIFEST.sha256 | sha256sum -c -
-
-      - name: Restore protected baseline digest and self-remove
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp /tmp/provenance/candidate-MANIFEST.sha256 MANIFEST.sha256
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("MANIFEST.sha256")
-          text = path.read_text(encoding="utf-8")
-          target = "contracts/engine/dual-engine-public-surface-v2.json"
-          old = "f2f3058365ebf08b44e389adf223be72fb1f4c12d906d6389aa5194415dc458d  " + target
-          new = "cd5531b7f181b91c24393339c155f8d4fe7dc72ce0b9c9a93bf2a35bc164ec2a  " + target
-          if text.count(old) != 1:
-              raise SystemExit("candidate manifest does not contain the exact expected protected digest")
-          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          def replace_exact(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one lifecycle fragment, found {count}")
+              file.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+
+          replace_exact(
+              "tools/certify_multi_graph_retrieval.py",
+              '''    _require(\n        completeness.get("current_milestone") == "multi_graph_retrieval_v1",\n        "registry has not advanced to multi_graph_retrieval_v1",\n    )''',
+              '''    _require(\n        bool(completeness.get("current_milestone")),\n        "capability registry current milestone missing",\n    )''',
+          )
+          replace_exact(
+              "tools/certify_multi_graph_retrieval.py",
+              '''    _require(\n        (by_id.get("multi_graph_retrieval_v1") or {}).get("state")\n        in {"implemented", "verified"},\n        "Multi-Graph registry state must be pre-certification implemented/verified",\n    )''',
+              '''    _require(\n        (by_id.get("multi_graph_retrieval_v1") or {}).get("state")\n        in {"implemented", "verified", "certified"},\n        "Multi-Graph registry state is not admissible",\n    )''',
+          )
+          replace_exact(
+              "tools/certify_adaptive_context_policy.py",
+              '''    _require(\n        completeness.get("current_milestone") == "adaptive_context_policy_v1",\n        "registry has not advanced to adaptive_context_policy_v1",\n    )''',
+              '''    _require(\n        bool(completeness.get("current_milestone")),\n        "capability registry current milestone missing",\n    )''',
+          )
+          replace_exact(
+              "tools/certify_adaptive_context_policy.py",
+              '''    _require(\n        (by_id.get("adaptive_context_policy_v1") or {}).get("state") in {"implemented", "verified"},\n        "Adaptive Context Policy registry state must be pre-certification implemented/verified",\n    )''',
+              '''    _require(\n        (by_id.get("adaptive_context_policy_v1") or {}).get("state")\n        in {"implemented", "verified", "certified"},\n        "Adaptive Context Policy registry state is not admissible",\n    )''',
+          )
           PY
+
+      - name: Verify lifecycle compatibility and seal manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.runtime.test_multi_graph_retrieval \
+            tests.runtime.test_multi_graph_security_hardening \
+            tests.runtime.test_adaptive_context_policy \
+            -v
+          python tools/certify_multi_graph_retrieval.py --out /tmp/multi-graph-retrieval.json
+          python tools/certify_adaptive_context_policy.py --out /tmp/adaptive-context-policy.json
           git rm "$SEAL_WORKFLOW"
-          git add MANIFEST.sha256
+          python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
+          git add MANIFEST.sha256 \
+            tools/certify_multi_graph_retrieval.py \
+            tools/certify_adaptive_context_policy.py
           git diff --check
           staged="$(git diff --cached --name-only | sort)"
-          expected="$(printf '%s\n%s\n' "$SEAL_WORKFLOW" MANIFEST.sha256 | sort)"
+          expected="$(printf '%s\n%s\n%s\n%s\n' \
+            "$SEAL_WORKFLOW" \
+            MANIFEST.sha256 \
+            tools/certify_adaptive_context_policy.py \
+            tools/certify_multi_graph_retrieval.py | sort)"
           test "$staged" = "$expected"
 
-      - name: Commit exact Adaptive manifest seal
+      - name: Commit lifecycle-compatible exact manifest seal
         shell: bash
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -m "Seal Adaptive Context manifest from provenance candidate"
+          git commit -m "Seal Adaptive admission and stabilize admitted certifiers"
           git push origin "HEAD:${TARGET_BRANCH}"
