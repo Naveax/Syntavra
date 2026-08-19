@@ -21,7 +21,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
       TARGET_BRANCH: agent/memory-retrieval-v1
-      BASE_MAIN: 9838235404a834cfbc4882ebfb989cf1b40ef42e
+      BASE_MAIN: 6120ea9d074b0cac0e880e3e9dbf873d1faaec58
     steps:
       - name: Checkout exact pull request head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -42,6 +42,37 @@ jobs:
           test "$(git rev-parse origin/$TARGET_BRANCH)" = "${{ github.event.pull_request.head.sha }}"
           test -z "$(git status --porcelain --untracked-files=all)"
           python -m pip install -e . pytest
+
+      - name: Adapt one-shot hardener to fresh admitted main
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/_memory_retrieval_admission_hardener.py')
+          text = path.read_text(encoding='utf-8')
+          old_order = 'if current_order not in [full_order[:12], full_order]:'
+          new_order = 'if current_order not in [full_order[:12], full_order[:13], full_order]:'
+          assert text.count(old_order) == 1, 'hardener milestone-order anchor drifted'
+          text = text.replace(old_order, new_order, 1)
+          old_main = '9838235404a834cfbc4882ebfb989cf1b40ef42e'
+          new_main = '6120ea9d074b0cac0e880e3e9dbf873d1faaec58'
+          assert text.count(old_main) >= 3, 'continuation main anchors drifted'
+          text = text.replace(old_main, new_main)
+          text = text.replace(
+              'Context Reset / Handoff v1 was exact-head admitted and merged through PR #148.',
+              'Context Reset / Handoff v1 runtime merged through PR #148 and lifecycle certification was admitted through PR #152.',
+          )
+          text = text.replace(
+              'Context Reset / Handoff v1: admitted through PR #148.',
+              'Context Reset / Handoff v1: runtime merged through PR #148; lifecycle certified through PR #152.',
+          )
+          text = text.replace(
+              'PYTHON-FIRST ACTIVE — Context Reset / Handoff v1 is admitted; memory_retrieval_v1 is the current milestone.',
+              'PYTHON-FIRST ACTIVE — Context Reset / Handoff v1 lifecycle is certified through PR #152; memory_retrieval_v1 is the current milestone.',
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
 
       - name: Apply deterministic admission hardening
         shell: bash
@@ -115,9 +146,13 @@ jobs:
           reset=json.loads(Path('/tmp/context-reset-final.json').read_text(encoding='utf-8'))
           memory=json.loads(Path('/tmp/memory-final.json').read_text(encoding='utf-8'))
           freeze=json.loads(Path('/tmp/rust-freeze-final.json').read_text(encoding='utf-8'))
+          registry=json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          memory_state=next(row['state'] for row in registry['capabilities'] if row['id']=='memory_retrieval_v1')
+          reset_state=next(row['state'] for row in registry['capabilities'] if row['id']=='context_reset_handoff_v1')
           assert cap['ok'] is True, cap
-          assert cap['current_milestone']['id'] == 'memory_retrieval_v1', cap['current_milestone']
-          assert cap['current_milestone']['state'] == 'implemented', cap['current_milestone']
+          assert cap['current_milestone'] == 'memory_retrieval_v1', cap['current_milestone']
+          assert memory_state == 'implemented', memory_state
+          assert reset_state == 'certified', reset_state
           assert cap['python_complete_ready'] is False
           assert cap['rust_resume_allowed'] is False
           assert reset['ok'] is True, reset
