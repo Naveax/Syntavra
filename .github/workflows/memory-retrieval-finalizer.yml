@@ -1,4 +1,4 @@
-name: Memory Retrieval Admission Finalizer
+name: Memory Retrieval Hardening Finalizer
 
 on:
   pull_request:
@@ -9,20 +9,19 @@ permissions:
   contents: write
 
 concurrency:
-  group: memory-retrieval-admission-finalizer-151
+  group: memory-retrieval-hardening-finalizer-151
   cancel-in-progress: false
 
 jobs:
   finalize:
     if: github.event.pull_request.number == 151 && github.event.pull_request.head.ref == 'agent/memory-retrieval-v1' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
       TARGET_BRANCH: agent/memory-retrieval-v1
       BASE_MAIN: 9838235404a834cfbc4882ebfb989cf1b40ef42e
-      PRESEAL_MEMORY_HEAD: b5103c5ff821cf1a8e9062658c97039a0f289ad7
     steps:
       - name: Checkout exact pull request head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -42,26 +41,173 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           test "$(git rev-parse origin/$TARGET_BRANCH)" = "${{ github.event.pull_request.head.sha }}"
           test -z "$(git status --porcelain --untracked-files=all)"
-          python -m pip install -e .
+          python -m pip install -e . pytest
 
-      - name: Revalidate pre-seal Memory implementation
+      - name: Apply Memory Retrieval scope and lifecycle hardening
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import re
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              count = text.count(old)
+              assert count == 1, f'{path}: expected one anchor, found {count}: {old[:120]!r}'
+              target.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          memory_path = Path('syntavra_runtime/memory_intelligence.py')
+          text = memory_path.read_text(encoding='utf-8')
+
+          anchor = '''        return True\n\n    def _record(self, memory_id: str) -> dict[str, Any]:\n'''
+          replacement = '''        return True\n\n    @staticmethod\n    def _scope_equal(candidate: Mapping[str, Any], requested: MemoryScope) -> bool:\n        return {\n            "project_id": str(candidate.get("project_id") or ""),\n            "user_id": str(candidate.get("user_id") or ""),\n            "session_id": str(candidate.get("session_id") or ""),\n        } == requested.as_dict()\n\n    def _record(self, memory_id: str) -> dict[str, Any]:\n'''
+          assert text.count(anchor) == 1
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''        for key in ("scope_json", "provenance_json", "supersedes_json", "conflicts_json"):\n            value[key.removesuffix("_json")] = json.loads(value.pop(key))\n        return value\n\n    def remember(\n'''
+          replacement = '''        for key in ("scope_json", "provenance_json", "supersedes_json", "conflicts_json"):\n            value[key.removesuffix("_json")] = json.loads(value.pop(key))\n        return value\n\n    def _record_visible(self, memory_id: str, scope: MemoryScope) -> dict[str, Any]:\n        record = self._record(memory_id)\n        if not self._scope_matches(record["scope"], scope):\n            raise PermissionError("memory scope mismatch")\n        return record\n\n    def _record_mutable(self, memory_id: str, scope: MemoryScope) -> dict[str, Any]:\n        record = self._record(memory_id)\n        if not self._scope_equal(record["scope"], scope):\n            raise PermissionError("memory mutation scope mismatch")\n        return record\n\n    def remember(\n'''
+          assert text.count(anchor) == 1
+          text = text.replace(anchor, replacement, 1)
+
+          old = '''        for related in (*supersedes_refs, *conflicts):\n            self._record(related)\n'''
+          new = '''        for related in (*supersedes_refs, *conflicts):\n            self._record_mutable(related, scope)\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''            "scope": scope.as_dict(),\n            "provenance_refs": list(provenance),\n        }\n'''
+          new = '''            "scope": scope.as_dict(),\n            "provenance_refs": list(provenance),\n            "supersedes": list(supersedes_refs),\n            "conflicts_with": list(conflicts),\n        }\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          start_anchor = '''        with self.store._connection() as db:\n            db.execute(\n                """\n                INSERT INTO memory_retrieval_records(\n'''
+          start = text.index(start_anchor, text.index('    def remember('))
+          end_anchor = '        return self.recover(memory_id)\n'
+          end = text.index(end_anchor, start) + len(end_anchor)
+          new_block = '''        with self.store._connection() as db:\n            cursor = db.execute(\n                """\n                INSERT OR IGNORE INTO memory_retrieval_records(\n                  memory_id,observation_id,memory_kind,scope_json,provenance_json,\n                  supersedes_json,conflicts_json,state,created_at,updated_at\n                ) VALUES(?,?,?,?,?,?,?,?,?,?)\n                """,\n                (\n                    memory_id,\n                    observation.observation_id,\n                    normalized_kind,\n                    json.dumps(scope.as_dict(), ensure_ascii=False, sort_keys=True),\n                    json.dumps(list(provenance), ensure_ascii=False, sort_keys=True),\n                    json.dumps(list(supersedes_refs), ensure_ascii=False, sort_keys=True),\n                    json.dumps(list(conflicts), ensure_ascii=False, sort_keys=True),\n                    "active",\n                    now,\n                    now,\n                ),\n            )\n            inserted = cursor.rowcount == 1\n            if inserted:\n                for old_id in supersedes_refs:\n                    db.execute(\n                        "UPDATE memory_retrieval_records SET state='superseded',updated_at=? WHERE memory_id=?",\n                        (now, old_id),\n                    )\n                for conflict_id in conflicts:\n                    row = db.execute(\n                        "SELECT conflicts_json FROM memory_retrieval_records WHERE memory_id=?",\n                        (conflict_id,),\n                    ).fetchone()\n                    existing = set(json.loads(row["conflicts_json"])) if row else set()\n                    existing.add(memory_id)\n                    db.execute(\n                        "UPDATE memory_retrieval_records SET conflicts_json=?,updated_at=? WHERE memory_id=?",\n                        (json.dumps(sorted(existing)), now, conflict_id),\n                    )\n        return self.recover(memory_id, scope=scope)\n'''
+          text = text[:start] + new_block + text[end:]
+
+          old = '''    def forget(self, memory_id: str, *, reason: str) -> dict[str, Any]:\n        if not reason.strip():\n            raise ValueError("forget reason is required")\n        self._record(memory_id)\n        now = time.time()\n        with self.store._connection() as db:\n            db.execute(\n                "UPDATE memory_retrieval_records SET state='forgotten',updated_at=? WHERE memory_id=?",\n                (now, memory_id),\n            )\n        recovered = self.recover(memory_id)\n        recovered["forget_reason"] = reason.strip()\n        return recovered\n'''
+          new = '''    def forget(self, memory_id: str, *, scope: MemoryScope, reason: str) -> dict[str, Any]:\n        if not reason.strip():\n            raise ValueError("forget reason is required")\n        self._record_mutable(memory_id, scope)\n        now = time.time()\n        with self.store._connection() as db:\n            db.execute(\n                "UPDATE memory_retrieval_records SET state='forgotten',updated_at=? WHERE memory_id=?",\n                (now, memory_id),\n            )\n        recovered = self.recover(memory_id, scope=scope)\n        recovered["forget_reason"] = reason.strip()\n        return recovered\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''        for memory_id in parents:\n            self._record(memory_id)\n'''
+          new = '''        for memory_id in parents:\n            self._record_mutable(memory_id, scope)\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''    def recover(self, memory_id: str) -> dict[str, Any]:\n        record = self._record(memory_id)\n'''
+          new = '''    def recover(self, memory_id: str, *, scope: MemoryScope) -> dict[str, Any]:\n        record = self._record_visible(memory_id, scope)\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '        base = self.store.search(expanded, limit=max(64, bounded_limit * 8), include_invalid=True)\n'
+          new = '        base = self.store.search(expanded, limit=max(64, bounded_limit * 8), include_invalid=False)\n'
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '        latest = max((float(row["updated_at"]) for row in records), default=0.0)\n'
+          new = '''        records = [\n            record\n            for record in records\n            if self._scope_matches(json.loads(record["scope_json"]), scope)\n        ]\n        latest = max((float(row["updated_at"]) for row in records), default=0.0)\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''        if include_session and self.session_memory is not None and scope.session_id:\n            if getattr(self.session_memory, "project_id", None) != scope.project_id:\n                raise RuntimeError("session memory project scope mismatch")\n            verification = self.session_memory.verify(scope.session_id)\n            if verification.get("ok") is not True:\n                raise RuntimeError("session memory chain verification failed")\n            session_result = self.session_memory.retrieve(scope.session_id, query, limit=bounded_limit)\n            if session_result.get("exact_recovery") is not True:\n                raise RuntimeError("session memory exact recovery failed")\n'''
+          new = '''        if include_session and self.session_memory is not None and scope.session_id:\n            if getattr(self.session_memory, "project_id", None) != scope.project_id:\n                raise RuntimeError("session memory project scope mismatch")\n            session = self.session_memory.describe(scope.session_id)\n            if str(session.get("project_id") or "") != scope.project_id:\n                raise RuntimeError("session memory project scope mismatch")\n            owner = str((session.get("metadata") or {}).get("user_id") or "")\n            if owner != scope.user_id:\n                raise RuntimeError("session memory user scope mismatch")\n            verification = self.session_memory.verify(scope.session_id)\n            if verification.get("ok") is not True:\n                raise RuntimeError("session memory chain verification failed")\n            session_result = self.session_memory.retrieve(scope.session_id, query, limit=bounded_limit)\n            if session_result.get("exact_recovery") is not True:\n                raise RuntimeError("session memory exact recovery failed")\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '        recovered = [self.recover(memory_id) for memory_id in ids]\n'
+          new = '        recovered = [self.recover(memory_id, scope=scope) for memory_id in ids]\n'
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''            "scoped_retrieval": True,\n            "exact_recovery": True,\n            "cross_agent_handoff_receipts": True,\n'''
+          new = '''            "scoped_retrieval": True,\n            "scoped_recovery": True,\n            "scope_safe_mutation": True,\n            "session_user_binding": True,\n            "no_silent_reactivation": True,\n            "invalid_memory_excluded": True,\n            "exact_recovery": True,\n            "cross_agent_handoff_receipts": True,\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          memory_path.write_text(text, encoding='utf-8')
+
+          session_path = Path('syntavra_runtime/session_memory.py')
+          text = session_path.read_text(encoding='utf-8')
+          anchor = '''    @staticmethod\n    def _require_session(db: Any, session_id: str) -> Any:\n        session = db.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()\n        if not session:\n            raise KeyError(session_id)\n        return session\n\n    def open(self, session_id: str | None = None, *, parents: Sequence[str] = (), metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:\n'''
+          replacement = '''    @staticmethod\n    def _require_session(db: Any, session_id: str) -> Any:\n        session = db.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()\n        if not session:\n            raise KeyError(session_id)\n        return session\n\n    def describe(self, session_id: str) -> dict[str, Any]:\n        with _connect(self.path) as db:\n            session = self._require_session(db, session_id)\n        return dict(session) | {\n            "parents": json.loads(session["parents_json"]),\n            "metadata": json.loads(session["metadata_json"]),\n        }\n\n    def open(self, session_id: str | None = None, *, parents: Sequence[str] = (), metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:\n'''
+          assert text.count(anchor) == 1
+          session_path.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
+
+          test_path = Path('tests/runtime/test_memory_retrieval_v1.py')
+          text = test_path.read_text(encoding='utf-8')
+          old = '        self.sessions.open("session-a")\n'
+          new = '        self.sessions.open("session-a", metadata={"user_id": "naveax"})\n'
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          text = re.sub(r'self\.engine\.recover\(([^\n,)]+\["memory_id"\])\)', r'self.engine.recover(\1, scope=self.scope)', text)
+          old = '        forgotten = self.engine.forget(new["memory_id"], reason="superseded by external authority")\n'
+          new = '        forgotten = self.engine.forget(new["memory_id"], scope=self.scope, reason="superseded by external authority")\n'
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          marker = '\n\nif __name__ == "__main__":\n'
+          assert text.count(marker) == 1
+          hardening_tests = '''\n    def test_cross_scope_recovery_and_mutation_fail_closed(self) -> None:\n        local = self.remember("local scoped memory", kind="project")\n        foreign_scope = MemoryScope(project_id="other-project", user_id="other-user")\n        foreign = self.engine.remember(\n            "foreign scoped memory",\n            kind="project",\n            scope=foreign_scope,\n            provenance_refs=("evidence:foreign",),\n        )\n        with self.assertRaises(PermissionError):\n            self.engine.recover(foreign["memory_id"], scope=self.scope)\n        with self.assertRaises(PermissionError):\n            self.engine.forget(foreign["memory_id"], scope=self.scope, reason="must not cross scope")\n        with self.assertRaises(PermissionError):\n            self.engine.remember(\n                "illegal cross-scope supersession",\n                kind="semantic",\n                scope=self.scope,\n                provenance_refs=("evidence:cross-scope",),\n                supersedes=(foreign["memory_id"],),\n            )\n        with self.assertRaises(PermissionError):\n            self.engine.remember(\n                "illegal cross-scope conflict",\n                kind="semantic",\n                scope=self.scope,\n                provenance_refs=("evidence:cross-conflict",),\n                conflicts_with=(foreign["memory_id"],),\n            )\n        with self.assertRaises(PermissionError):\n            self.engine.consolidate(\n                (local["memory_id"], foreign["memory_id"]),\n                "illegal cross-scope consolidation",\n                kind="semantic",\n                scope=self.scope,\n            )\n\n    def test_duplicate_identity_does_not_reactivate_forgotten_memory(self) -> None:\n        item = self.remember("logical forgetting remains durable", kind="semantic")\n        self.engine.forget(item["memory_id"], scope=self.scope, reason="retire")\n        duplicate = self.remember("logical forgetting remains durable", kind="semantic")\n        self.assertEqual(duplicate["memory_id"], item["memory_id"])
+        self.assertEqual(duplicate["state"], "forgotten")\n        result = self.engine.retrieve("logical forgetting", scope=self.scope, include_session=False)\n        self.assertNotIn(item["memory_id"], {row["memory_id"] for row in result["results"]})\n\n    def test_lifecycle_relations_are_part_of_memory_identity(self) -> None:\n        parent = self.remember("identity parent", kind="semantic")\n        conflict = self.remember(\n            "same lifecycle content",\n            kind="semantic",\n            provenance_refs=("evidence:lifecycle",),\n            conflicts_with=(parent["memory_id"],),\n        )\n        superseding = self.remember(\n            "same lifecycle content",\n            kind="semantic",\n            provenance_refs=("evidence:lifecycle",),\n            supersedes=(parent["memory_id"],),\n        )\n        self.assertNotEqual(conflict["memory_id"], superseding["memory_id"])\n\n    def test_invalid_memory_is_excluded_from_active_retrieval(self) -> None:\n        invalid = self.remember("invalid evidence must not rank", kind="semantic", validity=0.0)\n        result = self.engine.retrieve("invalid evidence", scope=self.scope, include_session=False)\n        self.assertNotIn(invalid["memory_id"], {row["memory_id"] for row in result["results"]})\n\n    def test_session_user_binding_fails_closed(self) -> None:\n        self.sessions.open("session-other", metadata={"user_id": "other-user"})\n        foreign_user_scope = MemoryScope(project_id="syntavra", user_id="naveax", session_id="session-other")\n        with self.assertRaises(RuntimeError):\n            self.engine.retrieve("anything", scope=foreign_user_scope)\n        self.sessions.open("session-unowned")\n        unowned_scope = MemoryScope(project_id="syntavra", user_id="naveax", session_id="session-unowned")\n        with self.assertRaises(RuntimeError):\n            self.engine.retrieve("anything", scope=unowned_scope)\n\n    def test_project_global_memory_is_visible_but_not_mutable_from_private_scope(self) -> None:\n        project_scope = MemoryScope(project_id="syntavra")\n        global_item = self.engine.remember(\n            "project global policy",\n            kind="project",\n            scope=project_scope,\n            provenance_refs=("evidence:global",),\n        )\n        recovered = self.engine.recover(global_item["memory_id"], scope=self.scope)\n        self.assertEqual(recovered["text"], "project global policy")\n        with self.assertRaises(PermissionError):\n            self.engine.forget(global_item["memory_id"], scope=self.scope, reason="private scope cannot mutate global")\n'''
+          text = text.replace(marker, hardening_tests + marker, 1)
+          test_path.write_text(text, encoding='utf-8')
+
+          certifier_path = Path('tools/certify_memory_retrieval_v1.py')
+          text = certifier_path.read_text(encoding='utf-8')
+          old = '        sessions.open("session-cert")\n'
+          new = '        sessions.open("session-cert", metadata={"user_id": "certifier"})\n'
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          text = text.replace('engine.recover(first["memory_id"])', 'engine.recover(first["memory_id"], scope=scope)')
+          anchor = '''        _require(status.get("new_persistent_database") is False, "parallel memory database introduced")\n        _require(status.get("exact_recovery") is True, "runtime exact recovery disabled")\n'''
+          replacement = '''        _require(status.get("new_persistent_database") is False, "parallel memory database introduced")\n        _require(status.get("scoped_recovery") is True, "scoped memory recovery disabled")\n        _require(status.get("scope_safe_mutation") is True, "memory mutation scope guard disabled")\n        _require(status.get("session_user_binding") is True, "session user binding disabled")\n        _require(status.get("no_silent_reactivation") is True, "memory may silently reactivate")\n        _require(status.get("invalid_memory_excluded") is True, "invalid memory may be retrieved")\n        _require(status.get("exact_recovery") is True, "runtime exact recovery disabled")\n'''
+          assert text.count(anchor) == 1
+          certifier_path.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
+
+          contract_path = Path('contracts/python/memory-retrieval-v1.json')
+          contract = json.loads(contract_path.read_text(encoding='utf-8'))
+          contract['scope'].update({
+              'recovery_requires_visible_scope': True,
+              'relation_mutation_requires_exact_scope': True,
+              'forget_requires_exact_scope': True,
+              'consolidation_requires_exact_scope': True,
+              'session_user_binding_required': True,
+          })
+          contract['storage'].update({
+              'memory_identity_includes_lifecycle_relations': True,
+              'duplicate_identity_does_not_reactivate': True,
+              'invalid_memory_excluded_from_retrieval': True,
+          })
+          contract_path.write_text(json.dumps(contract, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Run hardening regression before lifecycle seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q syntavra_runtime
           python -m unittest tests.runtime.test_memory_retrieval_v1 -v
-          python -m unittest tests.runtime.test_complete_competitive_features_v001 -v
+          python -m pytest tests/runtime/test_complete_competitive_features_v001.py -q
           python -m unittest tests.runtime.test_context_reset_handoff -v
-          python tools/certify_memory_retrieval_v1.py --out /tmp/memory-preseal.json
-          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-preseal.json
+          python tools/certify_memory_retrieval_v1.py --out /tmp/memory-hardened.json
+          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-hardened.json
           python - <<'PY'
           import json
           from pathlib import Path
-          memory=json.loads(Path('/tmp/memory-preseal.json').read_text(encoding='utf-8'))
-          reset=json.loads(Path('/tmp/context-reset-preseal.json').read_text(encoding='utf-8'))
+          memory=json.loads(Path('/tmp/memory-hardened.json').read_text(encoding='utf-8'))
+          reset=json.loads(Path('/tmp/context-reset-hardened.json').read_text(encoding='utf-8'))
           assert memory['ok'] is True, memory
           assert memory['admission_ready'] is True, memory
-          assert memory['runtime']['new_persistent_database'] is False, memory
-          assert memory['runtime']['exact_recovery'] is True, memory
+          runtime=memory['runtime']
+          for key in ('scoped_recovery','scope_safe_mutation','session_user_binding','no_silent_reactivation','invalid_memory_excluded','exact_recovery'):
+              assert runtime[key] is True, (key, runtime)
+          assert runtime['new_persistent_database'] is False
           assert reset['ok'] is True, reset
           PY
 
@@ -74,8 +220,6 @@ jobs:
           import re
           from pathlib import Path
 
-          registry_path=Path('contracts/python/capability-completeness-registry-v1.json')
-          registry=json.loads(registry_path.read_text(encoding='utf-8'))
           full_order=[
               'python_authority_v1','capability_completeness_registry_v1','rust_feature_freeze_guard_v1',
               'universal_context_item_v1','evidence_store_v2','typed_context_object_store_v1',
@@ -84,6 +228,8 @@ jobs:
               'memory_retrieval_v1','epistemic_safety_v1','cache_provider_budget_v1','output_intelligence_v1',
               'host_adapter_conformance_v1','observability_attribution_v1','signalbench_python_product_v1',
           ]
+          registry_path=Path('contracts/python/capability-completeness-registry-v1.json')
+          registry=json.loads(registry_path.read_text(encoding='utf-8'))
           current_order=list(registry.get('milestone_order') or [])
           assert current_order in [full_order[:12], full_order], current_order
           registry['milestone_order']=full_order
@@ -129,7 +275,7 @@ jobs:
           text=text.replace('- [ ] Add a machine-enforced Rust feature-freeze guard once Python-first implementation begins.','- [x] Add a machine-enforced Rust feature-freeze guard once Python-first implementation begins.',1)
           start=text.index('## Repository state at checkpoint')
           end=text.index('## Existing Python baseline: do not reimplement blindly')
-          current='''## Repository state at checkpoint\n\n- Admitted `main` before Memory work: `9838235404a834cfbc4882ebfb989cf1b40ef42e`.\n- Context Reset / Handoff v1 was exact-head admitted and merged through PR #148.\n- Active Memory branch: `agent/memory-retrieval-v1`.\n- Active PR: #151 — `Add Memory Retrieval v1`.\n- Pre-seal implementation head: `b5103c5ff821cf1a8e9062658c97039a0f289ad7`.\n- Memory Retrieval exact-head runtime/certifier workflow passed on the pre-seal implementation head.\n- Release Main on that head passed all runtime/certifier/freeze checks and failed only because `MANIFEST.sha256` was intentionally stale before the final seal.\n- Python COMPLETE remains false.\n- Rust remains feature-frozen at 174/245 production promotion with 71 remaining.\n\n## Immediate exact task\n\n- [x] Merge Context Reset / Handoff v1.\n- [x] Implement Memory Retrieval v1 without a parallel memory database.\n- [x] Add scoped retrieval, provenance, conflict/supersession, consolidation/forgetting, exact recovery and handoff receipts.\n- [x] Bind Memory Retrieval to exact-head CI, Release Main and immutable action-pin enforcement.\n- [ ] Seal the permanent PR #151 tree and pass final exact-head admission gates.\n- [ ] Merge PR #151 only after all load-bearing gates pass.\n- [ ] Re-read fresh `main`, then advance to `epistemic_safety_v1`.\n\n'''
+          current='''## Repository state at checkpoint\n\n- Admitted `main` before Memory work: `9838235404a834cfbc4882ebfb989cf1b40ef42e`.\n- Context Reset / Handoff v1 was exact-head admitted and merged through PR #148.\n- Active Memory branch: `agent/memory-retrieval-v1`.\n- Active PR: #151 — `Add Memory Retrieval v1`.\n- Memory Retrieval pre-seal implementation passed its dedicated exact-head workflow and was subsequently scope/lifecycle hardened before admission.\n- Python COMPLETE remains false.\n- Rust remains feature-frozen at 174/245 production promotion with 71 remaining.\n\n## Immediate exact task\n\n- [x] Merge Context Reset / Handoff v1.\n- [x] Implement Memory Retrieval v1 without a parallel memory database.\n- [x] Add scoped retrieval, provenance, conflict/supersession, consolidation/forgetting, exact recovery and handoff receipts.\n- [x] Harden recovery/mutation/session ownership boundaries and prevent silent memory reactivation.\n- [x] Bind Memory Retrieval to exact-head CI, Release Main and immutable action-pin enforcement.\n- [ ] Pass final exact-head admission gates on the permanent sealed PR #151 tree.\n- [ ] Merge PR #151 only after all load-bearing gates pass.\n- [ ] Re-read fresh `main`, then advance to `epistemic_safety_v1`.\n\n'''
           text=text[:start]+current+text[end:]
           first=text.index('## First exact Python commits after PR #132')
           wave=text.index('## Wave P0-A: authority / contracts / reproducibility')
@@ -138,13 +284,13 @@ jobs:
           checklist.write_text(text,encoding='utf-8')
 
           live=Path('docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md')
-          live.write_text('''# Syntavra Python-First Live Checkpoint\n\nUpdated: **2026-08-19**\n\nThis file is the volatile continuation authority. Historical milestones live in `SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt`; the capability registry is the machine-readable lifecycle authority.\n\n## Current admitted base\n\n- `main` before Memory work: `9838235404a834cfbc4882ebfb989cf1b40ef42e`\n- Context Reset / Handoff v1: admitted through PR #148.\n- Python feature authority: active.\n- Python COMPLETE: false.\n- Rust feature development: frozen.\n- Rust production promotion: 174/245.\n- Remaining Rust parity/promotion set: 71.\n\n## Current implementation\n\n### PR #151 — Memory Retrieval v1\n\n- Branch: `agent/memory-retrieval-v1`.\n- Pre-seal implementation head: `b5103c5ff821cf1a8e9062658c97039a0f289ad7`.\n- Existing `MemoryIntelligenceStore` SQLite authority is reused.\n- Existing `SessionMemory` exact hash-chain authority is reused.\n- No parallel persistent memory database is introduced.\n- Episodic, semantic, procedural, project, user and temporal memory scopes are represented.\n- Project/user/session isolation fails closed.\n- Provenance is mandatory.\n- Conflicts remain explicit; supersession is explicit.\n- Consolidation preserves parent lineage.\n- Forgetting is logical: inactive for retrieval but exact payload remains recoverable.\n- Hybrid BM25/vector retrieval uses deterministic query expansion and importance/confidence/validity/recency reranking.\n- Retrieval and cross-agent handoff emit deterministic content-addressed receipts.\n\n## Verification\n\n- Dedicated Memory Retrieval exact-head workflow passed on the pre-seal implementation head.\n- New Memory Retrieval regression suite passed 7/7 there.\n- Memory certifier reported `admission_ready=true`, exact recovery true, and no new persistent database.\n- Rust Freeze and the other Python-first gates passed on that head.\n- Release Main failed only at the expected stale `MANIFEST.sha256` check after all runtime/certifier checks passed.\n\n## Current lifecycle repair\n\n- `context_reset_handoff_v1` is advanced from stale `partial` metadata to `certified`.\n- `memory_retrieval_v1` is recorded as `implemented` pending final exact-head admission/merge.\n- Machine-readable milestone order now continues through Epistemic Safety, Cache/Provider/Budget, Output Intelligence, Host Adapter Conformance, Observability Attribution and SignalBench.\n- The capability certifier enforces that complete order so omitted future milestones cannot accidentally yield Python COMPLETE.\n\n## Next exact task\n\n1. Produce the exact permanent PR #151 tree and canonical `MANIFEST.sha256`.\n2. Run final exact-head Memory Retrieval, Capability Completeness, Context Reset, Rust Freeze, Release Main and Package Provenance gates.\n3. Merge PR #151 only after all load-bearing checks pass.\n4. Re-read fresh `main`.\n5. Begin `epistemic_safety_v1`; reuse existing security scan, trust/taint, claim governance, capability authorization and Adaptive Context Policy primitives instead of duplicating them.\n\n## Required continuation instruction\n\n```text\nContinue Syntavra in PYTHON-FIRST mode from docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md.\nCross-check contracts/python/capability-completeness-registry-v1.json before choosing work.\nDo not resume Rust feature development or alter the 174/245 production-promotion boundary.\nDo not start a later milestone while the first non-admitted canonical milestone is still open.\nWhen CI is active, track the existing run instead of creating a duplicate; continue independent work while it runs.\n```\n''',encoding='utf-8')
+          live.write_text('''# Syntavra Python-First Live Checkpoint\n\nUpdated: **2026-08-19**\n\nThis file is the volatile continuation authority. Historical milestones live in `SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt`; the capability registry is the machine-readable lifecycle authority.\n\n## Current admitted base\n\n- `main` before Memory work: `9838235404a834cfbc4882ebfb989cf1b40ef42e`\n- Context Reset / Handoff v1: admitted through PR #148.\n- Python feature authority: active.\n- Python COMPLETE: false.\n- Rust feature development: frozen.\n- Rust production promotion: 174/245.\n- Remaining Rust parity/promotion set: 71.\n\n## Current implementation\n\n### PR #151 — Memory Retrieval v1\n\n- Branch: `agent/memory-retrieval-v1`.\n- Existing `MemoryIntelligenceStore` SQLite authority is reused.\n- Existing `SessionMemory` exact hash-chain authority is reused.\n- No parallel persistent memory database is introduced.\n- Episodic, semantic, procedural, project, user and temporal memory scopes are represented.\n- Project/user/session retrieval isolation fails closed.\n- Exact recovery requires a visible scope.\n- Lifecycle mutation, forgetting and consolidation require exact scope ownership.\n- Session retrieval binds the session's recorded user to the requested memory scope.\n- Provenance is mandatory.\n- Conflicts remain explicit; supersession is explicit.\n- Lifecycle relation sets are part of memory identity.\n- Consolidation preserves parent lineage.\n- Forgetting is logical and durable: inactive for retrieval, exact payload preserved, duplicate remember does not silently reactivate it.\n- Invalid observations are excluded from active retrieval.\n- Hybrid BM25/vector retrieval uses deterministic query expansion and importance/confidence/validity/recency reranking.\n- Retrieval and cross-agent handoff emit deterministic content-addressed receipts.\n\n## Verification state\n\n- The original Memory Retrieval implementation passed its dedicated exact-head workflow (7/7 initial regressions).\n- Release Main on that pre-seal head passed runtime/certifier/freeze checks and stopped only at the intentionally stale manifest.\n- Admission review then found and hardened cross-scope relation mutation/recovery/forgetting, session-user binding, invalid-memory retrieval and silent reactivation edges before merge.\n- Final exact-head admission gates must pass on the permanent sealed tree before PR #151 can merge.\n\n## Current lifecycle repair\n\n- `context_reset_handoff_v1` advances from stale `partial` metadata to `certified`.\n- `memory_retrieval_v1` is recorded as `implemented` pending final exact-head admission/merge.\n- Machine-readable milestone order now continues through Epistemic Safety, Cache/Provider/Budget, Output Intelligence, Host Adapter Conformance, Observability Attribution and SignalBench.\n- Capability completeness enforces the full order; omitted future milestones cannot accidentally yield Python COMPLETE.\n\n## Next exact task\n\n1. Pass final exact-head Memory Retrieval, Capability Completeness, Context Reset, Rust Freeze, Release Main and Package Provenance gates.\n2. Merge PR #151 only after all load-bearing checks pass.\n3. Re-read fresh `main`.\n4. Begin `epistemic_safety_v1`; reuse existing security scan, trust/taint, claim governance, capability authorization and Adaptive Context Policy primitives instead of duplicating them.\n\n## Required continuation instruction\n\n```text\nContinue Syntavra in PYTHON-FIRST mode from docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md.\nCross-check contracts/python/capability-completeness-registry-v1.json before choosing work.\nDo not resume Rust feature development or alter the 174/245 production-promotion boundary.\nDo not start a later milestone while the first non-admitted canonical milestone is still open.\nWhen CI is active, track the existing run instead of creating a duplicate; continue independent work while it runs.\n```\n''',encoding='utf-8')
 
           checkpoint=Path('docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt')
           text=checkpoint.read_text(encoding='utf-8')
           marker='APPENDED CURRENT CHECKPOINT — 2026-08-19 — MEMORY RETRIEVAL ACTIVE'
           if marker not in text:
-              text += '''\n\n======================================================================\nAPPENDED CURRENT CHECKPOINT — 2026-08-19 — MEMORY RETRIEVAL ACTIVE\n======================================================================\n\nCURRENT ADMITTED MAIN BEFORE MEMORY:\n9838235404a834cfbc4882ebfb989cf1b40ef42e\n\nACTIVE IMPLEMENTATION BRANCH:\nagent/memory-retrieval-v1\n\nACTIVE PR:\n#151 — Add Memory Retrieval v1\n\nPYTHON STATUS:\nPYTHON-FIRST ACTIVE — Context Reset / Handoff v1 is admitted; memory_retrieval_v1 is the current milestone.\n\nRUST STATUS:\nFEATURE FROZEN AND CI-ENFORCED — production promotion 174/245; remaining parity/promotion 71; Rust resume false.\n\nCURRENT IMPLEMENTATION:\n- existing MemoryIntelligenceStore and SessionMemory authorities are reused.\n- no parallel persistent memory database was introduced.\n- scoped episodic/semantic/procedural/project/user/temporal memory records added.\n- provenance, conflict, supersession, consolidation, logical forgetting and exact recovery added.\n- BM25/vector retrieval extended with deterministic query expansion and importance/confidence/validity/recency reranking.\n- session retrieval remains hash-chain verified and exact recoverable.\n- deterministic retrieval and cross-agent handoff receipts added.\n- Memory contract, regression suite, certifier, exact-head workflow, Release Main binding and immutable action-pin coverage added.\n\nVERIFIED PRE-SEAL:\n- Memory Retrieval exact-head workflow PASS on b5103c5ff821cf1a8e9062658c97039a0f289ad7.\n- new Memory Retrieval regression PASS 7/7.\n- Memory certifier admission_ready=true; exact recovery=true; new_persistent_database=false.\n- Rust Freeze and supporting Python-first gates PASS.\n- Release Main reached the canonical manifest check after all runtime/certifier checks passed; failure was stale MANIFEST.sha256 only.\n\nLIFECYCLE REPAIR IN THIS ADMISSION:\n- context_reset_handoff_v1 stale partial metadata advances to certified.\n- memory_retrieval_v1 advances to implemented pending final exact-head admission and merge.\n- milestone order/certifier now covers every remaining Python-first milestone through SignalBench.\n\nNEXT EXACT TASK:\n- seal the permanent PR #151 tree and run final exact-head admission gates.\n- merge only after all load-bearing checks pass.\n- re-read fresh main and advance to epistemic_safety_v1.\n'''
+              text += '''\n\n======================================================================\nAPPENDED CURRENT CHECKPOINT — 2026-08-19 — MEMORY RETRIEVAL ACTIVE\n======================================================================\n\nCURRENT ADMITTED MAIN BEFORE MEMORY:\n9838235404a834cfbc4882ebfb989cf1b40ef42e\n\nACTIVE IMPLEMENTATION BRANCH:\nagent/memory-retrieval-v1\n\nACTIVE PR:\n#151 — Add Memory Retrieval v1\n\nPYTHON STATUS:\nPYTHON-FIRST ACTIVE — Context Reset / Handoff v1 is admitted; memory_retrieval_v1 is the current milestone.\n\nRUST STATUS:\nFEATURE FROZEN AND CI-ENFORCED — production promotion 174/245; remaining parity/promotion 71; Rust resume false.\n\nCURRENT IMPLEMENTATION:\n- existing MemoryIntelligenceStore and SessionMemory authorities are reused.\n- no parallel persistent memory database was introduced.\n- scoped episodic/semantic/procedural/project/user/temporal memory records added.\n- provenance, conflict, supersession, consolidation, logical forgetting and exact recovery added.\n- recovery and lifecycle mutation are scope-gated; session retrieval is user-bound.\n- duplicate identities do not reactivate forgotten/superseded memories.\n- invalid memories are excluded from active retrieval.\n- BM25/vector retrieval extended with deterministic query expansion and importance/confidence/validity/recency reranking.\n- session retrieval remains hash-chain verified and exact recoverable.\n- deterministic retrieval and cross-agent handoff receipts added.\n- Memory contract, regression suite, certifier, exact-head workflow, Release Main binding and immutable action-pin coverage added.\n\nVERIFIED PRE-SEAL:\n- original Memory Retrieval exact-head workflow PASS.\n- initial Memory Retrieval regression PASS 7/7.\n- Memory certifier admission_ready=true; exact recovery=true; new_persistent_database=false.\n- Rust Freeze and supporting Python-first gates PASS.\n- Release Main reached the canonical manifest check after runtime/certifier checks passed; failure was stale MANIFEST.sha256 only.\n- admission review subsequently found and hardened cross-scope and silent-reactivation edge cases before merge.\n\nLIFECYCLE REPAIR IN THIS ADMISSION:\n- context_reset_handoff_v1 stale partial metadata advances to certified.\n- memory_retrieval_v1 advances to implemented pending final exact-head admission and merge.\n- milestone order/certifier now covers every remaining Python-first milestone through SignalBench.\n\nNEXT EXACT TASK:\n- pass final exact-head admission gates on the permanent sealed PR #151 tree.\n- merge only after all load-bearing checks pass.\n- re-read fresh main and advance to epistemic_safety_v1.\n'''
               checkpoint.write_text(text,encoding='utf-8')
           PY
 
@@ -157,7 +303,7 @@ jobs:
           python tools/refresh_manifest.py --check
           python -m unittest tests.runtime.test_python_capability_completeness -v
           python -m unittest tests.runtime.test_memory_retrieval_v1 -v
-          python -m unittest tests.runtime.test_complete_competitive_features_v001 -v
+          python -m pytest tests/runtime/test_complete_competitive_features_v001.py -q
           python -m unittest tests.runtime.test_context_reset_handoff -v
           python -m unittest tests.runtime.test_release_action_pins -v
           git diff --check
@@ -170,6 +316,11 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add MANIFEST.sha256 \
+            syntavra_runtime/memory_intelligence.py \
+            syntavra_runtime/session_memory.py \
+            contracts/python/memory-retrieval-v1.json \
+            tests/runtime/test_memory_retrieval_v1.py \
+            tools/certify_memory_retrieval_v1.py \
             contracts/python/capability-completeness-registry-v1.json \
             tools/certify_python_capability_completeness.py \
             docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md \
@@ -177,13 +328,14 @@ jobs:
             docs/SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt
           git add -u .github/workflows/memory-retrieval-finalizer.yml
           git status --short
-          git commit -m 'Seal Memory Retrieval v1 admission state'
+          git commit -m 'Harden and seal Memory Retrieval v1 admission'
 
       - name: Validate committed seal before publication
         shell: bash
         run: |
           set -euo pipefail
           python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_memory_retrieval_v1 -v
           python tools/certify_python_capability_completeness.py --out /tmp/capability-final.json
           python tools/certify_context_reset_handoff.py --out /tmp/context-reset-final.json
           python tools/certify_memory_retrieval_v1.py --out /tmp/memory-final.json
@@ -202,8 +354,14 @@ jobs:
           assert cap['rust_resume_allowed'] is False
           assert reset['ok'] is True, reset
           assert memory['ok'] is True, memory
-          assert memory['runtime']['new_persistent_database'] is False
-          assert memory['runtime']['exact_recovery'] is True
+          runtime=memory['runtime']
+          assert runtime['new_persistent_database'] is False
+          assert runtime['scoped_recovery'] is True
+          assert runtime['scope_safe_mutation'] is True
+          assert runtime['session_user_binding'] is True
+          assert runtime['no_silent_reactivation'] is True
+          assert runtime['invalid_memory_excluded'] is True
+          assert runtime['exact_recovery'] is True
           assert freeze['ok'] is True, freeze
           assert freeze['denied_change_count'] == 0, freeze
           PY
