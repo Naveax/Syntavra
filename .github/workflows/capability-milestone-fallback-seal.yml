@@ -1,0 +1,104 @@
+name: Capability Milestone Fallback Seal
+
+on:
+  push:
+    branches:
+      - agent/certify-context-reset-handoff-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: capability-milestone-fallback-seal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  seal:
+    if: github.actor == 'Naveax'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact staging head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Patch capability milestone fallback
+        shell: bash
+        env:
+          EXPECTED_PARENT: ff59cd24b96e442fc45d35adbd6ee44437583a97
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          python - <<'PY'
+          from pathlib import Path
+
+          certifier = Path('tools/certify_python_capability_completeness.py')
+          text = certifier.read_text(encoding='utf-8')
+          old_prefix = '''    "multi_graph_retrieval_v1",\n    "adaptive_context_policy_v1",\n]'''
+          new_prefix = '''    "multi_graph_retrieval_v1",\n    "adaptive_context_policy_v1",\n    "context_reset_handoff_v1",\n]'''
+          if old_prefix not in text:
+              raise SystemExit('canonical prefix patch anchor missing')
+          text = text.replace(old_prefix, new_prefix, 1)
+          old_current = '''    current_milestone = next(\n        (milestone for milestone in milestone_order if (by_id.get(milestone) or {}).get("state") != "certified"),\n        "python_complete",\n    )'''
+          new_current = '''    current_milestone = next(\n        (milestone for milestone in milestone_order if (by_id.get(milestone) or {}).get("state") != "certified"),\n        uncertified_required[0] if uncertified_required else "python_complete",\n    )'''
+          if old_current not in text:
+              raise SystemExit('current milestone patch anchor missing')
+          certifier.write_text(text.replace(old_current, new_current, 1), encoding='utf-8', newline='\n')
+
+          tests = Path('tests/runtime/test_python_capability_completeness.py')
+          text = tests.read_text(encoding='utf-8')
+          old_expected = '        expected_current = next((milestone for milestone in contract["milestone_order"] if (by_id.get(milestone) or {}).get("state") != "certified"), "python_complete")'
+          new_expected = '''        uncertified_required = [\n            item["id"]\n            for item in contract["capabilities"]\n            if item.get("required_for_python_complete") is True\n            and item.get("classification") != "EXTERNAL"\n            and item.get("state") != "certified"\n        ]\n        expected_current = next(\n            (milestone for milestone in contract["milestone_order"] if (by_id.get(milestone) or {}).get("state") != "certified"),\n            uncertified_required[0] if uncertified_required else "python_complete",\n        )'''
+          if old_expected not in text:
+              raise SystemExit('test expectation patch anchor missing')
+          tests.write_text(text.replace(old_expected, new_expected, 1), encoding='utf-8', newline='\n')
+          PY
+
+      - name: Verify corrected exact-head lifecycle semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python tools/certify_python_capability_completeness.py --out /tmp/capability.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/capability.json').read_text(encoding='utf-8'))
+          assert report['ok'] is True, report
+          assert report['current_milestone'] == 'memory_retrieval_v1', report
+          assert report['python_complete_ready'] is False, report
+          assert report['rust_resume_allowed'] is False, report
+          assert 'memory_retrieval_v1' in report['uncertified_required'], report
+          PY
+
+      - name: Materialize final manifest and remove one-shot sealer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/capability-milestone-fallback-seal.yml
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          git diff --check
+
+      - name: Commit exact corrected seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$changed"
+          printf '%s\n' "$changed" | grep -F 'tools/certify_python_capability_completeness.py'
+          printf '%s\n' "$changed" | grep -F 'tests/runtime/test_python_capability_completeness.py'
+          printf '%s\n' "$changed" | grep -F 'MANIFEST.sha256'
+          printf '%s\n' "$changed" | grep -F '.github/workflows/capability-milestone-fallback-seal.yml'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/certify_python_capability_completeness.py tests/runtime/test_python_capability_completeness.py MANIFEST.sha256
+          git commit -m 'Fix post-certification capability milestone fallback'
+          git push origin HEAD:agent/certify-context-reset-handoff-v1
