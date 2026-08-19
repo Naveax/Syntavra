@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "family": "adaptive-context-policy",
+  "phase": "python-first",
+  "claim": "ADAPTIVE_CONTEXT_POLICY_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/adaptive_context_policy.py",
+  "existing_authorities": {
+    "context_pack": "syntavra_runtime/context_pack.py:TaskContextPack",
+    "optimization_modes": "syntavra_runtime/optimization_modes.py:OptimizationMode",
+    "multi_graph_retrieval": "syntavra_runtime/multi_graph_retrieval.py:MultiGraphRetrieval",
+    "context_namespace": "syntavra_runtime/context_namespace.py:ContextNamespaceAddress",
+    "payload_authority": "syntavra_runtime/universal_context_item.py:UniversalContextItem"
+  },
+  "ownership_policy": {
+    "reference_only_signals": true,
+    "exact_payload_storage_forbidden": true,
+    "parallel_persistent_store_forbidden": true,
+    "policy_side_effects_forbidden": true,
+    "existing_budget_authority_reused": true,
+    "existing_context_pack_reused": true,
+    "multi_graph_results_consumed_by_reference": true,
+    "public_cli_route_added": false
+  },
+  "item_actions": [
+    "KEEP",
+    "SUMMARIZE",
+    "COMPRESS",
+    "EXTERNALIZE",
+    "ABSTAIN"
+  ],
+  "session_actions": [
+    "KEEP",
+    "RESET",
+    "BRANCH",
+    "ABSTAIN"
+  ],
+  "decision_policy": {
+    "deterministic": true,
+    "explainable_reason_codes": true,
+    "utility_scored": true,
+    "risk_scored": true,
+    "budget_aware": true,
+    "exact_required_preserved": true,
+    "impossible_exact_budget_abstains": true,
+    "security_deny_abstains": true,
+    "tainted_exact_required_abstains": true,
+    "irreversible_unresolved_risk_abstains": true,
+    "task_drift_branches_when_allowed": true,
+    "task_drift_without_branch_permission_abstains": true,
+    "reset_requires_recoverable_context": true,
+    "unsafe_reset_abstains": true,
+    "budget_pressure_economizes_lower_utility_first": true,
+    "no_silent_fallback": true
+  },
+  "shadow_policy": {
+    "supported": true,
+    "recommended_action_recorded": true,
+    "effective_item_action_remains_keep": true,
+    "effective_session_action_remains_keep": true,
+    "side_effect_claims_forbidden": true
+  },
+  "receipt_policy": {
+    "content_addressed": true,
+    "timestamps_excluded_from_identity": true,
+    "config_recorded": true,
+    "state_recorded": true,
+    "reference_only_signals_recorded": true,
+    "recommended_and_effective_actions_recorded": true,
+    "reason_codes_recorded": true,
+    "token_metrics_recorded": true,
+    "budget_fit_recorded": true
+  },
+  "adapter_policy": {
+    "task_context_pack_exact_text_forbidden": true,
+    "task_context_pack_file_hash_reference_preserved": true,
+    "multi_graph_identity_preserved": true,
+    "multi_graph_evidence_refs_preserved": true,
+    "optimization_mode_context_budget_reused": true
+  },
+  "admission": {
+    "prior_multi_graph_must_be_certified": true,
+    "capability_registry_current_milestone": "adaptive_context_policy_v1",
+    "python_complete_must_remain_false": true,
+    "rust_resume_must_remain_false": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71
+  },
+  "claim_boundary": "This contract certifies a deterministic, explainable, reference-only Python policy plane that recommends KEEP, SUMMARIZE, COMPRESS, EXTERNALIZE, RESET, BRANCH, or ABSTAIN under explicit budget, trust, freshness, recoverability, task-drift, and safety signals. It does not claim autonomous side-effect authority, complete epistemic safety, perfect utility estimation, external benchmark superiority, or Rust Remaining-71 parity/promotion."
+}
