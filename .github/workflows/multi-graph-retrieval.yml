@@ -69,6 +69,8 @@ jobs:
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['eight_graph_fusion'] is True
           assert report['runtime']['security_deny_fail_closed'] is True
+          assert report['runtime']['security_deny_alias_closure'] is True
+          assert report['runtime']['blocked_nodes_cannot_seed_or_propagate'] is True
           assert report['runtime']['persistent_store'] is False
           assert report['runtime']['payload_authority'] is False
           assert report['rust']['production_promoted'] == 174
