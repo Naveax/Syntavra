@@ -308,14 +308,25 @@
     {
       "id": "context_reset_handoff_v1",
       "group": "context-lifecycle",
-      "state": "partial",
+      "state": "certified",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "syntavra_runtime/session_memory.py",
-        "syntavra_runtime/autonomous_agent.py"
+        "syntavra_runtime/autonomous_agent.py",
+        "syntavra_runtime/context_reset_handoff.py",
+        "contracts/python/context-reset-handoff-v1.json",
+        "tools/certify_context_reset_handoff.py",
+        "tests/runtime/test_context_reset_handoff.py",
+        ".github/workflows/context-reset-handoff.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/context-reset-handoff-v1.json",
+        "syntavra_runtime/context_reset_handoff.py",
+        "tools/certify_context_reset_handoff.py",
+        "tests/runtime/test_context_reset_handoff.py",
+        ".github/workflows/context-reset-handoff.yml"
+      ],
       "acceptance": "CONTINUE/COMPACT/RESET/BRANCH decisions and verified structured handoff preserving evidence, git, and security state."
     },
     {

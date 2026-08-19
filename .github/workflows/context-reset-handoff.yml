@@ -68,42 +68,6 @@ jobs:
           assert report['rust']['remaining_parity_promotion'] == 71
           PY
 
-      - name: Render lifecycle certification seal candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/context-reset-handoff-lifecycle
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path('contracts/python/capability-completeness-registry-v1.json')
-          registry = json.loads(path.read_text(encoding='utf-8'))
-          row = next(item for item in registry['capabilities'] if item['id'] == 'context_reset_handoff_v1')
-          row['state'] = 'certified'
-          row['implementation_evidence'] = [
-              'syntavra_runtime/session_memory.py',
-              'syntavra_runtime/autonomous_agent.py',
-              'syntavra_runtime/context_reset_handoff.py',
-              'contracts/python/context-reset-handoff-v1.json',
-              'tools/certify_context_reset_handoff.py',
-              'tests/runtime/test_context_reset_handoff.py',
-              '.github/workflows/context-reset-handoff.yml',
-          ]
-          row['certification_evidence'] = [
-              'contracts/python/context-reset-handoff-v1.json',
-              'syntavra_runtime/context_reset_handoff.py',
-              'tools/certify_context_reset_handoff.py',
-              'tests/runtime/test_context_reset_handoff.py',
-              '.github/workflows/context-reset-handoff.yml',
-          ]
-          path.write_text(json.dumps(registry, indent=2, ensure_ascii=False) + '\n', encoding='utf-8', newline='\n')
-          PY
-          python tools/refresh_manifest.py
-          cp contracts/python/capability-completeness-registry-v1.json /tmp/context-reset-handoff-lifecycle/capability-completeness-registry-v1.json
-          cp MANIFEST.sha256 /tmp/context-reset-handoff-lifecycle/MANIFEST.sha256
-          git checkout -- contracts/python/capability-completeness-registry-v1.json MANIFEST.sha256
-
       - name: Enforce exact clean pull request head
         if: always()
         shell: bash
@@ -121,8 +85,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: context-reset-handoff-${{ github.event.pull_request.head.sha }}
-          path: |
-            /tmp/context-reset-handoff.json
-            /tmp/context-reset-handoff-lifecycle/capability-completeness-registry-v1.json
-            /tmp/context-reset-handoff-lifecycle/MANIFEST.sha256
+          path: /tmp/context-reset-handoff.json
           if-no-files-found: error
