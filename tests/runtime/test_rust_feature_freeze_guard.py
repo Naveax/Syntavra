@@ -38,6 +38,7 @@ class RustFeatureFreezeGuardTests(unittest.TestCase):
         self.assertEqual(_classify(".github/workflows/remaining71-agent-differential.yml", contract), "remaining71")
         self.assertEqual(_classify("tools/validate_remaining71_agent_differential.py", contract), "remaining71")
         self.assertEqual(_classify("contracts/engine/phase2-rust-migration-matrix-v1.json", contract), "promotion-authority")
+        self.assertEqual(_classify("contracts/engine/dual-engine-public-surface-v2.json", contract), "promotion-authority")
         self.assertIsNone(_classify("syntavra_runtime/context_pack.py", contract))
 
     def test_baseline_is_174_promoted_71_remaining_and_resume_closed(self) -> None:
@@ -69,6 +70,73 @@ class RustFeatureFreezeGuardTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual(report["protected_change_count"], 1)
         self.assertEqual(report["denied_change_count"], 0)
+
+    def test_python_surface_metadata_sync_is_narrowly_allowed(self) -> None:
+        path = "contracts/engine/dual-engine-public-surface-v2.json"
+        changed = [{"status": "M", "path": path, "role": "path"}]
+        before = {
+            "claim": "FULL_DUAL_ENGINE_PARITY_PROVEN",
+            "python_surface": {
+                "module_count": 198,
+                "public_command_count": 245,
+                "command_paths_sha256": "a" * 64,
+                "digest_encoding": "canonical-json-array-utf8",
+            },
+            "rust_surface": {"native_public_command_count": 245},
+        }
+        after = {
+            **before,
+            "python_surface": {
+                **before["python_surface"],
+                "module_count": 206,
+            },
+        }
+        with (
+            patch("tools.check_rust_feature_freeze._changed_paths", return_value=changed),
+            patch(
+                "tools.check_rust_feature_freeze._read_revision_json",
+                side_effect=[before, after],
+            ),
+        ):
+            report = check(ROOT, base="base", head="head")
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["protected_change_count"], 1)
+        self.assertEqual(report["allowed_python_surface_metadata_change_count"], 1)
+        self.assertEqual(report["denied_change_count"], 0)
+        self.assertEqual(
+            report["allowed_python_surface_metadata_changes"][0]["allowance"],
+            "python-surface-metadata-sync",
+        )
+
+    def test_dual_engine_rust_or_promotion_change_remains_denied(self) -> None:
+        path = "contracts/engine/dual-engine-public-surface-v2.json"
+        changed = [{"status": "M", "path": path, "role": "path"}]
+        before = {
+            "claim": "FULL_DUAL_ENGINE_PARITY_PROVEN",
+            "python_surface": {
+                "module_count": 198,
+                "public_command_count": 245,
+                "command_paths_sha256": "a" * 64,
+                "digest_encoding": "canonical-json-array-utf8",
+            },
+            "rust_surface": {"native_public_command_count": 245},
+        }
+        after = {
+            **before,
+            "rust_surface": {"native_public_command_count": 244},
+        }
+        with (
+            patch("tools.check_rust_feature_freeze._changed_paths", return_value=changed),
+            patch(
+                "tools.check_rust_feature_freeze._read_revision_json",
+                side_effect=[before, after],
+            ),
+        ):
+            report = check(ROOT, base="base", head="head")
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["allowed_python_surface_metadata_change_count"], 0)
+        self.assertEqual(report["denied_change_count"], 1)
+        self.assertEqual(report["denied_changes"][0]["class"], "promotion-authority")
 
     def test_maintenance_exception_never_admits_promotion_authority_change(self) -> None:
         changed = [{"status": "M", "path": "contracts/engine/phase2-rust-migration-matrix-v1.json", "role": "path"}]

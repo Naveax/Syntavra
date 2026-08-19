@@ -64,6 +64,72 @@ def _classify(path: str, contract: dict[str, Any]) -> str | None:
     return None
 
 
+_DUAL_ENGINE_SURFACE = "contracts/engine/dual-engine-public-surface-v2.json"
+_PYTHON_SURFACE_METADATA_KEYS = frozenset(
+    {
+        "module_count",
+        "public_command_count",
+        "command_paths_sha256",
+        "digest_encoding",
+    }
+)
+
+
+def _read_revision_json(repo: Path, revision: str, path: str) -> dict[str, Any]:
+    proc = subprocess.run(
+        ["git", "show", f"{revision}:{path}"],
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise AssertionError(
+            f"unable to read {path} at {revision}: {proc.stderr.strip()}"
+        )
+    value = json.loads(proc.stdout)
+    if not isinstance(value, dict):
+        raise AssertionError(f"expected JSON object at {revision}:{path}")
+    return value
+
+
+def _is_python_surface_metadata_sync(
+    repo: Path,
+    *,
+    base: str,
+    head: str,
+    row: dict[str, str],
+) -> bool:
+    if (
+        row.get("path") != _DUAL_ENGINE_SURFACE
+        or row.get("status") != "M"
+        or row.get("role") != "path"
+    ):
+        return False
+
+    before = _read_revision_json(repo, base, _DUAL_ENGINE_SURFACE)
+    after = _read_revision_json(repo, head, _DUAL_ENGINE_SURFACE)
+
+    before_other = {key: value for key, value in before.items() if key != "python_surface"}
+    after_other = {key: value for key, value in after.items() if key != "python_surface"}
+    if before_other != after_other:
+        return False
+
+    before_python = before.get("python_surface")
+    after_python = after.get("python_surface")
+    if not isinstance(before_python, dict) or not isinstance(after_python, dict):
+        return False
+
+    sentinel = object()
+    changed_keys = {
+        key
+        for key in set(before_python) | set(after_python)
+        if before_python.get(key, sentinel) != after_python.get(key, sentinel)
+    }
+    return bool(changed_keys) and changed_keys <= _PYTHON_SURFACE_METADATA_KEYS
+
+
 def verify_baseline(repo: Path, contract: dict[str, Any]) -> dict[str, Any]:
     authority = contract.get("authority") or {}
     expected = contract.get("expected") or {}
@@ -128,6 +194,7 @@ def check(
 
     changes = _changed_paths(repo, base, head)
     protected_changes: list[dict[str, str]] = []
+    allowed_python_surface_metadata_changes: list[dict[str, str]] = []
     denied_changes: list[dict[str, str]] = []
     for row in changes:
         path_class = _classify(row["path"], contract)
@@ -135,6 +202,16 @@ def check(
             continue
         enriched = {**row, "class": path_class}
         protected_changes.append(enriched)
+        if path_class == "promotion-authority" and _is_python_surface_metadata_sync(
+            repo,
+            base=base,
+            head=head,
+            row=row,
+        ):
+            allowed_python_surface_metadata_changes.append(
+                {**enriched, "allowance": "python-surface-metadata-sync"}
+            )
+            continue
         if maintenance_exception is None:
             denied_changes.append(enriched)
             continue
@@ -153,11 +230,17 @@ def check(
         "maintenance_reason_present": bool((maintenance_reason or "").strip()),
         "changed_path_count": len(changes),
         "protected_change_count": len(protected_changes),
+        "allowed_python_surface_metadata_change_count": len(
+            allowed_python_surface_metadata_changes
+        ),
         "denied_change_count": len(denied_changes),
         "protected_changes": protected_changes,
+        "allowed_python_surface_metadata_changes": allowed_python_surface_metadata_changes,
         "denied_changes": denied_changes,
         "policy": (
             "Ordinary Python-first CI denies native, Remaining-71 parity-program, and promotion-authority changes. "
+            "The sole content-scoped exception is canonical Python public-surface metadata synchronization inside "
+            "dual-engine-public-surface-v2.json; every non-Python field and every Rust/promotion field remains frozen. "
             "An explicit maintenance exception may admit native-only repair changes, but never Remaining-71 or production-promotion authority changes."
         ),
     }
