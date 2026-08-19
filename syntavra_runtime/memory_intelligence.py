@@ -282,6 +282,14 @@ class MemoryRetrievalV1:
             return False
         return True
 
+    @staticmethod
+    def _scope_equal(candidate: Mapping[str, Any], requested: MemoryScope) -> bool:
+        return {
+            "project_id": str(candidate.get("project_id") or ""),
+            "user_id": str(candidate.get("user_id") or ""),
+            "session_id": str(candidate.get("session_id") or ""),
+        } == requested.as_dict()
+
     def _record(self, memory_id: str) -> dict[str, Any]:
         with self.store._connection() as db:
             row = db.execute(
@@ -300,6 +308,18 @@ class MemoryRetrievalV1:
         for key in ("scope_json", "provenance_json", "supersedes_json", "conflicts_json"):
             value[key.removesuffix("_json")] = json.loads(value.pop(key))
         return value
+
+    def _record_visible(self, memory_id: str, scope: MemoryScope) -> dict[str, Any]:
+        record = self._record(memory_id)
+        if not self._scope_matches(record["scope"], scope):
+            raise PermissionError("memory scope mismatch")
+        return record
+
+    def _record_mutable(self, memory_id: str, scope: MemoryScope) -> dict[str, Any]:
+        record = self._record(memory_id)
+        if not self._scope_equal(record["scope"], scope):
+            raise PermissionError("memory mutation scope mismatch")
+        return record
 
     def remember(
         self,
@@ -326,7 +346,7 @@ class MemoryRetrievalV1:
         if set(supersedes_refs) & set(conflicts):
             raise ValueError("a memory cannot both supersede and conflict with the same record")
         for related in (*supersedes_refs, *conflicts):
-            self._record(related)
+            self._record_mutable(related, scope)
 
         observation = self.store.add(
             text,
@@ -342,21 +362,18 @@ class MemoryRetrievalV1:
             "memory_kind": normalized_kind,
             "scope": scope.as_dict(),
             "provenance_refs": list(provenance),
+            "supersedes": list(supersedes_refs),
+            "conflicts_with": list(conflicts),
         }
         memory_id = sha256_bytes(canonical_json(basis))
         now = time.time()
         with self.store._connection() as db:
-            db.execute(
+            cursor = db.execute(
                 """
-                INSERT INTO memory_retrieval_records(
+                INSERT OR IGNORE INTO memory_retrieval_records(
                   memory_id,observation_id,memory_kind,scope_json,provenance_json,
                   supersedes_json,conflicts_json,state,created_at,updated_at
                 ) VALUES(?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(memory_id) DO UPDATE SET
-                  supersedes_json=excluded.supersedes_json,
-                  conflicts_json=excluded.conflicts_json,
-                  state='active',
-                  updated_at=excluded.updated_at
                 """,
                 (
                     memory_id,
@@ -371,35 +388,37 @@ class MemoryRetrievalV1:
                     now,
                 ),
             )
-            for old_id in supersedes_refs:
-                db.execute(
-                    "UPDATE memory_retrieval_records SET state='superseded',updated_at=? WHERE memory_id=?",
-                    (now, old_id),
-                )
-            for conflict_id in conflicts:
-                row = db.execute(
-                    "SELECT conflicts_json FROM memory_retrieval_records WHERE memory_id=?",
-                    (conflict_id,),
-                ).fetchone()
-                existing = set(json.loads(row["conflicts_json"])) if row else set()
-                existing.add(memory_id)
-                db.execute(
-                    "UPDATE memory_retrieval_records SET conflicts_json=?,updated_at=? WHERE memory_id=?",
-                    (json.dumps(sorted(existing)), now, conflict_id),
-                )
-        return self.recover(memory_id)
+            inserted = cursor.rowcount == 1
+            if inserted:
+                for old_id in supersedes_refs:
+                    db.execute(
+                        "UPDATE memory_retrieval_records SET state='superseded',updated_at=? WHERE memory_id=?",
+                        (now, old_id),
+                    )
+                for conflict_id in conflicts:
+                    row = db.execute(
+                        "SELECT conflicts_json FROM memory_retrieval_records WHERE memory_id=?",
+                        (conflict_id,),
+                    ).fetchone()
+                    existing = set(json.loads(row["conflicts_json"])) if row else set()
+                    existing.add(memory_id)
+                    db.execute(
+                        "UPDATE memory_retrieval_records SET conflicts_json=?,updated_at=? WHERE memory_id=?",
+                        (json.dumps(sorted(existing)), now, conflict_id),
+                    )
+        return self.recover(memory_id, scope=scope)
 
-    def forget(self, memory_id: str, *, reason: str) -> dict[str, Any]:
+    def forget(self, memory_id: str, *, scope: MemoryScope, reason: str) -> dict[str, Any]:
         if not reason.strip():
             raise ValueError("forget reason is required")
-        self._record(memory_id)
+        self._record_mutable(memory_id, scope)
         now = time.time()
         with self.store._connection() as db:
             db.execute(
                 "UPDATE memory_retrieval_records SET state='forgotten',updated_at=? WHERE memory_id=?",
                 (now, memory_id),
             )
-        recovered = self.recover(memory_id)
+        recovered = self.recover(memory_id, scope=scope)
         recovered["forget_reason"] = reason.strip()
         return recovered
 
@@ -418,7 +437,7 @@ class MemoryRetrievalV1:
         if len(parents) < 2:
             raise ValueError("consolidation requires at least two distinct memories")
         for memory_id in parents:
-            self._record(memory_id)
+            self._record_mutable(memory_id, scope)
         provenance = self._refs((*provenance_refs, *(f"memory:{memory_id}" for memory_id in parents)))
         result = self.remember(
             text,
@@ -433,8 +452,8 @@ class MemoryRetrievalV1:
         result["consolidated_from"] = list(parents)
         return result
 
-    def recover(self, memory_id: str) -> dict[str, Any]:
-        record = self._record(memory_id)
+    def recover(self, memory_id: str, *, scope: MemoryScope) -> dict[str, Any]:
+        record = self._record_visible(memory_id, scope)
         exact = str(record["text"])
         expected = sha256_bytes(exact.strip().encode("utf-8"))
         if expected != record["source_hash"]:
@@ -477,7 +496,7 @@ class MemoryRetrievalV1:
             raise ValueError("memory query is required")
         bounded_limit = max(1, min(100, int(limit)))
         expanded = self._expanded_query(query)
-        base = self.store.search(expanded, limit=max(64, bounded_limit * 8), include_invalid=True)
+        base = self.store.search(expanded, limit=max(64, bounded_limit * 8), include_invalid=False)
         by_observation = {
             row["observation"]["observation_id"]: row
             for row in base
@@ -496,6 +515,11 @@ class MemoryRetrievalV1:
                 ).fetchall()
             records = [dict(row) for row in rows]
 
+        records = [
+            record
+            for record in records
+            if self._scope_matches(json.loads(record["scope_json"]), scope)
+        ]
         latest = max((float(row["updated_at"]) for row in records), default=0.0)
         ranked: list[dict[str, Any]] = []
         for record in records:
@@ -538,6 +562,12 @@ class MemoryRetrievalV1:
         if include_session and self.session_memory is not None and scope.session_id:
             if getattr(self.session_memory, "project_id", None) != scope.project_id:
                 raise RuntimeError("session memory project scope mismatch")
+            session = self.session_memory.describe(scope.session_id)
+            if str(session.get("project_id") or "") != scope.project_id:
+                raise RuntimeError("session memory project scope mismatch")
+            owner = str((session.get("metadata") or {}).get("user_id") or "")
+            if owner != scope.user_id:
+                raise RuntimeError("session memory user scope mismatch")
             verification = self.session_memory.verify(scope.session_id)
             if verification.get("ok") is not True:
                 raise RuntimeError("session memory chain verification failed")
@@ -605,7 +635,7 @@ class MemoryRetrievalV1:
 
     def handoff(self, memory_ids: Sequence[str], *, scope: MemoryScope) -> dict[str, Any]:
         ids = self._refs(memory_ids)
-        recovered = [self.recover(memory_id) for memory_id in ids]
+        recovered = [self.recover(memory_id, scope=scope) for memory_id in ids]
         for item in recovered:
             if not self._scope_matches(item["scope"], scope):
                 raise RuntimeError("memory handoff scope mismatch")
@@ -649,6 +679,11 @@ class MemoryRetrievalV1:
             "consolidation": True,
             "forgetting_without_deletion": True,
             "scoped_retrieval": True,
+            "scoped_recovery": True,
+            "scope_safe_mutation": True,
+            "session_user_binding": True,
+            "no_silent_reactivation": True,
+            "invalid_memory_excluded": True,
             "exact_recovery": True,
             "cross_agent_handoff_receipts": True,
         }

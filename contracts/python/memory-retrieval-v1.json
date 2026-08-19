@@ -48,15 +48,23 @@
   },
   "schema_version": 1,
   "scope": {
+    "consolidation_requires_exact_scope": true,
     "cross_project_retrieval_forbidden": true,
     "cross_session_retrieval_fail_closed": true,
     "cross_user_retrieval_fail_closed": true,
+    "forget_requires_exact_scope": true,
     "project_required": true,
+    "recovery_requires_visible_scope": true,
+    "relation_mutation_requires_exact_scope": true,
     "session_optional": true,
+    "session_user_binding_required": true,
     "user_optional": true
   },
   "storage": {
+    "duplicate_identity_does_not_reactivate": true,
     "forgetting_deletes_exact_payload": false,
+    "invalid_memory_excluded_from_retrieval": true,
+    "memory_identity_includes_lifecycle_relations": true,
     "parallel_database_forbidden": true,
     "relation_table": "memory_retrieval_records",
     "reuse_existing_memory_sqlite": true

@@ -48,7 +48,13 @@
     "multi_graph_retrieval_v1",
     "adaptive_context_policy_v1",
     "context_reset_handoff_v1",
-    "memory_retrieval_v1"
+    "memory_retrieval_v1",
+    "epistemic_safety_v1",
+    "cache_provider_budget_v1",
+    "output_intelligence_v1",
+    "host_adapter_conformance_v1",
+    "observability_attribution_v1",
+    "signalbench_python_product_v1"
   ],
   "capabilities": [
     {
@@ -333,12 +339,16 @@
     {
       "id": "memory_retrieval_v1",
       "group": "memory",
-      "state": "partial",
+      "state": "implemented",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "syntavra_runtime/memory_intelligence.py",
-        "syntavra_runtime/session_memory.py"
+        "syntavra_runtime/session_memory.py",
+        "contracts/python/memory-retrieval-v1.json",
+        "tools/certify_memory_retrieval_v1.py",
+        "tests/runtime/test_memory_retrieval_v1.py",
+        ".github/workflows/memory-retrieval.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Episodic/semantic/procedural/project/user/temporal memory with provenance, conflict, consolidation, forgetting, reranking, and exact recovery."

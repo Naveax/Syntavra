@@ -35,6 +35,14 @@ EXPECTED_MILESTONE_PREFIX = [
     "unified_context_namespace_v1",
     "multi_graph_retrieval_v1",
     "adaptive_context_policy_v1",
+    "context_reset_handoff_v1",
+    "memory_retrieval_v1",
+    "epistemic_safety_v1",
+    "cache_provider_budget_v1",
+    "output_intelligence_v1",
+    "host_adapter_conformance_v1",
+    "observability_attribution_v1",
+    "signalbench_python_product_v1",
 ]
 ADVANCED_STATES = {"partial", "implemented", "verified", "certified"}
 

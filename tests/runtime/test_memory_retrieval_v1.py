@@ -20,7 +20,7 @@ class MemoryRetrievalV1Tests(unittest.TestCase):
         root = Path(self.tmp.name)
         self.store = MemoryIntelligenceStore(root / "memory.sqlite3")
         self.sessions = SessionMemory(root / "session.sqlite3", project_id="syntavra")
-        self.sessions.open("session-a")
+        self.sessions.open("session-a", metadata={"user_id": "naveax"})
         self.engine = MemoryRetrievalV1(self.store, session_memory=self.sessions)
         self.scope = MemoryScope(project_id="syntavra", user_id="naveax", session_id="session-a")
 
@@ -67,8 +67,8 @@ class MemoryRetrievalV1Tests(unittest.TestCase):
             kind="semantic",
             conflicts_with=(first["memory_id"],),
         )
-        recovered_first = self.engine.recover(first["memory_id"])
-        recovered_second = self.engine.recover(second["memory_id"])
+        recovered_first = self.engine.recover(first["memory_id"], scope=self.scope)
+        recovered_second = self.engine.recover(second["memory_id"], scope=self.scope)
         self.assertIn(second["memory_id"], recovered_first["conflicts_with"])
         self.assertIn(first["memory_id"], recovered_second["conflicts_with"])
         result = self.engine.retrieve("release policy alpha", scope=self.scope, include_session=False)
@@ -84,14 +84,14 @@ class MemoryRetrievalV1Tests(unittest.TestCase):
             kind="procedural",
             supersedes=(old["memory_id"],),
         )
-        self.assertEqual(self.engine.recover(old["memory_id"])["state"], "superseded")
-        self.assertTrue(self.engine.recover(old["memory_id"])["exact_recovery"])
+        self.assertEqual(self.engine.recover(old["memory_id"], scope=self.scope)["state"], "superseded")
+        self.assertTrue(self.engine.recover(old["memory_id"], scope=self.scope)["exact_recovery"])
         result = self.engine.retrieve("cache policy", scope=self.scope, include_session=False)
         ids = {row["memory_id"] for row in result["results"]}
         self.assertIn(new["memory_id"], ids)
         self.assertNotIn(old["memory_id"], ids)
 
-        forgotten = self.engine.forget(new["memory_id"], reason="superseded by external authority")
+        forgotten = self.engine.forget(new["memory_id"], scope=self.scope, reason="superseded by external authority")
         self.assertEqual(forgotten["state"], "forgotten")
         self.assertTrue(forgotten["exact_recovery"])
         result = self.engine.retrieve("cache policy", scope=self.scope, include_session=False)
@@ -112,8 +112,8 @@ class MemoryRetrievalV1Tests(unittest.TestCase):
         self.assertTrue(
             {f"memory:{first['memory_id']}", f"memory:{second['memory_id']}"} <= set(consolidated["provenance_refs"])
         )
-        self.assertEqual(self.engine.recover(first["memory_id"])["state"], "superseded")
-        self.assertEqual(self.engine.recover(second["memory_id"])["state"], "superseded")
+        self.assertEqual(self.engine.recover(first["memory_id"], scope=self.scope)["state"], "superseded")
+        self.assertEqual(self.engine.recover(second["memory_id"], scope=self.scope)["state"], "superseded")
 
     def test_session_retrieval_and_handoff_preserve_exact_recovery(self) -> None:
         item = self.remember("Repository migration uses exact checkpoints", kind="project")
@@ -142,6 +142,96 @@ class MemoryRetrievalV1Tests(unittest.TestCase):
         self.assertFalse(status["new_persistent_database"])
         self.assertTrue(status["same_sqlite_relation_table"])
         self.assertTrue(status["exact_recovery"])
+
+    def test_cross_scope_recovery_and_mutation_fail_closed(self) -> None:
+        local = self.remember("local scoped memory", kind="project")
+        foreign_scope = MemoryScope(project_id="other-project", user_id="other-user")
+        foreign = self.engine.remember(
+            "foreign scoped memory",
+            kind="project",
+            scope=foreign_scope,
+            provenance_refs=("evidence:foreign",),
+        )
+        with self.assertRaises(PermissionError):
+            self.engine.recover(foreign["memory_id"], scope=self.scope)
+        with self.assertRaises(PermissionError):
+            self.engine.forget(foreign["memory_id"], scope=self.scope, reason="must not cross scope")
+        with self.assertRaises(PermissionError):
+            self.engine.remember(
+                "illegal cross-scope supersession",
+                kind="semantic",
+                scope=self.scope,
+                provenance_refs=("evidence:cross-scope",),
+                supersedes=(foreign["memory_id"],),
+            )
+        with self.assertRaises(PermissionError):
+            self.engine.remember(
+                "illegal cross-scope conflict",
+                kind="semantic",
+                scope=self.scope,
+                provenance_refs=("evidence:cross-conflict",),
+                conflicts_with=(foreign["memory_id"],),
+            )
+        with self.assertRaises(PermissionError):
+            self.engine.consolidate(
+                (local["memory_id"], foreign["memory_id"]),
+                "illegal cross-scope consolidation",
+                kind="semantic",
+                scope=self.scope,
+            )
+
+    def test_duplicate_identity_does_not_reactivate_forgotten_memory(self) -> None:
+        item = self.remember("logical forgetting remains durable", kind="semantic")
+        self.engine.forget(item["memory_id"], scope=self.scope, reason="retire")
+        duplicate = self.remember("logical forgetting remains durable", kind="semantic")
+        self.assertEqual(duplicate["memory_id"], item["memory_id"])
+        self.assertEqual(duplicate["state"], "forgotten")
+        result = self.engine.retrieve("logical forgetting", scope=self.scope, include_session=False)
+        self.assertNotIn(item["memory_id"], {row["memory_id"] for row in result["results"]})
+
+    def test_lifecycle_relations_are_part_of_memory_identity(self) -> None:
+        parent = self.remember("identity parent", kind="semantic")
+        conflict = self.remember(
+            "same lifecycle content",
+            kind="semantic",
+            provenance_refs=("evidence:lifecycle",),
+            conflicts_with=(parent["memory_id"],),
+        )
+        superseding = self.remember(
+            "same lifecycle content",
+            kind="semantic",
+            provenance_refs=("evidence:lifecycle",),
+            supersedes=(parent["memory_id"],),
+        )
+        self.assertNotEqual(conflict["memory_id"], superseding["memory_id"])
+
+    def test_invalid_memory_is_excluded_from_active_retrieval(self) -> None:
+        invalid = self.remember("invalid evidence must not rank", kind="semantic", validity=0.0)
+        result = self.engine.retrieve("invalid evidence", scope=self.scope, include_session=False)
+        self.assertNotIn(invalid["memory_id"], {row["memory_id"] for row in result["results"]})
+
+    def test_session_user_binding_fails_closed(self) -> None:
+        self.sessions.open("session-other", metadata={"user_id": "other-user"})
+        foreign_user_scope = MemoryScope(project_id="syntavra", user_id="naveax", session_id="session-other")
+        with self.assertRaises(RuntimeError):
+            self.engine.retrieve("anything", scope=foreign_user_scope)
+        self.sessions.open("session-unowned")
+        unowned_scope = MemoryScope(project_id="syntavra", user_id="naveax", session_id="session-unowned")
+        with self.assertRaises(RuntimeError):
+            self.engine.retrieve("anything", scope=unowned_scope)
+
+    def test_project_global_memory_is_visible_but_not_mutable_from_private_scope(self) -> None:
+        project_scope = MemoryScope(project_id="syntavra")
+        global_item = self.engine.remember(
+            "project global policy",
+            kind="project",
+            scope=project_scope,
+            provenance_refs=("evidence:global",),
+        )
+        recovered = self.engine.recover(global_item["memory_id"], scope=self.scope)
+        self.assertEqual(recovered["text"], "project global policy")
+        with self.assertRaises(PermissionError):
+            self.engine.forget(global_item["memory_id"], scope=self.scope, reason="private scope cannot mutate global")
 
 
 if __name__ == "__main__":
