@@ -1,0 +1,112 @@
+name: Context Reset Implemented Export Runner
+
+on:
+  pull_request:
+    branches:
+      - automation/context-reset-implemented-export-base-148
+
+permissions:
+  contents: write
+
+concurrency:
+  group: context-reset-implemented-export-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  export-implemented:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact helper head branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Build and validate implemented lifecycle candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry_path = Path('contracts/python/capability-completeness-registry-v1.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          rows = [row for row in registry['capabilities'] if row.get('id') == 'context_reset_handoff_v1']
+          assert len(rows) == 1, 'Context Reset registry row missing or duplicated'
+          row = rows[0]
+          assert row['state'] == 'partial', f"unexpected lifecycle state: {row['state']}"
+          assert row['classification'] == 'HARDEN'
+          assert row['required_for_python_complete'] is True
+          assert row['certification_evidence'] == [], 'certification evidence must remain empty before final admission'
+          row['state'] = 'implemented'
+          row['implementation_evidence'] = [
+              'syntavra_runtime/session_memory.py',
+              'syntavra_runtime/autonomous_agent.py',
+              'syntavra_runtime/context_reset_handoff.py',
+              'contracts/python/context-reset-handoff-v1.json',
+              'tools/certify_context_reset_handoff.py',
+              'tests/runtime/test_context_reset_handoff.py',
+              '.github/workflows/context-reset-handoff.yml',
+          ]
+          registry_path.write_text(json.dumps(registry, indent=2) + '\n', encoding='utf-8')
+          PY
+
+          git rm .github/workflows/context-reset-implemented-export-pr.yml .context-reset-implemented-export-trigger
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_context_reset_handoff -v
+          python tools/certify_python_capability_completeness.py --out /tmp/capability-completeness.json
+          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-handoff.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          row = next(row for row in registry['capabilities'] if row['id'] == 'context_reset_handoff_v1')
+          assert row['state'] == 'implemented'
+          assert row['certification_evidence'] == []
+          completeness = json.loads(Path('/tmp/capability-completeness.json').read_text(encoding='utf-8'))
+          assert completeness['ok'] is True
+          assert completeness['current_milestone'] == 'context_reset_handoff_v1'
+          assert completeness['python_complete_ready'] is False
+          assert completeness['rust_resume_allowed'] is False
+          handoff = json.loads(Path('/tmp/context-reset-handoff.json').read_text(encoding='utf-8'))
+          assert handoff['ok'] is True
+          assert handoff['claim'] == 'CONTEXT_RESET_HANDOFF_V1'
+          assert handoff['python_complete_ready'] is False
+          assert handoff['rust_resume_allowed'] is False
+          PY
+          git diff --check
+
+          cp contracts/python/capability-completeness-registry-v1.json /tmp/candidate-context-reset-registry.json
+          cp MANIFEST.sha256 /tmp/candidate-MANIFEST.context-reset-implemented.sha256
+          git reset --hard HEAD
+          cp /tmp/candidate-context-reset-registry.json candidate-context-reset-registry.json
+          cp /tmp/candidate-MANIFEST.context-reset-implemented.sha256 candidate-MANIFEST.context-reset-implemented.sha256
+
+      - name: Publish only normal candidate blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+Naveax@users.noreply.github.com'
+          git add candidate-context-reset-registry.json candidate-MANIFEST.context-reset-implemented.sha256
+          git commit -m 'Export Context Reset implemented lifecycle candidates'
+          git push origin HEAD:"${{ github.event.pull_request.head.ref }}"
