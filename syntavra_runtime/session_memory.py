@@ -52,6 +52,14 @@ class SessionMemory:
             raise KeyError(session_id)
         return session
 
+    def describe(self, session_id: str) -> dict[str, Any]:
+        with _connect(self.path) as db:
+            session = self._require_session(db, session_id)
+        return dict(session) | {
+            "parents": json.loads(session["parents_json"]),
+            "metadata": json.loads(session["metadata_json"]),
+        }
+
     def open(self, session_id: str | None = None, *, parents: Sequence[str] = (), metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
         session_id = session_id or secrets.token_hex(12)
         now = _now()

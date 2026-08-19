@@ -514,3 +514,54 @@ NEXT EXACT TASK:
 - preserve evidence handles, git state and security state across RESET/BRANCH.
 - add deterministic handoff compiler + verifier and fail-closed recovery checks.
 - add reset benchmark arms and exact-head admission workflow.
+
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-19 — MEMORY RETRIEVAL ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN BEFORE MEMORY:
+6120ea9d074b0cac0e880e3e9dbf873d1faaec58
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/memory-retrieval-v1
+
+ACTIVE PR:
+#151 — Add Memory Retrieval v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — Context Reset / Handoff v1 lifecycle is certified through PR #152; memory_retrieval_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — production promotion 174/245; remaining parity/promotion 71; Rust resume false.
+
+CURRENT IMPLEMENTATION:
+- existing MemoryIntelligenceStore and SessionMemory authorities are reused.
+- no parallel persistent memory database was introduced.
+- scoped episodic/semantic/procedural/project/user/temporal memory records added.
+- provenance, conflict, supersession, consolidation, logical forgetting and exact recovery added.
+- recovery and lifecycle mutation are scope-gated; session retrieval is user-bound.
+- duplicate identities do not reactivate forgotten/superseded memories.
+- invalid memories are excluded from active retrieval.
+- BM25/vector retrieval extended with deterministic query expansion and importance/confidence/validity/recency reranking.
+- session retrieval remains hash-chain verified and exact recoverable.
+- deterministic retrieval and cross-agent handoff receipts added.
+- Memory contract, regression suite, certifier, exact-head workflow, Release Main binding and immutable action-pin coverage added.
+
+VERIFIED PRE-SEAL:
+- original Memory Retrieval exact-head workflow PASS.
+- initial Memory Retrieval regression PASS 7/7.
+- Memory certifier admission_ready=true; exact recovery=true; new_persistent_database=false.
+- Rust Freeze and supporting Python-first gates PASS.
+- Release Main reached the canonical manifest check after runtime/certifier checks passed; failure was stale MANIFEST.sha256 only.
+- admission review subsequently found and hardened cross-scope and silent-reactivation edge cases before merge.
+
+LIFECYCLE REPAIR IN THIS ADMISSION:
+- context_reset_handoff_v1 stale partial metadata advances to certified.
+- memory_retrieval_v1 advances to implemented pending final exact-head admission and merge.
+- milestone order/certifier now covers every remaining Python-first milestone through SignalBench.
+
+NEXT EXACT TASK:
+- pass final exact-head admission gates on the permanent sealed PR #151 tree.
+- merge only after all load-bearing checks pass.
+- re-read fresh main and advance to epistemic_safety_v1.

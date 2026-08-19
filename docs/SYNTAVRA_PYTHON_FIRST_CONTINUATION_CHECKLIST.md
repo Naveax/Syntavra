@@ -1,6 +1,6 @@
 # Syntavra Python-First Continuation Checklist
 
-Status checkpoint: **2026-08-18**
+Status checkpoint: **2026-08-19**
 
 This document is the operational continuation state for Syntavra. It intentionally separates product development from PR #132 release-authority hardening.
 
@@ -15,34 +15,30 @@ This document is the operational continuation state for Syntavra. It intentional
 - [x] No new Rust feature implementation before Python COMPLETE.
 - [x] The master roadmap is append-only. Existing roadmap material must not be deleted, shortened or rewritten.
 - [x] Existing Python features must be inspected and reused before opening duplicate engines.
-- [ ] Add a machine-enforced Rust feature-freeze guard once Python-first implementation begins.
+- [x] Add a machine-enforced Rust feature-freeze guard once Python-first implementation begins.
 
 Rust exceptions during the freeze are limited to build-blocking repair, security repair, data-loss repair, or minimal contract maintenance required to keep Python development possible. These exceptions must not change the native promotion counter or add product features.
 
 ## Repository state at checkpoint
 
-- `main`: `ab300e84d39c009b609b78324f7f6e7045408bff`
-- Open release-hardening work: PR #132, `agent/release-authority-action-pins`
-- PR #132 root cause identified and fixed in its branch: repository hygiene previously required literal mutable `actions/attest@v4`; it now accepts only a full immutable 40-character SHA.
-- Regression coverage rejects mutable `@v4` and short SHA values.
-- A Release Package Provenance run passed on a fixed PR #132 head during diagnosis.
-- PR #132 still needs final manifest/exact-head closeout before merge.
-- Temporary manifest-refresh workflow/trigger experiments were removed from the PR tree.
-- Python remains the canonical behavioral reference.
-- Rust migration remains 174 promoted / 71 remaining / 71 owned / 0 unowned.
+- Admitted `main` before Memory work: `6120ea9d074b0cac0e880e3e9dbf873d1faaec58`.
+- Context Reset / Handoff v1 runtime merged through PR #148 and lifecycle certification was admitted through PR #152.
+- Active Memory branch: `agent/memory-retrieval-v1`.
+- Active PR: #151 — `Add Memory Retrieval v1`.
+- Memory Retrieval pre-seal implementation passed its dedicated exact-head workflow and was subsequently scope/lifecycle hardened before admission.
+- Python COMPLETE remains false.
+- Rust remains feature-frozen at 174/245 production promotion with 71 remaining.
 
-## Immediate prerequisite: close PR #132 cleanly
+## Immediate exact task
 
-- [ ] Refresh PR #132 `MANIFEST.sha256` from its exact final tree.
-- [ ] Repository hygiene validation PASS on final head.
-- [ ] Release smoke validation PASS on final head.
-- [ ] Release Main Merge Gate PASS on final head.
-- [ ] Release Package Provenance PASS on final head.
-- [ ] Final authority/freeze artifacts exact-head consistent.
-- [ ] Merge PR #132.
-- [ ] Re-read `main` after merge and record the new main SHA here.
-
-Do not mix broad Python feature implementation into PR #132.
+- [x] Merge Context Reset / Handoff v1.
+- [x] Implement Memory Retrieval v1 without a parallel memory database.
+- [x] Add scoped retrieval, provenance, conflict/supersession, consolidation/forgetting, exact recovery and handoff receipts.
+- [x] Harden recovery/mutation/session ownership boundaries and prevent silent memory reactivation.
+- [x] Bind Memory Retrieval to exact-head CI, Release Main and immutable action-pin enforcement.
+- [ ] Pass final exact-head admission gates on the permanent sealed PR #151 tree.
+- [ ] Merge PR #151 only after all load-bearing gates pass.
+- [ ] Re-read fresh `main`, then advance to `epistemic_safety_v1`.
 
 ## Existing Python baseline: do not reimplement blindly
 
@@ -81,20 +77,29 @@ Every capability should be classified as one of:
 - `CERTIFY`: implementation exists but exact-head/product/benchmark certification is required.
 - `EXTERNAL`: proof cannot legitimately be manufactured inside the repository.
 
-## First exact Python commits after PR #132
+## Canonical Python milestone order
 
 Do these in order. Do not begin item N+1 until N has acceptance tests and an exact-head receipt.
 
-- [ ] `python_authority_v1`
-- [ ] `capability_completeness_registry_v1`
-- [ ] `rust_feature_freeze_guard_v1`
-- [ ] `universal_context_item_v1`
-- [ ] `evidence_store_v2`
-- [ ] `typed_context_object_store_v1`
-- [ ] `programmatic_execution_v1`
-- [ ] `deferred_tool_discovery_v1`
-- [ ] `unified_context_namespace_v1`
-- [ ] `adaptive_context_policy_v1`
+- [x] `python_authority_v1`
+- [x] `capability_completeness_registry_v1`
+- [x] `rust_feature_freeze_guard_v1`
+- [x] `universal_context_item_v1`
+- [x] `evidence_store_v2`
+- [x] `typed_context_object_store_v1`
+- [x] `programmatic_execution_v1`
+- [x] `deferred_tool_discovery_v1`
+- [x] `unified_context_namespace_v1`
+- [x] `multi_graph_retrieval_v1`
+- [x] `adaptive_context_policy_v1`
+- [x] `context_reset_handoff_v1`
+- [ ] `memory_retrieval_v1` — current admission candidate
+- [ ] `epistemic_safety_v1`
+- [ ] `cache_provider_budget_v1`
+- [ ] `output_intelligence_v1`
+- [ ] `host_adapter_conformance_v1`
+- [ ] `observability_attribution_v1`
+- [ ] `signalbench_python_product_v1`
 
 ## Wave P0-A: authority / contracts / reproducibility
 

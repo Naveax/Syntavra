@@ -1,0 +1,72 @@
+{
+  "admission": {
+    "immutable_action_pin_required": true,
+    "release_main_gate_required": true,
+    "required_certifier": "tools/certify_memory_retrieval_v1.py",
+    "required_runtime_test": "tests/runtime/test_memory_retrieval_v1.py",
+    "required_workflow": ".github/workflows/memory-retrieval.yml"
+  },
+  "authority": {
+    "capability_registry": "contracts/python/capability-completeness-registry-v1.json",
+    "memory_intelligence_store": "syntavra_runtime/memory_intelligence.py",
+    "session_memory": "syntavra_runtime/session_memory.py"
+  },
+  "claim": "MEMORY_RETRIEVAL_V1",
+  "claim_boundary": {
+    "external_superiority_claimed": false,
+    "python_complete": false,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71,
+    "rust_resume_allowed": false
+  },
+  "family": "memory-retrieval",
+  "lifecycle": {
+    "conflicts_preserved": true,
+    "consolidation_parent_lineage": true,
+    "cross_agent_handoff_receipt": true,
+    "forgetting_is_logical_not_destructive": true,
+    "observation_timeline": true,
+    "provenance_required": true,
+    "supersession_explicit": true
+  },
+  "memory_kinds": [
+    "episodic",
+    "project",
+    "procedural",
+    "semantic",
+    "temporal",
+    "user"
+  ],
+  "phase": "python-first",
+  "retrieval": {
+    "deterministic_query_expansion": true,
+    "deterministic_receipt": true,
+    "hybrid_bm25_vector": true,
+    "importance_confidence_validity_recency_rerank": true,
+    "progressive_preview_then_exact_recovery": true,
+    "session_event_and_summary_retrieval": true
+  },
+  "schema_version": 1,
+  "scope": {
+    "consolidation_requires_exact_scope": true,
+    "cross_project_retrieval_forbidden": true,
+    "cross_session_retrieval_fail_closed": true,
+    "cross_user_retrieval_fail_closed": true,
+    "forget_requires_exact_scope": true,
+    "project_required": true,
+    "recovery_requires_visible_scope": true,
+    "relation_mutation_requires_exact_scope": true,
+    "session_optional": true,
+    "session_user_binding_required": true,
+    "user_optional": true
+  },
+  "storage": {
+    "duplicate_identity_does_not_reactivate": true,
+    "forgetting_deletes_exact_payload": false,
+    "invalid_memory_excluded_from_retrieval": true,
+    "memory_identity_includes_lifecycle_relations": true,
+    "parallel_database_forbidden": true,
+    "relation_table": "memory_retrieval_records",
+    "reuse_existing_memory_sqlite": true
+  }
+}
