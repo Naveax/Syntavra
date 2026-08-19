@@ -417,3 +417,56 @@ NEXT EXACT TASK:
 - seal MANIFEST.sha256 from the permanent tree.
 - pass final Release Main + Package Provenance + Python-first gates.
 - merge, then advance to multi_graph_retrieval_v1.
+
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-19 — MULTI-GRAPH RETRIEVAL ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+5c2b745c3c5c70fbc3eaf25ba0ecc0b6cb455f79
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/multi-graph-retrieval-v1
+
+ACTIVE PR:
+#144 — Add Multi-Graph Retrieval v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — unified_context_namespace_v1 is admitted/certified; multi_graph_retrieval_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion set 71; Rust resume false.
+
+CURRENT IMPLEMENTATION:
+- reference-only Multi-Graph Retrieval plane added over existing canonical graph authorities.
+- code, semantic, temporal, causal, entity, task, provenance and security graph views supported.
+- canonical syntavra:// / Universal Context item identity fusion added.
+- deterministic task-aware retrieval, trust/freshness weighting and bounded graph propagation added.
+- explicit security deny/block/quarantine remains fail-closed even when tainted context is explicitly included.
+- exact payload ownership remains outside Multi-Graph; no parallel persistent graph store added.
+- StructuralIndex snapshot adapter reuses existing repository intelligence rather than creating another repository index.
+- content-addressed retrieval receipts record graph/layer coverage and candidate identities/scores without timestamps.
+- no public CLI route added.
+- Unified Context Namespace lifecycle advanced to certified.
+- Multi-Graph Retrieval lifecycle advanced to implemented pending exact-head admission.
+
+VERIFIED PRE-ADMISSION BOUNDARY:
+- initial Multi-Graph runtime regression suite passed 18/18 on GitHub runner before lifecycle advancement.
+- initial certifier failure was isolated to stale lifecycle state, not runtime behavior.
+- security override boundary was hardened after static review and permanent regression coverage was added.
+- Multi-Graph contract, certifier and immutable-pinned exact-head workflow exist.
+- Python COMPLETE remains false.
+- Rust production promotion remains 174/245 and Rust resume remains false.
+
+BLOCKERS:
+- final exact-head Multi-Graph, Capability Completeness and Context Namespace certificates required on the permanent tree.
+- canonical MANIFEST.sha256 seal required after the permanent tree is frozen.
+- final Release Main + Package Provenance + Rust Freeze + Phase 2 Matrix gates required before merge.
+
+NEXT EXACT TASK:
+- pass hardened Multi-Graph regression and exact-head certificate.
+- pass Capability Completeness and Context Namespace post-admission certification.
+- freeze permanent tree and seal MANIFEST.sha256 from the provenance candidate.
+- pass final load-bearing CI and merge PR #144.
+- after admission advance to adaptive_context_policy_v1.

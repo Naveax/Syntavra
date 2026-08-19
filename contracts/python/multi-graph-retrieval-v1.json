@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "family": "multi-graph-retrieval",
+  "phase": "python-first",
+  "claim": "MULTI_GRAPH_RETRIEVAL_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/multi_graph_retrieval.py",
+  "existing_authorities": {
+    "canonical_repository_graph": "syntavra_runtime/canonical_graph.py:CanonicalRepositoryGraph",
+    "structural_index": "syntavra_runtime/structural.py:StructuralIndex",
+    "semantic_graph": "syntavra_runtime/semantic_intelligence.py:IncrementalCodeIntelligenceGraph",
+    "context_identity": "syntavra_runtime/context_namespace.py:ContextNamespaceAddress",
+    "payload_authority": "syntavra_runtime/universal_context_item.py:UniversalContextItem"
+  },
+  "graph_kinds": [
+    "code",
+    "semantic",
+    "temporal",
+    "causal",
+    "entity",
+    "task",
+    "provenance",
+    "security"
+  ],
+  "ownership_policy": {
+    "new_persistent_graph_store_forbidden": true,
+    "exact_payload_storage_forbidden": true,
+    "duplicate_repository_index_forbidden": true,
+    "existing_graph_authorities_reused": true,
+    "namespace_or_item_identity_preferred_for_fusion": true,
+    "public_cli_route_added": false
+  },
+  "retrieval_policy": {
+    "task_aware": true,
+    "deterministic": true,
+    "bounded_limit": 100,
+    "bounded_hops": 4,
+    "required_graph_missing_fails_closed": true,
+    "identity_fusion_enabled": true,
+    "multi_graph_consensus_bonus": true,
+    "temporal_freshness_weighted": true,
+    "trust_weighted": true,
+    "security_deny_fail_closed": true,
+    "security_deny_alias_closure": true,
+    "tainted_context_excluded_by_default": true,
+    "blocked_nodes_cannot_seed_or_propagate": true,
+    "evidence_refs_preserved": true,
+    "reverse_edge_propagation_bounded": true
+  },
+  "receipt_policy": {
+    "content_addressed": true,
+    "timestamps_excluded_from_identity": true,
+    "candidate_identities_recorded": true,
+    "candidate_scores_recorded": true,
+    "layer_counts_recorded": true,
+    "required_graphs_recorded": true,
+    "blocked_identity_count_recorded": true,
+    "blocked_item_id_count_recorded": true,
+    "blocked_namespace_uri_count_recorded": true
+  },
+  "structural_adapter_policy": {
+    "structural_snapshot_is_read_only": true,
+    "code_or_semantic_only": true,
+    "canonical_namespace_uri_generated": true,
+    "parser_confidence_to_trust_mapping": true,
+    "unresolved_edges_not_invented": true
+  },
+  "admission": {
+    "prior_namespace_must_be_certified": true,
+    "capability_registry_current_milestone": "multi_graph_retrieval_v1",
+    "python_complete_must_remain_false": true,
+    "rust_resume_must_remain_false": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71
+  },
+  "claim_boundary": "This contract certifies deterministic reference-only fusion across code, semantic, temporal, causal, entity, task, provenance and security graph views. It does not claim complete world knowledge, perfect graph extraction, external benchmark superiority, Rust Remaining-71 parity/promotion, or ownership of exact context payloads."
+}
