@@ -389,13 +389,20 @@
     {
       "id": "cache_provider_budget_v1",
       "group": "cost-routing",
-      "state": "partial",
+      "state": "implemented",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "syntavra_runtime/prompt_cache_optimizer.py",
+        "syntavra_runtime/provider_account_pool.py",
         "syntavra_runtime/adaptive_provider_router.py",
-        "syntavra_runtime/provider_account_pool.py"
+        "syntavra_runtime/provider_gateway.py",
+        "syntavra_runtime/usage_receipt_ledger.py",
+        "syntavra_runtime/cache_provider_budget.py",
+        "contracts/python/cache-provider-budget-v1.json",
+        "tools/certify_cache_provider_budget_v1.py",
+        "tests/runtime/test_cache_provider_budget_v1.py",
+        ".github/workflows/cache-provider-budget.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Provider-aware prompt cache compiler, budget engine, ROI, cache-bust attribution, capability negotiation, and deterministic fallback policy."

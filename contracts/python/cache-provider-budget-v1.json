@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "family": "cache-provider-budget",
+  "phase": "python-first",
+  "claim": "CACHE_PROVIDER_BUDGET_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/cache_provider_budget.py",
+  "existing_authorities": {
+    "prompt_cache": "syntavra_runtime/prompt_cache_optimizer.py:PromptCacheOptimizer",
+    "provider_accounts": "syntavra_runtime/provider_account_pool.py:ProviderAccountPool",
+    "provider_routing": "syntavra_runtime/adaptive_provider_router.py:AdaptiveProviderRouter",
+    "provider_capabilities": "syntavra_runtime/provider_gateway.py:ProviderGateway.capabilities",
+    "provider_usage": "syntavra_runtime/usage_receipt_ledger.py:UsageReceiptLedger"
+  },
+  "ownership_policy": {
+    "parallel_persistent_store_forbidden": true,
+    "credential_ownership_forbidden": true,
+    "provider_transport_ownership_forbidden": true,
+    "existing_cache_store_reused": true,
+    "existing_account_pool_reused": true,
+    "existing_router_reused": true,
+    "existing_capability_registry_reused": true,
+    "public_cli_route_added": false
+  },
+  "budget_policy": {
+    "provider_aware_prompt_cache_compiler": true,
+    "provider_capability_negotiation": true,
+    "expected_request_budget": true,
+    "quota_reserve_gate": true,
+    "quality_floor_gate": true,
+    "context_window_gate": true,
+    "cache_roi": true,
+    "cache_bust_attribution": true,
+    "deterministic_fallback_policy": true,
+    "content_addressed_decision_receipt": true,
+    "fail_closed_when_no_candidate_satisfies_constraints": true,
+    "no_silent_budget_overrun": true
+  },
+  "cache_bust_reasons": [
+    "initial-plan",
+    "provider-changed",
+    "model-changed",
+    "stable-prefix-changed",
+    "previous-cache-expired",
+    "none"
+  ],
+  "admission": {
+    "prior_epistemic_safety_must_be_certified": true,
+    "capability_registry_current_milestone": "cache_provider_budget_v1",
+    "python_complete_must_remain_false": true,
+    "rust_resume_must_remain_false": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71
+  },
+  "claim_boundary": "This contract certifies deterministic provider/cache budget planning over existing account, cache and routing authorities. Cost figures are modeled from supplied provider pricing rows and cache multipliers; it does not claim live billing truth, credential ownership, transport execution, Python COMPLETE, external superiority, or Rust Remaining-71 parity/promotion."
+}
