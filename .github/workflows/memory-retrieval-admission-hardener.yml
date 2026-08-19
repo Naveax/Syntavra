@@ -1,0 +1,143 @@
+name: Memory Retrieval Admission Hardener
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: memory-retrieval-admission-hardener-151
+  cancel-in-progress: false
+
+jobs:
+  harden-and-seal:
+    if: github.event.pull_request.number == 151 && github.event.pull_request.head.ref == 'agent/memory-retrieval-v1' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+      TARGET_BRANCH: agent/memory-retrieval-v1
+      BASE_MAIN: 9838235404a834cfbc4882ebfb989cf1b40ef42e
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Verify exact target and install test runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "$(git rev-parse origin/$TARGET_BRANCH)" = "${{ github.event.pull_request.head.sha }}"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python -m pip install -e . pytest
+
+      - name: Apply deterministic admission hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/_memory_retrieval_admission_hardener.py
+          python -m compileall -q syntavra_runtime
+          git diff --check
+
+      - name: Run hardened Memory regression surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_memory_retrieval_v1 -v
+          python -m pytest tests/runtime/test_complete_competitive_features_v001.py -q
+          python -m unittest tests.runtime.test_context_reset_handoff -v
+          python tools/certify_memory_retrieval_v1.py --out /tmp/memory-hardened.json
+          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-hardened.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          memory=json.loads(Path('/tmp/memory-hardened.json').read_text(encoding='utf-8'))
+          reset=json.loads(Path('/tmp/context-reset-hardened.json').read_text(encoding='utf-8'))
+          assert memory['ok'] is True, memory
+          assert memory['admission_ready'] is True, memory
+          runtime=memory['runtime']
+          for key in ('scoped_recovery','scope_safe_mutation','session_user_binding','no_silent_reactivation','invalid_memory_excluded','exact_recovery'):
+              assert runtime[key] is True, (key, runtime)
+          assert runtime['new_persistent_database'] is False
+          assert reset['ok'] is True, reset
+          PY
+
+      - name: Remove one-shot machinery and refresh canonical manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/memory-retrieval-admission-hardener.yml
+          git rm tools/_memory_retrieval_admission_hardener.py
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_memory_retrieval_v1 -v
+          python -m unittest tests.runtime.test_release_action_pins -v
+          git diff --check
+
+      - name: Commit permanent sealed tree locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git status --short
+          git commit -m 'Harden and seal Memory Retrieval v1 admission'
+
+      - name: Validate exact committed seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_memory_retrieval_v1 -v
+          python tools/certify_python_capability_completeness.py --out /tmp/capability-final.json
+          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-final.json
+          python tools/certify_memory_retrieval_v1.py --out /tmp/memory-final.json
+          python tools/check_rust_feature_freeze.py --base "$BASE_MAIN" --head HEAD --out /tmp/rust-freeze-final.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cap=json.loads(Path('/tmp/capability-final.json').read_text(encoding='utf-8'))
+          reset=json.loads(Path('/tmp/context-reset-final.json').read_text(encoding='utf-8'))
+          memory=json.loads(Path('/tmp/memory-final.json').read_text(encoding='utf-8'))
+          freeze=json.loads(Path('/tmp/rust-freeze-final.json').read_text(encoding='utf-8'))
+          assert cap['ok'] is True, cap
+          assert cap['current_milestone']['id'] == 'memory_retrieval_v1', cap['current_milestone']
+          assert cap['current_milestone']['state'] == 'implemented', cap['current_milestone']
+          assert cap['python_complete_ready'] is False
+          assert cap['rust_resume_allowed'] is False
+          assert reset['ok'] is True, reset
+          assert memory['ok'] is True, memory
+          runtime=memory['runtime']
+          assert runtime['new_persistent_database'] is False
+          assert runtime['scoped_recovery'] is True
+          assert runtime['scope_safe_mutation'] is True
+          assert runtime['session_user_binding'] is True
+          assert runtime['no_silent_reactivation'] is True
+          assert runtime['invalid_memory_excluded'] is True
+          assert runtime['exact_recovery'] is True
+          assert freeze['ok'] is True, freeze
+          assert freeze['denied_change_count'] == 0, freeze
+          PY
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Publish one permanent sealed target-head movement
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin HEAD:"$TARGET_BRANCH"
