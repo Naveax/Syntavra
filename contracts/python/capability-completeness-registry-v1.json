@@ -47,7 +47,8 @@
     "unified_context_namespace_v1",
     "multi_graph_retrieval_v1",
     "adaptive_context_policy_v1",
-    "context_reset_handoff_v1"
+    "context_reset_handoff_v1",
+    "memory_retrieval_v1"
   ],
   "capabilities": [
     {
