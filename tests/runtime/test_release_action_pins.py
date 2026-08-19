@@ -21,6 +21,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/typed-context-object-store.yml",
     ".github/workflows/programmatic-execution.yml",
     ".github/workflows/deferred-tool-discovery.yml",
+    ".github/workflows/adaptive-context-policy.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
