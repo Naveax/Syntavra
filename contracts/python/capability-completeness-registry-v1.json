@@ -46,7 +46,8 @@
     "deferred_tool_discovery_v1",
     "unified_context_namespace_v1",
     "multi_graph_retrieval_v1",
-    "adaptive_context_policy_v1"
+    "adaptive_context_policy_v1",
+    "context_reset_handoff_v1"
   ],
   "capabilities": [
     {
@@ -254,7 +255,7 @@
     {
       "id": "multi_graph_retrieval_v1",
       "group": "retrieval",
-      "state": "implemented",
+      "state": "certified",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -270,20 +271,38 @@
         "tests/runtime/test_multi_graph_security_hardening.py",
         ".github/workflows/multi-graph-retrieval.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/multi-graph-retrieval-v1.json",
+        "syntavra_runtime/multi_graph_retrieval.py",
+        "tools/certify_multi_graph_retrieval.py",
+        "tests/runtime/test_multi_graph_retrieval.py",
+        "tests/runtime/test_multi_graph_security_hardening.py",
+        ".github/workflows/multi-graph-retrieval.yml"
+      ],
       "acceptance": "Unify semantic, temporal, causal, entity, code, task, provenance, and security graphs with task-aware retrieval."
     },
     {
       "id": "adaptive_context_policy_v1",
       "group": "policy",
-      "state": "partial",
+      "state": "certified",
       "classification": "UNIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "syntavra_runtime/context_pack.py",
-        "syntavra_runtime/optimization_modes.py"
+        "syntavra_runtime/optimization_modes.py",
+        "syntavra_runtime/adaptive_context_policy.py",
+        "contracts/python/adaptive-context-policy-v1.json",
+        "tools/certify_adaptive_context_policy.py",
+        "tests/runtime/test_adaptive_context_policy.py",
+        ".github/workflows/adaptive-context-policy.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/adaptive-context-policy-v1.json",
+        "syntavra_runtime/adaptive_context_policy.py",
+        "tools/certify_adaptive_context_policy.py",
+        "tests/runtime/test_adaptive_context_policy.py",
+        ".github/workflows/adaptive-context-policy.yml"
+      ],
       "acceptance": "Deterministic explainable KEEP/SUMMARIZE/COMPRESS/EXTERNALIZE/RESET/BRANCH/ABSTAIN policy with shadow mode."
     },
     {

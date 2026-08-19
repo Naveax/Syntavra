@@ -470,3 +470,47 @@ NEXT EXACT TASK:
 - freeze permanent tree and seal MANIFEST.sha256 from the provenance candidate.
 - pass final load-bearing CI and merge PR #144.
 - after admission advance to adaptive_context_policy_v1.
+
+
+======================================================================
+APPENDED CURRENT CHECKPOINT — 2026-08-19 — CONTEXT RESET / HANDOFF ACTIVE
+======================================================================
+
+CURRENT ADMITTED MAIN:
+ff9fe699b835889f326e2a8b0dfbb7ba334d3949
+
+ACTIVE IMPLEMENTATION BRANCH:
+agent/adaptive-context-policy-v1
+
+ACTIVE PR:
+#145 — Add Adaptive Context Policy v1
+
+PYTHON STATUS:
+PYTHON-FIRST ACTIVE — adaptive_context_policy_v1 is certified; context_reset_handoff_v1 is the current milestone.
+
+RUST STATUS:
+FEATURE FROZEN AND CI-ENFORCED — implementation coverage 245/245; production promotion 174/245; remaining parity/promotion 71; Rust resume false.
+
+ADMITTED ADAPTIVE POLICY:
+- deterministic and explainable KEEP/SUMMARIZE/COMPRESS/EXTERNALIZE/ABSTAIN item policy.
+- KEEP/RESET/BRANCH/ABSTAIN session recommendations with explicit safety gates.
+- exact-required context fails closed when budget cannot be satisfied.
+- security deny, tainted exact-required evidence and unsafe irreversible state abstain.
+- shadow mode records recommendations without claiming enforcement.
+- reference-only Multi-Graph and TaskContextPack adapters preserve payload authority boundaries.
+- exact-head Adaptive Context Policy, Rust Freeze, Dual Engine, Release Main and Package Provenance gates passed before lifecycle certification.
+
+NEXT CANONICAL MILESTONE:
+context_reset_handoff_v1
+
+EXISTING PRIMITIVES TO REUSE:
+- SessionMemory exact hash chain, multi-view compaction, checkpoint, fork, merge and restore.
+- AutonomousCodingAgent bounded execution receipts and optional session event recording.
+- AdaptiveContextPolicy session recommendations and recoverability/task-drift signals.
+
+NEXT EXACT TASK:
+- define one canonical context reset / structured handoff contract.
+- compose existing session memory and adaptive policy primitives instead of duplicating stores.
+- preserve evidence handles, git state and security state across RESET/BRANCH.
+- add deterministic handoff compiler + verifier and fail-closed recovery checks.
+- add reset benchmark arms and exact-head admission workflow.
