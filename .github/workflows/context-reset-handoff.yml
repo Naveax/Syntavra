@@ -43,25 +43,29 @@ jobs:
           set -euo pipefail
           python -m unittest tests.runtime.test_context_reset_handoff -v
 
-      - name: Emit runtime surface evidence
+      - name: Certify exact-head Context Reset Handoff
         shell: bash
         run: |
           set -euo pipefail
+          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-handoff.json
           python - <<'PY'
           import json
+          import subprocess
           from pathlib import Path
-          from syntavra_runtime.context_reset_handoff import ContextResetHandoff
 
-          report = ContextResetHandoff.status()
+          report = json.loads(Path('/tmp/context-reset-handoff.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ok'] is True, report
           assert report['claim'] == 'CONTEXT_RESET_HANDOFF_V1'
-          assert set(report['decisions']) == {'CONTINUE', 'COMPACT', 'RESET', 'BRANCH'}
-          assert report['session_memory_authority_reused'] is True
-          assert report['new_persistent_store'] is False
-          assert report['secret_material_allowed'] is False
-          Path('/tmp/context-reset-handoff.json').write_text(
-              json.dumps(report, indent=2, sort_keys=True) + '\n',
-              encoding='utf-8',
-          )
+          assert report['exact_head'] == head
+          assert report['admission_ready'] is True
+          assert report['python_complete_ready'] is False
+          assert report['rust_resume_allowed'] is False
+          assert report['runtime']['session_memory_authority_reused'] is True
+          assert report['runtime']['new_persistent_store'] is False
+          assert report['runtime']['secret_material_allowed'] is False
+          assert report['rust']['production_promoted'] == 174
+          assert report['rust']['remaining_parity_promotion'] == 71
           PY
 
       - name: Enforce exact clean pull request head
