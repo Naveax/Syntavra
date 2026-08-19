@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "family": "context-reset-handoff",
+  "phase": "python-first",
+  "claim": "CONTEXT_RESET_HANDOFF_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/context_reset_handoff.py",
+  "existing_authorities": {
+    "session_memory": "syntavra_runtime/session_memory.py:SessionMemory",
+    "adaptive_context_policy": "syntavra_runtime/adaptive_context_policy.py:AdaptiveContextPolicy"
+  },
+  "decision_surface": [
+    "CONTINUE",
+    "COMPACT",
+    "RESET",
+    "BRANCH"
+  ],
+  "handoff_policy": {
+    "session_event_chain_must_verify": true,
+    "checkpoint_required": true,
+    "exact_history_preserved": true,
+    "content_addressed_receipt": true,
+    "timestamp_excluded_from_receipt_identity": true,
+    "reset_and_branch_create_parent_linked_session": true,
+    "compact_reuses_session_memory_summaries": true,
+    "parallel_persistent_store_forbidden": true
+  },
+  "repository_policy": {
+    "repository_identity_preserved": true,
+    "branch_preserved": true,
+    "exact_head_sha_preserved": true,
+    "dirty_worktree_requires_recovery_reference": true
+  },
+  "evidence_policy": {
+    "evidence_references_preserved": true,
+    "checkpoint_recovery_handle_always_preserved": true,
+    "critical_evidence_must_remain_referenced_across_reset_or_branch": true,
+    "payload_copy_not_required": true
+  },
+  "security_policy": {
+    "taint_state_preserved": true,
+    "critical_evidence_count_preserved": true,
+    "capability_deny_state_preserved": true,
+    "secret_material_forbidden": true,
+    "tainted_handoff_requires_policy_reference": true
+  },
+  "admission": {
+    "adaptive_context_policy_must_be_certified": true,
+    "python_complete_must_remain_false": true,
+    "rust_resume_must_remain_false": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71
+  },
+  "claim_boundary": "This contract certifies deterministic verified CONTINUE/COMPACT/RESET/BRANCH handoff over the existing SessionMemory authority while preserving repository, evidence, recovery, and security state by reference. It does not claim autonomous repository mutation, secret transport, Python COMPLETE, or Rust Remaining-71 production promotion."
+}
