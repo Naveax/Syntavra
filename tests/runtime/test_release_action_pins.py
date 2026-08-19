@@ -23,6 +23,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/deferred-tool-discovery.yml",
     ".github/workflows/adaptive-context-policy.yml",
     ".github/workflows/context-reset-handoff.yml",
+    ".github/workflows/memory-retrieval.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
