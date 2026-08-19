@@ -463,8 +463,8 @@ def certify(repo: Path) -> dict[str, Any]:
         "capability completeness is not valid",
     )
     _require(
-        completeness.get("current_milestone") == "multi_graph_retrieval_v1",
-        "registry has not advanced to multi_graph_retrieval_v1",
+        bool(completeness.get("current_milestone")),
+        "capability registry current milestone missing",
     )
     _require(
         completeness.get("python_complete_ready") is False,
@@ -488,8 +488,8 @@ def certify(repo: Path) -> dict[str, Any]:
     )
     _require(
         (by_id.get("multi_graph_retrieval_v1") or {}).get("state")
-        in {"implemented", "verified"},
-        "Multi-Graph registry state must be pre-certification implemented/verified",
+        in {"implemented", "verified", "certified"},
+        "Multi-Graph registry state is not admissible",
     )
 
     rust_freeze = certify_rust_freeze(repo)

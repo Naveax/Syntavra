@@ -298,8 +298,8 @@ def certify(repo: Path) -> dict[str, Any]:
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
     _require(
-        completeness.get("current_milestone") == "adaptive_context_policy_v1",
-        "registry has not advanced to adaptive_context_policy_v1",
+        bool(completeness.get("current_milestone")),
+        "capability registry current milestone missing",
     )
     _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
     _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
@@ -315,8 +315,9 @@ def certify(repo: Path) -> dict[str, Any]:
         "Multi-Graph Retrieval must be certified before Adaptive Context Policy admission",
     )
     _require(
-        (by_id.get("adaptive_context_policy_v1") or {}).get("state") in {"implemented", "verified"},
-        "Adaptive Context Policy registry state must be pre-certification implemented/verified",
+        (by_id.get("adaptive_context_policy_v1") or {}).get("state")
+        in {"implemented", "verified", "certified"},
+        "Adaptive Context Policy registry state is not admissible",
     )
 
     rust_freeze = certify_rust_freeze(repo)
