@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "family": "epistemic-safety",
+  "phase": "python-first",
+  "claim": "EPISTEMIC_SAFETY_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/epistemic_safety.py",
+  "existing_authorities": {
+    "context_envelope": "syntavra_runtime/universal_context_item.py:UniversalContextItem",
+    "ingress_scanner": "syntavra_runtime/security_scan.py:scan_text",
+    "capability_security": "syntavra_runtime/capability_security.py:CapabilitySecurity",
+    "adaptive_abstention": "syntavra_runtime/adaptive_context_policy.py:AdaptiveContextPolicy",
+    "evidence_persistence": "syntavra_runtime/evidence_store.py:EvidenceStoreV2"
+  },
+  "ownership_policy": {
+    "parallel_persistent_store_forbidden": true,
+    "evidence_payload_ownership_forbidden": true,
+    "capability_issuance_ownership_forbidden": true,
+    "side_effects_forbidden": true,
+    "public_cli_route_added": false,
+    "existing_ingress_scanner_reused": true,
+    "existing_taint_envelope_reused": true,
+    "existing_capability_security_reused": true
+  },
+  "epistemic_policy": {
+    "deterministic_state_engine": true,
+    "context_critic": true,
+    "missing_evidence_detection": true,
+    "information_gain_marginal_utility": true,
+    "universal_taint_propagation": true,
+    "instruction_data_separation": true,
+    "prompt_injection_ingress_filter": true,
+    "minimum_evidence_schemas": true,
+    "safe_action_commit_gate": true,
+    "content_addressed_evidence_certificate": true,
+    "agentic_abstention": true,
+    "context_lease_dependency_invalidation": true,
+    "no_silent_fallback": true
+  },
+  "decision_states": [
+    "SUPPORTED",
+    "UNCERTAIN",
+    "MISSING",
+    "CONTRADICTED",
+    "TAINTED"
+  ],
+  "decisions": [
+    "ALLOW",
+    "VERIFY",
+    "ABSTAIN"
+  ],
+  "admission": {
+    "prior_memory_retrieval_must_be_certified": true,
+    "capability_registry_current_milestone": "epistemic_safety_v1",
+    "python_complete_must_remain_false": true,
+    "rust_resume_must_remain_false": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71
+  },
+  "claim_boundary": "This contract certifies a deterministic side-effect-free Python epistemic critic and action gate that composes existing context, ingress-scan and capability-security authorities. It does not claim perfect truth detection, autonomous authorization, Python COMPLETE, external superiority, or Rust Remaining-71 parity/promotion."
+}

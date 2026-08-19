@@ -362,12 +362,20 @@
     {
       "id": "epistemic_safety_v1",
       "group": "reliability-safety",
-      "state": "partial",
+      "state": "implemented",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "syntavra_runtime/capability_security.py",
-        "syntavra_runtime/secret_redaction.py"
+        "syntavra_runtime/secret_redaction.py",
+        "syntavra_runtime/security_scan.py",
+        "syntavra_runtime/universal_context_item.py",
+        "syntavra_runtime/adaptive_context_policy.py",
+        "syntavra_runtime/epistemic_safety.py",
+        "contracts/python/epistemic-safety-v1.json",
+        "tools/certify_epistemic_safety_v1.py",
+        "tests/runtime/test_epistemic_safety_v1.py",
+        ".github/workflows/epistemic-safety.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Epistemic state, context critic, missing-evidence detection, taint propagation, action commit gate, and abstention."
