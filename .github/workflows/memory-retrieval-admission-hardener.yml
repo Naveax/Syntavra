@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           git rm .github/workflows/memory-retrieval-admission-hardener.yml
-          git rm tools/_memory_retrieval_admission_hardener.py
+          git rm -f tools/_memory_retrieval_admission_hardener.py
           rm -rf syntavra_runtime.egg-info
           python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
