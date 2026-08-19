@@ -1,0 +1,100 @@
+name: Context Reset Handoff Seal Helper
+
+on:
+  push:
+    branches:
+      - automation/context-reset-handoff-seal-148
+
+permissions:
+  contents: write
+
+concurrency:
+  group: context-reset-handoff-seal-helper
+  cancel-in-progress: false
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact helper branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: automation/context-reset-handoff-seal-148
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Apply fail-closed Context Reset seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          dual = Path('contracts/engine/dual-engine-public-surface-v2.json')
+          text = dual.read_text(encoding='utf-8')
+          old = '"module_count": 206'
+          assert text.count(old) == 1, 'unexpected Python module_count authority state'
+          dual.write_text(text.replace(old, '"module_count": 207', 1), encoding='utf-8')
+
+          gate = Path('.github/workflows/release-main-merge-gate.yml')
+          text = gate.read_text(encoding='utf-8')
+          test_line = '          python -m unittest tests.runtime.test_adaptive_context_policy -v\n'
+          assert text.count(test_line) == 1, 'adaptive test anchor drifted'
+          text = text.replace(
+              test_line,
+              test_line + '          python -m unittest tests.runtime.test_context_reset_handoff -v\n',
+              1,
+          )
+          cert_line = '          python tools/certify_adaptive_context_policy.py --out /tmp/adaptive-context-policy.json\n'
+          assert text.count(cert_line) == 1, 'adaptive certifier anchor drifted'
+          text = text.replace(
+              cert_line,
+              cert_line + '          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-handoff.json\n',
+              1,
+          )
+          gate.write_text(text, encoding='utf-8')
+
+          pins = Path('tests/runtime/test_release_action_pins.py')
+          text = pins.read_text(encoding='utf-8')
+          pin_line = '    ".github/workflows/adaptive-context-policy.yml",\n'
+          assert text.count(pin_line) == 1, 'release pin trust-chain anchor drifted'
+          pins.write_text(
+              text.replace(
+                  pin_line,
+                  pin_line + '    ".github/workflows/context-reset-handoff.yml",\n',
+                  1,
+              ),
+              encoding='utf-8',
+          )
+          PY
+
+          git rm .github/workflows/context-reset-seal-helper.yml
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_release_action_pins -v
+          python -m unittest tests.runtime.test_context_reset_handoff -v
+          python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v
+          git diff --check
+
+      - name: Commit canonical sealed tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add MANIFEST.sha256 \
+            contracts/engine/dual-engine-public-surface-v2.json \
+            .github/workflows/release-main-merge-gate.yml \
+            tests/runtime/test_release_action_pins.py
+          git add -u .github/workflows/context-reset-seal-helper.yml
+          git status --short
+          git commit -m 'Seal Context Reset Handoff admission boundaries'
+          git push origin HEAD:automation/context-reset-handoff-seal-148
