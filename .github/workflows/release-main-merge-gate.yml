@@ -62,6 +62,7 @@ jobs:
           python -m unittest tests.runtime.test_context_reset_handoff -v
           python -m unittest tests.runtime.test_memory_retrieval_v1 -v
           python -m unittest tests.runtime.test_epistemic_safety_v1 -v
+          python -m unittest tests.runtime.test_cache_provider_budget_v1 -v
           python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
           python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
           python tools/certify_python_authority.py --out /tmp/python-authority.json
@@ -76,6 +77,7 @@ jobs:
           python tools/certify_context_reset_handoff.py --out /tmp/context-reset-handoff.json
           python tools/certify_memory_retrieval_v1.py --out /tmp/memory-retrieval.json
           python tools/certify_epistemic_safety_v1.py --out /tmp/epistemic-safety.json
+          python tools/certify_cache_provider_budget_v1.py --out /tmp/cache-provider-budget.json
           python tools/check_rust_feature_freeze.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --out /tmp/rust-feature-freeze-diff.json
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
           python tools/refresh_manifest.py --check

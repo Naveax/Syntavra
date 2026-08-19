@@ -25,6 +25,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/context-reset-handoff.yml",
     ".github/workflows/memory-retrieval.yml",
     ".github/workflows/epistemic-safety.yml",
+    ".github/workflows/cache-provider-budget.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
