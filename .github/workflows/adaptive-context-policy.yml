@@ -1,0 +1,98 @@
+name: Adaptive Context Policy
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - agent/adaptive-context-policy-v1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adaptive-context-policy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adaptive-context-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Run Adaptive Context Policy regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_adaptive_context_policy -v
+
+      - name: Generate exact-head Adaptive Context Policy certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/certify_adaptive_context_policy.py --out /tmp/adaptive-context-policy.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/adaptive-context-policy.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ok'] is True, report
+          assert report['claim'] == 'ADAPTIVE_CONTEXT_POLICY_V1'
+          assert report['exact_head'] == head
+          assert report['admission_ready'] is True
+          assert report['python_complete_ready'] is False
+          assert report['rust_resume_allowed'] is False
+          assert report['runtime']['deterministic'] is True
+          assert report['runtime']['explainable'] is True
+          assert report['runtime']['security_abstain'] is True
+          assert report['runtime']['task_drift_branch'] is True
+          assert report['runtime']['recoverable_pressure_reset'] is True
+          assert report['runtime']['shadow_non_enforcement'] is True
+          assert report['runtime']['payload_authority'] is False
+          assert report['runtime']['persistent_store'] is False
+          assert report['runtime']['side_effects'] is False
+          assert report['rust']['production_promoted'] == 174
+          assert report['rust']['remaining_parity_promotion'] == 71
+          PY
+
+      - name: Enforce clean exact-head repository
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload Adaptive Context Policy evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: adaptive-context-policy-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/adaptive-context-policy.json
+          if-no-files-found: error
