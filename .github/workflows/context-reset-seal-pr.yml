@@ -31,6 +31,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
       - name: Build and validate canonical sealed tree
         shell: bash
         run: |
