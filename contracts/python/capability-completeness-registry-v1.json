@@ -362,7 +362,7 @@
     {
       "id": "epistemic_safety_v1",
       "group": "reliability-safety",
-      "state": "implemented",
+      "state": "certified",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -377,7 +377,13 @@
         "tests/runtime/test_epistemic_safety_v1.py",
         ".github/workflows/epistemic-safety.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/epistemic-safety-v1.json",
+        "syntavra_runtime/epistemic_safety.py",
+        "tools/certify_epistemic_safety_v1.py",
+        "tests/runtime/test_epistemic_safety_v1.py",
+        ".github/workflows/epistemic-safety.yml"
+      ],
       "acceptance": "Epistemic state, context critic, missing-evidence detection, taint propagation, action commit gate, and abstention."
     },
     {
