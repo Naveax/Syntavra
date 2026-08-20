@@ -1,0 +1,129 @@
+HOST_ADAPTER_STAGING_DIAGNOSTIC
+expected_target=1c7afd63648ba3df642bdc74d471a3cf667f11b0
+actual_target=1c7afd63648ba3df642bdc74d471a3cf667f11b0
+prepare_rc=0
+verify_rc=0
+
+=== PREPARE ===
+PREPARE_OK
+
+=== VERIFY ===
+Defaulting to user installation because normal site-packages is not writeable
+Obtaining file:///home/runner/work/Syntavra/Syntavra/target
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting cryptography>=43 (from syntavra-runtime==0.0.1)
+  Downloading cryptography-50.0.0-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.3 kB)
+Collecting tree-sitter-language-pack>=0.9 (from syntavra-runtime==0.0.1)
+  Downloading tree_sitter_language_pack-1.14.3-cp310-abi3-manylinux_2_34_x86_64.whl.metadata (713 bytes)
+Collecting tree-sitter-c-sharp>=0.23.1 (from syntavra-runtime==0.0.1)
+  Downloading tree_sitter_c_sharp-0.23.5-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (2.7 kB)
+Collecting cffi>=2.0.0 (from cryptography>=43->syntavra-runtime==0.0.1)
+  Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+Collecting tree-sitter>=0.23 (from tree-sitter-language-pack>=0.9->syntavra-runtime==0.0.1)
+  Downloading tree_sitter-0.26.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (10 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=43->syntavra-runtime==0.0.1)
+  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Downloading cryptography-50.0.0-cp311-abi3-manylinux_2_34_x86_64.whl (4.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 56.8 MB/s eta 0:00:00
+Downloading tree_sitter_c_sharp-0.23.5-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (358 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 358.3/358.3 kB 111.6 MB/s eta 0:00:00
+Downloading tree_sitter_language_pack-1.14.3-cp310-abi3-manylinux_2_34_x86_64.whl (2.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.4/2.4 MB 173.8 MB/s eta 0:00:00
+Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 221.8/221.8 kB 81.7 MB/s eta 0:00:00
+Downloading tree_sitter-0.26.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (667 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 667.5/667.5 kB 148.0 MB/s eta 0:00:00
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.2/48.2 kB 20.1 MB/s eta 0:00:00
+Building wheels for collected packages: syntavra-runtime
+  Building editable for syntavra-runtime (pyproject.toml): started
+  Building editable for syntavra-runtime (pyproject.toml): finished with status 'done'
+  Created wheel for syntavra-runtime: filename=syntavra_runtime-0.0.1-0.editable-py3-none-any.whl size=8049 sha256=fcb39b8cb09c2645ef26c91d67f17682961750ce63e554f3a45f2c4101574cb4
+  Stored in directory: /tmp/pip-ephem-wheel-cache-d_qglnuh/wheels/5f/ef/8d/7d3a026e8e2e5a8e015a2d0845b8c7fd6de847d6c03126d856
+Successfully built syntavra-runtime
+Installing collected packages: tree-sitter-c-sharp, tree-sitter, pycparser, tree-sitter-language-pack, cffi, cryptography, syntavra-runtime
+Successfully installed cffi-2.1.1 cryptography-50.0.0 pycparser-3.0 syntavra-runtime-0.0.1 tree-sitter-0.26.0 tree-sitter-c-sharp-0.23.5 tree-sitter-language-pack-1.14.3
+test_canonical_alias_map_resolves_legacy_contracts_one_to_one (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_canonical_alias_map_resolves_legacy_contracts_one_to_one) ... ok
+test_canonical_runtime_product_registry_is_exact (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_canonical_runtime_product_registry_is_exact) ... ok
+test_capability_claims_and_negotiation_are_consistent (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_capability_claims_and_negotiation_are_consistent) ... ok
+test_contract_keeps_python_first_and_rust_freeze_boundaries (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_contract_keeps_python_first_and_rust_freeze_boundaries) ... ok
+test_empty_fresh_repo_install_and_doctor_do_not_fabricate_hosts (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_empty_fresh_repo_install_and_doctor_do_not_fabricate_hosts) ... ok
+test_external_live_certification_boundary_fails_closed (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_external_live_certification_boundary_fails_closed) ... ok
+test_fresh_repo_all_host_dry_run_is_zero_code_and_complete (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_fresh_repo_all_host_dry_run_is_zero_code_and_complete) ... ok
+test_internal_legacy_registry_never_claims_live_certification (tests.runtime.test_host_adapter_conformance_v1.HostAdapterConformanceV1Tests.test_internal_legacy_registry_never_claims_live_certification) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.053s
+
+OK
+{
+  "admission_ready": false,
+  "aider_mode": "INSTRUCTION_ONLY",
+  "all_host_dry_run_count": 18,
+  "canonical_alias_count": 18,
+  "canonical_host_count": 18,
+  "claim": "HOST_ADAPTER_CONFORMANCE_V1",
+  "claim_boundary": "This contract certifies internal cross-host adapter contract consistency, capability negotiation, reversible zero-code installation paths, fresh-repository smoke behavior, and fail-closed external certification boundaries. It does not claim that any external host/version was live-certified without an explicit external execution receipt, does not claim adoption or superiority, and does not resume Rust Remaining-71 work.",
+  "exact_head": "1c7afd63648ba3df642bdc74d471a3cf667f11b0",
+  "external_receipt_boundary": true,
+  "fresh_repo_zero_code_smoke": true,
+  "internal_live_certified": 0,
+  "lifecycle_state": "partial",
+  "ok": true,
+  "python_complete_ready": false,
+  "runtime_ready": true,
+  "rust": {
+    "feature_development_frozen": true,
+    "production_promoted": 174,
+    "remaining_parity_promotion": 71
+  },
+  "rust_resume_allowed": false,
+  "schema_version": 1
+}
+--- CERTIFICATE ---
+{
+  "admission_ready": false,
+  "aider_mode": "INSTRUCTION_ONLY",
+  "all_host_dry_run_count": 18,
+  "canonical_alias_count": 18,
+  "canonical_host_count": 18,
+  "claim": "HOST_ADAPTER_CONFORMANCE_V1",
+  "claim_boundary": "This contract certifies internal cross-host adapter contract consistency, capability negotiation, reversible zero-code installation paths, fresh-repository smoke behavior, and fail-closed external certification boundaries. It does not claim that any external host/version was live-certified without an explicit external execution receipt, does not claim adoption or superiority, and does not resume Rust Remaining-71 work.",
+  "exact_head": "1c7afd63648ba3df642bdc74d471a3cf667f11b0",
+  "external_receipt_boundary": true,
+  "fresh_repo_zero_code_smoke": true,
+  "internal_live_certified": 0,
+  "lifecycle_state": "partial",
+  "ok": true,
+  "python_complete_ready": false,
+  "runtime_ready": true,
+  "rust": {
+    "feature_development_frozen": true,
+    "production_promoted": 174,
+    "remaining_parity_promotion": 71
+  },
+  "rust_resume_allowed": false,
+  "schema_version": 1
+}
+
+=== DIFF STAT ===
+ .github/workflows/release-main-merge-gate.yml |  2 ++
+ syntavra_runtime/host_adapters.py             | 10 ++++++----
+ tests/runtime/test_release_action_pins.py     |  1 +
+ 3 files changed, 9 insertions(+), 4 deletions(-)
+
+=== STATUS ===
+ M .github/workflows/release-main-merge-gate.yml
+ M syntavra_runtime/host_adapters.py
+ M tests/runtime/test_release_action_pins.py
+?? .github/workflows/host-adapter-conformance.yml
+?? contracts/python/host-adapter-conformance-v1.json
+?? tests/runtime/test_host_adapter_conformance_v1.py
+?? tools/certify_host_adapter_conformance_v1.py
