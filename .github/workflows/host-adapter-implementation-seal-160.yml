@@ -1,0 +1,292 @@
+name: Host Adapter Implementation Seal 160
+
+on:
+  push:
+    branches:
+      - automation/host-adapter-seal-160
+
+permissions:
+  contents: write
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TARGET_BRANCH: agent/host-adapter-conformance-v1
+      CANDIDATE_BRANCH: automation/host-adapter-sealed-candidate-160
+      EXPECTED_HEAD: ebc7b22dec1ad0f342ae6314170266525c9a9906
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/host-adapter-conformance-v1
+          path: target
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Verify target and candidate have not moved
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C target rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git -C target fetch origin "$TARGET_BRANCH" "$CANDIDATE_BRANCH"
+          test "$(git -C target rev-parse FETCH_HEAD)" = "$EXPECTED_HEAD"
+          candidate_head="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$candidate_head" = "$EXPECTED_HEAD"
+
+      - name: Advance Host Adapter Conformance to implemented
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('contracts/python/capability-completeness-registry-v1.json')
+          registry = json.loads(path.read_text(encoding='utf-8'))
+          by_id = {item['id']: item for item in registry['capabilities']}
+          assert by_id['output_intelligence_v1']['state'] == 'certified'
+          item = by_id['host_adapter_conformance_v1']
+          assert item['state'] == 'partial', item['state']
+          item['state'] = 'implemented'
+          item['implementation_evidence'] = [
+              'syntavra_runtime/integration_matrix.py',
+              'syntavra_runtime/host_adapters.py',
+              'syntavra_runtime/platform_adapter_extension.py',
+              'syntavra_runtime/product_surface.py',
+              'syntavra_runtime/adapter_platform.py',
+              'syntavra_runtime/adapter_runtime.py',
+              'syntavra_runtime/host_installation.py',
+              'syntavra_runtime/zero_friction.py',
+              'contracts/python/host-adapter-conformance-v1.json',
+              'tools/certify_host_adapter_conformance_v1.py',
+              'tests/runtime/test_host_adapter_conformance_v1.py',
+              '.github/workflows/host-adapter-conformance.yml',
+              '.github/workflows/release-main-merge-gate.yml',
+              'tests/runtime/test_release_action_pins.py',
+          ]
+          item['certification_evidence'] = []
+          assert registry['python_complete']['ready'] is False
+          assert registry['python_complete']['rust_resume_allowed'] is False
+          path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Refresh volatile live checkpoint
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          cat > docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md <<'EOF'
+          # Syntavra Python-First Live Checkpoint
+
+          Updated: **2026-08-20**
+
+          This file is the volatile continuation authority. Historical milestones live in `SYNTAVRA_PYTHON_FIRST_CHECKPOINT.txt`; the capability registry is the machine-readable lifecycle authority.
+
+          ## Current admitted base
+
+          - Admitted `main` before Host Adapter Conformance work: `1c7afd63648ba3df642bdc74d471a3cf667f11b0`.
+          - Context Reset / Handoff v1, Memory Retrieval v1, Epistemic Safety v1, Cache/Provider/Budget v1 and Output Intelligence v1 are lifecycle-certified.
+          - Output Intelligence implementation merged through PR #158 and lifecycle certification through PR #159.
+          - Python feature authority: active.
+          - Python COMPLETE: false.
+          - Rust feature development: frozen.
+          - Rust production promotion: 174/245.
+          - Remaining Rust parity/promotion set: 71.
+
+          ## Current implementation
+
+          ### PR #160 — Host Adapter Conformance v1
+
+          - Branch: `agent/host-adapter-conformance-v1`.
+          - Staging implementation head: `ebc7b22dec1ad0f342ae6314170266525c9a9906`.
+          - The existing adapter authorities are reused; no parallel adapter runtime or persistent store is introduced.
+          - Canonical host authority remains the 18-host Integration Matrix.
+          - Runtime Product Adapter registry is required to match that canonical set exactly.
+          - Canonical-to-legacy host aliases are explicit and one-to-one.
+          - Capability claims are cross-checked against runtime host negotiation.
+          - Aider's existing `AGENTS.md` path is harmonized through `platform_adapter_extension` so canonical negotiation is `INSTRUCTION_ONLY` rather than stale `UNSUPPORTED`.
+          - All 18 canonical hosts must have zero-code dry-run installation contracts.
+          - Fresh-repository doctor/install smoke must not fabricate detected hosts.
+          - Live adapter certification remains external-receipt gated; repository-internal registry state must not manufacture live certification.
+
+          ## Verification state
+
+          - Host Adapter Conformance exact-head run `32347242431`: PASS.
+          - Python Capability Completeness run `32347242387`: PASS.
+          - Rust Feature Freeze Guard run `32347242438`: PASS.
+          - Release Package Provenance run `32347242373`: PASS.
+          - Package Provenance generated and verified the exact staging candidate manifest for 1246 files.
+          - The pre-seal Release Main run `32347242250` reached the expected permanent-manifest boundary; the implementation seal refreshes the repository manifest together with lifecycle and continuity state.
+          - Pre-PR diagnostic candidate verification passed 8/8 Host Adapter Conformance regressions and the Host Adapter certifier.
+
+          ## Current lifecycle
+
+          - `host_adapter_conformance_v1` is sealed as `implemented` pending final exact-head admission and merge of PR #160.
+          - Certification evidence remains empty until the separate lifecycle-certification PR after implementation admission.
+          - Python COMPLETE remains false and Rust resume remains forbidden.
+          - After Host Adapter lifecycle certification, the next canonical implementation milestone is `observability_attribution_v1`.
+
+          ## Next exact task
+
+          1. Pass final exact-head Host Adapter Conformance, Capability Completeness, Rust Freeze, Release Main and Package Provenance gates on the permanent sealed PR #160 tree.
+          2. Merge PR #160 only after all load-bearing checks pass.
+          3. Re-read fresh `main` and create the separate Host Adapter Conformance lifecycle-certification PR.
+          4. After that certification is admitted, begin `observability_attribution_v1`; reuse existing telemetry, receipt, evidence and decision-attribution primitives before adding new surfaces.
+
+          ## Required continuation instruction
+
+          ```text
+          Continue Syntavra in PYTHON-FIRST mode from docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md.
+          Cross-check contracts/python/capability-completeness-registry-v1.json before choosing work.
+          Do not resume Rust feature development or alter the 174/245 production-promotion boundary.
+          Do not start a later milestone while the first non-admitted canonical milestone is still open.
+          When CI is active, track the existing run instead of creating a duplicate; continue independent work while it runs.
+          ```
+          EOF
+
+      - name: Repair operational continuation checklist
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('Status checkpoint: **2026-08-19**', 'Status checkpoint: **2026-08-20**', 1)
+
+          repo_start = text.index('## Repository state at checkpoint')
+          immediate_start = text.index('## Immediate exact task', repo_start)
+          repo_block = '''## Repository state at checkpoint
+
+          - Admitted `main` before Host Adapter Conformance work: `1c7afd63648ba3df642bdc74d471a3cf667f11b0`.
+          - Context Reset / Handoff v1, Memory Retrieval v1, Epistemic Safety v1, Cache/Provider/Budget v1 and Output Intelligence v1 are lifecycle-certified.
+          - Active Host Adapter branch: `agent/host-adapter-conformance-v1`.
+          - Active PR: #160 — `Implement Host Adapter Conformance v1`.
+          - Host Adapter staging head `ebc7b22dec1ad0f342ae6314170266525c9a9906` passed its dedicated conformance gate, Capability Completeness, Rust Freeze and Package Provenance; implementation lifecycle/manifest sealing is the current admission step.
+          - Python COMPLETE remains false.
+          - Rust remains feature-frozen at 174/245 production promotion with 71 remaining.
+
+          '''
+          text = text[:repo_start] + repo_block + text[immediate_start:]
+
+          immediate_start = text.index('## Immediate exact task')
+          baseline_start = text.index('## Existing Python baseline: do not reimplement blindly', immediate_start)
+          immediate_block = '''## Immediate exact task
+
+          - [x] Admit and lifecycle-certify Memory Retrieval v1.
+          - [x] Admit and lifecycle-certify Epistemic Safety v1.
+          - [x] Admit and lifecycle-certify Cache/Provider/Budget v1.
+          - [x] Admit and lifecycle-certify Output Intelligence v1.
+          - [x] Implement Host Adapter Conformance v1 without a parallel adapter runtime.
+          - [x] Bind the 18-host conformance suite to exact-head CI, Release Main and immutable action-pin enforcement.
+          - [x] Seal Host Adapter implementation lifecycle metadata, continuity state and `MANIFEST.sha256` together.
+          - [ ] Pass final exact-head admission gates on the permanent sealed PR #160 tree.
+          - [ ] Merge PR #160 only after all load-bearing gates pass.
+          - [ ] Lifecycle-certify `host_adapter_conformance_v1`, then advance to `observability_attribution_v1`.
+
+          '''
+          text = text[:immediate_start] + immediate_block + text[baseline_start:]
+
+          canonical_start = text.index('- [x] `python_authority_v1`')
+          canonical_end_line = '- [ ] `signalbench_python_product_v1`'
+          canonical_end = text.index(canonical_end_line, canonical_start) + len(canonical_end_line)
+          canonical_block = '''- [x] `python_authority_v1`
+          - [x] `capability_completeness_registry_v1`
+          - [x] `rust_feature_freeze_guard_v1`
+          - [x] `universal_context_item_v1`
+          - [x] `evidence_store_v2`
+          - [x] `typed_context_object_store_v1`
+          - [x] `programmatic_execution_v1`
+          - [x] `deferred_tool_discovery_v1`
+          - [x] `unified_context_namespace_v1`
+          - [x] `multi_graph_retrieval_v1`
+          - [x] `adaptive_context_policy_v1`
+          - [x] `context_reset_handoff_v1`
+          - [x] `memory_retrieval_v1`
+          - [x] `epistemic_safety_v1`
+          - [x] `cache_provider_budget_v1`
+          - [x] `output_intelligence_v1`
+          - [ ] `host_adapter_conformance_v1` — implementation sealed in PR #160; final admission and lifecycle certification pending
+          - [ ] `observability_attribution_v1`
+          - [ ] `signalbench_python_product_v1`'''
+          text = text[:canonical_start] + canonical_block + text[canonical_end:]
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Prove sealed implementation and refresh manifest
+        shell: bash
+        working-directory: target
+        env:
+          PYTHONPATH: ${{ github.workspace }}/target
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m unittest tests.runtime.test_host_adapter_conformance_v1 -v
+          python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter.json
+          python tools/certify_python_capability_completeness.py --out /tmp/completeness.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          host = json.loads(Path('/tmp/host-adapter.json').read_text(encoding='utf-8'))
+          complete = json.loads(Path('/tmp/completeness.json').read_text(encoding='utf-8'))
+          assert host['ok'] is True, host
+          assert host['lifecycle_state'] == 'implemented', host
+          assert host['admission_ready'] is True, host
+          assert host['canonical_host_count'] == 18
+          assert host['all_host_dry_run_count'] == 18
+          assert host['aider_mode'] == 'INSTRUCTION_ONLY'
+          assert host['internal_live_certified'] == 0
+          assert host['python_complete_ready'] is False
+          assert host['rust_resume_allowed'] is False
+          assert complete['ok'] is True, complete
+          assert complete['current_milestone'] == 'host_adapter_conformance_v1', complete
+          assert complete['python_complete_ready'] is False
+          assert complete['rust_resume_allowed'] is False
+          assert complete['rust']['production_promoted'] == 174
+          assert complete['rust']['remaining_parity_promotion'] == 71
+          PY
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          python - <<'PY'
+          import subprocess
+          expected = sorted([
+              'MANIFEST.sha256',
+              'contracts/python/capability-completeness-registry-v1.json',
+              'docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md',
+              'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md',
+          ])
+          actual = sorted(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          assert actual == expected, (actual, expected)
+          PY
+
+      - name: Commit clean sealed candidate
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH" "$CANDIDATE_BRANCH"
+          target_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          candidate_head="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$target_head" = "$EXPECTED_HEAD"
+          test "$candidate_head" = "$EXPECTED_HEAD"
+          git config user.name "Syntavra Admission Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            contracts/python/capability-completeness-registry-v1.json \
+            docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md \
+            docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md \
+            MANIFEST.sha256
+          git commit -m "Seal Host Adapter Conformance v1 implementation"
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
