@@ -1,6 +1,6 @@
 # Syntavra Python-First Continuation Checklist
 
-Status checkpoint: **2026-08-19**
+Status checkpoint: **2026-08-20**
 
 This document is the operational continuation state for Syntavra. It intentionally separates product development from PR #132 release-authority hardening.
 
@@ -21,24 +21,26 @@ Rust exceptions during the freeze are limited to build-blocking repair, security
 
 ## Repository state at checkpoint
 
-- Admitted `main` before Memory work: `6120ea9d074b0cac0e880e3e9dbf873d1faaec58`.
-- Context Reset / Handoff v1 runtime merged through PR #148 and lifecycle certification was admitted through PR #152.
-- Active Memory branch: `agent/memory-retrieval-v1`.
-- Active PR: #151 — `Add Memory Retrieval v1`.
-- Memory Retrieval pre-seal implementation passed its dedicated exact-head workflow and was subsequently scope/lifecycle hardened before admission.
+- Admitted `main` before Host Adapter Conformance work: `1c7afd63648ba3df642bdc74d471a3cf667f11b0`.
+- Context Reset / Handoff v1, Memory Retrieval v1, Epistemic Safety v1, Cache/Provider/Budget v1 and Output Intelligence v1 are lifecycle-certified.
+- Active Host Adapter branch: `agent/host-adapter-conformance-v1`.
+- Active PR: #160 — `Implement Host Adapter Conformance v1`.
+- Host Adapter staging head `ebc7b22dec1ad0f342ae6314170266525c9a9906` passed its dedicated conformance gate, Capability Completeness, Rust Freeze and Package Provenance; implementation lifecycle/manifest sealing is the current admission step.
 - Python COMPLETE remains false.
 - Rust remains feature-frozen at 174/245 production promotion with 71 remaining.
 
 ## Immediate exact task
 
-- [x] Merge Context Reset / Handoff v1.
-- [x] Implement Memory Retrieval v1 without a parallel memory database.
-- [x] Add scoped retrieval, provenance, conflict/supersession, consolidation/forgetting, exact recovery and handoff receipts.
-- [x] Harden recovery/mutation/session ownership boundaries and prevent silent memory reactivation.
-- [x] Bind Memory Retrieval to exact-head CI, Release Main and immutable action-pin enforcement.
-- [ ] Pass final exact-head admission gates on the permanent sealed PR #151 tree.
-- [ ] Merge PR #151 only after all load-bearing gates pass.
-- [ ] Re-read fresh `main`, then advance to `epistemic_safety_v1`.
+- [x] Admit and lifecycle-certify Memory Retrieval v1.
+- [x] Admit and lifecycle-certify Epistemic Safety v1.
+- [x] Admit and lifecycle-certify Cache/Provider/Budget v1.
+- [x] Admit and lifecycle-certify Output Intelligence v1.
+- [x] Implement Host Adapter Conformance v1 without a parallel adapter runtime.
+- [x] Bind the 18-host conformance suite to exact-head CI, Release Main and immutable action-pin enforcement.
+- [x] Seal Host Adapter implementation lifecycle metadata, continuity state and `MANIFEST.sha256` together.
+- [ ] Pass final exact-head admission gates on the permanent sealed PR #160 tree.
+- [ ] Merge PR #160 only after all load-bearing gates pass.
+- [ ] Lifecycle-certify `host_adapter_conformance_v1`, then advance to `observability_attribution_v1`.
 
 ## Existing Python baseline: do not reimplement blindly
 
@@ -93,11 +95,11 @@ Do these in order. Do not begin item N+1 until N has acceptance tests and an exa
 - [x] `multi_graph_retrieval_v1`
 - [x] `adaptive_context_policy_v1`
 - [x] `context_reset_handoff_v1`
-- [ ] `memory_retrieval_v1` — current admission candidate
-- [ ] `epistemic_safety_v1`
-- [ ] `cache_provider_budget_v1`
-- [ ] `output_intelligence_v1`
-- [ ] `host_adapter_conformance_v1`
+- [x] `memory_retrieval_v1`
+- [x] `epistemic_safety_v1`
+- [x] `cache_provider_budget_v1`
+- [x] `output_intelligence_v1`
+- [ ] `host_adapter_conformance_v1` — implementation sealed in PR #160; final admission and lifecycle certification pending
 - [ ] `observability_attribution_v1`
 - [ ] `signalbench_python_product_v1`
 
