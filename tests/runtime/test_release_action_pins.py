@@ -26,6 +26,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/memory-retrieval.yml",
     ".github/workflows/epistemic-safety.yml",
     ".github/workflows/cache-provider-budget.yml",
+    ".github/workflows/output-intelligence.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
