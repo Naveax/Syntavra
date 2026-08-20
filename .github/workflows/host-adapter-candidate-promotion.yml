@@ -1,0 +1,143 @@
+name: Host Adapter Candidate Promotion
+
+on:
+  push:
+    branches:
+      - automation/host-adapter-candidate-promotion
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: 1c7afd63648ba3df642bdc74d471a3cf667f11b0
+      TEMP_BRANCH: automation/host-adapter-candidate-promotion
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact target base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/host-adapter-conformance-v1
+          path: target
+          fetch-depth: 0
+
+      - name: Checkout sealed builder source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: automation/host-adapter-candidate-promotion
+          path: builder
+          fetch-depth: 1
+
+      - name: Verify exact target base
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Materialize tested candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          source = Path('builder/.github/workflows/host-adapter-conformance-staging-builder.yml').read_text(encoding='utf-8')
+          def extract(path: str, token: str) -> str:
+              lines = source.splitlines()
+              needle = f"cat > {path} <<'{token}'"
+              starts = [i for i, line in enumerate(lines) if line.strip() == needle]
+              assert len(starts) == 1, (path, starts)
+              start = starts[0] + 1
+              end = next(i for i in range(start, len(lines)) if lines[i].strip() == token)
+              return textwrap.dedent('\n'.join(lines[start:end])) + '\n'
+
+          for relative, token in (
+              ('contracts/python/host-adapter-conformance-v1.json', 'EOF'),
+              ('tests/runtime/test_host_adapter_conformance_v1.py', 'PY'),
+              ('tools/certify_host_adapter_conformance_v1.py', 'PY'),
+              ('.github/workflows/host-adapter-conformance.yml', 'EOF'),
+          ):
+              destination = Path('target') / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_text(extract(relative, token), encoding='utf-8')
+          (Path('target') / 'tools/certify_host_adapter_conformance_v1.py').chmod(0o755)
+
+          path = Path('target/syntavra_runtime/host_adapters.py')
+          text = path.read_text(encoding='utf-8')
+          start = text.index('    "aider": HostCapabilities(')
+          end = text.index('\n    ),', start) + len('\n    ),')
+          old = text[start:end]
+          assert '"instruction-only"' in old and '"Aider"' in old, old
+          new = '''    "aider": HostCapabilities(
+              "aider", "Aider",
+              supports_native_skill=True,
+              project_markers=(".aider.conf.yml",),
+              skill_path="AGENTS.md",
+              integration_notes=("instruction-only",),
+          )'''
+          path.write_text(text[:start] + new + text[end:], encoding='utf-8')
+
+          release = Path('target/.github/workflows/release-main-merge-gate.yml')
+          text = release.read_text(encoding='utf-8')
+          test_marker = '          python -m unittest tests.runtime.test_output_intelligence_v1 -v\n'
+          cert_marker = '          python tools/certify_output_intelligence_v1.py --out /tmp/output-intelligence.json\n'
+          assert text.count(test_marker) == 1
+          assert text.count(cert_marker) == 1
+          text = text.replace(test_marker, test_marker + '          python -m unittest tests.runtime.test_host_adapter_conformance_v1 -v\n', 1)
+          text = text.replace(cert_marker, cert_marker + '          python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter-conformance.json\n', 1)
+          release.write_text(text, encoding='utf-8')
+
+          pins = Path('target/tests/runtime/test_release_action_pins.py')
+          text = pins.read_text(encoding='utf-8')
+          marker = '    ".github/workflows/output-intelligence.yml",\n'
+          assert text.count(marker) == 1
+          pins.write_text(text.replace(marker, marker + '    ".github/workflows/host-adapter-conformance.yml",\n', 1), encoding='utf-8')
+          PY
+
+      - name: Re-prove candidate before commit
+        shell: bash
+        working-directory: target
+        env:
+          PYTHONPATH: ${{ github.workspace }}/target
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m unittest tests.runtime.test_host_adapter_conformance_v1 -v
+          python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter-conformance.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/host-adapter-conformance.json').read_text(encoding='utf-8'))
+          assert report['ok'] is True, report
+          assert report['lifecycle_state'] == 'partial'
+          assert report['runtime_ready'] is True
+          assert report['canonical_host_count'] == 18
+          assert report['all_host_dry_run_count'] == 18
+          assert report['aider_mode'] == 'INSTRUCTION_ONLY'
+          assert report['internal_live_certified'] == 0
+          PY
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+
+      - name: Commit candidate and replace only temporary ref
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          git config user.name "Syntavra Admission Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            syntavra_runtime/host_adapters.py \
+            contracts/python/host-adapter-conformance-v1.json \
+            tests/runtime/test_host_adapter_conformance_v1.py \
+            tools/certify_host_adapter_conformance_v1.py \
+            .github/workflows/host-adapter-conformance.yml \
+            .github/workflows/release-main-merge-gate.yml \
+            tests/runtime/test_release_action_pins.py
+          git commit -m "Implement Host Adapter Conformance v1 staging slice"
+          git push --force origin "HEAD:refs/heads/$TEMP_BRANCH"
