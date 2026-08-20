@@ -416,12 +416,20 @@
     {
       "id": "output_intelligence_v1",
       "group": "output",
-      "state": "partial",
+      "state": "implemented",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
+        "syntavra_runtime/artifacts.py",
+        "syntavra_runtime/terminal_engine.py",
         "syntavra_runtime/command_compactors.py",
-        "syntavra_runtime/command_rewriter.py"
+        "syntavra_runtime/command_rewriter.py",
+        "syntavra_runtime/competitive_fabric.py",
+        "syntavra_runtime/output_intelligence.py",
+        "contracts/python/output-intelligence-v1.json",
+        "tools/certify_output_intelligence_v1.py",
+        "tests/runtime/test_output_intelligence_v1.py",
+        ".github/workflows/output-intelligence.yml"
       ],
       "certification_evidence": [],
       "acceptance": "Exact-recoverable bounded output intelligence with semantic preservation verification and no-worse guard."
