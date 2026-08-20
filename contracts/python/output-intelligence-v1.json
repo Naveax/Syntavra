@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "family": "output-intelligence",
+  "phase": "python-first",
+  "claim": "OUTPUT_INTELLIGENCE_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/output_intelligence.py",
+  "existing_authorities": {
+    "exact_artifacts": "syntavra_runtime/artifacts.py:ArtifactStore",
+    "terminal_capture": "syntavra_runtime/terminal_engine.py:TerminalOutputEngine",
+    "compaction": "syntavra_runtime/competitive_fabric.py:CommandCompactor",
+    "command_compactors": "syntavra_runtime/command_compactors.py:CommandCompactorRegistry",
+    "command_rewrite": "syntavra_runtime/command_rewriter.py:CommandRewriteEngine",
+    "security_scan": "syntavra_runtime/security_scan.py:scan_text"
+  },
+  "ownership_policy": {
+    "parallel_persistent_store_forbidden": true,
+    "existing_artifact_store_reused": true,
+    "existing_terminal_engine_reused": true,
+    "existing_compactor_registry_reused": true,
+    "existing_rewrite_engine_reused": true,
+    "public_cli_route_added": false
+  },
+  "output_policy": {
+    "exact_recovery_required": true,
+    "bounded_visible_output": true,
+    "compression_safety_classes": [
+      "EXACT_ONLY",
+      "STRUCTURAL_SAFE",
+      "SEMANTIC_SAFE",
+      "LOSSY_ALLOWED"
+    ],
+    "semantic_preservation_verifier": true,
+    "critical_fact_categories": [
+      "errors",
+      "test-status",
+      "paths",
+      "numbers",
+      "permissions",
+      "negations",
+      "constraints",
+      "error-entities"
+    ],
+    "no_worse_guard": true,
+    "fail_closed_on_preservation_failure": true,
+    "content_addressed_decision_receipt": true,
+    "no_silent_fallback": true
+  },
+  "admission": {
+    "prior_cache_provider_budget_must_be_certified": true,
+    "capability_registry_current_milestone": "output_intelligence_v1",
+    "python_complete_must_remain_false": true,
+    "rust_resume_must_remain_false": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71
+  },
+  "claim_boundary": "This contract certifies deterministic bounded output policy over existing exact artifact, terminal capture, compaction, rewrite and security authorities. It requires semantic-preservation verification or explicit exact reveal and a no-worse visible-output guard. It does not claim external quality superiority, Python COMPLETE, credential ownership, provider execution, or Rust Remaining-71 parity/promotion."
+}
