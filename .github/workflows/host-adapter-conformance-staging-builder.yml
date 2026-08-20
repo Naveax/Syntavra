@@ -1,0 +1,689 @@
+name: Host Adapter Conformance Staging Builder
+
+on:
+  push:
+    branches:
+      - automation/host-adapter-conformance-staging
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TARGET_BRANCH: agent/host-adapter-conformance-v1
+      EXPECTED_HEAD: 1c7afd63648ba3df642bdc74d471a3cf667f11b0
+      TEMP_BRANCH: automation/host-adapter-conformance-staging
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/host-adapter-conformance-v1
+          fetch-depth: 0
+
+      - name: Verify target has not moved
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git fetch origin "$TARGET_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Harden Aider instruction-only negotiation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('syntavra_runtime/host_adapters.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    "aider": HostCapabilities(
+              "aider", "Aider", False, False, False, False, False, False, False, False, False,
+              False, (".aider.conf.yml",), (), "", "AGENTS.md",
+              False, ("instruction-only",),
+          ),'''
+          new = '''    "aider": HostCapabilities(
+              "aider", "Aider",
+              supports_native_skill=True,
+              project_markers=(".aider.conf.yml",),
+              skill_path="AGENTS.md",
+              integration_notes=("instruction-only",),
+          ),'''
+          assert text.count(old) == 1, 'Aider host contract marker drifted'
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Write Host Adapter Conformance contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > contracts/python/host-adapter-conformance-v1.json <<'EOF'
+          {
+            "schema_version": 1,
+            "family": "host-adapter-conformance",
+            "phase": "python-first",
+            "claim": "HOST_ADAPTER_CONFORMANCE_V1",
+            "strict": true,
+            "canonical_host_source": "syntavra_runtime/integration_matrix.py:HOSTS",
+            "authorities": {
+              "host_capabilities": "syntavra_runtime/host_adapters.py:KNOWN_HOSTS",
+              "product_adapters": "syntavra_runtime/product_surface.py:PlatformAdapterRegistry",
+              "legacy_adapter_contracts": "syntavra_runtime/adapter_platform.py:ADAPTERS",
+              "adapter_lifecycle": "syntavra_runtime/adapter_runtime.py:AdapterPlatformRuntime",
+              "installation": "syntavra_runtime/host_installation.py:HostInstallationManager",
+              "zero_friction": "syntavra_runtime/zero_friction.py:ZeroFrictionManager",
+              "official_path_extension": "syntavra_runtime/platform_adapter_extension.py:install"
+            },
+            "canonical_aliases": {
+              "claude-code": "claude-code",
+              "codex": "codex-cli",
+              "gemini-cli": "gemini-cli",
+              "vscode-copilot": "github-copilot-vscode",
+              "jetbrains-copilot": "github-copilot-jetbrains",
+              "cursor": "cursor",
+              "windsurf": "windsurf",
+              "opencode": "opencode",
+              "cline": "cline",
+              "roo-code": "roo-code",
+              "qwen-code": "qwen-code",
+              "kiro": "kiro",
+              "zed": "zed",
+              "pi": "pi",
+              "omp": "oh-my-pi",
+              "openclaw": "openclaw",
+              "aider": "aider",
+              "continue": "continue"
+            },
+            "policy": {
+              "canonical_host_count": 18,
+              "runtime_product_registry_exact_match": true,
+              "legacy_aliases_must_resolve_one_to_one": true,
+              "canonical_hosts_must_have_install_contracts": true,
+              "mcp_claim_requires_mcp_capability": true,
+              "hook_claim_requires_hook_capability": true,
+              "canonical_negotiation_must_not_be_unsupported": true,
+              "fresh_repo_zero_code_smoke_required": true,
+              "all_host_dry_run_required": true,
+              "rollback_and_path_safety_regressions_required": true,
+              "live_certification_requires_external_receipt": true,
+              "internal_registry_must_not_claim_live_certification": true,
+              "no_parallel_adapter_runtime": true,
+              "no_new_persistent_store": true,
+              "no_external_network_required": true
+            },
+            "admission": {
+              "prior_output_intelligence_must_be_certified": true,
+              "capability_registry_current_milestone": "host_adapter_conformance_v1",
+              "python_complete_must_remain_false": true,
+              "rust_resume_must_remain_false": true,
+              "rust_production_promoted": 174,
+              "rust_remaining_parity_promotion": 71
+            },
+            "claim_boundary": "This contract certifies internal cross-host adapter contract consistency, capability negotiation, reversible zero-code installation paths, fresh-repository smoke behavior, and fail-closed external certification boundaries. It does not claim that any external host/version was live-certified without an explicit external execution receipt, does not claim adoption or superiority, and does not resume Rust Remaining-71 work."
+          }
+          EOF
+
+      - name: Write Host Adapter Conformance regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > tests/runtime/test_host_adapter_conformance_v1.py <<'PY'
+          from __future__ import annotations
+
+          import json
+          import tempfile
+          import unittest
+          from pathlib import Path
+
+          from syntavra_runtime.adapter_platform import ADAPTERS, AdapterRegistry
+          from syntavra_runtime.adapter_runtime import AdapterMaturity, AdapterPlatformRuntime
+          from syntavra_runtime.host_adapters import KNOWN_HOSTS, host_spec, negotiate
+          from syntavra_runtime.integration_matrix import IntegrationMatrix
+          from syntavra_runtime.product_surface import PlatformAdapterRegistry
+          from syntavra_runtime.zero_friction import ZeroFrictionManager
+
+
+          ROOT = Path(__file__).resolve().parents[2]
+          CONTRACT = ROOT / "contracts/python/host-adapter-conformance-v1.json"
+
+
+          def _contract() -> dict[str, object]:
+              value = json.loads(CONTRACT.read_text(encoding="utf-8"))
+              assert isinstance(value, dict)
+              return value
+
+
+          def _canonical_hosts() -> tuple[str, ...]:
+              return tuple(row["integration_id"] for row in IntegrationMatrix.records("host"))
+
+
+          class HostAdapterConformanceV1Tests(unittest.TestCase):
+              def test_canonical_runtime_product_registry_is_exact(self) -> None:
+                  matrix = IntegrationMatrix.validate()
+                  product = PlatformAdapterRegistry.validate()
+                  hosts = _canonical_hosts()
+                  self.assertTrue(matrix["ok"], matrix)
+                  self.assertEqual(matrix["hosts"], 18)
+                  self.assertEqual(len(hosts), 18)
+                  self.assertEqual(len(hosts), len(set(hosts)))
+                  self.assertTrue(product["ok"], product)
+                  self.assertEqual(product["adapters"], 18)
+                  self.assertEqual(product["missing_matrix_hosts"], [])
+                  self.assertEqual(product["extra_adapters"], [])
+
+              def test_canonical_alias_map_resolves_legacy_contracts_one_to_one(self) -> None:
+                  aliases = _contract()["canonical_aliases"]
+                  self.assertIsInstance(aliases, dict)
+                  canonical = set(_canonical_hosts())
+                  legacy = {item.adapter_id for item in ADAPTERS}
+                  self.assertEqual(set(aliases), canonical)
+                  self.assertEqual(len(set(aliases.values())), len(canonical))
+                  for host, adapter_id in aliases.items():
+                      with self.subTest(host=host, adapter_id=adapter_id):
+                          self.assertIn(host, KNOWN_HOSTS)
+                          self.assertIn(adapter_id, legacy)
+
+              def test_capability_claims_and_negotiation_are_consistent(self) -> None:
+                  for row in IntegrationMatrix.records("host"):
+                      host = row["integration_id"]
+                      claims = set(row["capabilities"])
+                      spec = host_spec(host)
+                      decision = negotiate(host, runtime_available=True, installed=None)
+                      with self.subTest(host=host):
+                          if "mcp" in claims:
+                              self.assertTrue(spec.supports_mcp)
+                          if "pre-tool" in claims:
+                              self.assertTrue(spec.supports_pre_tool_hook)
+                          if "post-tool" in claims:
+                              self.assertTrue(spec.supports_post_tool_hook)
+                          self.assertNotEqual(decision["mode"], "UNSUPPORTED")
+                  self.assertEqual(negotiate("aider")["mode"], "INSTRUCTION_ONLY")
+
+              def test_fresh_repo_all_host_dry_run_is_zero_code_and_complete(self) -> None:
+                  canonical = set(_canonical_hosts())
+                  with tempfile.TemporaryDirectory() as directory:
+                      root = Path(directory)
+                      project = root / "project"
+                      state = root / "state"
+                      project.mkdir()
+                      manager = ZeroFrictionManager(project, state_root=state)
+                      plan = manager.install_plan(all_hosts=True, profile="minimal")
+                      self.assertEqual(set(plan.installable_hosts), canonical)
+                      self.assertEqual(plan.contract_only_hosts, ())
+                      result = manager.install(all_hosts=True, dry_run=True, profile="minimal")
+                      self.assertTrue(result["ok"], result)
+                      self.assertEqual(len(result["host_results"]), 18)
+                      self.assertTrue(all(row["status"] == "dry-run" for row in result["host_results"]))
+                      self.assertTrue(all(row["verification"]["ok"] for row in result["host_results"]))
+
+              def test_empty_fresh_repo_install_and_doctor_do_not_fabricate_hosts(self) -> None:
+                  with tempfile.TemporaryDirectory() as directory:
+                      root = Path(directory)
+                      project = root / "project"
+                      state = root / "state"
+                      project.mkdir()
+                      manager = ZeroFrictionManager(project, state_root=state)
+                      before = manager.doctor()
+                      self.assertTrue(before["ok"], before)
+                      self.assertTrue(before["ready_to_install"])
+                      self.assertFalse(before["installed"])
+                      result = manager.install(dry_run=False, profile="minimal")
+                      self.assertTrue(result["ok"], result)
+                      self.assertEqual(result["host_results"], [])
+                      after = manager.doctor()
+                      self.assertTrue(after["ok"], after)
+                      self.assertTrue(after["installed"])
+                      self.assertEqual(after["configured_hosts"], [])
+
+              def test_external_live_certification_boundary_fails_closed(self) -> None:
+                  with tempfile.TemporaryDirectory() as directory:
+                      root = Path(directory)
+                      project = root / "project"
+                      state = root / "state"
+                      project.mkdir()
+                      runtime = AdapterPlatformRuntime(project, state)
+                      denied = runtime.certify("codex-cli", {})
+                      self.assertFalse(denied.ok)
+                      self.assertEqual(denied.maturity, AdapterMaturity.ENFORCED)
+                      valid = {
+                          "host": "codex",
+                          "host_version": "external-fixture",
+                          "clean_install": True,
+                          "tool_interception": True,
+                          "context_interception": True,
+                          "security_denial": True,
+                          "session_restore": True,
+                          "artifact_hash": "sha256:" + "0" * 64,
+                      }
+                      admitted = runtime.certify("codex-cli", valid)
+                      self.assertTrue(admitted.ok)
+                      self.assertEqual(admitted.maturity, AdapterMaturity.CERTIFIED)
+                      self.assertIn("external execution receipt", admitted.claim_boundary)
+
+              def test_internal_legacy_registry_never_claims_live_certification(self) -> None:
+                  report = AdapterRegistry.validate()
+                  self.assertTrue(report["ok"], report)
+                  self.assertTrue(report["inventory_gate"], report)
+                  self.assertGreaterEqual(report["adapters"], 20)
+                  self.assertEqual(report["live_certified"], 0)
+                  self.assertIn("external execution receipts", report["live_boundary"])
+
+              def test_contract_keeps_python_first_and_rust_freeze_boundaries(self) -> None:
+                  contract = _contract()
+                  self.assertEqual(contract["claim"], "HOST_ADAPTER_CONFORMANCE_V1")
+                  policy = contract["policy"]
+                  self.assertTrue(policy["no_parallel_adapter_runtime"])
+                  self.assertTrue(policy["no_new_persistent_store"])
+                  self.assertTrue(policy["no_external_network_required"])
+                  admission = contract["admission"]
+                  self.assertEqual(admission["rust_production_promoted"], 174)
+                  self.assertEqual(admission["rust_remaining_parity_promotion"], 71)
+                  self.assertTrue(admission["python_complete_must_remain_false"])
+                  self.assertTrue(admission["rust_resume_must_remain_false"])
+
+
+          if __name__ == "__main__":
+              unittest.main()
+          PY
+
+      - name: Write Host Adapter Conformance certifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > tools/certify_host_adapter_conformance_v1.py <<'PY'
+          #!/usr/bin/env python3
+          from __future__ import annotations
+
+          import argparse
+          import json
+          import subprocess
+          import sys
+          import tempfile
+          import traceback
+          from pathlib import Path
+          from typing import Any
+
+          ROOT = Path(__file__).resolve().parents[1]
+          if str(ROOT) not in sys.path:
+              sys.path.insert(0, str(ROOT))
+
+          from syntavra_runtime.adapter_platform import ADAPTERS, AdapterRegistry
+          from syntavra_runtime.adapter_runtime import AdapterMaturity, AdapterPlatformRuntime
+          from syntavra_runtime.host_adapters import KNOWN_HOSTS, host_spec, negotiate
+          from syntavra_runtime.integration_matrix import IntegrationMatrix
+          from syntavra_runtime.product_surface import PlatformAdapterRegistry
+          from syntavra_runtime.zero_friction import ZeroFrictionManager
+
+          CONTRACT = Path("contracts/python/host-adapter-conformance-v1.json")
+          REGISTRY = Path("contracts/python/capability-completeness-registry-v1.json")
+          WORKFLOW = Path(".github/workflows/host-adapter-conformance.yml")
+          RELEASE_GATE = Path(".github/workflows/release-main-merge-gate.yml")
+          PIN_POLICY = Path("tests/runtime/test_release_action_pins.py")
+
+
+          def _require(condition: bool, message: str) -> None:
+              if not condition:
+                  raise AssertionError(message)
+
+
+          def _read_json(path: Path) -> dict[str, Any]:
+              value = json.loads(path.read_text(encoding="utf-8"))
+              _require(isinstance(value, dict), f"expected JSON object: {path}")
+              return value
+
+
+          def _head(repo: Path) -> str:
+              return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+
+
+          def certify(repo: Path) -> dict[str, Any]:
+              repo = repo.resolve()
+              _require(repo == ROOT, "host adapter conformance certifier must run against its own checkout")
+              contract = _read_json(repo / CONTRACT)
+              _require(contract.get("schema_version") == 1, "host adapter conformance schema drift")
+              _require(contract.get("family") == "host-adapter-conformance", "host adapter family drift")
+              _require(contract.get("phase") == "python-first", "host adapter phase drift")
+              _require(contract.get("claim") == "HOST_ADAPTER_CONFORMANCE_V1", "host adapter claim drift")
+              _require(contract.get("strict") is True, "host adapter contract must remain strict")
+
+              aliases = contract.get("canonical_aliases") or {}
+              canonical_rows = IntegrationMatrix.records("host")
+              canonical = [row["integration_id"] for row in canonical_rows]
+              _require(len(canonical) == 18 and len(set(canonical)) == 18, "canonical host inventory drift")
+              _require(set(aliases) == set(canonical), "canonical alias source coverage drift")
+              _require(len(set(aliases.values())) == 18, "canonical aliases are not one-to-one")
+              legacy_ids = {item.adapter_id for item in ADAPTERS}
+              for host, adapter_id in aliases.items():
+                  _require(host in KNOWN_HOSTS, f"missing canonical host contract: {host}")
+                  _require(adapter_id in legacy_ids, f"missing legacy adapter alias target: {host}->{adapter_id}")
+
+              matrix = IntegrationMatrix.validate()
+              product = PlatformAdapterRegistry.validate()
+              legacy = AdapterRegistry.validate()
+              _require(matrix.get("ok") is True and matrix.get("hosts") == 18, "integration matrix host gate failed")
+              _require(product.get("ok") is True and product.get("adapters") == 18, "runtime product adapter registry drift")
+              _require(product.get("missing_matrix_hosts") == [], "runtime product registry missing canonical hosts")
+              _require(product.get("extra_adapters") == [], "runtime product registry has noncanonical hosts")
+              _require(legacy.get("ok") is True and legacy.get("inventory_gate") is True, "legacy adapter contract registry failed")
+              _require(legacy.get("live_certified") == 0, "internal adapter registry fabricated live certification")
+
+              negotiation: dict[str, str] = {}
+              for row in canonical_rows:
+                  host = row["integration_id"]
+                  claims = set(row["capabilities"])
+                  spec = host_spec(host)
+                  decision = negotiate(host, runtime_available=True, installed=None)
+                  if "mcp" in claims:
+                      _require(spec.supports_mcp, f"{host}: matrix claims MCP without host capability")
+                  if "pre-tool" in claims:
+                      _require(spec.supports_pre_tool_hook, f"{host}: matrix claims pre-tool without hook capability")
+                  if "post-tool" in claims:
+                      _require(spec.supports_post_tool_hook, f"{host}: matrix claims post-tool without hook capability")
+                  _require(decision["mode"] != "UNSUPPORTED", f"{host}: canonical host negotiates to unsupported")
+                  negotiation[host] = str(decision["mode"])
+              _require(negotiation.get("aider") == "INSTRUCTION_ONLY", "Aider instruction-only negotiation drift")
+
+              with tempfile.TemporaryDirectory(prefix="syntavra-host-conformance-") as directory:
+                  root = Path(directory)
+                  project = root / "project"
+                  state = root / "state"
+                  project.mkdir()
+                  manager = ZeroFrictionManager(project, state_root=state)
+                  plan = manager.install_plan(all_hosts=True, profile="minimal")
+                  _require(set(plan.installable_hosts) == set(canonical), "fresh repo all-host install plan drift")
+                  _require(plan.contract_only_hosts == (), "canonical matrix contains contract-only host")
+                  dry = manager.install(all_hosts=True, dry_run=True, profile="minimal")
+                  _require(dry.get("ok") is True, f"all-host dry-run failed: {dry}")
+                  _require(len(dry.get("host_results", [])) == 18, "all-host dry-run did not cover 18 hosts")
+                  _require(all(row.get("status") == "dry-run" for row in dry["host_results"]), "all-host dry-run wrote host state")
+
+                  fresh_project = root / "fresh-project"
+                  fresh_state = root / "fresh-state"
+                  fresh_project.mkdir()
+                  fresh = ZeroFrictionManager(fresh_project, state_root=fresh_state)
+                  before = fresh.doctor()
+                  _require(before.get("ok") is True and before.get("ready_to_install") is True, "fresh-repo doctor failed")
+                  install = fresh.install(dry_run=False, profile="minimal")
+                  _require(install.get("ok") is True and install.get("host_results") == [], "fresh repo fabricated host installation")
+                  after = fresh.doctor()
+                  _require(after.get("ok") is True and after.get("installed") is True, "fresh repo zero-code install doctor failed")
+
+                  adapter_project = root / "adapter-project"
+                  adapter_project.mkdir()
+                  runtime = AdapterPlatformRuntime(adapter_project, root / "adapter-state")
+                  denied = runtime.certify("codex-cli", {})
+                  _require(denied.ok is False and denied.maturity == AdapterMaturity.ENFORCED, "missing external receipt did not fail closed")
+                  admitted = runtime.certify("codex-cli", {
+                      "host": "codex",
+                      "host_version": "external-fixture",
+                      "clean_install": True,
+                      "tool_interception": True,
+                      "context_interception": True,
+                      "security_denial": True,
+                      "session_restore": True,
+                      "artifact_hash": "sha256:" + "0" * 64,
+                  })
+                  _require(admitted.ok is True and admitted.maturity == AdapterMaturity.CERTIFIED, "valid external receipt shape was not admitted")
+                  _require("external execution receipt" in admitted.claim_boundary, "external live certification boundary drift")
+
+              for relative in (WORKFLOW, RELEASE_GATE, PIN_POLICY):
+                  _require((repo / relative).is_file(), f"missing host adapter enforcement surface: {relative}")
+              workflow = (repo / WORKFLOW).read_text(encoding="utf-8")
+              _require("tests.runtime.test_host_adapter_conformance_v1" in workflow, "host adapter workflow lost regression suite")
+              _require("tools/certify_host_adapter_conformance_v1.py" in workflow, "host adapter workflow lost certifier")
+              for pin in (
+                  "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+                  "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+                  "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+              ):
+                  _require(pin in workflow, f"host adapter workflow pin drift: {pin}")
+              release = (repo / RELEASE_GATE).read_text(encoding="utf-8")
+              _require("tests.runtime.test_host_adapter_conformance_v1" in release, "Release Main lost host adapter regression")
+              _require("tools/certify_host_adapter_conformance_v1.py" in release, "Release Main lost host adapter certifier")
+              pins = (repo / PIN_POLICY).read_text(encoding="utf-8")
+              _require('".github/workflows/host-adapter-conformance.yml"' in pins, "immutable pin policy lost host adapter workflow")
+
+              registry = _read_json(repo / REGISTRY)
+              by_id = {item["id"]: item for item in registry["capabilities"]}
+              _require(by_id["output_intelligence_v1"]["state"] == "certified", "Output Intelligence must be certified first")
+              lifecycle_state = by_id["host_adapter_conformance_v1"]["state"]
+              _require(lifecycle_state in {"partial", "implemented", "verified", "certified"}, "invalid host adapter lifecycle state")
+              _require(registry["python_complete"]["ready"] is False, "host adapter milestone cannot claim Python COMPLETE")
+              _require(registry["python_complete"]["rust_resume_allowed"] is False, "host adapter milestone cannot resume Rust")
+
+              exact_head = _head(repo)
+              return {
+                  "ok": True,
+                  "schema_version": 1,
+                  "claim": "HOST_ADAPTER_CONFORMANCE_V1",
+                  "exact_head": exact_head,
+                  "runtime_ready": True,
+                  "lifecycle_state": lifecycle_state,
+                  "admission_ready": lifecycle_state in {"implemented", "verified", "certified"},
+                  "canonical_host_count": 18,
+                  "canonical_alias_count": len(aliases),
+                  "all_host_dry_run_count": 18,
+                  "fresh_repo_zero_code_smoke": True,
+                  "aider_mode": negotiation["aider"],
+                  "external_receipt_boundary": True,
+                  "internal_live_certified": legacy["live_certified"],
+                  "python_complete_ready": False,
+                  "rust_resume_allowed": False,
+                  "rust": {
+                      "production_promoted": 174,
+                      "remaining_parity_promotion": 71,
+                      "feature_development_frozen": True,
+                  },
+                  "claim_boundary": contract["claim_boundary"],
+              }
+
+
+          def main() -> int:
+              parser = argparse.ArgumentParser(description="Certify Syntavra Host Adapter Conformance v1")
+              parser.add_argument("--repo", default=".")
+              parser.add_argument("--out")
+              args = parser.parse_args()
+              try:
+                  report = certify(Path(args.repo))
+              except Exception as exc:  # pragma: no cover
+                  report = {
+                      "ok": False,
+                      "schema_version": 1,
+                      "claim": "HOST_ADAPTER_CONFORMANCE_V1",
+                      "error": f"{type(exc).__name__}: {exc}",
+                      "traceback": traceback.format_exc(),
+                  }
+              payload = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+              if args.out:
+                  output = Path(args.out)
+                  output.parent.mkdir(parents=True, exist_ok=True)
+                  output.write_text(payload, encoding="utf-8")
+              print(payload, end="")
+              return 0 if report.get("ok") is True else 1
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main())
+          PY
+          chmod +x tools/certify_host_adapter_conformance_v1.py
+
+      - name: Write Host Adapter Conformance workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .github/workflows/host-adapter-conformance.yml <<'EOF'
+          name: Host Adapter Conformance
+
+          on:
+            pull_request:
+              branches:
+                - main
+            push:
+              branches:
+                - main
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: host-adapter-conformance-${{ github.event.pull_request.number || github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            host-adapter-conformance:
+              runs-on: ubuntu-24.04
+              timeout-minutes: 25
+              env:
+                PYTHONPATH: ${{ github.workspace }}
+                PYTHONUTF8: '1'
+              steps:
+                - name: Checkout exact head
+                  uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+                  with:
+                    ref: ${{ github.event.pull_request.head.sha || github.sha }}
+                    fetch-depth: 0
+
+                - name: Set up Python
+                  uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+                  with:
+                    python-version: '3.12'
+
+                - name: Install Python runtime
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    python -m pip install -e .
+
+                - name: Run host adapter conformance regressions
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    python -m unittest \
+                      tests.runtime.test_host_adapter_conformance_v1 \
+                      tests.runtime.test_official_platform_adapters_v001 \
+                      tests.runtime.test_host_installation_v4 \
+                      tests.runtime.test_zero_friction_host_setup_v001 -v
+
+                - name: Generate exact-head Host Adapter Conformance certificate
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter-conformance.json
+                    python - <<'PY'
+                    import json
+                    import subprocess
+                    from pathlib import Path
+                    report = json.loads(Path('/tmp/host-adapter-conformance.json').read_text(encoding='utf-8'))
+                    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+                    assert report['ok'] is True, report
+                    assert report['claim'] == 'HOST_ADAPTER_CONFORMANCE_V1'
+                    assert report['exact_head'] == head
+                    assert report['runtime_ready'] is True
+                    assert report['canonical_host_count'] == 18
+                    assert report['canonical_alias_count'] == 18
+                    assert report['all_host_dry_run_count'] == 18
+                    assert report['fresh_repo_zero_code_smoke'] is True
+                    assert report['aider_mode'] == 'INSTRUCTION_ONLY'
+                    assert report['external_receipt_boundary'] is True
+                    assert report['internal_live_certified'] == 0
+                    assert report['python_complete_ready'] is False
+                    assert report['rust_resume_allowed'] is False
+                    assert report['rust']['production_promoted'] == 174
+                    assert report['rust']['remaining_parity_promotion'] == 71
+                    PY
+
+                - name: Enforce clean exact-head repository
+                  if: always()
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    rm -rf syntavra_runtime.egg-info
+                    git diff --check
+                    status="$(git status --porcelain --untracked-files=all)"
+                    printf '%s\n' "$status"
+                    test -z "$status"
+
+                - name: Upload Host Adapter Conformance evidence
+                  if: always()
+                  uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+                  with:
+                    name: host-adapter-conformance-${{ github.event.pull_request.head.sha || github.sha }}
+                    path: /tmp/host-adapter-conformance.json
+                    if-no-files-found: error
+          EOF
+
+      - name: Bind Release Main and immutable action policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          release = Path('.github/workflows/release-main-merge-gate.yml')
+          text = release.read_text(encoding='utf-8')
+          test_marker = '          python -m unittest tests.runtime.test_output_intelligence_v1 -v\n'
+          cert_marker = '          python tools/certify_output_intelligence_v1.py --out /tmp/output-intelligence.json\n'
+          assert text.count(test_marker) == 1, 'Release Main output test marker drifted'
+          assert text.count(cert_marker) == 1, 'Release Main output certifier marker drifted'
+          text = text.replace(test_marker, test_marker + '          python -m unittest tests.runtime.test_host_adapter_conformance_v1 -v\n', 1)
+          text = text.replace(cert_marker, cert_marker + '          python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter-conformance.json\n', 1)
+          release.write_text(text, encoding='utf-8')
+
+          pins = Path('tests/runtime/test_release_action_pins.py')
+          text = pins.read_text(encoding='utf-8')
+          marker = '    ".github/workflows/output-intelligence.yml",\n'
+          assert text.count(marker) == 1, 'immutable workflow pin marker drifted'
+          text = text.replace(marker, marker + '    ".github/workflows/host-adapter-conformance.yml",\n', 1)
+          pins.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify staging slice before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m unittest tests.runtime.test_host_adapter_conformance_v1 -v
+          python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter-conformance.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/host-adapter-conformance.json').read_text(encoding='utf-8'))
+          assert report['ok'] is True, report
+          assert report['lifecycle_state'] == 'partial', report
+          assert report['runtime_ready'] is True
+          assert report['admission_ready'] is False
+          assert report['canonical_host_count'] == 18
+          assert report['aider_mode'] == 'INSTRUCTION_ONLY'
+          PY
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+
+      - name: Commit one staging slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_HEAD"
+          git config user.name "Syntavra Admission Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            syntavra_runtime/host_adapters.py \
+            contracts/python/host-adapter-conformance-v1.json \
+            tests/runtime/test_host_adapter_conformance_v1.py \
+            tools/certify_host_adapter_conformance_v1.py \
+            .github/workflows/host-adapter-conformance.yml \
+            .github/workflows/release-main-merge-gate.yml \
+            tests/runtime/test_release_action_pins.py
+          git commit -m "Implement Host Adapter Conformance v1 staging slice"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Remove one-shot staging branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete "$TEMP_BRANCH" || true
