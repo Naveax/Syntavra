@@ -416,7 +416,7 @@
     {
       "id": "output_intelligence_v1",
       "group": "output",
-      "state": "implemented",
+      "state": "certified",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -431,7 +431,13 @@
         "tests/runtime/test_output_intelligence_v1.py",
         ".github/workflows/output-intelligence.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/output-intelligence-v1.json",
+        "syntavra_runtime/output_intelligence.py",
+        "tools/certify_output_intelligence_v1.py",
+        "tests/runtime/test_output_intelligence_v1.py",
+        ".github/workflows/output-intelligence.yml"
+      ],
       "acceptance": "Exact-recoverable bounded output intelligence with semantic preservation verification and no-worse guard."
     },
     {
