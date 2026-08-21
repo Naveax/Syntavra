@@ -18,7 +18,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/rust-feature-freeze-guard.yml",
     ".github/workflows/universal-context-item.yml",
     ".github/workflows/evidence-store-v2.yml",
-    ".github/workflows/typed-context-object-store.yml",
+    ".github/workflows/typed-context-object_store.yml",
     ".github/workflows/programmatic-execution.yml",
     ".github/workflows/deferred-tool-discovery.yml",
     ".github/workflows/adaptive-context-policy.yml",
@@ -56,14 +56,20 @@ class ReleaseActionPinContractTests(unittest.TestCase):
                 with self.subTest(workflow=relative, ref=ref):
                     self.assertIn("@", ref)
                     slug, revision = ref.rsplit("@", 1)
-                    self.assertIn(slug, PINNED_ACTIONS, f"unreviewed external action in release trust chain: {slug}")
+                    self.assertIn(
+                        slug,
+                        PINNED_ACTIONS,
+                        f"unreviewed external action in release trust chain: {slug}",
+                    )
                     self.assertRegex(revision, HEX40_RE)
                     self.assertEqual(revision, PINNED_ACTIONS[slug])
                     seen.add(slug)
         self.assertEqual(seen, set(PINNED_ACTIONS))
 
     def test_mutable_release_action_refs_are_forbidden(self) -> None:
-        forbidden = re.compile(r"(?m)^\s*-?\s*uses:\s*[^\s#]+@(v\d+(?:\.\d+)*|main|master|release/[^\s#]+)\b")
+        forbidden = re.compile(
+            r"(?m)^\s*-?\s*uses:\s*[^\s#]+@(v\d+(?:\.\d+)*|main|master|release/[^\s#]+)\b"
+        )
         for relative in TRUST_WORKFLOWS:
             text = (ROOT / relative).read_text(encoding="utf-8")
             with self.subTest(workflow=relative):
