@@ -28,6 +28,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/cache-provider-budget.yml",
     ".github/workflows/output-intelligence.yml",
     ".github/workflows/host-adapter-conformance.yml",
+    ".github/workflows/observability-attribution.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
@@ -55,20 +56,14 @@ class ReleaseActionPinContractTests(unittest.TestCase):
                 with self.subTest(workflow=relative, ref=ref):
                     self.assertIn("@", ref)
                     slug, revision = ref.rsplit("@", 1)
-                    self.assertIn(
-                        slug,
-                        PINNED_ACTIONS,
-                        f"unreviewed external action in release trust chain: {slug}",
-                    )
+                    self.assertIn(slug, PINNED_ACTIONS, f"unreviewed external action in release trust chain: {slug}")
                     self.assertRegex(revision, HEX40_RE)
                     self.assertEqual(revision, PINNED_ACTIONS[slug])
                     seen.add(slug)
         self.assertEqual(seen, set(PINNED_ACTIONS))
 
     def test_mutable_release_action_refs_are_forbidden(self) -> None:
-        forbidden = re.compile(
-            r"(?m)^\s*-?\s*uses:\s*[^\s#]+@(v\d+(?:\.\d+)*|main|master|release/[^\s#]+)\b"
-        )
+        forbidden = re.compile(r"(?m)^\s*-?\s*uses:\s*[^\s#]+@(v\d+(?:\.\d+)*|main|master|release/[^\s#]+)\b")
         for relative in TRUST_WORKFLOWS:
             text = (ROOT / relative).read_text(encoding="utf-8")
             with self.subTest(workflow=relative):
