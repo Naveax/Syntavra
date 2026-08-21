@@ -469,14 +469,35 @@
     {
       "id": "observability_attribution_v1",
       "group": "observability",
-      "state": "partial",
+      "state": "certified",
       "classification": "HARDEN",
       "required_for_python_complete": true,
       "implementation_evidence": [
+        "contracts/python/observability-attribution-v1.json",
+        "syntavra_runtime/observability_attribution.py",
+        "syntavra_runtime/runtime_evidence.py",
+        "syntavra_runtime/usage_receipt_ledger.py",
         "syntavra_runtime/token_attribution.py",
-        "syntavra_runtime/runtime_evidence.py"
+        "syntavra_runtime/cache_provider_budget.py",
+        "syntavra_runtime/signalbench_hardened.py",
+        "syntavra_runtime/observability.py",
+        "tools/certify_observability_attribution_v1.py",
+        "tests/runtime/test_observability_attribution_v1.py",
+        ".github/workflows/observability-attribution.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/observability-attribution-v1.json",
+        "syntavra_runtime/observability_attribution.py",
+        "syntavra_runtime/runtime_evidence.py",
+        "syntavra_runtime/usage_receipt_ledger.py",
+        "syntavra_runtime/token_attribution.py",
+        "syntavra_runtime/cache_provider_budget.py",
+        "syntavra_runtime/signalbench_hardened.py",
+        "syntavra_runtime/observability.py",
+        "tools/certify_observability_attribution_v1.py",
+        "tests/runtime/test_observability_attribution_v1.py",
+        ".github/workflows/observability-attribution.yml"
+      ],
       "acceptance": "Context/tool/policy decision attribution, provider usage receipts, performance budget, recovery amplification, and quality SLOs."
     },
     {
