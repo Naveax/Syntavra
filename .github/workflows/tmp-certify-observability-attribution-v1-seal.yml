@@ -1,0 +1,159 @@
+name: Temporary Certify Observability Attribution v1 Seal
+
+on:
+  push:
+    branches:
+      - automation/certify-observability-attribution-v1-seal
+
+permissions:
+  contents: write
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TARGET_BRANCH: agent/certify-observability-attribution-v1
+      TARGET_HEAD: b71f8b4dbd1a951d311b0fc5101db2f5cb8f86c4
+      PYTHONUTF8: '1'
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout helper history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Verify lifecycle target has not moved
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          actual="$(git rev-parse "origin/$TARGET_BRANCH")"
+          printf 'target=%s actual=%s\n' "$TARGET_HEAD" "$actual"
+          test "$actual" = "$TARGET_HEAD"
+
+      - name: Checkout exact lifecycle base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$TARGET_HEAD"
+          test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Certify Observability lifecycle authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('contracts/python/capability-completeness-registry-v1.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          by_id = {item['id']: item for item in data['capabilities']}
+          obs = by_id['observability_attribution_v1']
+          signalbench = by_id['signalbench_python_product_v1']
+
+          if obs['state'] != 'partial':
+              raise SystemExit(f"expected observability partial on admitted main, got {obs['state']!r}")
+          if obs['certification_evidence']:
+              raise SystemExit('observability certification evidence must be empty before lifecycle seal')
+          if signalbench['state'] != 'partial':
+              raise SystemExit(f"SignalBench must remain partial before its own pass, got {signalbench['state']!r}")
+          if data['python_complete']['ready'] is not False or data['python_complete']['rust_resume_allowed'] is not False:
+              raise SystemExit('Python COMPLETE / Rust resume boundary drifted before Observability certification')
+
+          evidence = [
+              'contracts/python/observability-attribution-v1.json',
+              'syntavra_runtime/observability_attribution.py',
+              'syntavra_runtime/runtime_evidence.py',
+              'syntavra_runtime/usage_receipt_ledger.py',
+              'syntavra_runtime/token_attribution.py',
+              'syntavra_runtime/cache_provider_budget.py',
+              'syntavra_runtime/signalbench_hardened.py',
+              'syntavra_runtime/observability.py',
+              'tools/certify_observability_attribution_v1.py',
+              'tests/runtime/test_observability_attribution_v1.py',
+              '.github/workflows/observability-attribution.yml',
+          ]
+          for relative in evidence:
+              if not Path(relative).is_file():
+                  raise SystemExit(f'missing lifecycle evidence: {relative}')
+
+          obs['state'] = 'certified'
+          obs['implementation_evidence'] = evidence
+          obs['certification_evidence'] = evidence
+
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Run focused lifecycle regressions and certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_observability_attribution_v1 -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python tools/certify_observability_attribution_v1.py --out /tmp/observability-attribution.json
+          python tools/certify_python_capability_completeness.py --out /tmp/capability-completeness.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          obs = json.loads(Path('/tmp/observability-attribution.json').read_text(encoding='utf-8'))
+          comp = json.loads(Path('/tmp/capability-completeness.json').read_text(encoding='utf-8'))
+          assert obs['ok'] is True, obs
+          assert obs['lifecycle_state'] == 'certified', obs
+          assert obs['admission_ready'] is True, obs
+          assert obs['python_complete_ready'] is False, obs
+          assert obs['rust_resume_allowed'] is False, obs
+          assert comp['ok'] is True, comp
+          assert comp['current_milestone'] == 'signalbench_python_product_v1', comp
+          assert comp['python_complete_ready'] is False, comp
+          assert comp['rust_resume_allowed'] is False, comp
+          assert 'signalbench_python_product_v1' in comp['uncertified_required'], comp
+          assert 'observability_attribution_v1' not in comp['uncertified_required'], comp
+          assert comp['rust']['production_promoted'] == 174, comp
+          assert comp['rust']['remaining_parity_promotion'] == 71, comp
+          PY
+
+      - name: Refresh and validate canonical manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python tools/validate.py
+
+      - name: Guard exact lifecycle scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          changed="$(git status --short | awk '{print $2}' | sort)"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' MANIFEST.sha256 contracts/python/capability-completeness-registry-v1.json | sort)"
+          test "$changed" = "$expected"
+          python tools/refresh_manifest.py --check
+
+      - name: Commit and push guarded lifecycle seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$TARGET_HEAD"
+          git config user.name "syntavra-ci"
+          git config user.email "syntavra-ci@users.noreply.github.com"
+          git add -- contracts/python/capability-completeness-registry-v1.json MANIFEST.sha256
+          git commit -m "Certify Observability Attribution v1 lifecycle"
+          git push origin HEAD:"$TARGET_BRANCH"
