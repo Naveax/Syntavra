@@ -1,0 +1,1 @@
+trigger signalbench v11 executor after workflow registration
