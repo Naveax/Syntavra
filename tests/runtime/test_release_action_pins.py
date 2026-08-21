@@ -18,7 +18,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/rust-feature-freeze-guard.yml",
     ".github/workflows/universal-context-item.yml",
     ".github/workflows/evidence-store-v2.yml",
-    ".github/workflows/typed-context-object_store.yml",
+    ".github/workflows/typed-context-object-store.yml",
     ".github/workflows/programmatic-execution.yml",
     ".github/workflows/deferred-tool-discovery.yml",
     ".github/workflows/adaptive-context-policy.yml",
