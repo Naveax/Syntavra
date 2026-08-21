@@ -85,6 +85,31 @@ def _repair_generated_certifier() -> None:
     path.write_text(text, encoding='utf-8')
 
 
+def _bind_external_adapter_identity() -> None:
+    path = Path('benchmarks/signalbench/adapters/external_cli.py')
+    text = path.read_text(encoding='utf-8')
+    anchor = '''    result = _load(agent_result)
+    metrics = result.get("metrics")
+'''
+    replacement = '''    result = _load(agent_result)
+    arm = request.get("arm") if isinstance(request.get("arm"), dict) else {}
+    arm_identity = {
+        "arm_id": str(arm.get("arm_id") or ""),
+        "version": str(arm.get("version") or ""),
+        "model": str(arm.get("model") or ""),
+        "reasoning": str(arm.get("reasoning") or ""),
+        "context_window": int(arm.get("context_window") or 0),
+    }
+    if not all((arm_identity["arm_id"], arm_identity["version"], arm_identity["model"], arm_identity["reasoning"])) or arm_identity["context_window"] <= 0:
+        raise ValueError("SignalBench request is missing frozen arm identity")
+    result["arm_identity"] = arm_identity
+    metrics = result.get("metrics")
+'''
+    if text.count(anchor) != 1:
+        raise RuntimeError(f'external adapter identity anchor drift: {text.count(anchor)}')
+    path.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
+
+
 def apply() -> None:
     helper_text = HELPER.read_text(encoding='utf-8')
     script = _repair_apply_script(_extract_apply_block(helper_text))
@@ -92,6 +117,7 @@ def apply() -> None:
     exec(compile(script, str(HELPER), 'exec'), namespace, namespace)
     _repair_generated_tests()
     _repair_generated_certifier()
+    _bind_external_adapter_identity()
 
     runtime = Path('syntavra_runtime/signalbench.py').read_text(encoding='utf-8')
     if 'def validate_product(self,' not in runtime:
@@ -100,6 +126,9 @@ def apply() -> None:
         raise RuntimeError('run_one still calls nonexistent SignalBenchProtocol.validate_product')
     if 'self.validate_product([task], [arm])' not in runtime:
         raise RuntimeError('run_one does not enforce product validation')
+    adapter = Path('benchmarks/signalbench/adapters/external_cli.py').read_text(encoding='utf-8')
+    if 'result["arm_identity"] = arm_identity' not in adapter:
+        raise RuntimeError('external adapter does not bind frozen arm identity')
 
 
 if __name__ == '__main__':
