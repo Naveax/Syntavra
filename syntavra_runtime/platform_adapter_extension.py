@@ -18,6 +18,12 @@ def install() -> None:
         current = host_adapters.KNOWN_HOSTS[host]
         host_adapters.KNOWN_HOSTS[host] = replace(current, config_path="")
 
+    # Aider's canonical project integration is AGENTS.md instruction injection.
+    # Keep the source host registry conservative while harmonizing the runtime
+    # capability view with the already-supported reversible installer path.
+    aider = host_adapters.KNOWN_HOSTS["aider"]
+    host_adapters.KNOWN_HOSTS["aider"] = replace(aider, supports_native_skill=True)
+
     # Generic editor executables, project directories and shared instruction files
     # do not prove that a particular Copilot host integration is installed.
     vscode = host_adapters.KNOWN_HOSTS["vscode-copilot"]

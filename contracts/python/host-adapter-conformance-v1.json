@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "family": "host-adapter-conformance",
+  "phase": "python-first",
+  "claim": "HOST_ADAPTER_CONFORMANCE_V1",
+  "strict": true,
+  "canonical_host_source": "syntavra_runtime/integration_matrix.py:HOSTS",
+  "authorities": {
+    "host_capabilities": "syntavra_runtime/host_adapters.py:KNOWN_HOSTS",
+    "runtime_harmonization": "syntavra_runtime/platform_adapter_extension.py:install",
+    "product_adapters": "syntavra_runtime/product_surface.py:PlatformAdapterRegistry",
+    "legacy_adapter_contracts": "syntavra_runtime/adapter_platform.py:ADAPTERS",
+    "adapter_lifecycle": "syntavra_runtime/adapter_runtime.py:AdapterPlatformRuntime",
+    "installation": "syntavra_runtime/host_installation.py:HostInstallationManager",
+    "zero_friction": "syntavra_runtime/zero_friction.py:ZeroFrictionManager"
+  },
+  "canonical_aliases": {
+    "claude-code": "claude-code",
+    "codex": "codex-cli",
+    "gemini-cli": "gemini-cli",
+    "vscode-copilot": "github-copilot-vscode",
+    "jetbrains-copilot": "github-copilot-jetbrains",
+    "cursor": "cursor",
+    "windsurf": "windsurf",
+    "opencode": "opencode",
+    "cline": "cline",
+    "roo-code": "roo-code",
+    "qwen-code": "qwen-code",
+    "kiro": "kiro",
+    "zed": "zed",
+    "pi": "pi",
+    "omp": "oh-my-pi",
+    "openclaw": "openclaw",
+    "aider": "aider",
+    "continue": "continue"
+  },
+  "policy": {
+    "canonical_host_count": 18,
+    "runtime_product_registry_exact_match": true,
+    "legacy_aliases_must_resolve_one_to_one": true,
+    "canonical_hosts_must_have_install_contracts": true,
+    "mcp_claim_requires_mcp_capability": true,
+    "hook_claim_requires_hook_capability": true,
+    "canonical_negotiation_must_not_be_unsupported": true,
+    "fresh_repo_zero_code_smoke_required": true,
+    "all_host_dry_run_required": true,
+    "rollback_and_path_safety_regressions_required": true,
+    "live_certification_requires_external_receipt": true,
+    "internal_registry_must_not_claim_live_certification": true,
+    "no_parallel_adapter_runtime": true,
+    "no_new_persistent_store": true,
+    "no_external_network_required": true
+  },
+  "admission": {
+    "prior_output_intelligence_must_be_certified": true,
+    "capability_registry_current_milestone": "host_adapter_conformance_v1",
+    "python_complete_must_remain_false": true,
+    "rust_resume_must_remain_false": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71
+  },
+  "claim_boundary": "This contract certifies internal cross-host adapter contract consistency, capability negotiation, reversible zero-code installation paths, fresh-repository smoke behavior, and fail-closed external certification boundaries. It does not claim that any external host/version was live-certified without an explicit external execution receipt, does not claim adoption or superiority, and does not resume Rust Remaining-71 work."
+}
