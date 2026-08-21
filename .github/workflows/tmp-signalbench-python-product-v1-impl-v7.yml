@@ -2,7 +2,7 @@ name: Temporary SignalBench Python Product v1 Implementer v7
 
 on:
   pull_request:
-    types: [synchronize]
+    types: [edited]
     branches:
       - automation/signalbench-v6-trigger-base
 
