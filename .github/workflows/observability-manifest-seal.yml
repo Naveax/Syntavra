@@ -1,0 +1,83 @@
+name: Observability Manifest Seal 162
+
+on:
+  push:
+    branches:
+      - automation/observability-manifest-seal-162
+    paths:
+      - .github/workflows/observability-manifest-seal.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: agent/observability-attribution-v1
+      TARGET_HEAD: 345f509486769d7a1af9a22a396bd3f02c38d286
+      PROVENANCE_RUN_ID: "32464257104"
+      ARTIFACT_ID: "9440133867"
+      ARTIFACT_DIGEST: sha256:06d2a47838945335240c3b032af441fb6b70cefadacab68ad06aa3d44bfcdc12
+      MANIFEST_SHA256: e830ac31cd7c21b5d8b7a09ed2852f1bda05ad8fbef2765ac74137aca612fd49
+      MANIFEST_GIT_BLOB: 0f870e2e3999dde5a8ddc2a0a74874cc6782c557
+    steps:
+      - name: Checkout helper head with authenticated remote
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify provenance and seal exact manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+
+          run_meta="$(curl --fail-with-body -sS "${auth[@]}" "$api/actions/runs/$PROVENANCE_RUN_ID")"
+          test "$(jq -r '.id' <<<"$run_meta")" = "$PROVENANCE_RUN_ID"
+          test "$(jq -r '.head_sha' <<<"$run_meta")" = "$TARGET_HEAD"
+          test "$(jq -r '.status' <<<"$run_meta")" = completed
+          test "$(jq -r '.conclusion' <<<"$run_meta")" = success
+
+          artifact_meta="$(curl --fail-with-body -sS "${auth[@]}" "$api/actions/artifacts/$ARTIFACT_ID")"
+          test "$(jq -r '.id' <<<"$artifact_meta")" = "$ARTIFACT_ID"
+          test "$(jq -r '.expired' <<<"$artifact_meta")" = false
+          test "$(jq -r '.digest' <<<"$artifact_meta")" = "$ARTIFACT_DIGEST"
+
+          curl --fail-with-body -sS -L "${auth[@]}" \
+            "$api/actions/artifacts/$ARTIFACT_ID/zip" \
+            -o /tmp/provenance.zip
+          rm -rf /tmp/provenance
+          mkdir -p /tmp/provenance
+          unzip -q /tmp/provenance.zip -d /tmp/provenance
+
+          candidate=/tmp/provenance/candidate-MANIFEST.sha256
+          test -f "$candidate"
+          test "$(sha256sum "$candidate" | awk '{print $1}')" = "$MANIFEST_SHA256"
+          test "$(git hash-object "$candidate")" = "$MANIFEST_GIT_BLOB"
+
+          git fetch origin "refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          actual_remote="$(git rev-parse "refs/remotes/origin/$TARGET_BRANCH")"
+          test "$actual_remote" = "$TARGET_HEAD"
+
+          git switch -C "$TARGET_BRANCH" "$TARGET_HEAD"
+          cp "$candidate" MANIFEST.sha256
+
+          python tools/refresh_manifest.py --check
+          git diff --check
+          test "$(git diff --name-only)" = MANIFEST.sha256
+          test -z "$(git status --porcelain --untracked-files=all | grep -v '^ M MANIFEST.sha256$' || true)"
+          test "$(git hash-object MANIFEST.sha256)" = "$MANIFEST_GIT_BLOB"
+
+          git config user.name syntavra-ci
+          git config user.email syntavra-ci@users.noreply.github.com
+          git add -- MANIFEST.sha256
+          git commit -m "Seal Observability Attribution manifest"
+          test "$(git rev-parse HEAD^)" = "$TARGET_HEAD"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
