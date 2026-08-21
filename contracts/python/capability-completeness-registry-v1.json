@@ -443,14 +443,27 @@
     {
       "id": "host_adapter_conformance_v1",
       "group": "integration",
-      "state": "partial",
+      "state": "certified",
       "classification": "CERTIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
+        "contracts/python/host-adapter-conformance-v1.json",
         "syntavra_runtime/host_adapters.py",
-        "syntavra_runtime/adapter_runtime.py"
+        "syntavra_runtime/adapter_runtime.py",
+        "syntavra_runtime/platform_adapter_extension.py",
+        "tools/certify_host_adapter_conformance_v1.py",
+        "tests/runtime/test_host_adapter_conformance_v1.py",
+        ".github/workflows/host-adapter-conformance.yml"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/host-adapter-conformance-v1.json",
+        "syntavra_runtime/host_adapters.py",
+        "syntavra_runtime/adapter_runtime.py",
+        "syntavra_runtime/platform_adapter_extension.py",
+        "tools/certify_host_adapter_conformance_v1.py",
+        "tests/runtime/test_host_adapter_conformance_v1.py",
+        ".github/workflows/host-adapter-conformance.yml"
+      ],
       "acceptance": "Cross-host adapter conformance, capability negotiation, zero-code integration paths, and clean install/fresh repo smoke."
     },
     {
