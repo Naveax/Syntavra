@@ -1,0 +1,1074 @@
+name: Temporary SignalBench Python Product v1 Implementer
+
+on:
+  push:
+    branches:
+      - automation/signalbench-python-product-v1-impl
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      TARGET_BRANCH: agent/signalbench-python-product-v1
+      TARGET_HEAD: 1b0c5b110b29164439066dc9a711c2d839369c60
+      PYTHONUTF8: '1'
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout helper history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Verify target branch has not moved
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          actual="$(git rev-parse "origin/$TARGET_BRANCH")"
+          printf 'target=%s actual=%s\n' "$TARGET_HEAD" "$actual"
+          test "$actual" = "$TARGET_HEAD"
+
+      - name: Checkout exact target base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$TARGET_HEAD"
+          test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Apply SignalBench Python product hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace_once(path: str, old: str, new: str, label: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Harden the existing runner without adding a parallel benchmark engine.
+          path = Path('syntavra_runtime/signalbench.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import os\nimport random\n', 'import os\nimport platform\nimport random\n', 1)
+          text = text.replace(
+              'from .claim_governance import bootstrap_ci\nfrom .util import atomic_write_json, canonical_json, sha256_bytes, sha256_file\n',
+              'from .claim_governance import bootstrap_ci\nfrom .signalbench_hardened import HardenedSignalBench, HardwareIdentity, UsageReceipt\nfrom .util import atomic_write_json, canonical_json, sha256_bytes, sha256_file\n',
+              1,
+          )
+          old_tail = '    provider_receipt_hash: str = ""\n\n\nTASK_FAMILIES = ('
+          new_tail = '''    provider_receipt_hash: str = ""
+    arm_version: str = ""
+    reasoning: str = ""
+    context_window: int = 0
+    hardware_hash: str = ""
+    provider_response_hash: str = ""
+    usage_receipt_hash: str = ""
+
+    def usage_receipt(self) -> UsageReceipt | None:
+        if not self.provider_observed or not self.usage_receipt_hash:
+            return None
+        return UsageReceipt(
+            task_id=self.task_id,
+            arm_id=self.arm_id,
+            repetition=self.repetition,
+            cache_mode=self.cache_mode,
+            provider=self.provider,
+            request_id_hash=self.request_id_hash,
+            provider_response_hash=self.provider_response_hash,
+            fresh_input_tokens=self.fresh_input_tokens,
+            cached_input_tokens=self.cached_input_tokens,
+            output_tokens=self.output_tokens,
+            reasoning_tokens=self.reasoning_tokens,
+            quota_cost=float(self.quota_cost or 0.0),
+            hardware_hash=self.hardware_hash,
+            receipt_hash=self.usage_receipt_hash,
+        )
+
+
+TASK_FAMILIES = ('''
+          if old_tail not in text:
+              raise SystemExit('RunResult tail anchor missing')
+          text = text.replace(old_tail, new_tail, 1)
+
+          helper_anchor = '\n\nclass SignalBenchProtocol:\n'
+          helpers = '''
+
+def _is_exact_hex(value: str, lengths: tuple[int, ...]) -> bool:
+    return len(value) in lengths and all(ch in "0123456789abcdef" for ch in value)
+
+
+def _is_placeholder(value: str) -> bool:
+    lowered = value.strip().casefold()
+    return not lowered or any(marker in lowered for marker in ("pin-", "replace-", "placeholder", "<", ">"))
+
+
+def _memory_bytes() -> int:
+    try:
+        pages = int(os.sysconf("SC_PHYS_PAGES"))
+        page_size = int(os.sysconf("SC_PAGE_SIZE"))
+        return max(0, pages * page_size)
+    except (AttributeError, OSError, TypeError, ValueError):
+        return 0
+
+
+def _current_hardware_identity() -> HardwareIdentity:
+    return HardwareIdentity(
+        os=platform.system().casefold() or os.name,
+        architecture=platform.machine().casefold() or "unknown",
+        cpu=platform.processor() or platform.machine() or "unknown",
+        logical_cores=max(1, int(os.cpu_count() or 1)),
+        memory_bytes=_memory_bytes(),
+        accelerator=os.environ.get("SIGNALBENCH_ACCELERATOR", ""),
+        runtime=f"python-{platform.python_version()}",
+    )
+'''
+          if text.count(helper_anchor) != 1:
+              raise SystemExit('SignalBenchProtocol anchor drift')
+          text = text.replace(helper_anchor, helpers + helper_anchor, 1)
+
+          old_pair = '''    @classmethod
+    def pair_identity(cls, task: TaskSpec, arm: ArmSpec, *, cache_mode: str) -> dict[str, Any]:
+        return {
+            "task_hash": cls.task_hash(task),
+            "repository_tree": task.repository_tree,
+            "model": arm.model,
+            "reasoning": arm.reasoning,
+            "context_window": arm.context_window,
+            "prompt_hash": sha256_bytes(task.prompt.encode()),
+            "verifier_hash": cls.verifier_hash(task),
+            "permissions_hash": cls.permissions_hash(task),
+            "timeout_seconds": task.timeout_seconds,
+            "cache_mode": cache_mode,
+        }
+'''
+          new_pair = '''    @classmethod
+    def pair_identity(cls, task: TaskSpec, arm: ArmSpec, *, cache_mode: str, hardware_hash: str = "") -> dict[str, Any]:
+        return {
+            "task_hash": cls.task_hash(task),
+            "repository_tree": task.repository_tree,
+            "arm_version": arm.version,
+            "model": arm.model,
+            "reasoning": arm.reasoning,
+            "context_window": arm.context_window,
+            "hardware_hash": hardware_hash,
+            "prompt_hash": sha256_bytes(task.prompt.encode()),
+            "verifier_hash": cls.verifier_hash(task),
+            "permissions_hash": cls.permissions_hash(task),
+            "timeout_seconds": task.timeout_seconds,
+            "cache_mode": cache_mode,
+        }
+'''
+          if text.count(old_pair) != 1:
+              raise SystemExit('pair_identity anchor drift')
+          text = text.replace(old_pair, new_pair, 1)
+
+          validation_anchor = '        return {"ok": not reasons, "reasons": reasons, "tasks": len(tasks), "arms": len(arms)}\n\n    @staticmethod\n    def _copy_repository'
+          validation_insert = '''        return {"ok": not reasons, "reasons": reasons, "tasks": len(tasks), "arms": len(arms)}
+
+    @staticmethod
+    def _frozen_repository_reasons(task: TaskSpec) -> list[str]:
+        reasons: list[str] = []
+        declared = str(task.repository_tree or "").casefold()
+        if not _is_exact_hex(declared, (40, 64)):
+            return ["repository-tree-not-exact"]
+        try:
+            source = Path(task.repository).resolve(strict=True)
+        except (OSError, RuntimeError):
+            return ["repository-missing"]
+        if not source.is_dir():
+            return ["repository-not-directory"]
+        try:
+            actual = subprocess.check_output(
+                ["git", "-C", str(source), "rev-parse", "HEAD^{tree}"],
+                stderr=subprocess.STDOUT,
+                text=True,
+            ).strip().casefold()
+            status = subprocess.check_output(
+                ["git", "-C", str(source), "status", "--porcelain", "--untracked-files=all"],
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return ["repository-not-git"]
+        if actual != declared:
+            reasons.append("repository-tree-mismatch")
+        if status.strip():
+            reasons.append("repository-worktree-dirty")
+        return reasons
+
+    @classmethod
+    def validate_product(cls, tasks: Iterable[TaskSpec], arms: Iterable[ArmSpec]) -> dict[str, Any]:
+        tasks = list(tasks)
+        arms = list(arms)
+        base = cls.validate(tasks, arms)
+        reasons = list(base["reasons"])
+        for task in tasks:
+            reasons.extend(f"task:{task.task_id}:{reason}" for reason in cls._frozen_repository_reasons(task))
+        for arm in arms:
+            for field, value in (("version", arm.version), ("model", arm.model), ("reasoning", arm.reasoning)):
+                if _is_placeholder(str(value)):
+                    reasons.append(f"arm:{arm.arm_id}:{field}-not-exact")
+        return {"ok": not reasons, "reasons": list(dict.fromkeys(reasons)), "tasks": len(tasks), "arms": len(arms), "frozen_product": True}
+
+    @staticmethod
+    def _copy_repository'''
+          if text.count(validation_anchor) != 1:
+              raise SystemExit('validation insertion anchor drift')
+          text = text.replace(validation_anchor, validation_insert, 1)
+
+          old_init = '''    def __init__(self, root: Path, *, seed: int = 1337):
+        self.root = root
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.seed = seed
+'''
+          new_init = '''    def __init__(self, root: Path, *, seed: int = 1337, hardware_identity: HardwareIdentity | None = None):
+        self.root = root
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.seed = seed
+        self.hardware_identity = hardware_identity or _current_hardware_identity()
+        self.hardware_hash = self.hardware_identity.digest
+'''
+          if text.count(old_init) != 1:
+              raise SystemExit('runner init anchor drift')
+          text = text.replace(old_init, new_init, 1)
+
+          text = text.replace(
+              '        reasons = [*SignalBenchProtocol.validate_task(task), *SignalBenchProtocol.validate_arm(arm)]\n',
+              '        reasons = SignalBenchProtocol.validate_product([task], [arm])["reasons"]\n',
+              1,
+          )
+          text = text.replace(
+              '        identity = SignalBenchProtocol.pair_identity(task, arm, cache_mode=cache_mode)\n',
+              '        identity = SignalBenchProtocol.pair_identity(task, arm, cache_mode=cache_mode, hardware_hash=self.hardware_hash)\n',
+              1,
+          )
+
+          provider_start = text.index('        raw_metrics = arm_result.get("metrics", {})', text.index('    def run_one('))
+          result_write = text.index('        atomic_write_json(artifact_dir / "result.json"', provider_start)
+          provider_block = '''        raw_metrics = arm_result.get("metrics", {}) if isinstance(arm_result.get("metrics", {}), dict) else {}
+        provider_receipt = arm_result.get("provider_receipt") if isinstance(arm_result.get("provider_receipt"), dict) else {}
+        expected_arm_identity = {
+            "arm_id": arm.arm_id,
+            "version": arm.version,
+            "model": arm.model,
+            "reasoning": arm.reasoning,
+            "context_window": arm.context_window,
+        }
+        arm_identity = arm_result.get("arm_identity") if isinstance(arm_result.get("arm_identity"), dict) else {}
+        arm_identity_matches = arm_identity == expected_arm_identity
+        provider_response_hash = str(provider_receipt.get("response_hash") or "").casefold()
+        request_id = str(provider_receipt.get("request_id") or "")
+        request_id_hash = sha256_bytes(request_id.encode()) if request_id else ""
+        try:
+            fresh_input_tokens = int(raw_metrics.get("fresh_input_tokens", 0))
+            cached_input_tokens = int(raw_metrics.get("cached_input_tokens", 0))
+            output_tokens = int(raw_metrics.get("output_tokens", 0))
+            provider_reasoning_tokens = int(raw_metrics.get("reasoning_tokens", 0))
+            quota_cost = float(raw_metrics["quota_cost"]) if raw_metrics.get("quota_cost") is not None else None
+        except (TypeError, ValueError, OverflowError):
+            fresh_input_tokens = cached_input_tokens = output_tokens = provider_reasoning_tokens = 0
+            quota_cost = None
+        usage_values_valid = all(value >= 0 for value in (fresh_input_tokens, cached_input_tokens, output_tokens, provider_reasoning_tokens))
+        provider_observed = bool(
+            provider_receipt.get("provider")
+            and str(provider_receipt.get("model") or "") == arm.model
+            and request_id
+            and _is_exact_hex(provider_response_hash, (64,))
+            and quota_cost is not None and quota_cost > 0
+            and usage_values_valid
+            and arm_identity_matches
+        )
+        if not arm_identity_matches:
+            error = error or "arm-identity-mismatch"
+        elif str(provider_receipt.get("model") or "") != arm.model:
+            error = error or "provider-model-mismatch"
+        elif provider_response_hash and not _is_exact_hex(provider_response_hash, (64,)):
+            error = error or "provider-response-hash-invalid"
+        elif not usage_values_valid:
+            error = error or "negative-provider-usage"
+        elif not provider_observed:
+            error = error or "missing-provider-observed-receipt"
+        success = exit_code == 0 and verifier_success and bool(arm_result.get("success", True)) and provider_observed
+        verified_work = task.expected_work if success else 0.0
+        sealed_usage = None
+        if provider_observed and quota_cost is not None:
+            sealed_usage = UsageReceipt.seal(
+                task_id=task.task_id,
+                arm_id=arm.arm_id,
+                repetition=repetition,
+                cache_mode=cache_mode,
+                provider=str(provider_receipt.get("provider") or ""),
+                request_id_hash=request_id_hash,
+                provider_response_hash=provider_response_hash,
+                fresh_input_tokens=fresh_input_tokens,
+                cached_input_tokens=cached_input_tokens,
+                output_tokens=output_tokens,
+                reasoning_tokens=provider_reasoning_tokens,
+                quota_cost=quota_cost,
+                hardware_hash=self.hardware_hash,
+            )
+        result = RunResult(
+            run_id=run_id,
+            task_id=task.task_id,
+            arm_id=arm.arm_id,
+            repetition=repetition,
+            success=success,
+            verifier_success=verifier_success,
+            verified_work=verified_work,
+            wall_seconds=wall,
+            exit_code=exit_code,
+            fresh_input_tokens=fresh_input_tokens,
+            cached_input_tokens=cached_input_tokens,
+            output_tokens=output_tokens,
+            reasoning_tokens=provider_reasoning_tokens,
+            quota_cost=quota_cost,
+            model_turns=int(raw_metrics.get("model_turns", 0)),
+            tool_calls=int(raw_metrics.get("tool_calls", 0)),
+            wait_calls=int(raw_metrics.get("wait_calls", 0)),
+            compactions=int(raw_metrics.get("compactions", 0)),
+            security_regressions=int(raw_metrics.get("security_regressions", 0)),
+            verifier_skips=int(raw_metrics.get("verifier_skips", 0)),
+            repository_tree=task.repository_tree,
+            prompt_hash=identity["prompt_hash"],
+            verifier_hash=identity["verifier_hash"],
+            permissions_hash=identity["permissions_hash"],
+            cache_mode=cache_mode,
+            artifact_dir=str(artifact_dir),
+            error=error,
+            provider_observed=provider_observed,
+            provider=str(provider_receipt.get("provider") or ""),
+            model=arm.model,
+            request_id_hash=request_id_hash,
+            provider_receipt_hash=sha256_bytes(canonical_json(provider_receipt)) if provider_receipt else "",
+            arm_version=arm.version,
+            reasoning=arm.reasoning,
+            context_window=arm.context_window,
+            hardware_hash=self.hardware_hash,
+            provider_response_hash=provider_response_hash,
+            usage_receipt_hash=sealed_usage.receipt_hash if sealed_usage else "",
+        )
+'''
+          text = text[:provider_start] + provider_block + text[result_write:]
+
+          text = text.replace('        validation = self.validate(tasks, arms)\n', '        validation = self.validate_product(tasks, arms)\n', 1)
+          text = text.replace(
+              '            "seed": self.seed,\n            "results": [asdict(result) for result in results],\n',
+              '            "seed": self.seed,\n            "hardware": {**asdict(self.hardware_identity), "digest": self.hardware_hash},\n            "results": [asdict(result) for result in results],\n',
+              1,
+          )
+
+          compare_start = text.index('    @staticmethod\n    def compare(', text.index('class SignalBenchRunner'))
+          compare_end = text.index('\n\n\ndef load_results', compare_start)
+          compare_method = '''    @staticmethod
+    def compare(results: Iterable[RunResult], *, baseline_arm: str, candidate_arm: str) -> dict[str, Any]:
+        rows = list(results)
+        receipts = [receipt for row in rows if (receipt := row.usage_receipt()) is not None]
+        result = HardenedSignalBench.compare(
+            rows,
+            baseline_arm=baseline_arm,
+            candidate_arm=candidate_arm,
+            receipts=receipts,
+            minimum_pairs=10,
+            require_receipts=True,
+        )
+        keyed = {(row.task_id, row.repetition, row.cache_mode, row.arm_id): row for row in rows}
+        pair_keys = sorted({(task, repetition, cache) for task, repetition, cache, arm in keyed if arm == baseline_arm})
+        observed = sum(
+            1 for task, repetition, cache in pair_keys
+            if (base := keyed.get((task, repetition, cache, baseline_arm))) is not None
+            and (candidate := keyed.get((task, repetition, cache, candidate_arm))) is not None
+            and base.provider_observed and candidate.provider_observed
+        )
+        result["valid_pairs"] = result["successful_equal_work_pairs"]
+        result["invalid_pairs"] = result["invalid"]
+        result["provider_observed_pairs"] = observed
+        result["provider_unobserved_pairs"] = max(0, result["matched_pairs"] - observed)
+        result["median_efficiency_ratio"] = result["median_success_pair_ratio"]
+        result["comparison_authority"] = "HardenedSignalBench.compare"
+        return result
+'''
+          text = text[:compare_start] + compare_method + text[compare_end:]
+          path.write_text(text, encoding='utf-8')
+
+          # Strengthen the canonical comparator's row/receipt identity binding.
+          path = Path('syntavra_runtime/signalbench_hardened.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              '    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "model", "reasoning", "context_window", "hardware_hash")\n',
+              '    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "provider", "model", "reasoning", "context_window", "hardware_hash")\n',
+              1,
+          )
+          old_mismatch = '            mismatched = [field for field in cls.identity_fields if cls._value(base, field) is None or cls._value(base, field) != cls._value(candidate, field)]\n'
+          new_mismatch = '''            mismatched = []
+            for field in cls.identity_fields:
+                base_value = cls._value(base, field)
+                candidate_value = cls._value(candidate, field)
+                missing = base_value is None or candidate_value is None or base_value == "" or candidate_value == ""
+                if field == "context_window":
+                    try:
+                        missing = missing or int(base_value) <= 0 or int(candidate_value) <= 0
+                    except (TypeError, ValueError):
+                        missing = True
+                if missing or base_value != candidate_value:
+                    mismatched.append(field)
+            for row, label in ((base, baseline_arm), (candidate, candidate_arm)):
+                if not str(cls._value(row, "arm_version", "")):
+                    mismatched.append(f"arm_version:{label}")
+'''
+          if text.count(old_mismatch) != 1:
+              raise SystemExit('hardened identity anchor drift')
+          text = text.replace(old_mismatch, new_mismatch, 1)
+          old_receipt = '''                if receipt is not None:
+                    reasons = receipt.validate()
+                    if cls._value(row, "hardware_hash") != receipt.hardware_hash: reasons.append("receipt-hardware-mismatch")
+                    if reasons: receipt_errors.append({"task": task_id, "arm": arm, "repetition": repetition, "cache": cache_mode, "reasons": reasons})
+                    else: quota = receipt.quota_cost
+'''
+          new_receipt = '''                if receipt is not None:
+                    reasons = receipt.validate()
+                    row_bindings = {
+                        "provider": receipt.provider,
+                        "request_id_hash": receipt.request_id_hash,
+                        "provider_response_hash": receipt.provider_response_hash,
+                        "hardware_hash": receipt.hardware_hash,
+                        "fresh_input_tokens": receipt.fresh_input_tokens,
+                        "cached_input_tokens": receipt.cached_input_tokens,
+                        "output_tokens": receipt.output_tokens,
+                        "reasoning_tokens": receipt.reasoning_tokens,
+                    }
+                    for field, expected in row_bindings.items():
+                        if cls._value(row, field) != expected:
+                            reasons.append(f"receipt-row-mismatch:{field}")
+                    try:
+                        if float(cls._value(row, "quota_cost")) != float(receipt.quota_cost):
+                            reasons.append("receipt-row-mismatch:quota_cost")
+                    except (TypeError, ValueError):
+                        reasons.append("receipt-row-mismatch:quota_cost")
+                    if reasons: receipt_errors.append({"task": task_id, "arm": arm, "repetition": repetition, "cache": cache_mode, "reasons": list(dict.fromkeys(reasons))})
+                    else: quota = receipt.quota_cost
+'''
+          if text.count(old_receipt) != 1:
+              raise SystemExit('hardened receipt anchor drift')
+          text = text.replace(old_receipt, new_receipt, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Make the existing public validate route enforce product-grade frozen identities.
+          replace_once(
+              'syntavra_runtime/cli.py',
+              '        result = runner.validate(runner.load_tasks(Path(args.tasks)), runner.load_arms(Path(args.arms)))\n',
+              '        result = runner.validate_product(runner.load_tasks(Path(args.tasks)), runner.load_arms(Path(args.arms)))\n',
+              'signalbench CLI product validation',
+          )
+
+          contract = {
+              "schema_version": 1,
+              "family": "signalbench-python-product",
+              "phase": "python-first",
+              "claim": "SIGNALBENCH_PYTHON_PRODUCT_V1",
+              "strict": True,
+              "runtime": {
+                  "runner": "syntavra_runtime/signalbench.py:SignalBenchRunner",
+                  "comparison_authority": "syntavra_runtime/signalbench_hardened.py:HardenedSignalBench",
+                  "external_adapter": "benchmarks/signalbench/adapters/external_cli.py",
+                  "benchmark_proof_authority": "contracts/python/benchmark-proof-reference-v1.json"
+              },
+              "frozen_identity": {
+                  "repository_git_tree_must_match": True,
+                  "repository_worktree_must_be_clean": True,
+                  "exact_product_version_required": True,
+                  "exact_model_required": True,
+                  "exact_reasoning_required": True,
+                  "context_window_bound": True,
+                  "hardware_identity_bound": True,
+                  "provider_identity_bound": True,
+                  "prompt_verifier_permissions_cache_bound": True,
+                  "template_placeholders_fail_closed": True
+              },
+              "measurement": {
+                  "provider_observed_usage_required": True,
+                  "sealed_usage_receipts_required": True,
+                  "failure_inclusive": True,
+                  "primary_metric": "verified_work_per_provider_quota",
+                  "minimum_paired_samples_for_superiority": 10,
+                  "confidence_interval": 0.95,
+                  "candidate_pass_rate_must_not_regress": True,
+                  "security_regressions_allowed": 0,
+                  "verifier_skips_allowed": 0
+              },
+              "ownership_policy": {
+                  "parallel_benchmark_engine_forbidden": True,
+                  "existing_signalbench_runner_reused": True,
+                  "existing_hardened_comparator_reused": True,
+                  "existing_benchmark_proof_authority_reused": True,
+                  "new_public_cli_route_added": False
+              },
+              "admission": {
+                  "observability_attribution_must_be_certified": True,
+                  "capability_registry_current_milestone": "signalbench_python_product_v1",
+                  "python_complete_must_remain_false_during_implementation": True,
+                  "rust_resume_must_remain_false": True,
+                  "rust_production_promoted": 174,
+                  "rust_remaining_parity_promotion": 71
+              },
+              "claim_boundary": "This contract certifies the repository-internal SignalBench Python product machinery: frozen task/arm identity, clean exact Git-tree execution, provider-observed sealed usage receipts, failure-inclusive hardened paired comparison, and fail-closed quality/safety gates. Repository self-certification does not prove live external superiority, adoption, marketplace maturity, provider billing truth beyond supplied receipts, Python COMPLETE, or Rust Remaining-71 promotion."
+          }
+          Path('contracts/python/signalbench-python-product-v1.json').write_text(json.dumps(contract, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          test_text = r'''from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from dataclasses import asdict
+from pathlib import Path
+
+from syntavra_runtime.signalbench import ArmSpec, RunResult, SignalBenchProtocol, SignalBenchRunner, TaskSpec
+from syntavra_runtime.signalbench_hardened import HardwareIdentity, UsageReceipt
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+class SignalBenchPythonProductV1Tests(unittest.TestCase):
+    def _repo(self, root: Path) -> tuple[Path, str]:
+        repo = root / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.email", "signalbench@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.name", "SignalBench Fixture"], check=True)
+        (repo / "fixture.txt").write_text("fixture\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "--", "fixture.txt"], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "fixture"], check=True)
+        tree = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
+        return repo, tree
+
+    @staticmethod
+    def _arm(arm_id: str, version: str = "1.2.3") -> ArmSpec:
+        return ArmSpec(arm_id, "host", (sys.executable, "adapter.py"), version, "fixture-model", "high", 200000)
+
+    def test_contract_and_enforcement_surfaces_exist(self) -> None:
+        contract = json.loads((ROOT / "contracts/python/signalbench-python-product-v1.json").read_text(encoding="utf-8"))
+        self.assertEqual(contract["claim"], "SIGNALBENCH_PYTHON_PRODUCT_V1")
+        self.assertTrue(contract["frozen_identity"]["repository_git_tree_must_match"])
+        self.assertTrue(contract["measurement"]["sealed_usage_receipts_required"])
+        self.assertFalse(contract["ownership_policy"]["new_public_cli_route_added"])
+        self.assertIn("external superiority", contract["claim_boundary"])
+
+    def test_product_validation_rejects_templates(self) -> None:
+        task = TaskSpec("t", "known-edit", "fix", "/tmp/missing", "pin-exact-git-tree-sha", (sys.executable, "-c", "pass"))
+        arms = [self._arm("base", "pin-exact-version"), self._arm("candidate")]
+        report = SignalBenchProtocol.validate_product([task], arms)
+        self.assertFalse(report["ok"])
+        joined = " ".join(report["reasons"])
+        self.assertIn("repository-tree-not-exact", joined)
+        self.assertIn("version-not-exact", joined)
+
+    def test_exact_tree_and_clean_worktree_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo, tree = self._repo(Path(temp))
+            task = TaskSpec("t", "known-edit", "fix", str(repo), tree, (sys.executable, "-c", "pass"))
+            arms = [self._arm("base"), self._arm("candidate")]
+            self.assertTrue(SignalBenchProtocol.validate_product([task], arms)["ok"])
+            mismatch = TaskSpec(**{**asdict(task), "repository_tree": "0" * len(tree)})
+            self.assertIn("task:t:repository-tree-mismatch", SignalBenchProtocol.validate_product([mismatch], arms)["reasons"])
+            (repo / "dirty.txt").write_text("dirty", encoding="utf-8")
+            self.assertIn("task:t:repository-worktree-dirty", SignalBenchProtocol.validate_product([task], arms)["reasons"])
+
+    @staticmethod
+    def _result(arm: str, repetition: int, quota: float, receipt_hash: str = "") -> RunResult:
+        values = dict(
+            run_id=f"{arm}-{repetition}", task_id="task", arm_id=arm, repetition=repetition,
+            success=True, verifier_success=True, verified_work=1.0, wall_seconds=1.0, exit_code=0,
+            fresh_input_tokens=100, cached_input_tokens=20, output_tokens=10, reasoning_tokens=5,
+            quota_cost=quota, model_turns=1, tool_calls=1, wait_calls=0, compactions=0,
+            security_regressions=0, verifier_skips=0, repository_tree="a" * 40,
+            prompt_hash="b" * 64, verifier_hash="c" * 64, permissions_hash="d" * 64,
+            cache_mode="cold", artifact_dir="artifact", provider_observed=True, provider="openai",
+            model="fixture-model", request_id_hash=("e" if arm == "base" else "f") * 64,
+            provider_receipt_hash="1" * 64, arm_version="1.2.3" if arm == "base" else "4.5.6",
+            reasoning="high", context_window=200000, hardware_hash="2" * 64,
+            provider_response_hash=("3" if arm == "base" else "4") * 64,
+            usage_receipt_hash=receipt_hash,
+        )
+        provisional = RunResult(**values)
+        receipt = UsageReceipt.seal(
+            task_id=provisional.task_id, arm_id=provisional.arm_id, repetition=provisional.repetition,
+            cache_mode=provisional.cache_mode, provider=provisional.provider,
+            request_id_hash=provisional.request_id_hash, provider_response_hash=provisional.provider_response_hash,
+            fresh_input_tokens=provisional.fresh_input_tokens, cached_input_tokens=provisional.cached_input_tokens,
+            output_tokens=provisional.output_tokens, reasoning_tokens=provisional.reasoning_tokens,
+            quota_cost=float(provisional.quota_cost), hardware_hash=provisional.hardware_hash,
+        )
+        return RunResult(**{**values, "usage_receipt_hash": receipt.receipt_hash})
+
+    def test_public_compare_uses_hardened_receipt_authority(self) -> None:
+        rows = []
+        for repetition in range(1, 11):
+            rows.extend([self._result("base", repetition, 10.0), self._result("candidate", repetition, 1.0)])
+        result = SignalBenchRunner.compare(rows, baseline_arm="base", candidate_arm="candidate")
+        self.assertTrue(result["claimable_superiority"])
+        self.assertEqual(result["comparison_authority"], "HardenedSignalBench.compare")
+        self.assertEqual(result["valid_pairs"], 10)
+        self.assertFalse(result["identity_mismatches"])
+        self.assertFalse(result["receipt_errors"])
+
+    def test_identity_drift_and_receipt_tampering_fail_closed(self) -> None:
+        rows = []
+        for repetition in range(1, 11):
+            rows.extend([self._result("base", repetition, 10.0), self._result("candidate", repetition, 1.0)])
+        bad_identity = RunResult(**{**asdict(rows[-1]), "hardware_hash": "9" * 64})
+        identity_rows = rows[:-1] + [bad_identity]
+        identity = SignalBenchRunner.compare(identity_rows, baseline_arm="base", candidate_arm="candidate")
+        self.assertFalse(identity["claimable_superiority"])
+        self.assertTrue(identity["identity_mismatches"])
+        tampered = RunResult(**{**asdict(rows[-1]), "quota_cost": 0.5})
+        tampered_rows = rows[:-1] + [tampered]
+        receipt = SignalBenchRunner.compare(tampered_rows, baseline_arm="base", candidate_arm="candidate")
+        self.assertFalse(receipt["claimable_superiority"])
+        self.assertTrue(receipt["receipt_errors"])
+
+    def test_legacy_fixture_validate_remains_available_but_product_validate_is_strict(self) -> None:
+        task = TaskSpec("t", "known-edit", "fix", "/tmp/missing", "tree", (sys.executable, "-c", "pass"))
+        arms = [self._arm("base"), self._arm("candidate")]
+        self.assertTrue(SignalBenchProtocol.validate([task], arms)["ok"])
+        self.assertFalse(SignalBenchProtocol.validate_product([task], arms)["ok"])
+
+    def test_public_cli_validate_route_is_product_grade_without_new_route(self) -> None:
+        cli = (ROOT / "syntavra_runtime/cli.py").read_text(encoding="utf-8")
+        self.assertIn("runner.validate_product", cli)
+        self.assertIn('sub.add_parser("signalbench")', cli)
+        self.assertNotIn('sub.add_parser("signalbench-product")', cli)
+
+
+if __name__ == "__main__":
+    unittest.main()
+'''
+          Path('tests/runtime/test_signalbench_python_product_v1.py').write_text(test_text, encoding='utf-8')
+
+          certifier = r'''#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import tempfile
+import traceback
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from syntavra_runtime.signalbench import ArmSpec, RunResult, SignalBenchProtocol, SignalBenchRunner, TaskSpec
+from syntavra_runtime.signalbench_hardened import UsageReceipt
+
+CONTRACT = Path("contracts/python/signalbench-python-product-v1.json")
+REGISTRY = Path("contracts/python/capability-completeness-registry-v1.json")
+WORKFLOW = Path(".github/workflows/signalbench-python-product.yml")
+RELEASE_GATE = Path(".github/workflows/release-main-merge-gate.yml")
+PIN_POLICY = Path("tests/runtime/test_release_action_pins.py")
+
+
+def require(value: bool, message: str) -> None:
+    if not value:
+        raise AssertionError(message)
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    require(isinstance(value, dict), f"expected JSON object: {path}")
+    return value
+
+
+def fixture_result(arm: str, repetition: int, quota: float) -> RunResult:
+    values = dict(
+        run_id=f"{arm}-{repetition}", task_id="certify-task", arm_id=arm, repetition=repetition,
+        success=True, verifier_success=True, verified_work=1.0, wall_seconds=1.0, exit_code=0,
+        fresh_input_tokens=100, cached_input_tokens=20, output_tokens=10, reasoning_tokens=5,
+        quota_cost=quota, model_turns=1, tool_calls=1, wait_calls=0, compactions=0,
+        security_regressions=0, verifier_skips=0, repository_tree="a" * 40,
+        prompt_hash="b" * 64, verifier_hash="c" * 64, permissions_hash="d" * 64,
+        cache_mode="cold", artifact_dir="artifact", provider_observed=True, provider="openai",
+        model="fixture-model", request_id_hash=("e" if arm == "base" else "f") * 64,
+        provider_receipt_hash="1" * 64, arm_version="1.2.3" if arm == "base" else "4.5.6",
+        reasoning="high", context_window=200000, hardware_hash="2" * 64,
+        provider_response_hash=("3" if arm == "base" else "4") * 64, usage_receipt_hash="",
+    )
+    receipt = UsageReceipt.seal(
+        task_id=values["task_id"], arm_id=values["arm_id"], repetition=values["repetition"],
+        cache_mode=values["cache_mode"], provider=values["provider"], request_id_hash=values["request_id_hash"],
+        provider_response_hash=values["provider_response_hash"], fresh_input_tokens=values["fresh_input_tokens"],
+        cached_input_tokens=values["cached_input_tokens"], output_tokens=values["output_tokens"],
+        reasoning_tokens=values["reasoning_tokens"], quota_cost=quota, hardware_hash=values["hardware_hash"],
+    )
+    return RunResult(**{**values, "usage_receipt_hash": receipt.receipt_hash})
+
+
+def certify(repo: Path) -> dict[str, Any]:
+    repo = repo.resolve()
+    require(repo == ROOT, "SignalBench product certifier must run against its own checkout")
+    contract = read_json(repo / CONTRACT)
+    require(contract.get("schema_version") == 1, "SignalBench product schema drift")
+    require(contract.get("family") == "signalbench-python-product", "SignalBench product family drift")
+    require(contract.get("claim") == "SIGNALBENCH_PYTHON_PRODUCT_V1", "SignalBench product claim drift")
+    require(contract.get("strict") is True, "SignalBench product must remain strict")
+    frozen = contract.get("frozen_identity") or {}
+    for key in (
+        "repository_git_tree_must_match", "repository_worktree_must_be_clean", "exact_product_version_required",
+        "exact_model_required", "exact_reasoning_required", "context_window_bound", "hardware_identity_bound",
+        "provider_identity_bound", "prompt_verifier_permissions_cache_bound", "template_placeholders_fail_closed",
+    ):
+        require(frozen.get(key) is True, f"SignalBench frozen identity disabled: {key}")
+    measurement = contract.get("measurement") or {}
+    require(measurement.get("provider_observed_usage_required") is True, "provider observed usage gate disabled")
+    require(measurement.get("sealed_usage_receipts_required") is True, "usage receipt gate disabled")
+    require(measurement.get("failure_inclusive") is True, "failure-inclusive metric disabled")
+    require(measurement.get("minimum_paired_samples_for_superiority") >= 10, "paired sample floor weakened")
+    require(measurement.get("security_regressions_allowed") == 0, "security regression gate weakened")
+    require(measurement.get("verifier_skips_allowed") == 0, "verifier skip gate weakened")
+
+    with tempfile.TemporaryDirectory(prefix="syntavra-signalbench-product-") as temp:
+        root = Path(temp)
+        project = root / "repo"
+        project.mkdir()
+        subprocess.run(["git", "init", "-q", str(project)], check=True)
+        subprocess.run(["git", "-C", str(project), "config", "user.email", "signalbench@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(project), "config", "user.name", "SignalBench Fixture"], check=True)
+        (project / "fixture.txt").write_text("fixture\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(project), "add", "--", "fixture.txt"], check=True)
+        subprocess.run(["git", "-C", str(project), "commit", "-q", "-m", "fixture"], check=True)
+        tree = subprocess.check_output(["git", "-C", str(project), "rev-parse", "HEAD^{tree}"], text=True).strip()
+        task = TaskSpec("certify-task", "known-edit", "fix", str(project), tree, (sys.executable, "-c", "pass"))
+        arms = [
+            ArmSpec("base", "host", (sys.executable, "adapter.py"), "1.2.3", "fixture-model", "high", 200000),
+            ArmSpec("candidate", "host", (sys.executable, "adapter.py"), "4.5.6", "fixture-model", "high", 200000),
+        ]
+        frozen_report = SignalBenchProtocol.validate_product([task], arms)
+        require(frozen_report["ok"] is True, f"valid frozen product rejected: {frozen_report}")
+        wrong_tree = TaskSpec(**{**asdict(task), "repository_tree": "0" * len(tree)})
+        require("task:certify-task:repository-tree-mismatch" in SignalBenchProtocol.validate_product([wrong_tree], arms)["reasons"], "tree mismatch did not fail closed")
+        placeholder = ArmSpec("base", "host", (sys.executable, "adapter.py"), "pin-exact-version", "fixture-model", "high", 200000)
+        require(any("version-not-exact" in item for item in SignalBenchProtocol.validate_product([task], [placeholder, arms[1]])["reasons"]), "placeholder version did not fail closed")
+
+    rows = []
+    for repetition in range(1, 11):
+        rows.extend([fixture_result("base", repetition, 10.0), fixture_result("candidate", repetition, 1.0)])
+    comparison = SignalBenchRunner.compare(rows, baseline_arm="base", candidate_arm="candidate")
+    require(comparison.get("claimable_superiority") is True, f"valid hardened fixture did not pass: {comparison}")
+    require(comparison.get("comparison_authority") == "HardenedSignalBench.compare", "legacy compare authority still active")
+    tampered = RunResult(**{**asdict(rows[-1]), "quota_cost": 0.5})
+    tamper_report = SignalBenchRunner.compare(rows[:-1] + [tampered], baseline_arm="base", candidate_arm="candidate")
+    require(tamper_report.get("claimable_superiority") is False and tamper_report.get("receipt_errors"), "receipt tampering did not fail closed")
+
+    for relative in (WORKFLOW, RELEASE_GATE, PIN_POLICY):
+        require((repo / relative).is_file(), f"missing SignalBench enforcement surface: {relative}")
+    workflow = (repo / WORKFLOW).read_text(encoding="utf-8")
+    require("tests.runtime.test_signalbench_python_product_v1" in workflow, "SignalBench workflow lost regression suite")
+    require("tools/certify_signalbench_python_product_v1.py" in workflow, "SignalBench workflow lost certifier")
+    for pin in (
+        "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+        "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+        "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+    ):
+        require(pin in workflow, f"SignalBench workflow pin drift: {pin}")
+    release = (repo / RELEASE_GATE).read_text(encoding="utf-8")
+    require("tests.runtime.test_signalbench_python_product_v1" in release, "Release Main lost SignalBench regression")
+    require("tools/certify_signalbench_python_product_v1.py" in release, "Release Main lost SignalBench certifier")
+    pins = (repo / PIN_POLICY).read_text(encoding="utf-8")
+    require('".github/workflows/signalbench-python-product.yml"' in pins, "immutable pin policy lost SignalBench workflow")
+    cli = (repo / "syntavra_runtime/cli.py").read_text(encoding="utf-8")
+    require("runner.validate_product" in cli, "public SignalBench validate route is not product-grade")
+
+    registry = read_json(repo / REGISTRY)
+    by_id = {item["id"]: item for item in registry["capabilities"]}
+    require(by_id["observability_attribution_v1"]["state"] == "certified", "Observability Attribution must be certified first")
+    lifecycle_state = by_id["signalbench_python_product_v1"]["state"]
+    require(lifecycle_state in {"partial", "implemented", "verified", "certified"}, "invalid SignalBench lifecycle state")
+    require(registry["python_complete"]["ready"] is False, "implementation pass cannot claim Python COMPLETE")
+    require(registry["python_complete"]["rust_resume_allowed"] is False, "implementation pass cannot resume Rust")
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    return {
+        "ok": True,
+        "schema_version": 1,
+        "claim": "SIGNALBENCH_PYTHON_PRODUCT_V1",
+        "exact_head": head,
+        "runtime_ready": True,
+        "lifecycle_state": lifecycle_state,
+        "admission_ready": lifecycle_state in {"implemented", "verified", "certified"},
+        "frozen_repository_identity": True,
+        "exact_arm_identity": True,
+        "provider_observed_usage": True,
+        "sealed_usage_receipts": True,
+        "hardened_comparison_authority": True,
+        "failure_inclusive": True,
+        "external_superiority_proven": False,
+        "python_complete_ready": False,
+        "rust_resume_allowed": False,
+        "rust": {"production_promoted": 174, "remaining_parity_promotion": 71, "feature_development_frozen": True},
+        "claim_boundary": contract["claim_boundary"],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Certify Syntavra SignalBench Python Product v1")
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--out")
+    args = parser.parse_args()
+    try:
+        report = certify(Path(args.repo))
+    except Exception as exc:
+        report = {"ok": False, "schema_version": 1, "claim": "SIGNALBENCH_PYTHON_PRODUCT_V1", "error": f"{type(exc).__name__}: {exc}", "traceback": traceback.format_exc()}
+    payload = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    if args.out:
+        output = Path(args.out)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(payload, encoding="utf-8")
+    print(payload, end="")
+    return 0 if report.get("ok") is True else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+          Path('tools/certify_signalbench_python_product_v1.py').write_text(certifier, encoding='utf-8')
+
+          workflow = '''name: SignalBench Python Product
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signalbench-python-product-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signalbench-python-product:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Run SignalBench Python product regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v
+          python -m unittest tests.runtime.test_runtime_v03_unified.RuntimeV03UnifiedTests.test_signalbench_protocol_and_fail_closed_compare -v
+
+      - name: Generate exact-head SignalBench Python product certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          report = json.loads(Path('/tmp/signalbench-python-product.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ok'] is True, report
+          assert report['claim'] == 'SIGNALBENCH_PYTHON_PRODUCT_V1'
+          assert report['exact_head'] == head
+          assert report['runtime_ready'] is True
+          assert report['frozen_repository_identity'] is True
+          assert report['exact_arm_identity'] is True
+          assert report['provider_observed_usage'] is True
+          assert report['sealed_usage_receipts'] is True
+          assert report['hardened_comparison_authority'] is True
+          assert report['external_superiority_proven'] is False
+          assert report['python_complete_ready'] is False
+          assert report['rust_resume_allowed'] is False
+          assert report['rust']['production_promoted'] == 174
+          assert report['rust']['remaining_parity_promotion'] == 71
+          PY
+
+      - name: Enforce clean exact-head repository
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload SignalBench Python product evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signalbench-python-product-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/signalbench-python-product.json
+          if-no-files-found: error
+'''
+          Path('.github/workflows/signalbench-python-product.yml').write_text(workflow, encoding='utf-8')
+
+          # Bind the new certifier to Release Main and immutable action-pin trust.
+          replace_once(
+              '.github/workflows/release-main-merge-gate.yml',
+              '          python -m unittest tests.runtime.test_observability_attribution_v1 -v\n',
+              '          python -m unittest tests.runtime.test_observability_attribution_v1 -v\n          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v\n',
+              'Release Main SignalBench regression binding',
+          )
+          replace_once(
+              '.github/workflows/release-main-merge-gate.yml',
+              '          python tools/certify_observability_attribution_v1.py --out /tmp/observability-attribution.json\n',
+              '          python tools/certify_observability_attribution_v1.py --out /tmp/observability-attribution.json\n          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json\n',
+              'Release Main SignalBench certifier binding',
+          )
+          replace_once(
+              'tests/runtime/test_release_action_pins.py',
+              '    ".github/workflows/observability-attribution.yml",\n',
+              '    ".github/workflows/observability-attribution.yml",\n    ".github/workflows/signalbench-python-product.yml",\n',
+              'SignalBench immutable pin binding',
+          )
+
+          registry_path = Path('contracts/python/capability-completeness-registry-v1.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          by_id = {item['id']: item for item in registry['capabilities']}
+          signalbench = by_id['signalbench_python_product_v1']
+          if signalbench['state'] != 'partial' or signalbench['certification_evidence']:
+              raise SystemExit(f'unexpected SignalBench lifecycle pre-state: {signalbench}')
+          signalbench['implementation_evidence'] = [
+              'contracts/python/signalbench-python-product-v1.json',
+              'contracts/python/benchmark-proof-reference-v1.json',
+              'benchmarks/signalbench/README.md',
+              'benchmarks/signalbench/tasks.example.json',
+              'benchmarks/signalbench/arms.example.json',
+              'benchmarks/signalbench/adapters/external_cli.py',
+              'syntavra_runtime/signalbench.py',
+              'syntavra_runtime/signalbench_hardened.py',
+              'tools/certify_python_benchmark_proof_reference.py',
+              'tools/certify_signalbench_python_product_v1.py',
+              'tests/runtime/test_signalbench_python_product_v1.py',
+              '.github/workflows/signalbench-python-product.yml',
+          ]
+          registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Run focused product regressions and certifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v
+          python -m unittest tests.runtime.test_runtime_v03_unified.RuntimeV03UnifiedTests.test_signalbench_protocol_and_fail_closed_compare -v
+          python -m unittest tests.runtime.test_adaptive_context_v04 -v
+          python -m unittest tests.runtime.test_release_action_pins -v
+          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/signalbench-python-product.json').read_text(encoding='utf-8'))
+          assert report['ok'] is True, report
+          assert report['runtime_ready'] is True
+          assert report['lifecycle_state'] == 'partial', report
+          assert report['admission_ready'] is False, report
+          assert report['external_superiority_proven'] is False, report
+          assert report['python_complete_ready'] is False, report
+          assert report['rust_resume_allowed'] is False, report
+          PY
+
+      - name: Refresh manifest and run repository validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python tools/validate.py
+
+      - name: Guard exact implementation scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          changed="$(git status --short | awk '{print $2}' | sort)"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' \
+            .github/workflows/release-main-merge-gate.yml \
+            .github/workflows/signalbench-python-product.yml \
+            MANIFEST.sha256 \
+            contracts/python/capability-completeness-registry-v1.json \
+            contracts/python/signalbench-python-product-v1.json \
+            syntavra_runtime/cli.py \
+            syntavra_runtime/signalbench.py \
+            syntavra_runtime/signalbench_hardened.py \
+            tests/runtime/test_release_action_pins.py \
+            tests/runtime/test_signalbench_python_product_v1.py \
+            tools/certify_signalbench_python_product_v1.py | sort)"
+          test "$changed" = "$expected"
+          python tools/refresh_manifest.py --check
+
+      - name: Commit and push guarded implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$TARGET_HEAD"
+          git config user.name "syntavra-ci"
+          git config user.email "syntavra-ci@users.noreply.github.com"
+          git add -- \
+            .github/workflows/release-main-merge-gate.yml \
+            .github/workflows/signalbench-python-product.yml \
+            MANIFEST.sha256 \
+            contracts/python/capability-completeness-registry-v1.json \
+            contracts/python/signalbench-python-product-v1.json \
+            syntavra_runtime/cli.py \
+            syntavra_runtime/signalbench.py \
+            syntavra_runtime/signalbench_hardened.py \
+            tests/runtime/test_release_action_pins.py \
+            tests/runtime/test_signalbench_python_product_v1.py \
+            tools/certify_signalbench_python_product_v1.py
+          git commit -m "Harden SignalBench Python product v1"
+          git push origin HEAD:"$TARGET_BRANCH"
