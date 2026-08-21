@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened]
     branches:
-      - automation/signalbench-v6-trigger-base
+      - automation/signalbench-v7-clean-base
 
 permissions:
   contents: write
