@@ -1,0 +1,143 @@
+name: Temporary Host Adapter Lifecycle Seal
+
+on:
+  push:
+    branches:
+      - automation/host-adapter-lifecycle-seal-20260821
+
+permissions:
+  contents: write
+
+concurrency:
+  group: host-adapter-lifecycle-seal-20260821
+  cancel-in-progress: false
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_BASE: fee51f258e72d0e65989cccb78781f564d05ae2e
+      TARGET_BRANCH: agent/certify-host-adapter-conformance-v1
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact admitted main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_BASE }}
+          fetch-depth: 0
+
+      - name: Guard exact base and unused target branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          if git ls-remote --exit-code --heads origin "refs/heads/$TARGET_BRANCH" >/dev/null 2>&1; then
+            echo "target branch already exists: $TARGET_BRANCH" >&2
+            exit 1
+          fi
+          git checkout -b "$TARGET_BRANCH"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Advance Host Adapter lifecycle only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('contracts/python/capability-completeness-registry-v1.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          capabilities = data['capabilities']
+          by_id = {item['id']: item for item in capabilities}
+          host = by_id['host_adapter_conformance_v1']
+          assert host['state'] == 'partial', host
+          assert by_id['output_intelligence_v1']['state'] == 'certified'
+          assert by_id['observability_attribution_v1']['state'] == 'partial'
+          assert data['python_complete']['ready'] is False
+          assert data['python_complete']['rust_resume_allowed'] is False
+
+          evidence = [
+              'contracts/python/host-adapter-conformance-v1.json',
+              'syntavra_runtime/host_adapters.py',
+              'syntavra_runtime/adapter_runtime.py',
+              'syntavra_runtime/platform_adapter_extension.py',
+              'tools/certify_host_adapter_conformance_v1.py',
+              'tests/runtime/test_host_adapter_conformance_v1.py',
+              '.github/workflows/host-adapter-conformance.yml',
+          ]
+          for relative in evidence:
+              assert Path(relative).is_file(), relative
+
+          host['state'] = 'certified'
+          host['implementation_evidence'] = evidence
+          host['certification_evidence'] = evidence
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Focused lifecycle validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.runtime.test_host_adapter_conformance_v1 \
+            tests.runtime.test_python_capability_completeness -v
+          python tools/certify_host_adapter_conformance_v1.py --repo . --out /tmp/host-adapter-lifecycle.json
+          python tools/certify_python_capability_completeness.py --repo . --out /tmp/capability-completeness.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          host = json.loads(Path('/tmp/host-adapter-lifecycle.json').read_text(encoding='utf-8'))
+          complete = json.loads(Path('/tmp/capability-completeness.json').read_text(encoding='utf-8'))
+          assert host['ok'] is True, host
+          assert host['lifecycle_state'] == 'certified', host
+          assert host['admission_ready'] is True, host
+          assert complete['ok'] is True, complete
+          assert complete['current_milestone'] == 'observability_attribution_v1', complete
+          assert complete['python_complete_ready'] is False, complete
+          assert complete['rust_resume_allowed'] is False, complete
+          PY
+
+      - name: Refresh permanent manifest authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+
+      - name: Enforce two-file lifecycle slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only | sort)
+          printf '%s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 2
+          test "${changed[0]}" = "MANIFEST.sha256"
+          test "${changed[1]}" = "contracts/python/capability-completeness-registry-v1.json"
+          python tools/certify_host_adapter_conformance_v1.py --repo . >/tmp/host-adapter-final.json
+          python tools/certify_python_capability_completeness.py --repo . >/tmp/completeness-final.json
+          python tools/refresh_manifest.py --check
+
+      - name: Commit and publish exact lifecycle candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Naveax"
+          git config user.email "79841922+Naveax@users.noreply.github.com"
+          git add MANIFEST.sha256 contracts/python/capability-completeness-registry-v1.json
+          git commit -m "Certify Host Adapter Conformance v1 lifecycle"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "published_head=$(git rev-parse HEAD)"
