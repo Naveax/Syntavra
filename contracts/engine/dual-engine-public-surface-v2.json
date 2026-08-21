@@ -14,7 +14,7 @@
   "python_surface": {
     "command_paths_sha256": "7bd02c46ba9209504c4b1842c9ad30e28151ce14a0f5c5d545daff960f9899aa",
     "digest_encoding": "canonical-json-array-utf8",
-    "module_count": 207,
+    "module_count": 211,
     "public_command_count": 245
   },
   "release_channel": "pre-release",
