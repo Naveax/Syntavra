@@ -110,6 +110,106 @@ def _bind_external_adapter_identity() -> None:
     path.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
 
 
+def _repair_hardened_compatibility() -> None:
+    path = Path('syntavra_runtime/signalbench_hardened.py')
+    text = path.read_text(encoding='utf-8')
+    with_provider = '    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "provider", "model", "reasoning", "context_window", "hardware_hash")\n'
+    without_provider = '    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "model", "reasoning", "context_window", "hardware_hash")\n'
+    if text.count(with_provider) != 1:
+        raise RuntimeError('post-helper provider identity tuple drift')
+    text = text.replace(with_provider, without_provider, 1)
+
+    old_mismatch = '''            mismatched = []
+            for field in cls.identity_fields:
+                base_value = cls._value(base, field)
+                candidate_value = cls._value(candidate, field)
+                missing = base_value is None or candidate_value is None or base_value == "" or candidate_value == ""
+                if field == "context_window":
+                    try:
+                        missing = missing or int(base_value) <= 0 or int(candidate_value) <= 0
+                    except (TypeError, ValueError):
+                        missing = True
+                if missing or base_value != candidate_value:
+                    mismatched.append(field)
+            for row, label in ((base, baseline_arm), (candidate, candidate_arm)):
+                if not str(cls._value(row, "arm_version", "")):
+                    mismatched.append(f"arm_version:{label}")
+'''
+    new_mismatch = '''            mismatched = []
+            for field in cls.identity_fields:
+                base_value = cls._value(base, field)
+                candidate_value = cls._value(candidate, field)
+                missing = base_value is None or candidate_value is None or base_value == "" or candidate_value == ""
+                if field == "context_window":
+                    try:
+                        missing = missing or int(base_value) <= 0 or int(candidate_value) <= 0
+                    except (TypeError, ValueError):
+                        missing = True
+                if missing or base_value != candidate_value:
+                    mismatched.append(field)
+            base_receipt = receipt_index.get((task_id, repetition, cache_mode, baseline_arm))
+            candidate_receipt = receipt_index.get((task_id, repetition, cache_mode, candidate_arm))
+            base_provider = str(cls._value(base, "provider", "") or (base_receipt.provider if base_receipt is not None else ""))
+            candidate_provider = str(cls._value(candidate, "provider", "") or (candidate_receipt.provider if candidate_receipt is not None else ""))
+            if not base_provider or not candidate_provider or base_provider != candidate_provider:
+                mismatched.append("provider")
+            for row, label in ((base, baseline_arm), (candidate, candidate_arm)):
+                if bool(cls._value(row, "usage_receipt_hash", "")) and not str(cls._value(row, "arm_version", "")):
+                    mismatched.append(f"arm_version:{label}")
+'''
+    if text.count(old_mismatch) != 1:
+        raise RuntimeError('post-helper identity mismatch block drift')
+    text = text.replace(old_mismatch, new_mismatch, 1)
+
+    old_binding = '''                    for field, expected in row_bindings.items():
+                        if cls._value(row, field) != expected:
+                            reasons.append(f"receipt-row-mismatch:{field}")
+                    try:
+                        if float(cls._value(row, "quota_cost")) != float(receipt.quota_cost):
+                            reasons.append("receipt-row-mismatch:quota_cost")
+                    except (TypeError, ValueError):
+                        reasons.append("receipt-row-mismatch:quota_cost")
+'''
+    new_binding = '''                    strict_row = bool(cls._value(row, "usage_receipt_hash", ""))
+                    for field, expected in row_bindings.items():
+                        actual = cls._value(row, field, None)
+                        missing = actual is None or actual == ""
+                        if strict_row:
+                            if missing or actual != expected:
+                                reasons.append(f"receipt-row-mismatch:{field}")
+                        elif not missing and actual != expected:
+                            reasons.append(f"receipt-row-mismatch:{field}")
+                    try:
+                        if float(cls._value(row, "quota_cost")) != float(receipt.quota_cost):
+                            reasons.append("receipt-row-mismatch:quota_cost")
+                    except (TypeError, ValueError):
+                        reasons.append("receipt-row-mismatch:quota_cost")
+'''
+    if text.count(old_binding) != 1:
+        raise RuntimeError('post-helper receipt row-binding block drift')
+    text = text.replace(old_binding, new_binding, 1)
+    path.write_text(text, encoding='utf-8')
+
+
+def _repair_legacy_receipt_gate_test() -> None:
+    path = Path('tests/runtime/test_complete_competitive_features_v001.py')
+    text = path.read_text(encoding='utf-8')
+    old = '''    comparison = SignalBenchRunner.compare(rows, baseline_arm="plain-host", candidate_arm="syntavra-minimal")
+    assert comparison["valid_pairs"] == 10
+    assert comparison["claimable_superiority"] is True
+    unobserved = [RunResult(**(asdict(row) | {"provider_observed": False})) for row in rows]
+'''
+    new = '''    comparison = SignalBenchRunner.compare(rows, baseline_arm="plain-host", candidate_arm="syntavra-minimal")
+    assert comparison["valid_pairs"] == 10
+    assert comparison["claimable_superiority"] is False
+    assert comparison["receipt_errors"]
+    unobserved = [RunResult(**(asdict(row) | {"provider_observed": False})) for row in rows]
+'''
+    if text.count(old) != 1:
+        raise RuntimeError('legacy provider-billed SignalBench expectation drift')
+    path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+
 def apply() -> None:
     helper_text = HELPER.read_text(encoding='utf-8')
     script = _repair_apply_script(_extract_apply_block(helper_text))
@@ -118,6 +218,8 @@ def apply() -> None:
     _repair_generated_tests()
     _repair_generated_certifier()
     _bind_external_adapter_identity()
+    _repair_hardened_compatibility()
+    _repair_legacy_receipt_gate_test()
 
     runtime = Path('syntavra_runtime/signalbench.py').read_text(encoding='utf-8')
     if 'def validate_product(self,' not in runtime:
@@ -129,6 +231,9 @@ def apply() -> None:
     adapter = Path('benchmarks/signalbench/adapters/external_cli.py').read_text(encoding='utf-8')
     if 'result["arm_identity"] = arm_identity' not in adapter:
         raise RuntimeError('external adapter does not bind frozen arm identity')
+    hardened = Path('syntavra_runtime/signalbench_hardened.py').read_text(encoding='utf-8')
+    if 'strict_row = bool(cls._value(row, "usage_receipt_hash", ""))' not in hardened:
+        raise RuntimeError('hardened comparator does not distinguish strict sealed rows from legacy receipt fixtures')
 
 
 if __name__ == '__main__':
