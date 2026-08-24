@@ -82,6 +82,46 @@ text = text[:receipt_start] + new_receipt + text[receipt_end:]
     return script.replace(brittle, semantic, 1)
 
 
+def _patch_v14_result_identity() -> None:
+    path = Path("/tmp/signalbench-v14-apply.py")
+    source = path.read_text(encoding="utf-8")
+    start_marker = "def patch_result_identity() -> None:\n"
+    end_marker = "\n\ndef patch_hardened_invariants() -> None:\n"
+    start = source.find(start_marker)
+    if start < 0:
+        raise RuntimeError("V14 result identity patch start missing")
+    end = source.find(end_marker, start)
+    if end < 0:
+        raise RuntimeError("V14 result identity patch end missing")
+    replacement = '''def patch_result_identity() -> None:
+    path = Path("syntavra_runtime/signalbench.py")
+    text = path.read_text(encoding="utf-8")
+    run_start = text.index("    def run_one(", text.index("class SignalBenchRunner"))
+    result_start = text.index("        result = RunResult(\\n", run_start)
+    result_end = text.index("        atomic_write_json(artifact_dir / \\\"result.json\\\"", result_start)
+    block = text[result_start:result_end]
+    required = (
+        '            repository_commit=task.repository_commit,\\n',
+        '            task_hash=identity["task_hash"],\\n',
+        '            timeout_seconds=float(task.timeout_seconds),\\n',
+    )
+    present = tuple(item in block for item in required)
+    if all(present):
+        return
+    if any(present):
+        raise RuntimeError("result identity partially applied")
+    marker = '            usage_receipt_hash=sealed_usage.receipt_hash if sealed_usage else "",\\n'
+    if block.count(marker) != 1:
+        raise RuntimeError(f"result identity semantic marker drift: {block.count(marker)}")
+    insertion = marker + "".join(required)
+    block = block.replace(marker, insertion, 1)
+    path.write_text(text[:result_start] + block + text[result_end:], encoding="utf-8")
+'''
+    patched = source[:start] + replacement + source[end:]
+    compile(patched, str(path), "exec")
+    path.write_text(patched, encoding="utf-8")
+
+
 def _extract(text: str) -> str:
     lines = text.splitlines()
     start_marker = "          python - <<'PY'"
@@ -111,6 +151,7 @@ def _extract(text: str) -> str:
 
 def main() -> None:
     _patch_fix_hardened_compatibility()
+    _patch_v14_result_identity()
     module = _load_v9()
     module.extract_outer_yaml_python_block = _extract
     module.main()
