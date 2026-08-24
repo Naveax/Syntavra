@@ -46,6 +46,24 @@ text = text[:pair_start] + new_pair + text[pair_end:]
     return script[:start] + semantic + script[end:]
 
 
+def _patch_receipt_anchor(script: str) -> str:
+    brittle = '''if text.count(old_receipt) != 1:
+    raise SystemExit('hardened receipt anchor drift')
+text = text.replace(old_receipt, new_receipt, 1)
+'''
+    count = script.count(brittle)
+    if count != 1:
+        raise RuntimeError(f"receipt patch source drift: {count}")
+    semantic = '''compare_start = text.index("    @classmethod\\n    def compare(", text.index("class HardenedSignalBench"))
+receipt_start = text.index("                if receipt is not None:\\n", compare_start)
+receipt_end = text.index("                elif require_receipts:", receipt_start)
+if receipt_end <= receipt_start:
+    raise SystemExit("hardened receipt semantic anchor invalid")
+text = text[:receipt_start] + new_receipt + text[receipt_end:]
+'''
+    return script.replace(brittle, semantic, 1)
+
+
 def _extract(text: str) -> str:
     lines = text.splitlines()
     start_marker = "          python - <<'PY'"
@@ -69,7 +87,8 @@ def _extract(text: str) -> str:
         line[len(prefix):] if line.startswith(prefix) else line
         for line in lines[start:end]
     ) + "\n"
-    return _patch_pair_anchor(script)
+    script = _patch_pair_anchor(script)
+    return _patch_receipt_anchor(script)
 
 
 def main() -> None:
