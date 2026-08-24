@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from pathlib import Path
 
 
 def _load_v9():
@@ -10,6 +11,23 @@ def _load_v9():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _patch_fix_hardened_compatibility() -> None:
+    path = Path("/tmp/signalbench-fix.py")
+    source = path.read_text(encoding="utf-8")
+    start_marker = "def _repair_hardened_compatibility() -> None:\n"
+    end_marker = "\n\ndef _repair_legacy_receipt_gate_test() -> None:\n"
+    start = source.find(start_marker)
+    if start < 0:
+        raise RuntimeError("fix hardened compatibility function start missing")
+    end = source.find(end_marker, start)
+    if end < 0:
+        raise RuntimeError("fix hardened compatibility function end missing")
+    replacement = 'def _repair_hardened_compatibility() -> None:\n    path = Path(\'syntavra_runtime/signalbench_hardened.py\')\n    text = path.read_text(encoding=\'utf-8\')\n\n    with_provider = \'    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "provider", "model", "reasoning", "context_window", "hardware_hash")\\n\'\n    without_provider = \'    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "model", "reasoning", "context_window", "hardware_hash")\\n\'\n    if text.count(with_provider) == 1:\n        text = text.replace(with_provider, without_provider, 1)\n    elif text.count(without_provider) != 1:\n        raise RuntimeError(\'post-helper provider identity tuple drift\')\n\n    compare_start = text.index("    @classmethod\\n    def compare(", text.index("class HardenedSignalBench"))\n    mismatch_start = text.index("            mismatched = ", compare_start)\n    mismatch_end = text.index("            if mismatched:\\n", mismatch_start)\n    new_mismatch = \'\'\'            mismatched = []\n            for field in cls.identity_fields:\n                base_value = cls._value(base, field)\n                candidate_value = cls._value(candidate, field)\n                missing = base_value is None or candidate_value is None or base_value == "" or candidate_value == ""\n                if field == "context_window":\n                    try:\n                        missing = missing or int(base_value) <= 0 or int(candidate_value) <= 0\n                    except (TypeError, ValueError):\n                        missing = True\n                if missing or base_value != candidate_value:\n                    mismatched.append(field)\n            base_receipt = receipt_index.get((task_id, repetition, cache_mode, baseline_arm))\n            candidate_receipt = receipt_index.get((task_id, repetition, cache_mode, candidate_arm))\n            base_provider = str(cls._value(base, "provider", "") or (base_receipt.provider if base_receipt is not None else ""))\n            candidate_provider = str(cls._value(candidate, "provider", "") or (candidate_receipt.provider if candidate_receipt is not None else ""))\n            if not base_provider or not candidate_provider or base_provider != candidate_provider:\n                mismatched.append("provider")\n            for row, label in ((base, baseline_arm), (candidate, candidate_arm)):\n                if bool(cls._value(row, "usage_receipt_hash", "")) and not str(cls._value(row, "arm_version", "")):\n                    mismatched.append(f"arm_version:{label}")\n\'\'\'\n    text = text[:mismatch_start] + new_mismatch + text[mismatch_end:]\n\n    receipt_start = text.index("                if receipt is not None:\\n", compare_start)\n    binding_start = text.index("                    for field, expected in row_bindings.items():\\n", receipt_start)\n    binding_end = text.index("                    if reasons:", binding_start)\n    new_binding = \'\'\'                    strict_row = bool(cls._value(row, "usage_receipt_hash", ""))\n                    for field, expected in row_bindings.items():\n                        actual = cls._value(row, field, None)\n                        missing = actual is None or actual == ""\n                        if strict_row:\n                            if missing or actual != expected:\n                                reasons.append(f"receipt-row-mismatch:{field}")\n                        elif not missing and actual != expected:\n                            reasons.append(f"receipt-row-mismatch:{field}")\n                    try:\n                        if float(cls._value(row, "quota_cost")) != float(receipt.quota_cost):\n                            reasons.append("receipt-row-mismatch:quota_cost")\n                    except (TypeError, ValueError):\n                        reasons.append("receipt-row-mismatch:quota_cost")\n\'\'\'\n    text = text[:binding_start] + new_binding + text[binding_end:]\n    path.write_text(text, encoding=\'utf-8\')\n'
+    patched = source[:start] + replacement + source[end:]
+    compile(patched, str(path), "exec")
+    path.write_text(patched, encoding="utf-8")
 
 
 def _patch_pair_anchor(script: str) -> str:
@@ -92,6 +110,7 @@ def _extract(text: str) -> str:
 
 
 def main() -> None:
+    _patch_fix_hardened_compatibility()
     module = _load_v9()
     module.extract_outer_yaml_python_block = _extract
     module.main()
