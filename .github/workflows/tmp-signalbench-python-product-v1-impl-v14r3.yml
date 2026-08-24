@@ -2,7 +2,7 @@ name: Temporary SignalBench Python Product v14r3 Executor
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
     branches:
       - automation/signalbench-v14r3-clean-base
 
@@ -40,8 +40,9 @@ jobs:
           cp tools/tmp_prepare_signalbench_python_product_v1_fix.py /tmp/signalbench-fix.py
           cp tools/tmp_signalbench_v9_apply.py /tmp/signalbench-v9-apply.py
           cp tools/tmp_signalbench_v12_apply.py /tmp/signalbench-v12-apply.py
+          cp tools/tmp_signalbench_v14r3_runner.py /tmp/signalbench-v14r3-runner.py
           python tools/tmp_signalbench_v14_unpack.py
-          python -m py_compile /tmp/signalbench-v9-apply.py /tmp/signalbench-v12-apply.py /tmp/signalbench-v14-apply.py
+          python -m py_compile /tmp/signalbench-v9-apply.py /tmp/signalbench-v12-apply.py /tmp/signalbench-v14-apply.py /tmp/signalbench-v14r3-runner.py
           git fetch origin "$TARGET_BRANCH"
           actual="$(git rev-parse "origin/$TARGET_BRANCH")"
           printf 'target=%s actual=%s helper=%s\n' "$TARGET_HEAD" "$actual" "${{ github.event.pull_request.head.sha }}"
@@ -59,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/tmp_signalbench_v14r3_runner.py
+          python /tmp/signalbench-v14r3-runner.py
           python /tmp/signalbench-v12-apply.py
           python /tmp/signalbench-v14-apply.py
 
