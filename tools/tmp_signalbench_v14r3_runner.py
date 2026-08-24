@@ -97,7 +97,8 @@ def _patch_v14_result_identity() -> None:
     path = Path("syntavra_runtime/signalbench.py")
     text = path.read_text(encoding="utf-8")
     run_start = text.index("    def run_one(", text.index("class SignalBenchRunner"))
-    result_start = text.index("        result = RunResult(\\n", run_start)
+    provider_start = text.index("        sealed_usage = None\\n", run_start)
+    result_start = text.index("        result = RunResult(\\n", provider_start)
     result_end = text.index("        atomic_write_json(artifact_dir / \\\"result.json\\\"", result_start)
     block = text[result_start:result_end]
     required = (
