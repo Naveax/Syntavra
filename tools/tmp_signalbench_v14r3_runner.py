@@ -99,8 +99,9 @@ def _patch_v14_result_identity() -> None:
     run_start = text.index("    def run_one(", text.index("class SignalBenchRunner"))
     provider_start = text.index("        sealed_usage = None\\n", run_start)
     result_start = text.index("        result = RunResult(\\n", provider_start)
-    result_end = text.index("        atomic_write_json(artifact_dir / \\\"result.json\\\"", result_start)
-    block = text[result_start:result_end]
+    result_close = text.index("        )\\n", result_start)
+    block_end = result_close + len("        )\\n")
+    block = text[result_start:block_end]
     required = (
         '            repository_commit=task.repository_commit,\\n',
         '            task_hash=identity["task_hash"],\\n',
@@ -111,12 +112,10 @@ def _patch_v14_result_identity() -> None:
         return
     if any(present):
         raise RuntimeError("result identity partially applied")
-    marker = '            usage_receipt_hash=sealed_usage.receipt_hash if sealed_usage else "",\\n'
-    if block.count(marker) != 1:
-        raise RuntimeError(f"result identity semantic marker drift: {block.count(marker)}")
-    insertion = marker + "".join(required)
-    block = block.replace(marker, insertion, 1)
-    path.write_text(text[:result_start] + block + text[result_end:], encoding="utf-8")
+    insertion = "".join(required)
+    offset = result_close - result_start
+    block = block[:offset] + insertion + block[offset:]
+    path.write_text(text[:result_start] + block + text[block_end:], encoding="utf-8")
 '''
     patched = source[:start] + replacement + source[end:]
     compile(patched, str(path), "exec")
