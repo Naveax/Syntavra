@@ -33,6 +33,27 @@ def _patch_post_v14_legacy_identity_scope() -> None:
     compare_start = text.index("    @classmethod\\n    def compare(", class_start)
     compare_block = text[compare_start:]
 
+    value_old = (
+        "    @staticmethod\\n"
+        "    def _value(row: Mapping[str, Any] | Any, key: str, default: Any = None) -> Any:\\n"
+        "        return row.get(key, default) if isinstance(row, Mapping) else getattr(row, key, default)\\n"
+    )
+    value_new = (
+        "    @staticmethod\\n"
+        "    def _value(row: Mapping[str, Any] | Any, key: str, default: Any = None) -> Any:\\n"
+        "        value = row.get(key, default) if isinstance(row, Mapping) else getattr(row, key, default)\\n"
+        "        if key == \\\"arm_version\\\" and (value is None or value == \\\"\\\"):\\n"
+        "            usage_receipt_hash = row.get(\\\"usage_receipt_hash\\\", \\\"\\\") if isinstance(row, Mapping) else getattr(row, \\\"usage_receipt_hash\\\", \\\"\\\")\\n"
+        "            if not usage_receipt_hash:\\n"
+        "                return \\\"__legacy_unversioned__\\\"\\n"
+        "        return value\\n"
+    )
+    prefix = text[:compare_start]
+    if prefix.count(value_old) == 1:
+        prefix = prefix.replace(value_old, value_new, 1)
+    elif value_new not in prefix:
+        raise RuntimeError("post-V14 HardenedSignalBench._value anchor drift")
+
     loop = "            for field in cls.identity_fields:\\n"
     if compare_block.count(loop) != 1:
         raise RuntimeError(
@@ -40,25 +61,26 @@ def _patch_post_v14_legacy_identity_scope() -> None:
         )
     strict_marker = "            strict_pair_identity = bool(\\n"
     if strict_marker not in compare_block:
-        replacement = """            strict_pair_identity = bool(
-                cls._value(base, \"usage_receipt_hash\", \"\")
-                or cls._value(candidate, \"usage_receipt_hash\", \"\")
-            )
-            legacy_identity_fields = {
-                \"repository_tree\",
-                \"prompt_hash\",
-                \"verifier_hash\",
-                \"permissions_hash\",
-                \"cache_mode\",
-                \"model\",
-                \"reasoning\",
-                \"context_window\",
-                \"hardware_hash\",
-            }
-            for field in cls.identity_fields:
-                if not strict_pair_identity and field not in legacy_identity_fields:
-                    continue
-"""
+        replacement = (
+            "            strict_pair_identity = bool(\\n"
+            "                cls._value(base, \\\"usage_receipt_hash\\\", \\\"\\\")\\n"
+            "                or cls._value(candidate, \\\"usage_receipt_hash\\\", \\\"\\\")\\n"
+            "            )\\n"
+            "            legacy_identity_fields = {\\n"
+            "                \\\"repository_tree\\\",\\n"
+            "                \\\"prompt_hash\\\",\\n"
+            "                \\\"verifier_hash\\\",\\n"
+            "                \\\"permissions_hash\\\",\\n"
+            "                \\\"cache_mode\\\",\\n"
+            "                \\\"model\\\",\\n"
+            "                \\\"reasoning\\\",\\n"
+            "                \\\"context_window\\\",\\n"
+            "                \\\"hardware_hash\\\",\\n"
+            "            }\\n"
+            "            for field in cls.identity_fields:\\n"
+            "                if not strict_pair_identity and field not in legacy_identity_fields:\\n"
+            "                    continue\\n"
+        )
         compare_block = compare_block.replace(loop, replacement, 1)
 
     required_compatibility = (
@@ -71,7 +93,7 @@ def _patch_post_v14_legacy_identity_scope() -> None:
     if missing:
         raise RuntimeError(f"post-V14 compatibility guards missing: {missing}")
 
-    text = text[:compare_start] + compare_block
+    text = prefix + compare_block
     path.write_text(text, encoding="utf-8")
 
 
