@@ -1,183 +1,239 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
+PREVIOUS_HELPER = "75b1f456440b8fd8bee309383b467d5f0f78879f"
+PREVIOUS_RUNNER = Path("/tmp/signalbench-v14r3-previous.py")
+V14_APPLY = Path("/tmp/signalbench-v14-apply.py")
 
-def _load_v9():
-    spec = importlib.util.spec_from_file_location("signalbench_v9", "/tmp/signalbench-v9-apply.py")
+
+def _load_previous():
+    source = subprocess.check_output(
+        ["git", "show", f"{PREVIOUS_HELPER}:tools/tmp_signalbench_v14r3_runner.py"],
+        text=True,
+    )
+    compile(source, str(PREVIOUS_RUNNER), "exec")
+    PREVIOUS_RUNNER.write_text(source, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("signalbench_v14r3_previous", PREVIOUS_RUNNER)
     if spec is None or spec.loader is None:
-        raise RuntimeError("unable to load SignalBench V9 module")
+        raise RuntimeError("unable to load previous SignalBench v14r3 runner")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def _patch_fix_hardened_compatibility() -> None:
-    path = Path("/tmp/signalbench-fix.py")
-    source = path.read_text(encoding="utf-8")
-    start_marker = "def _repair_hardened_compatibility() -> None:\n"
-    end_marker = "\n\ndef _repair_legacy_receipt_gate_test() -> None:\n"
-    start = source.find(start_marker)
-    if start < 0:
-        raise RuntimeError("fix hardened compatibility function start missing")
-    end = source.find(end_marker, start)
-    if end < 0:
-        raise RuntimeError("fix hardened compatibility function end missing")
-    replacement = 'def _repair_hardened_compatibility() -> None:\n    path = Path(\'syntavra_runtime/signalbench_hardened.py\')\n    text = path.read_text(encoding=\'utf-8\')\n\n    with_provider = \'    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "provider", "model", "reasoning", "context_window", "hardware_hash")\\n\'\n    without_provider = \'    identity_fields = ("repository_tree", "prompt_hash", "verifier_hash", "permissions_hash", "cache_mode", "model", "reasoning", "context_window", "hardware_hash")\\n\'\n    if text.count(with_provider) == 1:\n        text = text.replace(with_provider, without_provider, 1)\n    elif text.count(without_provider) != 1:\n        raise RuntimeError(\'post-helper provider identity tuple drift\')\n\n    compare_start = text.index("    @classmethod\\n    def compare(", text.index("class HardenedSignalBench"))\n    mismatch_start = text.index("            mismatched = ", compare_start)\n    mismatch_end = text.index("            if mismatched:", mismatch_start)\n    new_mismatch = """            mismatched = []\n            for field in cls.identity_fields:\n                base_value = cls._value(base, field)\n                candidate_value = cls._value(candidate, field)\n                missing = base_value is None or candidate_value is None or base_value == "" or candidate_value == ""\n                if field == "context_window":\n                    try:\n                        missing = missing or int(base_value) <= 0 or int(candidate_value) <= 0\n                    except (TypeError, ValueError):\n                        missing = True\n                if missing or base_value != candidate_value:\n                    mismatched.append(field)\n            base_receipt = receipt_index.get((task_id, repetition, cache_mode, baseline_arm))\n            candidate_receipt = receipt_index.get((task_id, repetition, cache_mode, candidate_arm))\n            base_provider = str(cls._value(base, "provider", "") or (base_receipt.provider if base_receipt is not None else ""))\n            candidate_provider = str(cls._value(candidate, "provider", "") or (candidate_receipt.provider if candidate_receipt is not None else ""))\n            if not base_provider or not candidate_provider or base_provider != candidate_provider:\n                mismatched.append("provider")\n            for row, label in ((base, baseline_arm), (candidate, candidate_arm)):\n                if bool(cls._value(row, "usage_receipt_hash", "")) and not str(cls._value(row, "arm_version", "")):\n                    mismatched.append(f"arm_version:{label}")\n"""\n    text = text[:mismatch_start] + new_mismatch + text[mismatch_end:]\n\n    receipt_start = text.index("                if receipt is not None:\\n", compare_start)\n    receipt_end = text.index("                elif require_receipts:", receipt_start)\n    new_receipt = """                if receipt is not None:\n                    reasons = receipt.validate()\n                    row_bindings = {\n                        "provider": receipt.provider,\n                        "request_id_hash": receipt.request_id_hash,\n                        "provider_response_hash": receipt.provider_response_hash,\n                        "hardware_hash": receipt.hardware_hash,\n                        "fresh_input_tokens": receipt.fresh_input_tokens,\n                        "cached_input_tokens": receipt.cached_input_tokens,\n                        "output_tokens": receipt.output_tokens,\n                        "reasoning_tokens": receipt.reasoning_tokens,\n                    }\n                    strict_row = bool(cls._value(row, "usage_receipt_hash", ""))\n                    for field, expected in row_bindings.items():\n                        actual = cls._value(row, field, None)\n                        missing = actual is None or actual == ""\n                        if strict_row:\n                            if missing or actual != expected:\n                                reasons.append(f"receipt-row-mismatch:{field}")\n                        elif not missing and actual != expected:\n                            reasons.append(f"receipt-row-mismatch:{field}")\n                    try:\n                        if float(cls._value(row, "quota_cost")) != float(receipt.quota_cost):\n                            reasons.append("receipt-row-mismatch:quota_cost")\n                    except (TypeError, ValueError):\n                        reasons.append("receipt-row-mismatch:quota_cost")\n                    if reasons:\n                        receipt_errors.append({"task": task_id, "arm": arm, "repetition": repetition, "cache": cache_mode, "reasons": list(dict.fromkeys(reasons))})\n                    else:\n                        quota = receipt.quota_cost\n"""\n    text = text[:receipt_start] + new_receipt + text[receipt_end:]\n    path.write_text(text, encoding=\'utf-8\')\n'
-    patched = source[:start] + replacement + source[end:]
-    compile(patched, str(path), "exec")
-    path.write_text(patched, encoding="utf-8")
-
-
-def _patch_pair_anchor(script: str) -> str:
-    start_marker = "old_pair = '''    @classmethod\n    def pair_identity"
-    end_marker = "text = text.replace(old_pair, new_pair, 1)\n"
-    start = script.find(start_marker)
-    if start < 0:
-        raise RuntimeError("pair patch source start missing")
-    end_at = script.find(end_marker, start)
-    if end_at < 0:
-        raise RuntimeError("pair patch source end missing")
-    end = end_at + len(end_marker)
-    semantic = '''pair_start = text.index("    @classmethod\\n    def pair_identity(")
-pair_end = text.index("\\n\\n\\nclass SignalBenchRunner:", pair_start)
-new_pair = \'''    @classmethod
-    def pair_identity(cls, task: TaskSpec, arm: ArmSpec, *, cache_mode: str, hardware_hash: str = "") -> dict[str, Any]:
-        return {
-            "task_hash": cls.task_hash(task),
-            "repository_tree": task.repository_tree,
-            "arm_version": arm.version,
-            "model": arm.model,
-            "reasoning": arm.reasoning,
-            "context_window": arm.context_window,
-            "hardware_hash": hardware_hash,
-            "prompt_hash": sha256_bytes(task.prompt.encode()),
-            "verifier_hash": cls.verifier_hash(task),
-            "permissions_hash": cls.permissions_hash(task),
-            "timeout_seconds": task.timeout_seconds,
-            "cache_mode": cache_mode,
-        }
-\'''
-text = text[:pair_start] + new_pair + text[pair_end:]
-'''
-    return script[:start] + semantic + script[end:]
-
-
-def _patch_receipt_anchor(script: str) -> str:
-    brittle = '''if text.count(old_receipt) != 1:
-    raise SystemExit('hardened receipt anchor drift')
-text = text.replace(old_receipt, new_receipt, 1)
-'''
-    count = script.count(brittle)
-    if count != 1:
-        raise RuntimeError(f"receipt patch source drift: {count}")
-    semantic = '''compare_start = text.index("    @classmethod\\n    def compare(", text.index("class HardenedSignalBench"))
-receipt_start = text.index("                if receipt is not None:\\n", compare_start)
-receipt_end = text.index("                elif require_receipts:", receipt_start)
-if receipt_end <= receipt_start:
-    raise SystemExit("hardened receipt semantic anchor invalid")
-text = text[:receipt_start] + new_receipt + text[receipt_end:]
-'''
-    return script.replace(brittle, semantic, 1)
-
-
-def _patch_v14_result_identity() -> None:
-    path = Path("/tmp/signalbench-v14-apply.py")
-    source = path.read_text(encoding="utf-8")
-    start_marker = "def patch_result_identity() -> None:\n"
-    end_marker = "\n\ndef patch_hardened_invariants() -> None:\n"
-    start = source.find(start_marker)
-    if start < 0:
-        raise RuntimeError("V14 result identity patch start missing")
-    end = source.find(end_marker, start)
-    if end < 0:
-        raise RuntimeError("V14 result identity patch end missing")
-    replacement = '''def patch_result_identity() -> None:
-    path = Path("syntavra_runtime/signalbench.py")
-    text = path.read_text(encoding="utf-8")
-    run_start = text.index("    def run_one(", text.index("class SignalBenchRunner"))
-    provider_start = text.index("        sealed_usage = None\\n", run_start)
-    result_start = text.index("        result = RunResult(\\n", provider_start)
-    result_close = text.index("        )\\n", result_start)
-    block_end = result_close + len("        )\\n")
-    block = text[result_start:block_end]
-    required = (
-        '            repository_commit=task.repository_commit,\\n',
-        '            task_hash=identity["task_hash"],\\n',
-        '            timeout_seconds=float(task.timeout_seconds),\\n',
-    )
-    present = tuple(item in block for item in required)
-    if all(present):
-        return
-    if any(present):
-        raise RuntimeError("result identity partially applied")
-    insertion = "".join(required)
-    offset = result_close - result_start
-    block = block[:offset] + insertion + block[offset:]
-    path.write_text(text[:result_start] + block + text[block_end:], encoding="utf-8")
-'''
-    patched = source[:start] + replacement + source[end:]
-    compile(patched, str(path), "exec")
-    path.write_text(patched, encoding="utf-8")
-
-
-def _patch_v14_fixture_compatibility() -> None:
-    path = Path("/tmp/signalbench-v14-apply.py")
+def _patch_all_fixture_drift() -> None:
+    path = V14_APPLY
     source = path.read_text(encoding="utf-8")
 
-    pairs_old = '    for old, new, label in pairs:\n        if text.count(old) != 1:\n            raise RuntimeError(f"{label} drift: {text.count(old)}")\n        text = text.replace(old, new, 1)\n'
-    pairs_new = '    for old, new, label in pairs:\n        count = text.count(old)\n        if count == 1:\n            text = text.replace(old, new, 1)\n            continue\n        if count == 0 and text.count(new) == 1:\n            continue\n        if label == "valid task fixture":\n            method_start = text.index("    def test_exact_tree_and_clean_worktree_are_enforced(")\n            method_end = text.index("\\n    @staticmethod\\n    def _result(", method_start)\n            block = text[method_start:method_end]\n            if "repo, commit, tree = self._repo(Path(temp))" not in block:\n                if block.count("repo, tree = self._repo(Path(temp))") != 1:\n                    raise RuntimeError("valid task repo unpack drift")\n                block = block.replace("repo, tree = self._repo(Path(temp))", "repo, commit, tree = self._repo(Path(temp))", 1)\n            if "repository_commit=commit" not in block:\n                lines = block.splitlines(keepends=True)\n                matches = [index for index, line in enumerate(lines) if "task = TaskSpec(" in line]\n                if len(matches) != 1:\n                    raise RuntimeError(f"valid task TaskSpec drift: {len(matches)}")\n                index = matches[0]\n                close = lines[index].rfind(")")\n                if close < 0:\n                    raise RuntimeError("valid task TaskSpec close missing")\n                lines[index] = lines[index][:close] + ", repository_commit=commit" + lines[index][close:]\n                block = "".join(lines)\n            text = text[:method_start] + block + text[method_end:]\n            continue\n        raise RuntimeError(f"{label} drift: {count}")\n'
-    if source.count(pairs_old) == 1:
-        source = source.replace(pairs_old, pairs_new, 1)
-    elif source.count(pairs_new) != 1:
+    helper_marker = "def _apply_fixture_pair(text: str, old: str, new: str, label: str) -> str:\n"
+    patch_marker = "def patch_tests_and_certifier() -> None:\n"
+    helper = r'''def _apply_fixture_pair(text: str, old: str, new: str, label: str) -> str:
+    old_count = text.count(old)
+    if old_count == 1:
+        return text.replace(old, new, 1)
+    if old_count == 0 and text.count(new) == 1:
+        return text
+
+    if label == "valid task fixture":
+        start = text.index("    def test_exact_tree_and_clean_worktree_are_enforced(")
+        end = text.index("\n    @staticmethod\n    def _result(", start)
+        block = text[start:end]
+        if "repo, commit, tree = self._repo(Path(temp))" not in block:
+            old_unpack = "repo, tree = self._repo(Path(temp))"
+            if block.count(old_unpack) != 1:
+                raise RuntimeError("valid task repo unpack drift")
+            block = block.replace(old_unpack, "repo, commit, tree = self._repo(Path(temp))", 1)
+        if "repository_commit=commit" not in block:
+            lines = block.splitlines(keepends=True)
+            matches = [index for index, line in enumerate(lines) if "task = TaskSpec(" in line]
+            if len(matches) != 1:
+                raise RuntimeError(f"valid task TaskSpec drift: {len(matches)}")
+            index = matches[0]
+            close = lines[index].rfind(")")
+            if close < 0:
+                raise RuntimeError("valid task TaskSpec close missing")
+            lines[index] = lines[index][:close] + ", repository_commit=commit" + lines[index][close:]
+            block = "".join(lines)
+        return text[:start] + block + text[end:]
+
+    if label == "result identity":
+        start = text.index("    @staticmethod\n    def _result(")
+        end = text.index("\n    def test_public_compare_uses_hardened_receipt_authority", start)
+        block = text[start:end]
+        identity = '            repository_commit="6" * 40, task_hash="5" * 64, timeout_seconds=1200.0,\n'
+        if identity in block:
+            return text
+        values_start = block.index("        values = dict(\n")
+        values_end = block.index("        )\n        provisional = RunResult(**values)", values_start)
+        block = block[:values_end] + identity + block[values_end:]
+        return text[:start] + block + text[end:]
+
+    if label in {"request identity", "cert request"}:
+        old_expr = 'request_id_hash=("e" if arm == "base" else "f") * 64'
+        new_expr = 'request_id_hash=(f"{repetition:064x}" if arm == "base" else f"{repetition + 1000:064x}")'
+        if new_expr in text:
+            return text
+        if text.count(old_expr) != 1:
+            raise RuntimeError(f"{label} request expression drift: {text.count(old_expr)}")
+        return text.replace(old_expr, new_expr, 1)
+
+    if label == "cert result identity":
+        start = text.index("def fixture_result(")
+        end = text.index("\n\ndef certify(", start)
+        block = text[start:end]
+        identity = '        repository_commit="6" * 40, task_hash="5" * 64, timeout_seconds=1200.0,\n'
+        if identity in block:
+            return text
+        values_start = block.index("    values = dict(\n")
+        values_end = block.index("    )\n    receipt = UsageReceipt.seal", values_start)
+        block = block[:values_end] + identity + block[values_end:]
+        return text[:start] + block + text[end:]
+
+    if label == "cert task":
+        lines = text.splitlines(keepends=True)
+        matches = [index for index, line in enumerate(lines) if 'task = TaskSpec("certify-task"' in line]
+        if len(matches) != 1:
+            raise RuntimeError(f"cert task TaskSpec drift: {len(matches)}")
+        task_index = matches[0]
+        if "repository_commit=commit" not in lines[task_index]:
+            close = lines[task_index].rfind(")")
+            if close < 0:
+                raise RuntimeError("cert task TaskSpec close missing")
+            lines[task_index] = lines[task_index][:close] + ", repository_commit=commit" + lines[task_index][close:]
+        commit_line = '        commit = subprocess.check_output(["git", "-C", str(project), "rev-parse", "HEAD"], text=True).strip()\n'
+        if commit_line not in lines:
+            tree_matches = [
+                index for index, line in enumerate(lines)
+                if 'tree = subprocess.check_output(["git", "-C", str(project), "rev-parse", "HEAD^{tree}"]' in line
+            ]
+            if len(tree_matches) != 1:
+                raise RuntimeError(f"cert task tree anchor drift: {len(tree_matches)}")
+            lines.insert(tree_matches[0], commit_line)
+        return "".join(lines)
+
+    if label == "cert negative":
+        marker = 'wrong_commit = TaskSpec(**{**asdict(task), "repository_commit": "0" * len(commit)})'
+        if marker in text:
+            return text
+        lines = text.splitlines(keepends=True)
+        matches = [
+            index for index, line in enumerate(lines)
+            if 'require("task:certify-task:repository-tree-mismatch"' in line
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(f"cert negative tree check drift: {len(matches)}")
+        index = matches[0] + 1
+        lines[index:index] = [
+            '        wrong_commit = TaskSpec(**{**asdict(task), "repository_commit": "0" * len(commit)})\n',
+            '        require("task:certify-task:repository-commit-mismatch" in SignalBenchRunner(root / "validation").validate_product([wrong_commit], arms)["reasons"], "commit mismatch did not fail closed")\n',
+        ]
+        return "".join(lines)
+
+    if label == "cert contract keys":
+        required = (
+            "repository_commit_must_match",
+            "git_workspace_preserved",
+            "host_environment_isolated",
+            "explicit_environment_inheritance_only",
+        )
+        if all(key in text for key in required):
+            return text
+        anchor = '        "repository_git_tree_must_match", "repository_worktree_must_be_clean", "exact_product_version_required",\n'
+        if text.count(anchor) != 1:
+            raise RuntimeError(f"cert contract key anchor drift: {text.count(anchor)}")
+        replacement = (
+            '        "repository_git_tree_must_match", "repository_commit_must_match", "repository_worktree_must_be_clean",\n'
+            '        "git_workspace_preserved", "host_environment_isolated", "explicit_environment_inheritance_only", "exact_product_version_required",\n'
+        )
+        return text.replace(anchor, replacement, 1)
+
+    if label == "cert output":
+        if '"exact_repository_commit": True' in text:
+            return text
+        anchor = '        "frozen_repository_identity": True,\n'
+        if text.count(anchor) != 1:
+            raise RuntimeError(f"cert output anchor drift: {text.count(anchor)}")
+        replacement = (
+            anchor
+            + '        "exact_repository_commit": True,\n'
+            + '        "git_workspace_preserved": True,\n'
+            + '        "host_environment_isolated": True,\n'
+        )
+        return text.replace(anchor, replacement, 1)
+
+    raise RuntimeError(f"{label} drift: {old_count}")
+'''
+
+    if helper_marker not in source:
+        location = source.index(patch_marker)
+        source = source[:location] + helper + "\n\n" + source[location:]
+
+    old_test_loop = '''    for old, new, label in pairs:
+        count = text.count(old)
+        if count == 1:
+            text = text.replace(old, new, 1)
+            continue
+        if count == 0 and text.count(new) == 1:
+            continue
+        if label == "valid task fixture":
+            method_start = text.index("    def test_exact_tree_and_clean_worktree_are_enforced(")
+            method_end = text.index("\\n    @staticmethod\\n    def _result(", method_start)
+            block = text[method_start:method_end]
+            if "repo, commit, tree = self._repo(Path(temp))" not in block:
+                if block.count("repo, tree = self._repo(Path(temp))") != 1:
+                    raise RuntimeError("valid task repo unpack drift")
+                block = block.replace("repo, tree = self._repo(Path(temp))", "repo, commit, tree = self._repo(Path(temp))", 1)
+            if "repository_commit=commit" not in block:
+                lines = block.splitlines(keepends=True)
+                matches = [index for index, line in enumerate(lines) if "task = TaskSpec(" in line]
+                if len(matches) != 1:
+                    raise RuntimeError(f"valid task TaskSpec drift: {len(matches)}")
+                index = matches[0]
+                close = lines[index].rfind(")")
+                if close < 0:
+                    raise RuntimeError("valid task TaskSpec close missing")
+                lines[index] = lines[index][:close] + ", repository_commit=commit" + lines[index][close:]
+                block = "".join(lines)
+            text = text[:method_start] + block + text[method_end:]
+            continue
+        raise RuntimeError(f"{label} drift: {count}")
+'''
+    new_test_loop = '''    for old, new, label in pairs:
+        text = _apply_fixture_pair(text, old, new, label)
+'''
+    if source.count(old_test_loop) == 1:
+        source = source.replace(old_test_loop, new_test_loop, 1)
+    elif source.count(new_test_loop) != 1:
         raise RuntimeError("V14 test fixture loop source drift")
 
-    cert_old = '    for old, new, label in cert_pairs:\n        if text.count(old) != 1:\n            raise RuntimeError(f"{label} drift: {text.count(old)}")\n        text = text.replace(old, new, 1)\n'
-    cert_new = '    for old, new, label in cert_pairs:\n        count = text.count(old)\n        if count == 1:\n            text = text.replace(old, new, 1)\n            continue\n        if count == 0 and text.count(new) == 1:\n            continue\n        raise RuntimeError(f"{label} drift: {count}")\n'
-    if source.count(cert_old) == 1:
-        source = source.replace(cert_old, cert_new, 1)
-    elif source.count(cert_new) != 1:
+    old_cert_loop = '''    for old, new, label in cert_pairs:
+        count = text.count(old)
+        if count == 1:
+            text = text.replace(old, new, 1)
+            continue
+        if count == 0 and text.count(new) == 1:
+            continue
+        raise RuntimeError(f"{label} drift: {count}")
+'''
+    new_cert_loop = '''    for old, new, label in cert_pairs:
+        text = _apply_fixture_pair(text, old, new, label)
+'''
+    if source.count(old_cert_loop) == 1:
+        source = source.replace(old_cert_loop, new_cert_loop, 1)
+    elif source.count(new_cert_loop) != 1:
         raise RuntimeError("V14 certifier fixture loop source drift")
 
     compile(source, str(path), "exec")
     path.write_text(source, encoding="utf-8")
 
 
-def _extract(text: str) -> str:
-    lines = text.splitlines()
-    start_marker = "          python - <<'PY'"
-    try:
-        start = lines.index(start_marker) + 1
-    except ValueError as exc:
-        raise RuntimeError("outer helper apply block start marker missing") from exc
-    try:
-        tail = next(
-            index for index in range(start, len(lines))
-            if "registry_path.write_text(json.dumps(registry" in lines[index]
-        )
-    except StopIteration as exc:
-        raise RuntimeError("outer helper apply tail marker missing") from exc
-    try:
-        end = next(index for index in range(tail + 1, len(lines)) if lines[index] == "          PY")
-    except StopIteration as exc:
-        raise RuntimeError("outer helper apply closing marker missing") from exc
-    prefix = " " * 10
-    script = "\n".join(
-        line[len(prefix):] if line.startswith(prefix) else line
-        for line in lines[start:end]
-    ) + "\n"
-    script = _patch_pair_anchor(script)
-    return _patch_receipt_anchor(script)
-
-
 def main() -> None:
-    _patch_fix_hardened_compatibility()
-    _patch_v14_result_identity()
-    _patch_v14_fixture_compatibility()
-    module = _load_v9()
-    module.extract_outer_yaml_python_block = _extract
-    module.main()
+    previous = _load_previous()
+    previous.main()
+    _patch_all_fixture_drift()
 
 
 if __name__ == "__main__":
