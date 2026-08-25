@@ -122,6 +122,28 @@ def _patch_v14_result_identity() -> None:
     path.write_text(patched, encoding="utf-8")
 
 
+def _patch_v14_fixture_compatibility() -> None:
+    path = Path("/tmp/signalbench-v14-apply.py")
+    source = path.read_text(encoding="utf-8")
+
+    pairs_old = '    for old, new, label in pairs:\n        if text.count(old) != 1:\n            raise RuntimeError(f"{label} drift: {text.count(old)}")\n        text = text.replace(old, new, 1)\n'
+    pairs_new = '    for old, new, label in pairs:\n        count = text.count(old)\n        if count == 1:\n            text = text.replace(old, new, 1)\n            continue\n        if count == 0 and text.count(new) == 1:\n            continue\n        if label == "valid task fixture":\n            method_start = text.index("    def test_exact_tree_and_clean_worktree_are_enforced(")\n            method_end = text.index("\\n    @staticmethod\\n    def _result(", method_start)\n            block = text[method_start:method_end]\n            if "repo, commit, tree = self._repo(Path(temp))" not in block:\n                if block.count("repo, tree = self._repo(Path(temp))") != 1:\n                    raise RuntimeError("valid task repo unpack drift")\n                block = block.replace("repo, tree = self._repo(Path(temp))", "repo, commit, tree = self._repo(Path(temp))", 1)\n            if "repository_commit=commit" not in block:\n                lines = block.splitlines(keepends=True)\n                matches = [index for index, line in enumerate(lines) if "task = TaskSpec(" in line]\n                if len(matches) != 1:\n                    raise RuntimeError(f"valid task TaskSpec drift: {len(matches)}")\n                index = matches[0]\n                close = lines[index].rfind(")")\n                if close < 0:\n                    raise RuntimeError("valid task TaskSpec close missing")\n                lines[index] = lines[index][:close] + ", repository_commit=commit" + lines[index][close:]\n                block = "".join(lines)\n            text = text[:method_start] + block + text[method_end:]\n            continue\n        raise RuntimeError(f"{label} drift: {count}")\n'
+    if source.count(pairs_old) == 1:
+        source = source.replace(pairs_old, pairs_new, 1)
+    elif source.count(pairs_new) != 1:
+        raise RuntimeError("V14 test fixture loop source drift")
+
+    cert_old = '    for old, new, label in cert_pairs:\n        if text.count(old) != 1:\n            raise RuntimeError(f"{label} drift: {text.count(old)}")\n        text = text.replace(old, new, 1)\n'
+    cert_new = '    for old, new, label in cert_pairs:\n        count = text.count(old)\n        if count == 1:\n            text = text.replace(old, new, 1)\n            continue\n        if count == 0 and text.count(new) == 1:\n            continue\n        raise RuntimeError(f"{label} drift: {count}")\n'
+    if source.count(cert_old) == 1:
+        source = source.replace(cert_old, cert_new, 1)
+    elif source.count(cert_new) != 1:
+        raise RuntimeError("V14 certifier fixture loop source drift")
+
+    compile(source, str(path), "exec")
+    path.write_text(source, encoding="utf-8")
+
+
 def _extract(text: str) -> str:
     lines = text.splitlines()
     start_marker = "          python - <<'PY'"
@@ -152,6 +174,7 @@ def _extract(text: str) -> str:
 def main() -> None:
     _patch_fix_hardened_compatibility()
     _patch_v14_result_identity()
+    _patch_v14_fixture_compatibility()
     module = _load_v9()
     module.extract_outer_yaml_python_block = _extract
     module.main()
