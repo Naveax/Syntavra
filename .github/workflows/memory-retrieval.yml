@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: memory-retrieval-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   memory-retrieval:
@@ -25,24 +25,20 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-
       - name: Install Python runtime
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install -e .
-
       - name: Run Memory Retrieval regression tests
         shell: bash
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_memory_retrieval_v1 -v
-
       - name: Certify exact-head Memory Retrieval
         shell: bash
         run: |
@@ -52,7 +48,6 @@ jobs:
           import json
           import subprocess
           from pathlib import Path
-
           report = json.loads(Path('/tmp/memory-retrieval.json').read_text(encoding='utf-8'))
           head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           assert report['ok'] is True, report
@@ -68,7 +63,6 @@ jobs:
           assert report['rust']['production_promoted'] == 174
           assert report['rust']['remaining_parity_promotion'] == 71
           PY
-
       - name: Enforce exact clean pull request head
         if: always()
         shell: bash
@@ -80,7 +74,6 @@ jobs:
           status="$(git status --porcelain --untracked-files=all)"
           printf '%s\n' "$status"
           test -z "$status"
-
       - name: Upload Memory Retrieval evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
