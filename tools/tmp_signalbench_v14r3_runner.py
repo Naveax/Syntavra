@@ -73,6 +73,73 @@ def _patch_post_v14_legacy_identity_scope() -> None:
 
     text = text[:compare_start] + compare_block
     path.write_text(text, encoding="utf-8")
+
+
+def _diagnose_legacy_hardened_compare() -> None:
+    import hashlib
+    import json
+
+    from syntavra_runtime.signalbench_hardened import HardenedSignalBench, UsageReceipt
+
+    def digest(value: str) -> str:
+        return hashlib.sha256(value.encode()).hexdigest()
+
+    def row(task: str, arm: str, quota: float) -> dict[str, object]:
+        return {
+            "task_id": task,
+            "arm_id": arm,
+            "repetition": 1,
+            "cache_mode": "cold",
+            "success": True,
+            "verifier_success": True,
+            "verified_work": 1.0,
+            "quota_cost": quota,
+            "security_regressions": 0,
+            "verifier_skips": 0,
+            "repository_tree": "tree",
+            "prompt_hash": digest("prompt"),
+            "verifier_hash": digest("verifier"),
+            "permissions_hash": digest("permissions"),
+            "model": "same",
+            "reasoning": "same",
+            "context_window": 200000,
+            "hardware_hash": digest("hw"),
+        }
+
+    def receipt(task: str, arm: str, quota: float) -> UsageReceipt:
+        return UsageReceipt.seal(
+            task_id=task,
+            arm_id=arm,
+            repetition=1,
+            cache_mode="cold",
+            provider="test",
+            request_id_hash=digest(f"req:{task}:{arm}"),
+            provider_response_hash=digest(f"res:{task}:{arm}"),
+            fresh_input_tokens=100,
+            cached_input_tokens=0,
+            output_tokens=10,
+            reasoning_tokens=5,
+            quota_cost=quota,
+            hardware_hash=digest("hw"),
+        )
+
+    rows: list[dict[str, object]] = []
+    receipts: list[UsageReceipt] = []
+    for index in range(12):
+        task = f"t{index}"
+        rows.extend((row(task, "plain", 10.0), row(task, "syntavra", 2.0)))
+        receipts.extend((receipt(task, "plain", 10.0), receipt(task, "syntavra", 2.0)))
+
+    result = HardenedSignalBench.compare(
+        rows,
+        baseline_arm="plain",
+        candidate_arm="syntavra",
+        receipts=receipts,
+    )
+    print("legacy SignalBench comparator diagnostic:")
+    print(json.dumps(result, sort_keys=True, indent=2))
+    if result.get("claimable_superiority") is not True:
+        raise RuntimeError("legacy SignalBench comparator compatibility self-check failed")
 '''
 
     if "_repair_legacy_hardened_identity_scope(path: Path)" not in source:
@@ -80,7 +147,7 @@ def _patch_post_v14_legacy_identity_scope() -> None:
         source = source[:location] + helper + "\n\n" + source[location:]
 
     anchor = "    _normalize_signalbench_runner_ten_space_drift(runtime_signalbench)\n    for generated in (\n"
-    replacement = "    _normalize_signalbench_runner_ten_space_drift(runtime_signalbench)\n    _repair_legacy_hardened_identity_scope(Path(\"syntavra_runtime/signalbench_hardened.py\"))\n    for generated in (\n"
+    replacement = "    _normalize_signalbench_runner_ten_space_drift(runtime_signalbench)\n    _repair_legacy_hardened_identity_scope(Path(\"syntavra_runtime/signalbench_hardened.py\"))\n    _diagnose_legacy_hardened_compare()\n    for generated in (\n"
     if source.count(anchor) != 1:
         raise RuntimeError(f"post-V14 compatibility call anchor drift: {source.count(anchor)}")
     source = source.replace(anchor, replacement, 1)
