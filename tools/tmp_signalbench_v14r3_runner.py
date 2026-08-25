@@ -33,27 +33,6 @@ def _patch_post_v14_legacy_identity_scope() -> None:
     compare_start = text.index("    @classmethod\\n    def compare(", class_start)
     compare_block = text[compare_start:]
 
-    value_old = (
-        "    @staticmethod\\n"
-        "    def _value(row: Mapping[str, Any] | Any, key: str, default: Any = None) -> Any:\\n"
-        "        return row.get(key, default) if isinstance(row, Mapping) else getattr(row, key, default)\\n"
-    )
-    value_new = (
-        "    @staticmethod\\n"
-        "    def _value(row: Mapping[str, Any] | Any, key: str, default: Any = None) -> Any:\\n"
-        "        value = row.get(key, default) if isinstance(row, Mapping) else getattr(row, key, default)\\n"
-        "        if key == \\\"arm_version\\\" and (value is None or value == \\\"\\\"):\\n"
-        "            usage_receipt_hash = row.get(\\\"usage_receipt_hash\\\", \\\"\\\") if isinstance(row, Mapping) else getattr(row, \\\"usage_receipt_hash\\\", \\\"\\\")\\n"
-        "            if not usage_receipt_hash:\\n"
-        "                return \\\"__legacy_unversioned__\\\"\\n"
-        "        return value\\n"
-    )
-    prefix = text[:compare_start]
-    if prefix.count(value_old) == 1:
-        prefix = prefix.replace(value_old, value_new, 1)
-    elif value_new not in prefix:
-        raise RuntimeError("post-V14 HardenedSignalBench._value anchor drift")
-
     loop = "            for field in cls.identity_fields:\\n"
     if compare_block.count(loop) != 1:
         raise RuntimeError(
@@ -83,6 +62,34 @@ def _patch_post_v14_legacy_identity_scope() -> None:
         )
         compare_block = compare_block.replace(loop, replacement, 1)
 
+    claim_anchor = "        claimable = bool(\\n"
+    if compare_block.count(claim_anchor) != 1:
+        raise RuntimeError(
+            f"hardened claimable anchor drift after V14: {compare_block.count(claim_anchor)}"
+        )
+    legacy_global_filter_marker = "        legacy_unversioned_arms = set()\\n"
+    if legacy_global_filter_marker not in compare_block:
+        legacy_filter = (
+            "        legacy_unversioned_arms = set()\\n"
+            "        for legacy_arm in (baseline_arm, candidate_arm):\\n"
+            "            arm_rows = [row for (task, repetition, cache, arm), row in keyed.items() if arm == legacy_arm]\\n"
+            "            if arm_rows and all(\\n"
+            "                not (row.get(\\\"usage_receipt_hash\\\", \\\"\\\") if isinstance(row, Mapping) else getattr(row, \\\"usage_receipt_hash\\\", \\\"\\\"))\\n"
+            "                and not (row.get(\\\"arm_version\\\", \\\"\\\") if isinstance(row, Mapping) else getattr(row, \\\"arm_version\\\", \\\"\\\"))\\n"
+            "                for row in arm_rows\\n"
+            "            ):\\n"
+            "                legacy_unversioned_arms.add(legacy_arm)\\n"
+            "        identity_mismatches = [\\n"
+            "            item for item in identity_mismatches\\n"
+            "            if not (\\n"
+            "                item.get(\\\"scope\\\") == \\\"arm-global\\\"\\n"
+            "                and item.get(\\\"arm\\\") in legacy_unversioned_arms\\n"
+            "                and item.get(\\\"fields\\\") == [\\\"arm_version\\\"]\\n"
+            "            )\\n"
+            "        ]\\n"
+        )
+        compare_block = compare_block.replace(claim_anchor, legacy_filter + claim_anchor, 1)
+
     required_compatibility = (
         'base_provider = str(cls._value(base, "provider", "") or (base_receipt.provider if base_receipt is not None else ""))',
         'candidate_provider = str(cls._value(candidate, "provider", "") or (candidate_receipt.provider if candidate_receipt is not None else ""))',
@@ -93,7 +100,7 @@ def _patch_post_v14_legacy_identity_scope() -> None:
     if missing:
         raise RuntimeError(f"post-V14 compatibility guards missing: {missing}")
 
-    text = prefix + compare_block
+    text = text[:compare_start] + compare_block
     path.write_text(text, encoding="utf-8")
 
 
