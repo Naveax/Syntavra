@@ -35,6 +35,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -f tools/tmp_python_only_retirement_repair.py
+          test -f tools/tmp_python_only_retirement_continuity_fix.py
           test -f .github/workflows/tmp-python-completion-phase-exit-materializer.yml
 
       - name: Set up Python 3.12
@@ -48,11 +49,15 @@ jobs:
       - name: Reconcile Python completion with Rust retirement
         run: python tools/tmp_python_only_retirement_repair.py
 
+      - name: Reconcile Python-only continuation authority
+        run: python tools/tmp_python_only_retirement_continuity_fix.py
+
       - name: Remove temporary surfaces and seal permanent manifest
         shell: bash
         run: |
           set -euo pipefail
           git rm tools/tmp_python_only_retirement_repair.py
+          git rm tools/tmp_python_only_retirement_continuity_fix.py
           git rm .github/workflows/tmp-python-completion-phase-exit-materializer.yml
           rm -rf syntavra_runtime.egg-info
           python tools/refresh_manifest.py
@@ -89,6 +94,33 @@ jobs:
           python tools/validate.py
           python tools/validate_release.py --smoke --output /tmp/release-smoke-precommit.json
 
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          assert registry['python_complete']['ready'] is True
+          assert registry['python_complete']['rust_resume_allowed'] is False
+          assert registry['python_complete']['rust_retired'] is True
+          assert registry['policy']['python_complete_does_not_auto_resume_rust'] is True
+          assert registry['policy']['rust_retirement_is_independent_of_python_complete'] is True
+          assert registry['policy']['python_hardening_continues_while_rust_retired'] is True
+          assert registry['policy']['rust_transition_capabilities_deferred_while_retired'] is True
+
+          checklist = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
+          assert 'FEATURE/PARITY RESUME ALLOWED' not in checklist
+          assert 'Lift Rust feature-freeze guard for feature/parity development' not in checklist
+          assert 'Rust feature/parity development may resume.' not in checklist
+          assert 'RETIRED/FROZEN — rust_resume_allowed=false' in checklist
+          assert 'Capabilities 271–275 are Rust-transition work and remain deferred' in checklist
+
+          live = Path('docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md').read_text(encoding='utf-8')
+          assert 'PYTHON_COMPLETE = true' in live
+          assert 'rust_resume_allowed = false' in live
+          assert 'rust_retired = true' in live
+          assert '240–270' in live and '271–275' in live and '276–280' in live
+          PY
+
       - name: Commit permanent Python-only candidate
         shell: bash
         run: |
@@ -104,6 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           test ! -e tools/tmp_python_only_retirement_repair.py
+          test ! -e tools/tmp_python_only_retirement_continuity_fix.py
           test ! -e .github/workflows/tmp-python-completion-phase-exit-materializer.yml
           python tools/refresh_manifest.py --check
           python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
@@ -159,6 +192,14 @@ jobs:
           assert registry['python_complete']['rust_retired'] is True
           assert registry['policy']['python_complete_does_not_auto_resume_rust'] is True
           assert registry['policy']['rust_retirement_is_independent_of_python_complete'] is True
+          assert registry['policy']['python_hardening_continues_while_rust_retired'] is True
+          assert registry['policy']['rust_transition_capabilities_deferred_while_retired'] is True
+
+          checklist = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
+          assert 'FEATURE/PARITY RESUME ALLOWED' not in checklist
+          assert 'Lift Rust feature-freeze guard for feature/parity development' not in checklist
+          assert 'Rust feature/parity development may resume.' not in checklist
+          assert 'RETIRED/FROZEN — rust_resume_allowed=false' in checklist
           PY
           rm -rf syntavra_runtime.egg-info
           rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
