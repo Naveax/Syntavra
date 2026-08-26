@@ -30,6 +30,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/host-adapter-conformance.yml",
     ".github/workflows/observability-attribution.yml",
     ".github/workflows/signalbench-python-product.yml",
+    ".github/workflows/python-completion-certificate.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",

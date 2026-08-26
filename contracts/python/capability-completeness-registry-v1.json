@@ -548,6 +548,13 @@
       "classification": "NEW",
       "required_for_python_complete": true,
       "implementation_evidence": [
+        "contracts/python/python-completion-certificate-v1.json",
+        "tools/certify_python_completion_certificate_v1.py",
+        "tools/python_completion_platform_smoke.py",
+        "tests/runtime/test_python_completion_certificate_v1.py",
+        ".github/workflows/python-completion-certificate.yml",
+        ".github/workflows/release-main-merge-gate.yml",
+        "tests/runtime/test_release_action_pins.py",
         "contracts/python/capability-completeness-registry-v1.json",
         "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
         "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"

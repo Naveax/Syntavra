@@ -34,7 +34,10 @@
   },
   "platform_receipts": {
     "claim": "PYTHON_COMPLETION_PLATFORM_SMOKE_V1",
-    "required_platforms": ["linux", "windows"],
+    "required_platforms": [
+      "linux",
+      "windows"
+    ],
     "exact_head_required": true,
     "clean_install_required": true,
     "source_import_isolation_required": true,
@@ -43,13 +46,18 @@
   },
   "contract_freeze": {
     "mode": "registry-derived-certified-python-contracts",
-    "expected_contract_count": 0,
-    "expected_sha256": "pin-after-generation",
+    "expected_contract_count": 20,
+    "expected_sha256": "80d6b40215f88f2c72ca6eac995f64306ac091b9cee30cde619531b75515c2e6",
     "self_contract_excluded": true,
     "external_evidence_excluded": true
   },
   "lifecycle": {
-    "allowed_states": ["partial", "implemented", "verified", "certified"],
+    "allowed_states": [
+      "partial",
+      "implemented",
+      "verified",
+      "certified"
+    ],
     "pass_state": "certified",
     "implementation_pass_must_not_open_python_complete": true,
     "python_complete_requires_certificate_pass": true,
