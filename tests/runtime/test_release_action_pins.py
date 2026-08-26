@@ -29,6 +29,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/output-intelligence.yml",
     ".github/workflows/host-adapter-conformance.yml",
     ".github/workflows/observability-attribution.yml",
+    ".github/workflows/signalbench-python-product.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",

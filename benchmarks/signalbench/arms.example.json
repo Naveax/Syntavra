@@ -5,90 +5,204 @@
     {
       "arm_id": "plain-host",
       "category": "baseline",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "plain", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "plain",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "pin-exact-host-version",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
       "environment": {},
-      "adapter": "external-json-v1"
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     },
     {
       "arm_id": "caveman",
       "category": "output-style",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "caveman", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "caveman",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "pin-exact-version",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
       "environment": {},
-      "adapter": "external-json-v1"
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     },
     {
       "arm_id": "rtk",
       "category": "tool-output",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "rtk", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "rtk",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "pin-exact-version",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
       "environment": {},
-      "adapter": "external-json-v1"
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     },
     {
       "arm_id": "token-savior",
       "category": "context-runtime",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "token-savior", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "token-savior",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "pin-exact-version",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
       "environment": {},
-      "adapter": "external-json-v1"
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     },
     {
       "arm_id": "jcodemunch",
       "category": "repository-context",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "jcodemunch", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "jcodemunch",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "pin-exact-version",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
       "environment": {},
-      "adapter": "external-json-v1"
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     },
     {
       "arm_id": "full-competitor-pack",
       "category": "combined",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "full-competitor-pack", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "full-competitor-pack",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "pin-every-component-version",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
       "environment": {},
-      "adapter": "external-json-v1"
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     },
     {
       "arm_id": "syntavra-minimal",
       "category": "candidate",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "syntavra", "--profile", "minimal", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "syntavra",
+        "--profile",
+        "minimal",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "0.0.1",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
-      "environment": {"SYNTAVRA_MCP_PROFILE": "minimal", "SYNTAVRA_SCHEMA_MODE": "compact"},
-      "adapter": "external-json-v1"
+      "environment": {
+        "SYNTAVRA_MCP_PROFILE": "minimal",
+        "SYNTAVRA_SCHEMA_MODE": "compact"
+      },
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     },
     {
       "arm_id": "syntavra-balanced",
       "category": "candidate",
-      "command": ["python", "benchmarks/signalbench/adapters/external_cli.py", "--product", "syntavra", "--profile", "balanced", "--request", "{request}", "--output", "{output}", "--workspace", "{workspace}"],
+      "command": [
+        "python",
+        "-m",
+        "syntavra_runtime.signalbench_external_adapter",
+        "--product",
+        "syntavra",
+        "--profile",
+        "balanced",
+        "--request",
+        "{request}",
+        "--output",
+        "{output}",
+        "--workspace",
+        "{workspace}"
+      ],
       "version": "0.0.1",
       "model": "pin-identical-model",
       "reasoning": "pin-identical-reasoning",
       "context_window": 258400,
-      "environment": {"SYNTAVRA_MCP_PROFILE": "balanced", "SYNTAVRA_SCHEMA_MODE": "compact"},
-      "adapter": "external-json-v1"
+      "environment": {
+        "SYNTAVRA_MCP_PROFILE": "balanced",
+        "SYNTAVRA_SCHEMA_MODE": "compact"
+      },
+      "adapter": "external-json-v1",
+      "inherit_environment": []
     }
   ]
 }
