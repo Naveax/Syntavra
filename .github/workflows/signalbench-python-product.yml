@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: signalbench-python-product-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   signalbench-python-product:
@@ -82,8 +82,7 @@ jobs:
           rm -rf syntavra_runtime.egg-info
           git diff --check
           status="$(git status --porcelain --untracked-files=all)"
-          printf '%s
-          ' "$status"
+          printf '%s\n          ' "$status"
           test -z "$status"
 
       - name: Upload SignalBench Python product evidence
