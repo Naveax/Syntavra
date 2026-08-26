@@ -6,13 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-LEGACY_CERTIFIERS = [
+LEGACY_INLINE_CERTIFIERS = [
     "tools/certify_universal_context_item.py",
     "tools/certify_evidence_store_v2.py",
     "tools/certify_typed_context_object_store.py",
     "tools/certify_programmatic_execution.py",
     "tools/certify_deferred_tool_discovery.py",
     "tools/certify_context_namespace.py",
+    "tools/certify_adaptive_context_policy.py",
 ]
 
 OLD_GLOBAL_STATE = (
@@ -21,6 +22,27 @@ OLD_GLOBAL_STATE = (
 )
 NEW_GLOBAL_STATE = (
     '    _require(isinstance(completeness.get("python_complete_ready"), bool), "Python COMPLETE state must be boolean")\n'
+    '    _require(\n'
+    '        completeness.get("python_complete_ready") is completeness.get("rust_resume_allowed"),\n'
+    '        "Python COMPLETE/Rust resume state disagreement",\n'
+    '    )\n'
+)
+
+MULTI_GRAPH_OLD = (
+    '    _require(\n'
+    '        completeness.get("python_complete_ready") is False,\n'
+    '        "Python COMPLETE unexpectedly true",\n'
+    '    )\n'
+    '    _require(\n'
+    '        completeness.get("rust_resume_allowed") is False,\n'
+    '        "Rust resume unexpectedly true",\n'
+    '    )\n'
+)
+MULTI_GRAPH_NEW = (
+    '    _require(\n'
+    '        isinstance(completeness.get("python_complete_ready"), bool),\n'
+    '        "Python COMPLETE state must be boolean",\n'
+    '    )\n'
     '    _require(\n'
     '        completeness.get("python_complete_ready") is completeness.get("rust_resume_allowed"),\n'
     '        "Python COMPLETE/Rust resume state disagreement",\n'
@@ -36,8 +58,15 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-for relative in LEGACY_CERTIFIERS:
+for relative in LEGACY_INLINE_CERTIFIERS:
     replace_once(ROOT / relative, OLD_GLOBAL_STATE, NEW_GLOBAL_STATE, "legacy global lifecycle assertion")
+
+replace_once(
+    ROOT / "tools/certify_multi_graph_retrieval.py",
+    MULTI_GRAPH_OLD,
+    MULTI_GRAPH_NEW,
+    "multi-graph global lifecycle assertion",
+)
 
 replace_once(
     ROOT / "tools/certify_universal_context_item.py",
