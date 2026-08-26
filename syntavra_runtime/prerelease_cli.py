@@ -364,7 +364,26 @@ def _handle_prove(args: argparse.Namespace, state: Path) -> int:
         value["provider_observed_runs"] = sum(bool(row.provider_observed) for row in rows)
         value["total_runs"] = len(rows)
         value["fail_closed"] = True
-        _emit(value)
+        compatibility = {
+            key: value[key]
+            for key in (
+                "baseline",
+                "candidate",
+                "claim",
+                "claimable_superiority",
+                "confidence_interval_95",
+                "fail_closed",
+                "invalid_pairs",
+                "median_efficiency_ratio",
+                "pass_rates",
+                "provider_observed_pairs",
+                "provider_observed_runs",
+                "provider_unobserved_pairs",
+                "total_runs",
+                "valid_pairs",
+            )
+        }
+        _emit(compatibility)
         return 0 if value["claimable_superiority"] else 4
     if args.action == "schema":
         output = Path(args.output)
