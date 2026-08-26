@@ -74,7 +74,6 @@ b95830ec83879cbccd2aa2ea9f1d7164f9dc542e0a095e7d8427a7d9d8455c64  .github/workfl
 15fc82f571204fdff1c3d47600efd2bb5d7da7fe9e5bd5d34982cd212654542e  .github/workflows/rust-feature-freeze-guard.yml
 386803d21749d6a1b507fff365683192ac9b3c4df278db348d852aee018f0ba3  .github/workflows/signalbench-python-product.yml
 7f01aedb4c7d1975050a4d22685bbad1a9cd0825db6457dbb40135b55ff7c39a  .github/workflows/tmp-agent-live-parity-repair.yml
-646a96992ffcc263273a1d8b322215f5ab90ea422d0ada48746eff09531b8b00  .github/workflows/tmp-signalbench-admission-closure-executor.yml
 a915b1cc5bc79197f8bdfb5810063364417e5a8419d0ce0a463e3c02b697b6d1  .github/workflows/typed-context-object-store.yml
 4c7a9ad3242fad354b11214a023d73cb6ac5e14b10de3bd49d3820478b5e3496  .github/workflows/unified-context-namespace.yml
 dd8f7c6680adb9d1653e29bd0952f0f5fd42e1f1363b6dd8cb01938ae743eb6b  .github/workflows/universal-context-item.yml
