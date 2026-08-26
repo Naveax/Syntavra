@@ -311,7 +311,8 @@ def test_provider_billed_signalbench_is_receipt_gated() -> None:
         rows.extend((_result("plain-host", repetition, 2.0), _result("syntavra-minimal", repetition, 1.0)))
     comparison = SignalBenchRunner.compare(rows, baseline_arm="plain-host", candidate_arm="syntavra-minimal")
     assert comparison["valid_pairs"] == 10
-    assert comparison["claimable_superiority"] is True
+    assert comparison["claimable_superiority"] is False
+    assert comparison["receipt_errors"]
     unobserved = [RunResult(**(asdict(row) | {"provider_observed": False})) for row in rows]
     assert SignalBenchRunner.compare(unobserved, baseline_arm="plain-host", candidate_arm="syntavra-minimal")["claimable_superiority"] is False
 

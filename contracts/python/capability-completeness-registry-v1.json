@@ -507,9 +507,20 @@
       "classification": "CERTIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
+        "contracts/python/signalbench-python-product-v1.json",
+        "contracts/python/benchmark-proof-reference-v1.json",
         "benchmarks/signalbench/README.md",
         "benchmarks/signalbench/tasks.example.json",
-        "benchmarks/signalbench/arms.example.json"
+        "benchmarks/signalbench/arms.example.json",
+        "benchmarks/signalbench/adapters/external_cli.py",
+        "syntavra_runtime/signalbench.py",
+        "syntavra_runtime/signalbench_hardened.py",
+        "tools/certify_python_benchmark_proof_reference.py",
+        "tools/certify_signalbench_python_product_v1.py",
+        "tests/runtime/test_signalbench_python_product_v1.py",
+        ".github/workflows/signalbench-python-product.yml",
+        "syntavra_runtime/usage_receipt_ledger.py",
+        "syntavra_runtime/signalbench_external_adapter.py"
       ],
       "certification_evidence": [],
       "acceptance": "Frozen-arm Python product suite measures provider-observed cost per verified successful task plus quality/safety/runtime metrics."
