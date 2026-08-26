@@ -35,6 +35,11 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+
+
 def _head(repo: Path) -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
 
@@ -122,25 +127,13 @@ def _transitive_invalidation_smoke() -> dict[str, Any]:
         repo = Path(directory)
         contracts = repo / "contracts/python"
         contracts.mkdir(parents=True)
-        (contracts / "a.json").write_text(
-            json.dumps({"schema_version": 1, "family": "a", "claim": "A", "phase": "python-first", "authority": {"b": "contracts/python/b.json"}}),
-            encoding="utf-8",
-        )
-        (contracts / "b.json").write_text(
-            json.dumps({"schema_version": 1, "family": "b", "claim": "B", "phase": "python-first", "authority": {"c": "contracts/python/c.json"}}),
-            encoding="utf-8",
-        )
-        (contracts / "c.json").write_text(
-            json.dumps({"schema_version": 1, "family": "c", "claim": "C", "phase": "python-first", "value": 1}),
-            encoding="utf-8",
-        )
+        _write_json(contracts / "a.json", {"schema_version": 1, "family": "a", "claim": "A", "phase": "python-first", "authority": {"b": "contracts/python/b.json"}})
+        _write_json(contracts / "b.json", {"schema_version": 1, "family": "b", "claim": "B", "phase": "python-first", "authority": {"c": "contracts/python/c.json"}})
+        _write_json(contracts / "c.json", {"schema_version": 1, "family": "c", "claim": "C", "phase": "python-first", "value": 1})
 
         graph = RuntimeContractVersionGraph(repo)
         before = graph.build()
-        (contracts / "c.json").write_text(
-            json.dumps({"schema_version": 2, "family": "c", "claim": "C", "phase": "python-first", "value": 2}),
-            encoding="utf-8",
-        )
+        _write_json(contracts / "c.json", {"schema_version": 2, "family": "c", "claim": "C", "phase": "python-first", "value": 2})
         after = graph.build()
         plan = RuntimeContractVersionGraph.invalidation_plan(before, after)
         _require(plan["changed_contracts"] == ["contracts/python/c.json"], f"changed contract smoke drift: {plan}")
@@ -153,6 +146,40 @@ def _transitive_invalidation_smoke() -> dict[str, Any]:
             "transitive_reverse_dependency_invalidation": True,
             "schema_and_content_change_detected": True,
             "content_addressed_invalidation_receipt": True,
+        }
+
+
+def _metadata_leaf_smoke() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="syntavra-contract-graph-leaf-") as directory:
+        repo = Path(directory)
+        _write_json(
+            repo / "contracts/python/a.json",
+            {"schema_version": 1, "family": "a", "authority": {"engine": "contracts/engine/b.json"}},
+        )
+        _write_json(
+            repo / "contracts/engine/b.json",
+            {"schema_version": 1, "family": "b", "authority": {"deeper": "contracts/engine/c.json"}},
+        )
+        _write_json(repo / "contracts/engine/c.json", {"schema_version": 1, "family": "c"})
+
+        snapshot = RuntimeContractVersionGraph(repo).build()
+        paths = {node["path"] for node in snapshot["nodes"]}
+        edges = {(row["dependent"], row["dependency"]) for row in snapshot["edges"]}
+        _require(paths == {"contracts/python/a.json", "contracts/engine/b.json"}, f"external leaf expansion drift: {paths}")
+        _require(edges == {("contracts/python/a.json", "contracts/engine/b.json")}, f"external leaf edge drift: {edges}")
+        _require(snapshot["metadata_leaf_count"] == 1, f"external metadata leaf count drift: {snapshot}")
+
+        try:
+            RuntimeContractVersionGraph(repo, allow_external_contract_refs=False).build()
+        except ValueError as exc:
+            _require("external contract dependency forbidden" in str(exc), f"unexpected external-ref rejection: {exc}")
+        else:
+            raise AssertionError("external dependency opt-out did not fail closed")
+
+        return {
+            "external_contracts_are_metadata_only_leaves": True,
+            "external_leaf_recursive_expansion_forbidden": True,
+            "external_dependency_opt_out_fails_closed": True,
         }
 
 
@@ -172,6 +199,8 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(first == second, "contract version graph is not deterministic")
     _require(first["node_count"] >= 20, f"unexpectedly small contract graph: {first['node_count']}")
     _require(first["edge_count"] > 0, "contract graph has no dependency edges")
+    _require(isinstance(first.get("metadata_leaf_count"), int), "contract graph metadata leaf count missing")
+    _require(first["metadata_leaf_count"] >= 0, "contract graph metadata leaf count invalid")
     _require(len(first["graph_sha256"]) == 64, "contract graph digest missing")
 
     paths = {node["path"] for node in first["nodes"]}
@@ -186,7 +215,10 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(unchanged["changed_count"] == 0, "unchanged graph produced invalidation")
     _require(unchanged["invalidated_count"] == 0, "unchanged graph invalidated contracts")
 
-    smoke = _transitive_invalidation_smoke()
+    smoke = {
+        **_transitive_invalidation_smoke(),
+        **_metadata_leaf_smoke(),
+    }
     exact_head = _head(repo)
     _require(len(exact_head) == 40, "unable to resolve exact git head")
     return {
@@ -198,6 +230,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "graph": {
             "node_count": first["node_count"],
             "edge_count": first["edge_count"],
+            "metadata_leaf_count": first["metadata_leaf_count"],
             "graph_sha256": first["graph_sha256"],
             "roots": first["roots"],
         },
