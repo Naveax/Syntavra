@@ -58,11 +58,12 @@ jobs:
           else:
               assert report['current_milestone'] in report['uncertified_required'], report
           assert report['registry_admission_ready'] is True
-          assert report['python_complete_ready'] is report['rust_resume_allowed']
+          assert report['python_complete_ready'] is True
+          assert report['rust_resume_allowed'] is False
           assert report['rust']['implementation_coverage'] == 245
           assert report['rust']['production_promoted'] == 174
           assert report['rust']['remaining_parity_promotion'] == 71
-          assert report['rust']['feature_development_frozen'] is (not report['rust_resume_allowed'])
+          assert report['rust']['feature_development_frozen'] is True
           PY
 
       - name: Enforce clean exact-head repository
