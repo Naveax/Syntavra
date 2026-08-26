@@ -429,27 +429,34 @@ def command_benchmark(args: argparse.Namespace) -> int:
 
 
 def command_signalbench(args: argparse.Namespace) -> int:
-    runner = SignalBenchRunner(Path(args.output_root), seed=args.seed)
-    if args.action == "validate":
-        result = runner.validate(runner.load_tasks(Path(args.tasks)), runner.load_arms(Path(args.arms)))
-        emit(result)
-        return 0 if result["ok"] else 3
-    if args.action == "manifest":
-        emit(runner.write_manifest(Path(args.output), runner.load_tasks(Path(args.tasks)), runner.load_arms(Path(args.arms))))
-        return 0
-    if args.action == "run":
-        result = runner.run(
-            runner.load_tasks(Path(args.tasks)), runner.load_arms(Path(args.arms)),
-            repetitions=args.repetitions, cache_modes=tuple(args.cache_mode), randomized=not args.no_randomize,
-        )
-        emit({"result_hash": result["result_hash"], "runs": len(result["results"]), "output": str(Path(args.output_root) / "results.json")})
-        return 0
     if args.action == "compare":
-        result = runner.compare(load_results(Path(args.results)), baseline_arm=args.baseline_arm, candidate_arm=args.candidate_arm)
+        result = SignalBenchRunner.compare(load_results(Path(args.results)), baseline_arm=args.baseline_arm, candidate_arm=args.candidate_arm)
         if args.output:
             atomic_write_json(Path(args.output), result, mode=0o644)
         emit(result)
         return 0 if result["claimable_superiority"] else 3
+
+    runner = SignalBenchRunner(Path(args.output_root), seed=args.seed)
+    tasks = runner.load_tasks(Path(args.tasks))
+    arms = runner.load_arms(Path(args.arms))
+    if args.action == "validate":
+        result = runner.validate_product(tasks, arms)
+        emit(result)
+        return 0 if result["ok"] else 3
+    if args.action == "manifest":
+        validation = runner.validate_product(tasks, arms)
+        if not validation["ok"]:
+            emit(validation)
+            return 3
+        emit(runner.write_manifest(Path(args.output), tasks, arms))
+        return 0
+    if args.action == "run":
+        result = runner.run(
+            tasks, arms,
+            repetitions=args.repetitions, cache_modes=tuple(args.cache_mode), randomized=not args.no_randomize,
+        )
+        emit({"result_hash": result["result_hash"], "runs": len(result["results"]), "output": str(Path(args.output_root) / "results.json")})
+        return 0
     raise ValueError(args.action)
 
 

@@ -1,0 +1,68 @@
+{
+  "admission": {
+    "capability_registry_current_milestone": "signalbench_python_product_v1",
+    "observability_attribution_must_be_certified": true,
+    "python_complete_must_remain_false_during_implementation": true,
+    "rust_production_promoted": 174,
+    "rust_remaining_parity_promotion": 71,
+    "rust_resume_must_remain_false": true
+  },
+  "claim": "SIGNALBENCH_PYTHON_PRODUCT_V1",
+  "claim_boundary": "This contract certifies the repository-internal SignalBench Python product machinery: frozen task/arm identity, clean exact Git-tree execution, provider-observed sealed usage receipts, failure-inclusive hardened paired comparison, and fail-closed quality/safety gates. Repository self-certification does not prove live external superiority, adoption, marketplace maturity, provider billing truth beyond supplied receipts, Python COMPLETE, or Rust Remaining-71 promotion.",
+  "family": "signalbench-python-product",
+  "frozen_identity": {
+    "context_window_bound": true,
+    "exact_model_required": true,
+    "exact_product_version_required": true,
+    "exact_reasoning_required": true,
+    "explicit_environment_inheritance_only": true,
+    "git_workspace_preserved": true,
+    "hardware_identity_bound": true,
+    "host_environment_isolated": true,
+    "prompt_verifier_permissions_cache_bound": true,
+    "provider_identity_bound": true,
+    "repository_commit_must_match": true,
+    "repository_git_tree_must_match": true,
+    "repository_worktree_must_be_clean": true,
+    "submodules_fail_closed": true,
+    "template_placeholders_fail_closed": true
+  },
+  "measurement": {
+    "arm_version_stable_across_repetitions": true,
+    "candidate_pass_rate_must_not_regress": true,
+    "comparison_identity_stable_across_repetitions": true,
+    "confidence_interval": 0.95,
+    "duplicate_receipts_fail_closed": true,
+    "duplicate_result_keys_fail_closed": true,
+    "failure_inclusive": true,
+    "minimum_paired_samples_for_superiority": 10,
+    "missing_arm_pairs_fail_closed": true,
+    "primary_metric": "verified_work_per_provider_quota",
+    "provider_observed_usage_required": true,
+    "provider_request_reuse_forbidden": true,
+    "receipt_hashes_require_sha256_hex": true,
+    "sealed_usage_receipts_required": true,
+    "security_regressions_allowed": 0,
+    "task_identity_stable_across_repetitions": true,
+    "verifier_skips_allowed": 0
+  },
+  "ownership_policy": {
+    "existing_benchmark_proof_authority_reused": true,
+    "existing_hardened_comparator_reused": true,
+    "existing_signalbench_runner_reused": true,
+    "existing_usage_receipt_ledger_reused": true,
+    "new_public_cli_route_added": false,
+    "packaged_external_adapter_is_canonical": true,
+    "parallel_benchmark_engine_forbidden": true
+  },
+  "phase": "python-first",
+  "runtime": {
+    "benchmark_proof_authority": "contracts/python/benchmark-proof-reference-v1.json",
+    "comparison_authority": "syntavra_runtime/signalbench_hardened.py:HardenedSignalBench",
+    "external_adapter": "syntavra_runtime/signalbench_external_adapter.py",
+    "runner": "syntavra_runtime/signalbench.py:SignalBenchRunner",
+    "usage_receipt_ledger": "syntavra_runtime/usage_receipt_ledger.py:UsageReceiptLedger"
+  },
+  "schema_version": 1,
+  "strict": true
+}

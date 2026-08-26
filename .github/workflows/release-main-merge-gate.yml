@@ -66,6 +66,7 @@ jobs:
           python -m unittest tests.runtime.test_output_intelligence_v1 -v
           python -m unittest tests.runtime.test_host_adapter_conformance_v1 -v
           python -m unittest tests.runtime.test_observability_attribution_v1 -v
+          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v
           python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
           python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
           python tools/certify_python_authority.py --out /tmp/python-authority.json
@@ -84,6 +85,7 @@ jobs:
           python tools/certify_output_intelligence_v1.py --out /tmp/output-intelligence.json
           python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter-conformance.json
           python tools/certify_observability_attribution_v1.py --out /tmp/observability-attribution.json
+          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json
           python tools/check_rust_feature_freeze.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --out /tmp/rust-feature-freeze-diff.json
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
           python tools/refresh_manifest.py --check
