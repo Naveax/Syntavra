@@ -1,0 +1,240 @@
+name: Temporary Python Completion Certificate Executor
+
+on:
+  push:
+    branches:
+      - agent/python-completion-certificate-executor-20260826
+    paths:
+      - .github/workflows/tmp-python-completion-certificate-executor.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-python-completion-certificate-executor-20260826
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact executor head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/python-completion-certificate-executor-20260826
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: python -m pip install -e .
+
+      - name: Bind completion implementation into permanent authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry_path = Path("contracts/python/capability-completeness-registry-v1.json")
+          registry = json.loads(registry_path.read_text(encoding="utf-8"))
+          row = next(item for item in registry["capabilities"] if item["id"] == "python_completion_certificate_v1")
+          assert row["state"] == "partial", row
+          assert row["certification_evidence"] == [], row
+          row["implementation_evidence"] = [
+              "contracts/python/python-completion-certificate-v1.json",
+              "tools/certify_python_completion_certificate_v1.py",
+              "tools/python_completion_platform_smoke.py",
+              "tests/runtime/test_python_completion_certificate_v1.py",
+              ".github/workflows/python-completion-certificate.yml",
+              ".github/workflows/release-main-merge-gate.yml",
+              "tests/runtime/test_release_action_pins.py",
+              "contracts/python/capability-completeness-registry-v1.json",
+              "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
+              "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md",
+          ]
+          assert registry["python_complete"]["ready"] is False
+          assert registry["python_complete"]["rust_resume_allowed"] is False
+          registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+          release_path = Path(".github/workflows/release-main-merge-gate.yml")
+          release = release_path.read_text(encoding="utf-8")
+          test_anchor = "          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v\n"
+          cert_anchor = "          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json\n"
+          assert "tests.runtime.test_python_completion_certificate_v1" not in release
+          assert "tools/certify_python_completion_certificate_v1.py" not in release
+          release = release.replace(test_anchor, test_anchor + "          python -m unittest tests.runtime.test_python_completion_certificate_v1 -v\n")
+          release = release.replace(cert_anchor, cert_anchor + "          python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate.json\n")
+          release_path.write_text(release, encoding="utf-8")
+
+          pins_path = Path("tests/runtime/test_release_action_pins.py")
+          pins = pins_path.read_text(encoding="utf-8")
+          anchor = '    ".github/workflows/signalbench-python-product.yml",\n'
+          assert '".github/workflows/python-completion-certificate.yml"' not in pins
+          pins = pins.replace(anchor, anchor + '    ".github/workflows/python-completion-certificate.yml",\n')
+          pins_path.write_text(pins, encoding="utf-8")
+          PY
+
+      - name: Pin registry-derived Python contract freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.certify_python_completion_certificate_v1 import derive_contract_freeze
+
+          registry = json.loads(Path("contracts/python/capability-completeness-registry-v1.json").read_text(encoding="utf-8"))
+          contract_path = Path("contracts/python/python-completion-certificate-v1.json")
+          contract = json.loads(contract_path.read_text(encoding="utf-8"))
+          freeze = derive_contract_freeze(Path(".").resolve(), registry)
+          assert freeze["contract_count"] > 0, freeze
+          contract["contract_freeze"]["expected_contract_count"] = freeze["contract_count"]
+          contract["contract_freeze"]["expected_sha256"] = freeze["sha256"]
+          contract_path.write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(freeze, indent=2))
+          PY
+
+      - name: Remove helper and regenerate permanent manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/tmp-python-completion-certificate-executor.yml
+          python tools/refresh_manifest.py
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py --check
+          git diff --check
+
+      - name: Validate completion implementation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
+          python -m unittest tests.runtime.test_release_action_pins -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python tools/certify_python_completion_certificate_v1.py --repo . --out /tmp/python-completion-implementation.json
+          python tools/validate.py
+          python tools/validate_release.py --smoke --output /tmp/python-completion-release.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("/tmp/python-completion-implementation.json").read_text(encoding="utf-8"))
+          assert report["ok"] is True, report
+          assert report["implementation_ready"] is True, report
+          assert report["platform_runtime_ready"] is False, report
+          assert report["lifecycle_state"] == "partial", report
+          assert report["phase_exit_ready"] is False, report
+          assert report["certificate_status"] == "NOT_YET_ADMITTED", report
+          assert report["python_complete_ready"] is False, report
+          assert report["rust_resume_allowed"] is False, report
+          assert report["external_superiority_proven"] is False, report
+          PY
+
+      - name: Commit final helper-free implementation tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "syntavra-ci"
+          git config user.email "syntavra-ci@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: implement Python Completion Certificate v1"
+          git push origin HEAD:agent/python-completion-certificate-executor-20260826
+
+  platform-smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+          - os: windows-latest
+            platform: windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout final executor branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/python-completion-certificate-executor-20260826
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Clean non-editable install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Generate platform smoke receipt
+        run: python tools/python_completion_platform_smoke.py --repo . --platform ${{ matrix.platform }} --out python-completion-${{ matrix.platform }}.json
+
+      - name: Upload platform smoke receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tmp-python-completion-platform-${{ matrix.platform }}
+          path: python-completion-${{ matrix.platform }}.json
+          if-no-files-found: error
+
+  final-certificate:
+    needs: platform-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout final executor branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/python-completion-certificate-executor-20260826
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: python -m pip install -e .
+
+      - name: Download platform receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: tmp-python-completion-platform-*
+          path: ${{ runner.temp }}/python-completion-platform
+          merge-multiple: true
+
+      - name: Verify cross-platform implementation certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/certify_python_completion_certificate_v1.py --repo . --platform-evidence "${RUNNER_TEMP}/python-completion-platform/python-completion-linux.json" --platform-evidence "${RUNNER_TEMP}/python-completion-platform/python-completion-windows.json" --out /tmp/python-completion-cross-platform.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("/tmp/python-completion-cross-platform.json").read_text(encoding="utf-8"))
+          assert report["ok"] is True, report
+          assert report["implementation_ready"] is True, report
+          assert report["platform_runtime_ready"] is True, report
+          assert report["gates"]["windows_linux_runtime"] is True, report
+          assert report["lifecycle_state"] == "partial", report
+          assert report["phase_exit_ready"] is False, report
+          assert report["python_complete_ready"] is False, report
+          assert report["rust_resume_allowed"] is False, report
+          PY
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
