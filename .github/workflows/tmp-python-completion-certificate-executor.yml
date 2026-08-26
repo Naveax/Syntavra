@@ -113,10 +113,23 @@ jobs:
           python tools/refresh_manifest.py --check
           git diff --check
 
-      - name: Validate completion implementation boundary
+      - name: Commit final helper-free implementation tree
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name "syntavra-ci"
+          git config user.email "syntavra-ci@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: implement Python Completion Certificate v1"
+          git push origin HEAD:agent/python-completion-certificate-executor-20260826
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Validate committed completion implementation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/agent/python-completion-certificate-executor-20260826)"
+          test -z "$(git status --porcelain --untracked-files=all)"
           python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
           python -m unittest tests.runtime.test_release_action_pins -v
           python -m unittest tests.runtime.test_python_capability_completeness -v
@@ -138,16 +151,10 @@ jobs:
           assert report["rust_resume_allowed"] is False, report
           assert report["external_superiority_proven"] is False, report
           PY
-
-      - name: Commit final helper-free implementation tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "syntavra-ci"
-          git config user.email "syntavra-ci@users.noreply.github.com"
-          git add -A
-          git commit -m "feat: implement Python Completion Certificate v1"
-          git push origin HEAD:agent/python-completion-certificate-executor-20260826
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
 
   platform-smoke:
     needs: build
