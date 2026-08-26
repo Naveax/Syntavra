@@ -75,6 +75,8 @@ class RuntimeContractVersionGraph:
 
     The graph is metadata-only. It never owns product behavior or persistence.
     Edges point from a dependent contract to a referenced dependency contract.
+    Contracts outside the configured roots are represented as metadata-only leaf
+    authorities so Python-side analysis does not recurse into retired engines.
     """
 
     def __init__(
@@ -89,6 +91,12 @@ class RuntimeContractVersionGraph:
         if not self.roots:
             raise ValueError("at least one contract root is required")
         self.allow_external_contract_refs = bool(allow_external_contract_refs)
+
+    def _inside_roots(self, relative: str) -> bool:
+        return any(
+            relative == root or relative.startswith(root.rstrip("/") + "/")
+            for root in self.roots
+        )
 
     def _contract_paths(self) -> list[Path]:
         paths: set[Path] = set()
@@ -113,19 +121,26 @@ class RuntimeContractVersionGraph:
         return value
 
     def build(self) -> dict[str, Any]:
-        primary_paths = self._contract_paths()
         documents: dict[str, dict[str, Any]] = {}
-        queue = deque(primary_paths)
+        metadata_leaves: set[str] = set()
+        queue: deque[tuple[Path, bool]] = deque((path, True) for path in self._contract_paths())
 
         while queue:
-            path = queue.popleft()
+            path, expand = queue.popleft()
             relative = path.relative_to(self.repo).as_posix()
             if relative in documents:
+                if expand:
+                    metadata_leaves.discard(relative)
                 continue
             document = self._read_contract(path)
             documents[relative] = document
+            if not expand:
+                metadata_leaves.add(relative)
+                continue
 
             for target in sorted(_contract_refs(document)):
+                if target == relative:
+                    continue
                 target_path = (self.repo / target).resolve()
                 try:
                     target_path.relative_to(self.repo)
@@ -133,14 +148,11 @@ class RuntimeContractVersionGraph:
                     raise ValueError(f"contract reference escapes repository: {relative} -> {target}") from exc
                 if not target_path.is_file():
                     raise FileNotFoundError(f"missing contract dependency: {relative} -> {target}")
+                target_inside_roots = self._inside_roots(target)
+                if not target_inside_roots and not self.allow_external_contract_refs:
+                    raise ValueError(f"external contract dependency forbidden: {relative} -> {target}")
                 if target not in documents:
-                    if self.allow_external_contract_refs:
-                        queue.append(target_path)
-                    elif not any(
-                        target == root or target.startswith(root.rstrip("/") + "/")
-                        for root in self.roots
-                    ):
-                        raise ValueError(f"external contract dependency forbidden: {relative} -> {target}")
+                    queue.append((target_path, target_inside_roots))
 
         nodes: list[ContractVersionNode] = []
         edges: set[ContractDependencyEdge] = set()
@@ -157,6 +169,8 @@ class RuntimeContractVersionGraph:
                     sha256=hashlib.sha256(payload).hexdigest(),
                 )
             )
+            if relative in metadata_leaves:
+                continue
             for dependency in sorted(_contract_refs(document)):
                 if dependency == relative:
                     continue
@@ -178,6 +192,7 @@ class RuntimeContractVersionGraph:
             "roots": list(self.roots),
             "node_count": len(node_rows),
             "edge_count": len(edge_rows),
+            "metadata_leaf_count": len(metadata_leaves),
             "nodes": node_rows,
             "edges": edge_rows,
             "graph_sha256": _digest(identity),
