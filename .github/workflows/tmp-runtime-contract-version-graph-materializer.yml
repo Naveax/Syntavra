@@ -1,11 +1,11 @@
 name: Temporary Runtime Contract Version Graph Materializer
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/runtime-contract-version-graph-v1
-    paths:
-      - .github/workflows/tmp-runtime-contract-version-graph-materializer.yml
+      - automation/runtime-contract-version-graph-materializer-base-240
+    types:
+      - opened
 
 permissions:
   contents: write
@@ -101,13 +101,27 @@ jobs:
           registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
 
           row = next(item for item in registry['capabilities'] if item['id'] == 'runtime_contract_version_graph_v1')
+          completion_row = next(item for item in registry['capabilities'] if item['id'] == 'python_completion_certificate_v1')
+          policy = registry['policy']
+
           assert row['state'] == 'implemented', row
           assert row['required_for_python_complete'] is False, row
+          assert completion_row['state'] == 'partial', completion_row
+          assert registry['python_complete']['ready'] is False, registry['python_complete']
+          assert registry['python_complete']['rust_resume_allowed'] is False, registry['python_complete']
+          assert policy['python_hardening_may_continue_after_completion_certificate_implementation'] is True
+          assert policy['rust_reactivation_requires_explicit_owner_decision'] is True
+          assert policy['rust_transition_capabilities_deferred_while_rust_retired'] is True
+
           assert graph['ok'] is True, graph
           assert graph['admission_ready'] is True, graph
           assert graph['rust_resume_allowed'] is False, graph
           assert graph['graph']['node_count'] >= 20, graph
           assert graph['graph']['edge_count'] > 0, graph
+          assert graph['graph']['metadata_leaf_count'] >= 0, graph
+          assert graph['runtime']['external_contracts_are_metadata_only_leaves'] is True, graph
+          assert graph['runtime']['external_leaf_recursive_expansion_forbidden'] is True, graph
+
           assert completeness['ok'] is True, completeness
           assert completeness['python_complete_ready'] is False, completeness
           assert completeness['rust_resume_allowed'] is False, completeness
@@ -119,6 +133,12 @@ jobs:
           assert completion['lifecycle_state'] == 'partial', completion
           assert completion['python_complete_ready'] is False, completion
           assert completion['rust_resume_allowed'] is False, completion
+
+          live = Path('docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md').read_text(encoding='utf-8')
+          assert 'runtime_contract_version_graph_v1' in live
+          assert 'context_decision_trace_v1' in live
+          assert 'Rust feature/parity development: **retired/frozen**' in live
+          assert 'rust_resume_allowed`: false' in live
           PY
           rm -rf syntavra_runtime.egg-info
           rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
