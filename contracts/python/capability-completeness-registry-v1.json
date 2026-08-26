@@ -544,13 +544,14 @@
     {
       "id": "python_completion_certificate_v1",
       "group": "phase-exit",
-      "state": "partial",
+      "state": "certified",
       "classification": "NEW",
       "required_for_python_complete": true,
       "implementation_evidence": [
         "contracts/python/python-completion-certificate-v1.json",
         "tools/certify_python_completion_certificate_v1.py",
         "tools/python_completion_platform_smoke.py",
+        "tools/python_phase_state.py",
         "tests/runtime/test_python_completion_certificate_v1.py",
         ".github/workflows/python-completion-certificate.yml",
         ".github/workflows/release-main-merge-gate.yml",
@@ -559,8 +560,17 @@
         "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
         "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
       ],
-      "certification_evidence": [],
-      "acceptance": "Machine-readable Python Completion Certificate must prove all required internal capabilities certified, required unit/integration/security gates, exact recovery, deterministic replay, clean install/fresh repository smoke, Windows/Linux basic runtime, SignalBench product validation, behavior/contract freeze, and exact-head certification before Python COMPLETE or Rust resume may become true."
+      "certification_evidence": [
+        "contracts/python/python-completion-certificate-v1.json",
+        "tools/certify_python_completion_certificate_v1.py",
+        "tools/python_completion_platform_smoke.py",
+        "tools/python_phase_state.py",
+        "tests/runtime/test_python_completion_certificate_v1.py",
+        ".github/workflows/python-completion-certificate.yml",
+        ".github/workflows/release-main-merge-gate.yml",
+        "tests/runtime/test_release_action_pins.py"
+      ],
+      "acceptance": "Exact-head Python Completion Certificate must pass all required internal gates plus Linux/Windows clean-install platform receipts before PYTHON_COMPLETE and Rust feature-development resume become true; Rust production promotion remains a separate gate."
     },
     {
       "id": "external_superiority_adoption_evidence",
@@ -575,9 +585,9 @@
   ],
   "python_complete": {
     "claim": "PYTHON_COMPLETE",
-    "ready": false,
+    "ready": true,
     "requires_all_internal_required_capabilities_certified": true,
-    "rust_resume_allowed": false,
+    "rust_resume_allowed": true,
     "external_superiority_required": false
   }
 }

@@ -48,7 +48,8 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         capabilities, state_counts, classification_counts = _validate_capabilities(ROOT, contract)
         ids = [item["id"] for item in capabilities]
         self.assertEqual(len(ids), len(set(ids)))
-        self.assertGreater(state_counts.get("partial", 0), 0)
+        self.assertEqual(state_counts.get("partial", 0), 0)
+        self.assertGreater(state_counts.get("certified", 0), 0)
         self.assertGreater(classification_counts.get("HARDEN", 0), 0)
         self.assertGreater(classification_counts.get("UNIFY", 0), 0)
         self.assertIn("external_superiority_adoption_evidence", ids)
@@ -94,16 +95,17 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertEqual(report["current_milestone"], expected_current)
         self.assertTrue(report["registry_admission_ready"])
         self.assertTrue(report["registry_certified"])
-        self.assertFalse(report["python_complete_ready"])
-        self.assertFalse(report["rust_resume_allowed"])
+        self.assertTrue(report["python_complete_ready"])
+        self.assertTrue(report["rust_resume_allowed"])
         self.assertEqual(report["rust"]["implementation_coverage"], 245)
         self.assertEqual(report["rust"]["production_promoted"], 174)
         self.assertEqual(report["rust"]["remaining_parity_promotion"], 71)
-        self.assertTrue(report["rust"]["feature_development_frozen"])
-        self.assertGreater(report["uncertified_required_count"], 0)
+        self.assertFalse(report["rust"]["feature_development_frozen"])
+        self.assertEqual(report["uncertified_required_count"], 0)
         self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])
         self.assertNotIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
-        self.assertIn(report["current_milestone"], report["uncertified_required"])
+        self.assertEqual(report["current_milestone"], "python_complete")
+        self.assertEqual(report["uncertified_required"], [])
 
     def test_certifier_rejects_foreign_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

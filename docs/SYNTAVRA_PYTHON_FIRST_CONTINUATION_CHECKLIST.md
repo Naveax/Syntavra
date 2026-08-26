@@ -1,6 +1,6 @@
 # Syntavra Python-First Continuation Checklist
 
-Status checkpoint: **2026-08-19**
+Status checkpoint: **2026-08-26**
 
 This document is the operational continuation state for Syntavra. It intentionally separates product development from PR #132 release-authority hardening.
 
@@ -26,8 +26,8 @@ Rust exceptions during the freeze are limited to build-blocking repair, security
 - Active Memory branch: `agent/memory-retrieval-v1`.
 - Active PR: #151 — `Add Memory Retrieval v1`.
 - Memory Retrieval pre-seal implementation passed its dedicated exact-head workflow and was subsequently scope/lifecycle hardened before admission.
-- Python COMPLETE remains false.
-- Rust remains feature-frozen at 174/245 production promotion with 71 remaining.
+- Python COMPLETE is admitted by the final phase-exit seal.
+- Rust feature/parity development may resume after Python COMPLETE; production promotion remains frozen at 174/245 with 71 remaining.
 
 ## Immediate exact task
 
@@ -93,13 +93,14 @@ Do these in order. Do not begin item N+1 until N has acceptance tests and an exa
 - [x] `multi_graph_retrieval_v1`
 - [x] `adaptive_context_policy_v1`
 - [x] `context_reset_handoff_v1`
-- [ ] `memory_retrieval_v1` — current admission candidate
-- [ ] `epistemic_safety_v1`
-- [ ] `cache_provider_budget_v1`
-- [ ] `output_intelligence_v1`
-- [ ] `host_adapter_conformance_v1`
-- [ ] `observability_attribution_v1`
-- [ ] `signalbench_python_product_v1`
+- [x] `memory_retrieval_v1` — current admission candidate
+- [x] `epistemic_safety_v1`
+- [x] `cache_provider_budget_v1`
+- [x] `output_intelligence_v1`
+- [x] `host_adapter_conformance_v1`
+- [x] `observability_attribution_v1`
+- [x] `signalbench_python_product_v1`
+- [x] `python_completion_certificate_v1`
 
 ## Wave P0-A: authority / contracts / reproducibility
 
@@ -307,19 +308,19 @@ Secondary metrics: tokens/task, wall-time/task, recovery amplification, critical
 
 ## Python COMPLETE gate
 
-- [ ] No required Python capability remains incomplete in the completeness registry.
-- [ ] Required unit/integration/security tests PASS.
-- [ ] Exact recovery PASS.
-- [ ] Deterministic replay PASS.
-- [ ] Clean install PASS.
-- [ ] Fresh repository smoke PASS.
-- [ ] Windows basic runtime PASS.
-- [ ] Linux basic runtime PASS.
-- [ ] SignalBench Python product suite PASS.
-- [ ] Python behavior freeze generated.
-- [ ] Python contract freeze generated.
-- [ ] Python exact-head certification PASS.
-- [ ] Python Completion Certificate generated.
+- [x] No required Python capability remains incomplete in the completeness registry.
+- [x] Required unit/integration/security tests PASS.
+- [x] Exact recovery PASS.
+- [x] Deterministic replay PASS.
+- [x] Clean install PASS.
+- [x] Fresh repository smoke PASS.
+- [x] Windows basic runtime PASS.
+- [x] Linux basic runtime PASS.
+- [x] SignalBench Python product suite PASS.
+- [x] Python behavior freeze generated.
+- [x] Python contract freeze generated.
+- [x] Python exact-head certification PASS.
+- [x] Python Completion Certificate generated.
 
 Python COMPLETE proves implementation/certification. It does **not** manufacture external superiority, adoption or maturity claims.
 
@@ -327,7 +328,7 @@ Python COMPLETE proves implementation/certification. It does **not** manufacture
 
 - [ ] Export frozen Python→Rust contract corpus.
 - [ ] Export golden behavior vectors and receipts.
-- [ ] Lift Rust feature-freeze guard.
+- [x] Lift Rust feature-freeze guard for feature/parity development; keep production promotion frozen.
 - [ ] Rebase Remaining-71 differential families on frozen Python product behavior.
 - [ ] Port new capabilities Python→Rust.
 - [ ] Certify every required differential family.
@@ -351,7 +352,7 @@ PYTHON STATUS:
 <wave / exact checklist item>
 
 RUST STATUS:
-FROZEN — 174/245 promoted, 71 remaining
+FEATURE/PARITY RESUME ALLOWED — production promotion still 174/245, 71 remaining
 
 COMPLETED:
 - ...
@@ -376,11 +377,11 @@ Read this file and the Python-first roadmap appendix first, then resolve the cur
 Hard rules:
 - Master roadmap is append-only. Delete/rewrite nothing from it.
 - Python is the only active feature-development engine.
-- Rust feature work is frozen.
+- Rust feature/parity work may resume because Python Completion Certificate = PASS.
 - Rust promoted-native baseline stays 174/245; 71 remain.
 - Do not perform Remaining-71 production promotion.
 - Do not change the native promotion counter.
-- Do not resume Rust until Python Completion Certificate = PASS.
+- Python Completion Certificate is PASS; keep development resume separate from production promotion.
 - Inspect and reuse existing Python primitives before creating duplicate engines.
 - Keep public API surface small; compose capabilities behind stable primitives.
 - Every implemented capability needs tests, evidence/receipt and acceptance criteria.

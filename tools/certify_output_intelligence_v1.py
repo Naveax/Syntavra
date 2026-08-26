@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from syntavra_runtime.artifacts import ArtifactStore
 from syntavra_runtime.output_intelligence import OutputIntelligenceEngine
 
@@ -105,8 +107,7 @@ def certify(repo: Path) -> dict[str, Any]:
         lifecycle_state in {"partial", "implemented", "verified", "certified"},
         "output intelligence registry state is invalid",
     )
-    _require(registry["python_complete"]["ready"] is False, "output intelligence cannot claim Python COMPLETE")
-    _require(registry["python_complete"]["rust_resume_allowed"] is False, "output intelligence cannot resume Rust")
+    validate_python_complete_state(registry)
 
     with tempfile.TemporaryDirectory(prefix="syntavra-output-intelligence-cert-") as td:
         store = ArtifactStore(Path(td) / "artifacts")

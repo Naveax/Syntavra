@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from tools.certify_python_authority import _assert_no_route_identity_copy
 from tools.certify_python_authority import certify as certify_python_authority
 
@@ -206,11 +208,12 @@ def certify(repo: Path) -> dict[str, Any]:
 
     enforcement = _validate_enforcement(repo)
 
+    phase_state = validate_python_complete_state(contract)
     python_authority = certify_python_authority(repo)
     _require(python_authority.get("ok") is True, "Python authority is not certified on this exact head")
     _require((python_authority.get("rust") or {}).get("production_promoted_routes") == 174, "Rust promotion baseline drift")
     _require((python_authority.get("rust") or {}).get("remaining_routes") == 71, "Rust remaining baseline drift")
-    _require((python_authority.get("rust") or {}).get("resume_allowed") is False, "Rust resume unexpectedly allowed")
+    _require((python_authority.get("rust") or {}).get("resume_allowed") is phase_state["rust_resume_allowed"], "Python authority Rust resume state disagrees with registry")
 
     capabilities, state_counts, classification_counts = _validate_capabilities(repo, contract)
     required_internal = [
@@ -257,11 +260,11 @@ def certify(repo: Path) -> dict[str, Any]:
             "implementation_coverage": 245,
             "production_promoted": 174,
             "remaining_parity_promotion": 71,
-            "feature_development_frozen": True,
+            "feature_development_frozen": not computed_python_complete,
         },
         "claim_boundary": (
             "This certificate proves that Syntavra tracks Python-first capability completeness with evidence-backed lifecycle states. "
-            "It admits the registry milestone itself but does not claim Python COMPLETE, external superiority, adoption, marketplace maturity, "
+            "It computes Python COMPLETE from the canonical required-capability registry and does not manufacture external superiority, adoption, marketplace maturity, "
             "or Rust Remaining-71 behavioral parity/promotion."
         ),
     }

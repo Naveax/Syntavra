@@ -284,3 +284,11 @@ Python COMPLETE
 → 245/245 post-promotion certification
 → Python oracle window
 ```
+
+## 2026-08-26 Python Completion phase-exit admission
+
+- `python_completion_certificate_v1` advanced from `partial` to `certified` only after the dedicated implementation pass was merged and exact-head Linux/Windows clean-install receipts were available.
+- `PYTHON_COMPLETE = true` now means every required internal Python capability is certified; external superiority, adoption and marketplace maturity remain outside this repository-internal claim.
+- Rust feature development and Remaining-71 parity work may resume after Python COMPLETE.
+- Rust production promotion remains a separate authority boundary at **174/245 promoted, 71 remaining**. Python COMPLETE does not mutate the production promotion counter and does not itself grant 174→245 promotion.
+- The Rust freeze guard remains active for production-promotion authority and native promotion-counter changes while allowing post-completion feature/parity work.

@@ -43,6 +43,8 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertFalse(contract["rust_freeze"]["feature_development_allowed"])
         self.assertFalse(contract["rust_freeze"]["production_promotion_allowed"])
         self.assertFalse(contract["rust_freeze"]["native_counter_change_allowed"])
+        self.assertEqual(contract["rust_freeze"]["resume_requires"], "contracts/python/python-completion-certificate-v1.json")
+        self.assertTrue(all(contract["rust_freeze"]["resume_transition"].values()))
         self.assertEqual(contract["expected"]["rust_implemented_native_routes"], 245)
         self.assertEqual(contract["expected"]["rust_implementation_missing_routes"], 0)
         self.assertEqual(contract["expected"]["rust_promoted_native_routes"], 174)
@@ -69,14 +71,15 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertEqual(report["enforcement"], EXPECTED_ENFORCEMENT)
         self.assertTrue(report["python"]["feature_development_authority"])
         self.assertEqual(report["python"]["public_route_count"], 245)
-        self.assertTrue(report["rust"]["feature_development_frozen"])
+        self.assertFalse(report["rust"]["feature_development_frozen"])
         self.assertEqual(report["rust"]["implemented_native_routes"], 245)
         self.assertEqual(report["rust"]["implementation_missing_routes"], 0)
         self.assertEqual(report["rust"]["production_promoted_routes"], 174)
         self.assertEqual(report["rust"]["remaining_routes"], 71)
         self.assertEqual(report["rust"]["remaining_owned_routes"], 71)
         self.assertEqual(report["rust"]["unowned_routes"], 0)
-        self.assertFalse(report["rust"]["resume_allowed"])
+        self.assertTrue(report["rust"]["resume_allowed"])
+        self.assertTrue(report["python_complete_ready"])
 
     def test_repository_validator_enforces_python_authority(self) -> None:
         required = {path.relative_to(ROOT).as_posix() for path in repository_validate.REQUIRED}
@@ -96,7 +99,7 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertEqual(observed["rust_implemented_native_routes"], 245)
         self.assertEqual(observed["rust_promoted_native_routes"], 174)
         self.assertEqual(observed["rust_remaining_routes"], 71)
-        self.assertFalse(observed["rust_resume_allowed"])
+        self.assertTrue(observed["rust_resume_allowed"])
         self.assertIn('checks.append(("python_authority", authority_ok, authority_detail))', inspect.getsource(repository_validate.main))
 
     def test_enforcement_surfaces_are_bound(self) -> None:

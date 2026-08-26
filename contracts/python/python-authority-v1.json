@@ -41,8 +41,14 @@
       "data-loss",
       "contract-blocker"
     ],
-    "resume_requires": "contracts/python/python-completion-v1.json",
-    "resume_claim": "PYTHON_COMPLETE"
+    "resume_requires": "contracts/python/python-completion-certificate-v1.json",
+    "resume_claim": "PYTHON_COMPLETE",
+    "resume_transition": {
+      "python_complete_opens_rust_feature_development": true,
+      "python_complete_opens_remaining71_parity_work": true,
+      "python_complete_does_not_grant_production_promotion": true,
+      "production_promotion_remains_separate": true
+    }
   },
   "policy": {
     "route_identity_authority_single_source": true,

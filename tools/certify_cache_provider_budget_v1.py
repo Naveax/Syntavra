@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from syntavra_runtime.cache_provider_budget import CacheProviderBudgetEngine, ProviderBudgetPolicy
 from syntavra_runtime.prompt_cache_optimizer import PromptCacheOptimizer
 from syntavra_runtime.provider_account_pool import ProviderAccountPool
@@ -101,8 +103,7 @@ def certify(repo: Path) -> dict[str, Any]:
     by_id = {item["id"]: item for item in registry["capabilities"]}
     _require(by_id["epistemic_safety_v1"]["state"] == "certified", "Epistemic Safety must be certified first")
     _require(by_id["cache_provider_budget_v1"]["state"] in {"implemented", "verified", "certified"}, "cache/provider registry state not advanced")
-    _require(registry["python_complete"]["ready"] is False, "cache/provider milestone cannot claim Python COMPLETE")
-    _require(registry["python_complete"]["rust_resume_allowed"] is False, "cache/provider milestone cannot resume Rust")
+    validate_python_complete_state(registry)
 
     with tempfile.TemporaryDirectory(prefix="syntavra-cache-provider-cert-") as td:
         root = Path(td)
