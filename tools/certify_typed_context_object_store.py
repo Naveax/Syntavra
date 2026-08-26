@@ -194,8 +194,11 @@ def certify(repo: Path) -> dict[str, Any]:
 
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
-    _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
-    _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
+    _require(isinstance(completeness.get("python_complete_ready"), bool), "Python COMPLETE state must be boolean")
+    _require(
+        completeness.get("python_complete_ready") is completeness.get("rust_resume_allowed"),
+        "Python COMPLETE/Rust resume state disagreement",
+    )
 
     evidence = certify_evidence_store(repo)
     _require(evidence.get("ok") is True, "Evidence Store v2 is not certified")

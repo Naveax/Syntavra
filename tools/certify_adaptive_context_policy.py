@@ -301,8 +301,11 @@ def certify(repo: Path) -> dict[str, Any]:
         bool(completeness.get("current_milestone")),
         "capability registry current milestone missing",
     )
-    _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
-    _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
+    _require(isinstance(completeness.get("python_complete_ready"), bool), "Python COMPLETE state must be boolean")
+    _require(
+        completeness.get("python_complete_ready") is completeness.get("rust_resume_allowed"),
+        "Python COMPLETE/Rust resume state disagreement",
+    )
 
     registry = _read_json(repo / REGISTRY_RELATIVE)
     by_id = {

@@ -6,39 +6,38 @@ This document is the operational continuation state for Syntavra. It intentional
 
 ## Hard rules
 
-- [x] Python is the only active feature-development authority for the next phase.
+- [x] The Python-first implementation/certification phase is complete; Python remains the frozen reference/oracle for Rust differential work.
 - [x] Rust code, tests, ownership records and contracts are retained.
-- [x] Rust production promotion baseline stays **174/245**.
-- [x] Remaining Rust public routes stay **71** while Python-first work is active.
-- [x] Remaining owned stays **71**, unowned stays **0** unless the canonical inventory itself changes for a separately reviewed reason.
-- [x] No 174→245 production promotion before Python COMPLETE.
-- [x] No new Rust feature implementation before Python COMPLETE.
+- [x] `PYTHON_COMPLETE = true` and Rust feature/parity development resume is allowed only through the canonical completion state.
+- [x] Rust production promotion baseline stays **174/245** with **71** remaining until the separate promotion authority passes.
+- [x] Remaining owned stays **71**, unowned stays **0** unless the canonical inventory changes for a separately reviewed reason.
+- [x] Rust feature/parity work may resume after Python COMPLETE, but this does not grant production promotion credit.
+- [x] Do not change the native production counter or perform 174→245 promotion before differential and promotion gates pass.
 - [x] The master roadmap is append-only. Existing roadmap material must not be deleted, shortened or rewritten.
-- [x] Existing Python features must be inspected and reused before opening duplicate engines.
-- [x] Add a machine-enforced Rust feature-freeze guard once Python-first implementation begins.
+- [x] Reuse the frozen Python contracts, behavior vectors and receipts as the Rust migration oracle instead of creating parallel authorities.
 
-Rust exceptions during the freeze are limited to build-blocking repair, security repair, data-loss repair, or minimal contract maintenance required to keep Python development possible. These exceptions must not change the native promotion counter or add product features.
+Maintenance exceptions remain narrow and must never bypass the separate production-promotion authority.
 
 ## Repository state at checkpoint
 
-- Admitted `main` before Memory work: `6120ea9d074b0cac0e880e3e9dbf873d1faaec58`.
-- Context Reset / Handoff v1 runtime merged through PR #148 and lifecycle certification was admitted through PR #152.
-- Active Memory branch: `agent/memory-retrieval-v1`.
-- Active PR: #151 — `Add Memory Retrieval v1`.
-- Memory Retrieval pre-seal implementation passed its dedicated exact-head workflow and was subsequently scope/lifecycle hardened before admission.
-- Python COMPLETE is admitted by the final phase-exit seal.
-- Rust feature/parity development may resume after Python COMPLETE; production promotion remains frozen at 174/245 with 71 remaining.
+- PR #174 (`Implement Python Completion Certificate v1`) merged to `main` as `e2ead74f70aef8cbf4da333bf19698231b45327b`.
+- Merge-push Python Completion Certificate run `32979620715` passed Linux, Windows, aggregate validation and exact-head certificate generation.
+- Active phase-exit branch: `agent/python-completion-phase-exit-v1`.
+- Python Completion Certificate lifecycle is `certified`; the canonical registry records `PYTHON_COMPLETE = true` and `rust_resume_allowed = true`.
+- Rust feature/parity work may resume, while production promotion remains frozen at **174/245** with **71** remaining.
+- External superiority, adoption, marketplace maturity and long-lived real-world claims remain external-evidence claims and are not manufactured by repository self-certification.
 
 ## Immediate exact task
 
-- [x] Merge Context Reset / Handoff v1.
-- [x] Implement Memory Retrieval v1 without a parallel memory database.
-- [x] Add scoped retrieval, provenance, conflict/supersession, consolidation/forgetting, exact recovery and handoff receipts.
-- [x] Harden recovery/mutation/session ownership boundaries and prevent silent memory reactivation.
-- [x] Bind Memory Retrieval to exact-head CI, Release Main and immutable action-pin enforcement.
-- [ ] Pass final exact-head admission gates on the permanent sealed PR #151 tree.
-- [ ] Merge PR #151 only after all load-bearing gates pass.
-- [ ] Re-read fresh `main`, then advance to `epistemic_safety_v1`.
+- [x] Merge PR #174 after exact-head completion, Release Main, Rust Freeze, Capability Completeness and SignalBench gates passed.
+- [x] Verify merge-push Completion Certificate run `32979620715` on `main`.
+- [x] Materialize the final Python phase-exit registry, authority and Rust-resume transition without changing production promotion.
+- [ ] Reconcile all historical milestone certifiers with the canonical post-completion global lifecycle state.
+- [ ] Remove all temporary phase-exit helper files and verify a helper-free manifest/diff.
+- [ ] Open the final phase-exit PR from `agent/python-completion-phase-exit-v1`.
+- [ ] Require exact-head Linux + Windows Completion Certificate `PASS` plus all load-bearing CI on the final PR head.
+- [ ] Merge the final phase-exit seal only after every exact-head gate is green.
+- [ ] Re-read fresh `main`, export the frozen Python→Rust contract/behavior corpus, then continue Remaining-71 differential work. Production promotion remains a later separate gate.
 
 ## Existing Python baseline: do not reimplement blindly
 
@@ -93,7 +92,7 @@ Do these in order. Do not begin item N+1 until N has acceptance tests and an exa
 - [x] `multi_graph_retrieval_v1`
 - [x] `adaptive_context_policy_v1`
 - [x] `context_reset_handoff_v1`
-- [x] `memory_retrieval_v1` — current admission candidate
+- [x] `memory_retrieval_v1`
 - [x] `epistemic_safety_v1`
 - [x] `cache_provider_budget_v1`
 - [x] `output_intelligence_v1`
@@ -370,52 +369,40 @@ NEXT EXACT TASK:
 ## Copy/paste continuation message
 
 ```text
-Continue Syntavra in PYTHON-FIRST mode.
+Continue Syntavra from the post-Python-COMPLETE Rust-resume boundary.
 
 Read this file and the Python-first roadmap appendix first, then resolve the current GitHub PR/CI state.
 
 Hard rules:
 - Master roadmap is append-only. Delete/rewrite nothing from it.
-- Python is the only active feature-development engine.
-- Rust feature/parity work may resume because Python Completion Certificate = PASS.
-- Rust promoted-native baseline stays 174/245; 71 remain.
-- Do not perform Remaining-71 production promotion.
-- Do not change the native promotion counter.
-- Python Completion Certificate is PASS; keep development resume separate from production promotion.
-- Inspect and reuse existing Python primitives before creating duplicate engines.
-- Keep public API surface small; compose capabilities behind stable primitives.
-- Every implemented capability needs tests, evidence/receipt and acceptance criteria.
-- Work on the first unchecked Python task only.
+- Python Completion Certificate is PASS/certified and Python stays the frozen reference/oracle.
+- Rust feature/parity development may resume.
+- Rust production promotion remains 174/245 with 71 remaining.
+- Do not perform the atomic 174→245 production promotion until the separate differential and promotion authorities pass.
+- Do not change the native production counter merely because Rust development resumed.
+- Reuse frozen Python contracts, golden behavior vectors and receipts as migration authority.
+- Keep public API surface small and avoid duplicate engines/authorities.
+- Every Rust differential/port step needs tests, exact-head evidence and acceptance criteria.
+- Work on the first unchecked Rust-resume/differential task only.
 - Do not mark a task complete without verification.
 
-Before broad Python feature coding:
-1. Resolve current branch/head.
-2. Resolve PR #132 state.
-3. If #132 is still open, finish its manifest + exact-head release CI and merge it.
-4. Re-read main after merge.
+Before new Rust feature/parity work:
+1. Resolve fresh `main`, current branch/head and the final phase-exit PR/CI state.
+2. If the phase-exit PR is still open, finish exact-head Linux/Windows Completion Certificate and all load-bearing CI, then merge it.
+3. Re-read `main` after merge.
+4. Export the frozen Python→Rust contract corpus and golden behavior vectors/receipts.
+5. Rebase Remaining-71 differential families on the frozen Python product behavior.
 
 Then continue in this order:
-Authority/Contracts
-→ Evidence Store v2
-→ Typed Context Objects
-→ Programmatic Tool Execution
-→ Tool Discovery/MCP Virtualization
-→ Context Namespace
-→ Multi-Graph Retrieval
-→ Adaptive Policy
-→ Context Reset/Handoff
-→ Memory
-→ Epistemic/Safety
-→ Cache/Provider/Budget
-→ Output Intelligence
-→ Host Adapters
-→ Observability
-→ SignalBench
-→ Python COMPLETE
-→ Rust Resume
-→ Differential Port
-→ Atomic 245 Promotion
-→ Post-Promotion Certification
+Frozen Python contract corpus
+→ Golden behavior vectors/receipts
+→ Remaining-71 differential rebase
+→ Rust capability ports
+→ Required differential certification
+→ Atomic 174→245 promotion
+→ 245/245 post-promotion certification
+→ Python-oracle certification window
+→ Rust authority decision
 
 At the end update:
 CURRENT HEAD

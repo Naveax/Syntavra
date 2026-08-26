@@ -193,8 +193,11 @@ def certify(repo: Path) -> dict[str, Any]:
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
     current_milestone = completeness.get("current_milestone")
-    _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
-    _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
+    _require(isinstance(completeness.get("python_complete_ready"), bool), "Python COMPLETE state must be boolean")
+    _require(
+        completeness.get("python_complete_ready") is completeness.get("rust_resume_allowed"),
+        "Python COMPLETE/Rust resume state disagreement",
+    )
 
     typed = certify_typed_context(repo)
     _require(typed.get("ok") is True, "Typed Context Object Store is not certified")
