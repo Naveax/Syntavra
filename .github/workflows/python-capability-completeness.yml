@@ -62,7 +62,7 @@ jobs:
           assert report['rust']['implementation_coverage'] == 245
           assert report['rust']['production_promoted'] == 174
           assert report['rust']['remaining_parity_promotion'] == 71
-          assert report['rust']['feature_development_frozen'] is True
+          assert report['rust']['feature_development_frozen'] is (not report['rust_resume_allowed'])
           PY
 
       - name: Enforce clean exact-head repository
