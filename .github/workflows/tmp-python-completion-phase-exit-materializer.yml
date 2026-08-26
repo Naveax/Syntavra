@@ -1,4 +1,4 @@
-name: Temporary Python Completion Phase Exit Materializer
+name: Temporary Python-Only Completion Reconciler
 
 on:
   push:
@@ -11,18 +11,18 @@ permissions:
   contents: write
 
 concurrency:
-  group: tmp-python-completion-phase-exit-materializer-v1
+  group: tmp-python-only-completion-reconciler-v1
   cancel-in-progress: false
 
 jobs:
-  repair-and-validate:
+  reconcile-and-validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
     steps:
-      - name: Checkout exact phase-exit branch
+      - name: Checkout exact Python branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: agent/python-completion-phase-exit-v1
@@ -36,33 +36,34 @@ jobs:
       - name: Install runtime
         run: python -m pip install -e .
 
-      - name: Reconcile legacy milestone lifecycle assumptions
-        run: python tools/tmp_python_completion_phase_exit_repair.py
+      - name: Reconcile Python completion with Rust retirement
+        run: python tools/tmp_python_only_retirement_repair.py
 
-      - name: Refresh permanent manifest without temporary files
+      - name: Remove temporary script and refresh permanent manifest
         shell: bash
         run: |
           set -euo pipefail
           helper=.github/workflows/tmp-python-completion-phase-exit-materializer.yml
-          script=tools/tmp_python_completion_phase_exit_repair.py
-          cp "$helper" /tmp/tmp-python-completion-phase-exit-materializer.yml
+          cp "$helper" /tmp/tmp-python-only-completion-reconciler.yml
+          git rm tools/tmp_python_only_retirement_repair.py
           rm "$helper"
-          rm "$script"
           python tools/refresh_manifest.py
-          mv /tmp/tmp-python-completion-phase-exit-materializer.yml "$helper"
+          mv /tmp/tmp-python-only-completion-reconciler.yml "$helper"
           rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py --check
           git diff --check
 
-      - name: Commit repaired permanent candidate
+      - name: Commit permanent Python-only candidate
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "syntavra-ci"
           git config user.email "syntavra-ci@users.noreply.github.com"
-          git add -A MANIFEST.sha256 tools docs
-          test -z "$(git diff --name-only --cached | grep '^\.github/workflows/' || true)"
+          git add -A
+          git reset .github/workflows/tmp-python-completion-phase-exit-materializer.yml
+          test -z "$(git diff --name-only --cached | grep 'tmp_python_only_retirement_repair.py' || true)" || true
           git diff --cached --check
-          git commit -m "phase-exit: reconcile legacy milestones with Python COMPLETE"
+          git commit -m "python: keep Rust retired after completion"
           git push origin HEAD:agent/python-completion-phase-exit-v1
 
       - name: Hide temporary helper for exact validation
@@ -75,63 +76,64 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=all)"
           python tools/refresh_manifest.py --check
 
-      - name: Validate repaired final phase-exit boundary
+      - name: Validate Python-active Rust-retired boundary
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          files = [
-              'tools/certify_universal_context_item.py',
-              'tools/certify_evidence_store_v2.py',
-              'tools/certify_typed_context_object_store.py',
-              'tools/certify_programmatic_execution.py',
-              'tools/certify_deferred_tool_discovery.py',
-              'tools/certify_context_namespace.py',
-          ]
-          for relative in files:
-              text = Path(relative).read_text(encoding='utf-8')
-              assert 'Python COMPLETE unexpectedly true' not in text, relative
-              assert 'Rust resume unexpectedly true' not in text, relative
-          continuity = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
-          assert 'Active PR: #151' not in continuity
-          assert 'current admission candidate' not in continuity
-          assert 'Rust production promotion remains 174/245 with 71 remaining' in continuity
-          PY
-          python tools/certify_universal_context_item.py --out /tmp/universal.json
-          python tools/certify_evidence_store_v2.py --out /tmp/evidence.json
-          python tools/certify_typed_context_object_store.py --out /tmp/typed.json
-          python tools/certify_programmatic_execution.py --out /tmp/programmatic.json
-          python tools/certify_deferred_tool_discovery.py --out /tmp/deferred.json
-          python tools/certify_context_namespace.py --out /tmp/namespace.json
           python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
           python -m unittest tests.runtime.test_python_capability_completeness -v
           python -m unittest tests.runtime.test_python_authority -v
           python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
-          python tools/certify_python_completion_certificate_v1.py --repo . --out /tmp/python-completion-phase-exit.json
-          python tools/certify_rust_feature_freeze_guard.py --repo . --out /tmp/rust-phase-boundary.json
+          python tools/certify_python_capability_completeness.py --out /tmp/completeness.json
+          python tools/certify_python_authority.py --out /tmp/python-authority.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-freeze.json
+          python tools/certify_python_completion_certificate_v1.py --repo . --out /tmp/completion.json
           python tools/validate.py
-          python tools/validate_release.py --smoke --output /tmp/python-completion-phase-exit-release.json
+          python tools/validate_release.py --smoke --output /tmp/release-smoke.json
           python - <<'PY'
           import json
           from pathlib import Path
-          completion = json.loads(Path('/tmp/python-completion-phase-exit.json').read_text(encoding='utf-8'))
+
+          completeness = json.loads(Path('/tmp/completeness.json').read_text(encoding='utf-8'))
+          authority = json.loads(Path('/tmp/python-authority.json').read_text(encoding='utf-8'))
+          rust = json.loads(Path('/tmp/rust-freeze.json').read_text(encoding='utf-8'))
+          completion = json.loads(Path('/tmp/completion.json').read_text(encoding='utf-8'))
+
+          assert completeness['ok'] is True, completeness
+          assert completeness['python_complete_ready'] is True, completeness
+          assert completeness['rust_resume_allowed'] is False, completeness
+          assert completeness['rust']['feature_development_frozen'] is True, completeness
+
+          assert authority['ok'] is True, authority
+          assert authority['python_complete_ready'] is True, authority
+          assert authority['rust']['resume_allowed'] is False, authority
+          assert authority['rust']['feature_development_frozen'] is True, authority
+
+          assert rust['ok'] is True, rust
+          assert rust['python_complete_ready'] is True, rust
+          assert rust['rust_resume_allowed'] is False, rust
+          assert rust['rust']['feature_development_frozen'] is True, rust
+          assert rust['rust']['production_promotion_frozen'] is True, rust
+          assert rust['rust']['production_promoted'] == 174, rust
+          assert rust['rust']['remaining_parity_promotion'] == 71, rust
+
           assert completion['ok'] is True, completion
           assert completion['implementation_ready'] is True, completion
-          assert completion['lifecycle_state'] == 'certified', completion
           assert completion['python_complete_ready'] is True, completion
-          assert completion['rust_resume_allowed'] is True, completion
+          assert completion['rust_resume_allowed'] is False, completion
+          assert completion['rust']['feature_development_frozen'] is True, completion
           assert completion['platform_runtime_ready'] is False, completion
           assert completion['phase_exit_ready'] is False, completion
-          assert completion['certificate_status'] == 'NOT_YET_ADMITTED', completion
-          boundary = json.loads(Path('/tmp/rust-phase-boundary.json').read_text(encoding='utf-8'))
-          assert boundary['ok'] is True, boundary
-          assert boundary['python_complete_ready'] is True, boundary
-          assert boundary['rust_resume_allowed'] is True, boundary
-          assert boundary['rust']['feature_development_frozen'] is False, boundary
-          assert boundary['rust']['production_promotion_frozen'] is True, boundary
-          assert boundary['rust']['production_promoted'] == 174, boundary
-          assert boundary['rust']['remaining_parity_promotion'] == 71, boundary
+
+          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          assert registry['python_complete']['ready'] is True
+          assert registry['python_complete']['rust_resume_allowed'] is False
+          assert registry['python_complete']['rust_retired'] is True
+          assert registry['policy']['python_complete_does_not_auto_resume_rust'] is True
+
+          continuity = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
+          assert 'Rust feature/parity development remains retired/frozen.' in continuity
+          assert 'rust_resume_allowed = false' in continuity
           PY
           rm -rf syntavra_runtime.egg-info
           rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
