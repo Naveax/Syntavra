@@ -65,8 +65,12 @@ jobs:
           assert report['admission_ready'] is True
           assert report['graph']['node_count'] >= 20
           assert report['graph']['edge_count'] > 0
+          assert report['graph']['metadata_leaf_count'] >= 0
           assert len(report['graph']['graph_sha256']) == 64
           assert report['runtime']['transitive_reverse_dependency_invalidation'] is True
+          assert report['runtime']['external_contracts_are_metadata_only_leaves'] is True
+          assert report['runtime']['external_leaf_recursive_expansion_forbidden'] is True
+          assert report['runtime']['external_dependency_opt_out_fails_closed'] is True
           assert report['rust_resume_allowed'] is False
           PY
 
