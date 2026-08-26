@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "family": "python-completion-certificate",
+  "phase": "python-first-exit",
+  "claim": "PYTHON_COMPLETION_CERTIFICATE_V1",
+  "strict": true,
+  "authority": {
+    "capability_registry": "contracts/python/capability-completeness-registry-v1.json",
+    "behavior_freeze": "contracts/python/python-behavior-freeze-v1.json",
+    "phase1_acceptance": "contracts/python/python-phase1-acceptance-v1.json",
+    "signalbench_product": "contracts/python/signalbench-python-product-v1.json",
+    "host_adapter_conformance": "contracts/python/host-adapter-conformance-v1.json",
+    "epistemic_safety": "contracts/python/epistemic-safety-v1.json",
+    "roadmap": "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
+    "continuation_checklist": "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md",
+    "release_gate": ".github/workflows/release-main-merge-gate.yml",
+    "completion_workflow": ".github/workflows/python-completion-certificate.yml",
+    "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py"
+  },
+  "required_gates": {
+    "all_prior_required_internal_capabilities_certified": true,
+    "required_unit_integration_security_validation": true,
+    "exact_recovery": true,
+    "deterministic_replay": true,
+    "clean_install": true,
+    "fresh_repository_smoke": true,
+    "windows_basic_runtime": true,
+    "linux_basic_runtime": true,
+    "signalbench_python_product": true,
+    "python_behavior_freeze": true,
+    "python_contract_freeze": true,
+    "exact_head_certification": true,
+    "external_superiority_required": false
+  },
+  "platform_receipts": {
+    "claim": "PYTHON_COMPLETION_PLATFORM_SMOKE_V1",
+    "required_platforms": [
+      "linux",
+      "windows"
+    ],
+    "exact_head_required": true,
+    "clean_install_required": true,
+    "source_import_isolation_required": true,
+    "fresh_repository_smoke_required": true,
+    "basic_runtime_required": true
+  },
+  "contract_freeze": {
+    "mode": "registry-derived-certified-python-contracts",
+    "expected_contract_count": 20,
+    "expected_sha256": "80d6b40215f88f2c72ca6eac995f64306ac091b9cee30cde619531b75515c2e6",
+    "self_contract_excluded": true,
+    "external_evidence_excluded": true
+  },
+  "lifecycle": {
+    "allowed_states": [
+      "partial",
+      "implemented",
+      "verified",
+      "certified"
+    ],
+    "pass_state": "certified",
+    "implementation_pass_must_not_open_python_complete": true,
+    "python_complete_requires_certificate_pass": true,
+    "rust_resume_requires_certificate_pass": true
+  },
+  "claim_boundary": "This certificate proves repository-internal Python product completion gates only. It does not manufacture external superiority, adoption, marketplace maturity, or Rust Remaining-71 parity/promotion. A partial/implemented/verified lifecycle is implementation evidence, not a PYTHON_COMPLETE PASS."
+}
