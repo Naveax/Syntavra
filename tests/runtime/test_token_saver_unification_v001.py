@@ -165,7 +165,19 @@ class TokenSaverUnificationV001Tests(unittest.TestCase):
             workspace.mkdir()
             request = root / "request.json"
             output = root / "output.json"
-            request.write_text(json.dumps({"task": {"prompt": "verify"}}), encoding="utf-8")
+            request.write_text(
+                json.dumps({
+                    "task": {"prompt": "verify"},
+                    "arm": {
+                        "arm_id": "fake",
+                        "version": "test-v1",
+                        "model": "test",
+                        "reasoning": "none",
+                        "context_window": 8192,
+                    },
+                }),
+                encoding="utf-8",
+            )
 
             missing = subprocess.run(
                 [sys.executable, str(adapter), "--product", "missing", "--request", str(request),
@@ -193,6 +205,7 @@ class TokenSaverUnificationV001Tests(unittest.TestCase):
             value = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(value["metrics"]["fresh_input_tokens"], 10)
             self.assertEqual(value["provider_receipt"]["provider"], "test")
+            self.assertEqual(value["arm_identity"]["arm_id"], "fake")
 
     def test_platform_registry_distinguishes_contract_from_live_target(self) -> None:
         value = json.loads(Path("skills/syntavra/data/platforms.json").read_text(encoding="utf-8"))
