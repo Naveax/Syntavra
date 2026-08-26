@@ -20,7 +20,8 @@ jobs:
     timeout-minutes: 45
     env:
       TARGET_BRANCH: agent/signalbench-python-product-v1
-      TARGET_HEAD: 1b0c5b110b29164439066dc9a711c2d839369c60
+      TARGET_HEAD: 4878a2f72692be89682c24ea31da94e54a48d929
+      MAIN_BASE: ac453b4b2b11f64dd7d4854b444c58aad93d1586
       PYTHONUTF8: '1'
       PYTHONPATH: ${{ github.workspace }}
 
@@ -31,22 +32,19 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Preserve reviewed helper chain and verify exact target guard
+      - name: Preserve closure runner and verify exact target guard
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
-          cp .github/workflows/tmp-signalbench-python-product-v1-impl.yml /tmp/signalbench-original-helper.yml
-          cp tools/tmp_prepare_signalbench_python_product_v1_fix.py /tmp/signalbench-fix.py
-          cp tools/tmp_signalbench_v9_apply.py /tmp/signalbench-v9-apply.py
-          cp tools/tmp_signalbench_v12_apply.py /tmp/signalbench-v12-apply.py
-          cp tools/tmp_signalbench_v14r3_runner.py /tmp/signalbench-v14r3-runner.py
-          python tools/tmp_signalbench_v14_unpack.py
-          python -m py_compile /tmp/signalbench-v9-apply.py /tmp/signalbench-v12-apply.py /tmp/signalbench-v14-apply.py /tmp/signalbench-v14r3-runner.py
-          git fetch origin "$TARGET_BRANCH"
+          cp tools/tmp_signalbench_v14r3_runner.py /tmp/signalbench-v14r3-closure.py
+          python -m py_compile /tmp/signalbench-v14r3-closure.py
+          git fetch origin "$TARGET_BRANCH" main
           actual="$(git rev-parse "origin/$TARGET_BRANCH")"
-          printf 'target=%s actual=%s helper=%s\n' "$TARGET_HEAD" "$actual" "${{ github.event.pull_request.head.sha }}"
+          main_actual="$(git rev-parse origin/main)"
+          printf 'target=%s actual=%s main=%s main_actual=%s helper=%s\n' "$TARGET_HEAD" "$actual" "$MAIN_BASE" "$main_actual" "${{ github.event.pull_request.head.sha }}"
           test "$actual" = "$TARGET_HEAD"
+          test "$main_actual" = "$MAIN_BASE"
 
       - name: Checkout exact canonical SignalBench target
         shell: bash
@@ -55,14 +53,6 @@ jobs:
           git checkout --detach "$TARGET_HEAD"
           test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
           test -z "$(git status --porcelain --untracked-files=all)"
-
-      - name: Apply V9 V12 V14 product hardening chain
-        shell: bash
-        run: |
-          set -euo pipefail
-          python /tmp/signalbench-v14r3-runner.py
-          python /tmp/signalbench-v12-apply.py
-          python /tmp/signalbench-v14-apply.py
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -75,107 +65,8 @@ jobs:
           set -euo pipefail
           python -m pip install -e .
 
-      - name: Run focused SignalBench product and negative controls
+      - name: Close frozen-arm fixture and manifest compatibility
         shell: bash
         run: |
           set -euo pipefail
-          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v
-          python -m unittest tests.runtime.test_runtime_v03_unified.RuntimeV03UnifiedTests.test_signalbench_protocol_and_fail_closed_compare -v
-          python -m unittest tests.runtime.test_adaptive_context_v04 -v
-          python -m unittest tests.runtime.test_release_action_pins -v
-          python - <<'PY'
-          from tests.runtime.test_complete_competitive_features_v001 import test_provider_billed_signalbench_is_receipt_gated
-          test_provider_billed_signalbench_is_receipt_gated()
-          PY
-          python -m syntavra_runtime.signalbench_external_adapter --help >/dev/null
-          python tools/certify_python_benchmark_proof_reference.py --output /tmp/benchmark-proof-reference.json
-          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path('/tmp/signalbench-python-product.json').read_text(encoding='utf-8'))
-          assert report['ok'] is True, report
-          assert report['runtime_ready'] is True, report
-          assert report['lifecycle_state'] == 'partial', report
-          assert report['admission_ready'] is False, report
-          assert report['frozen_repository_identity'] is True, report
-          assert report['exact_repository_commit'] is True, report
-          assert report['git_workspace_preserved'] is True, report
-          assert report['host_environment_isolated'] is True, report
-          assert report['exact_arm_identity'] is True, report
-          assert report['provider_observed_usage'] is True, report
-          assert report['sealed_usage_receipts'] is True, report
-          assert report['usage_receipt_ledger_authority'] is True, report
-          assert report['hardened_comparison_authority'] is True, report
-          assert report['external_superiority_proven'] is False, report
-          assert report['python_complete_ready'] is False, report
-          assert report['rust_resume_allowed'] is False, report
-          assert report['rust']['production_promoted'] == 174, report
-          assert report['rust']['remaining_parity_promotion'] == 71, report
-          assert report['rust']['feature_development_frozen'] is True, report
-          PY
-
-      - name: Refresh manifest and validate repository
-        shell: bash
-        run: |
-          set -euo pipefail
-          python tools/refresh_manifest.py
-          python tools/refresh_manifest.py --check
-          python tools/validate.py
-
-      - name: Guard exact V14 implementation scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf syntavra_runtime.egg-info
-          git diff --check
-          changed="$(git status --short | awk '{print $2}' | sort)"
-          printf '%s\n' "$changed"
-          expected="$(printf '%s\n' \
-            .github/workflows/release-main-merge-gate.yml \
-            .github/workflows/signalbench-python-product.yml \
-            MANIFEST.sha256 \
-            benchmarks/signalbench/adapters/external_cli.py \
-            benchmarks/signalbench/arms.example.json \
-            benchmarks/signalbench/tasks.example.json \
-            contracts/python/capability-completeness-registry-v1.json \
-            contracts/python/signalbench-python-product-v1.json \
-            syntavra_runtime/cli.py \
-            syntavra_runtime/signalbench.py \
-            syntavra_runtime/signalbench_external_adapter.py \
-            syntavra_runtime/signalbench_hardened.py \
-            tests/runtime/test_complete_competitive_features_v001.py \
-            tests/runtime/test_release_action_pins.py \
-            tests/runtime/test_signalbench_python_product_v1.py \
-            tools/certify_signalbench_python_product_v1.py | sort)"
-          test "$changed" = "$expected"
-          python tools/refresh_manifest.py --check
-
-      - name: Commit and push exact guarded candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
-          test "$remote_head" = "$TARGET_HEAD"
-          git config user.name "syntavra-ci"
-          git config user.email "syntavra-ci@users.noreply.github.com"
-          git add -- \
-            .github/workflows/release-main-merge-gate.yml \
-            .github/workflows/signalbench-python-product.yml \
-            MANIFEST.sha256 \
-            benchmarks/signalbench/adapters/external_cli.py \
-            benchmarks/signalbench/arms.example.json \
-            benchmarks/signalbench/tasks.example.json \
-            contracts/python/capability-completeness-registry-v1.json \
-            contracts/python/signalbench-python-product-v1.json \
-            syntavra_runtime/cli.py \
-            syntavra_runtime/signalbench.py \
-            syntavra_runtime/signalbench_external_adapter.py \
-            syntavra_runtime/signalbench_hardened.py \
-            tests/runtime/test_complete_competitive_features_v001.py \
-            tests/runtime/test_release_action_pins.py \
-            tests/runtime/test_signalbench_python_product_v1.py \
-            tools/certify_signalbench_python_product_v1.py
-          git commit -m "Harden SignalBench Python product v1 V14"
-          git push origin HEAD:"$TARGET_BRANCH"
+          python /tmp/signalbench-v14r3-closure.py
