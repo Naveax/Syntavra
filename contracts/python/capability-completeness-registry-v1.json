@@ -54,7 +54,8 @@
     "output_intelligence_v1",
     "host_adapter_conformance_v1",
     "observability_attribution_v1",
-    "signalbench_python_product_v1"
+    "signalbench_python_product_v1",
+    "python_completion_certificate_v1"
   ],
   "capabilities": [
     {
@@ -503,7 +504,7 @@
     {
       "id": "signalbench_python_product_v1",
       "group": "benchmark",
-      "state": "partial",
+      "state": "certified",
       "classification": "CERTIFY",
       "required_for_python_complete": true,
       "implementation_evidence": [
@@ -522,8 +523,37 @@
         "syntavra_runtime/usage_receipt_ledger.py",
         "syntavra_runtime/signalbench_external_adapter.py"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/signalbench-python-product-v1.json",
+        "contracts/python/benchmark-proof-reference-v1.json",
+        "benchmarks/signalbench/README.md",
+        "benchmarks/signalbench/tasks.example.json",
+        "benchmarks/signalbench/arms.example.json",
+        "benchmarks/signalbench/adapters/external_cli.py",
+        "syntavra_runtime/signalbench.py",
+        "syntavra_runtime/signalbench_hardened.py",
+        "tools/certify_python_benchmark_proof_reference.py",
+        "tools/certify_signalbench_python_product_v1.py",
+        "tests/runtime/test_signalbench_python_product_v1.py",
+        ".github/workflows/signalbench-python-product.yml",
+        "syntavra_runtime/usage_receipt_ledger.py",
+        "syntavra_runtime/signalbench_external_adapter.py"
+      ],
       "acceptance": "Frozen-arm Python product suite measures provider-observed cost per verified successful task plus quality/safety/runtime metrics."
+    },
+    {
+      "id": "python_completion_certificate_v1",
+      "group": "phase-exit",
+      "state": "partial",
+      "classification": "NEW",
+      "required_for_python_complete": true,
+      "implementation_evidence": [
+        "contracts/python/capability-completeness-registry-v1.json",
+        "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
+        "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Machine-readable Python Completion Certificate must prove all required internal capabilities certified, required unit/integration/security gates, exact recovery, deterministic replay, clean install/fresh repository smoke, Windows/Linux basic runtime, SignalBench product validation, behavior/contract freeze, and exact-head certification before Python COMPLETE or Rust resume may become true."
     },
     {
       "id": "external_superiority_adoption_evidence",
