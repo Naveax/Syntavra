@@ -54,8 +54,9 @@ jobs:
           assert report['claim'] == 'RUST_FEATURE_FREEZE_ENFORCED'
           assert report['exact_head'] == head
           assert report['guard_admission_ready'] is True
-          assert report['python_complete_ready'] is False
-          assert report['rust_resume_allowed'] is False
+          assert report['python_complete_ready'] is report['rust_resume_allowed']
+          assert report['rust']['feature_development_frozen'] is (not report['rust_resume_allowed'])
+          assert report['rust']['production_promotion_frozen'] is True
           assert report['rust']['implementation_coverage'] == 245
           assert report['rust']['production_promoted'] == 174
           assert report['rust']['remaining_parity_promotion'] == 71
