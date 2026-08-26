@@ -1,0 +1,101 @@
+name: Release Main Merge Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  release-main-merge-gate:
+    name: release-main-merge-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Verify release-main merge authority contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_release_main_protection -v
+          python -m unittest tests.runtime.test_pre_release_publish_credentials -v
+          python -m unittest tests.runtime.test_pre_release_publish_workflow_contract -v
+          python -m unittest tests.runtime.test_pre_release_publication_visibility -v
+          python -m unittest tests.runtime.test_pre_release_publication_attempt_ledger -v
+          python -m unittest tests.runtime.test_pre_release_secret_scope -v
+          python -m unittest tests.runtime.test_release_action_pins -v
+          python -m unittest tests.runtime.test_pre_release_registry_availability -v
+          python -m unittest tests.runtime.test_pre_release_publisher_prerequisites -v
+          python -m unittest tests.runtime.test_pre_release_candidate_receipt_plan -v
+          python -m unittest tests.runtime.test_python_publication_registry_reference -v
+          python -m unittest tests.runtime.test_python_authority -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python -m unittest tests.runtime.test_universal_context_item -v
+          python -m unittest tests.runtime.test_evidence_store_v2 -v
+          python -m unittest tests.runtime.test_typed_context_object_store -v
+          python -m unittest tests.runtime.test_programmatic_execution -v
+          python -m unittest tests.runtime.test_deferred_tool_discovery -v
+          python -m unittest tests.runtime.test_adaptive_context_policy -v
+          python -m unittest tests.runtime.test_context_reset_handoff -v
+          python -m unittest tests.runtime.test_memory_retrieval_v1 -v
+          python -m unittest tests.runtime.test_epistemic_safety_v1 -v
+          python -m unittest tests.runtime.test_cache_provider_budget_v1 -v
+          python -m unittest tests.runtime.test_output_intelligence_v1 -v
+          python -m unittest tests.runtime.test_host_adapter_conformance_v1 -v
+          python -m unittest tests.runtime.test_observability_attribution_v1 -v
+          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v
+          python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
+          python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
+          python tools/certify_python_authority.py --out /tmp/python-authority.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          python tools/certify_universal_context_item.py --out /tmp/universal-context-item.json
+          python tools/certify_evidence_store_v2.py --out /tmp/evidence-store-v2.json
+          python tools/certify_typed_context_object_store.py --out /tmp/typed-context-object-store.json
+          python tools/certify_programmatic_execution.py --out /tmp/programmatic-execution.json
+          python tools/certify_deferred_tool_discovery.py --out /tmp/deferred-tool-discovery.json
+          python tools/certify_adaptive_context_policy.py --out /tmp/adaptive-context-policy.json
+          python tools/certify_context_reset_handoff.py --out /tmp/context-reset-handoff.json
+          python tools/certify_memory_retrieval_v1.py --out /tmp/memory-retrieval.json
+          python tools/certify_epistemic_safety_v1.py --out /tmp/epistemic-safety.json
+          python tools/certify_cache_provider_budget_v1.py --out /tmp/cache-provider-budget.json
+          python tools/certify_output_intelligence_v1.py --out /tmp/output-intelligence.json
+          python tools/certify_host_adapter_conformance_v1.py --out /tmp/host-adapter-conformance.json
+          python tools/certify_observability_attribution_v1.py --out /tmp/observability-attribution.json
+          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json
+          python tools/check_rust_feature_freeze.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --out /tmp/rust-feature-freeze-diff.json
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+          python tools/refresh_manifest.py --check
+
+      - name: Enforce exact clean pull request head
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"

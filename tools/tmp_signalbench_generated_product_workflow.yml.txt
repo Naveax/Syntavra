@@ -1,0 +1,95 @@
+name: SignalBench Python Product
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signalbench-python-product-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signalbench-python-product:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Run SignalBench Python product regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_signalbench_python_product_v1 -v
+          python -m unittest tests.runtime.test_runtime_v03_unified.RuntimeV03UnifiedTests.test_signalbench_protocol_and_fail_closed_compare -v
+
+      - name: Generate exact-head SignalBench Python product certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/certify_signalbench_python_product_v1.py --out /tmp/signalbench-python-product.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          report = json.loads(Path('/tmp/signalbench-python-product.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ok'] is True, report
+          assert report['claim'] == 'SIGNALBENCH_PYTHON_PRODUCT_V1'
+          assert report['exact_head'] == head
+          assert report['runtime_ready'] is True
+          assert report['frozen_repository_identity'] is True
+          assert report['exact_arm_identity'] is True
+          assert report['provider_observed_usage'] is True
+          assert report['sealed_usage_receipts'] is True
+          assert report['hardened_comparison_authority'] is True
+          assert report['external_superiority_proven'] is False
+          assert report['python_complete_ready'] is False
+          assert report['rust_resume_allowed'] is False
+          assert report['rust']['production_promoted'] == 174
+          assert report['rust']['remaining_parity_promotion'] == 71
+          PY
+
+      - name: Enforce clean exact-head repository
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s
+          ' "$status"
+          test -z "$status"
+
+      - name: Upload SignalBench Python product evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signalbench-python-product-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/signalbench-python-product.json
+          if-no-files-found: error

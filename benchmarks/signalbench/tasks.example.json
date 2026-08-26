@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "claim_boundary": "Templates only. Replace every repository, tree SHA, prompt and verifier with frozen real tasks before execution.",
+  "claim_boundary": "Templates only. Replace every repository, commit SHA, tree SHA, prompt and verifier with frozen real tasks before execution.",
   "tasks": [
     {
       "task_id": "structural-navigation-001",
@@ -8,119 +8,219 @@
       "prompt": "Identify the implementation and transitive callers of target_symbol, then write the verified answer to the adapter result.",
       "repository": "/absolute/path/to/frozen/repository-1",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_structural.py"],
+      "verifier": [
+        "python",
+        "verify_structural.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "bug-fix-001",
-      "family": "bug-fix",
+      "family": "bug-diagnosis",
       "prompt": "Repair the pinned defect without changing unrelated behavior and make the verifier pass.",
       "repository": "/absolute/path/to/frozen/repository-1",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_bug_fix.py"],
+      "verifier": [
+        "python",
+        "verify_bug_fix.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "test-repair-001",
-      "family": "test-failure-repair",
+      "family": "bug-diagnosis",
       "prompt": "Diagnose the failing test output, implement the smallest correct repair and run the bound verifier.",
       "repository": "/absolute/path/to/frozen/repository-2",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_test_repair.py"],
+      "verifier": [
+        "python",
+        "verify_test_repair.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "cross-file-refactor-001",
-      "family": "cross-file-refactor",
+      "family": "multi-file-implementation",
       "prompt": "Refactor the pinned API across implementation, callers and tests while preserving behavior.",
       "repository": "/absolute/path/to/frozen/repository-2",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_refactor.py"],
+      "verifier": [
+        "python",
+        "verify_refactor.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "dependency-impact-001",
-      "family": "dependency-impact",
+      "family": "call-graph-impact",
       "prompt": "Determine the transitive impact of the pinned dependency change and update every required path.",
       "repository": "/absolute/path/to/frozen/repository-3",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_dependency_impact.py"],
+      "verifier": [
+        "python",
+        "verify_dependency_impact.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "configuration-repair-001",
-      "family": "configuration-repair",
+      "family": "bug-diagnosis",
       "prompt": "Repair the pinned build or runtime configuration without weakening validation.",
       "repository": "/absolute/path/to/frozen/repository-3",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_configuration.py"],
+      "verifier": [
+        "python",
+        "verify_configuration.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "cli-contract-001",
-      "family": "cli-contract",
+      "family": "known-edit",
       "prompt": "Implement the pinned CLI behavior and preserve backwards-compatible error semantics.",
       "repository": "/absolute/path/to/frozen/repository-4",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_cli.py"],
+      "verifier": [
+        "python",
+        "verify_cli.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "documentation-consistency-001",
-      "family": "documentation-code-consistency",
+      "family": "known-edit",
       "prompt": "Reconcile the pinned documentation and executable behavior without inventing unsupported claims.",
       "repository": "/absolute/path/to/frozen/repository-4",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_docs.py"],
+      "verifier": [
+        "python",
+        "verify_docs.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "long-session-continuation-001",
-      "family": "long-session-continuation",
+      "family": "long-session-continuity",
       "prompt": "Continue the pinned multi-stage task using only verified prior decisions and current repository evidence.",
       "repository": "/absolute/path/to/frozen/repository-5",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_continuation.py"],
+      "verifier": [
+        "python",
+        "verify_continuation.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     },
     {
       "task_id": "large-output-diagnosis-001",
-      "family": "large-tool-output-diagnosis",
+      "family": "output-heavy-verification",
       "prompt": "Diagnose the pinned large test/build output, preserve the root cause and implement the verified repair.",
       "repository": "/absolute/path/to/frozen/repository-5",
       "repository_tree": "replace-with-git-tree-sha",
-      "verifier": ["python", "verify_large_output.py"],
+      "verifier": [
+        "python",
+        "verify_large_output.py"
+      ],
       "timeout_seconds": 1200,
-      "permissions": ["read", "write", "execute"],
+      "permissions": [
+        "read",
+        "write",
+        "execute"
+      ],
       "expected_work": 1.0,
-      "metadata": {"frozen": true}
+      "metadata": {
+        "frozen": true
+      },
+      "repository_commit": "replace-with-git-commit-sha"
     }
   ]
 }
