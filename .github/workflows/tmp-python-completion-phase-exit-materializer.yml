@@ -36,6 +36,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -f tools/tmp_python_only_retirement_repair.py
           test -f tools/tmp_python_only_retirement_continuity_fix.py
+          test -f tools/tmp_public_surface_doc_sync.py
           test -f .github/workflows/tmp-python-completion-phase-exit-materializer.yml
 
       - name: Set up Python 3.12
@@ -52,12 +53,16 @@ jobs:
       - name: Reconcile Python-only continuation authority
         run: python tools/tmp_python_only_retirement_continuity_fix.py
 
+      - name: Synchronize README public surface to canonical inventory
+        run: python tools/tmp_public_surface_doc_sync.py
+
       - name: Remove temporary surfaces and seal permanent manifest
         shell: bash
         run: |
           set -euo pipefail
           git rm tools/tmp_python_only_retirement_repair.py
           git rm tools/tmp_python_only_retirement_continuity_fix.py
+          git rm tools/tmp_public_surface_doc_sync.py
           git rm .github/workflows/tmp-python-completion-phase-exit-materializer.yml
           rm -rf syntavra_runtime.egg-info
           python tools/refresh_manifest.py
@@ -87,6 +92,7 @@ jobs:
           python -m unittest tests.runtime.test_python_capability_completeness -v
           python -m unittest tests.runtime.test_python_authority -v
           python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python -m unittest tests.runtime.test_release_action_pins -v
           python tools/certify_python_capability_completeness.py --out /tmp/completeness-precommit.json
           python tools/certify_python_authority.py --out /tmp/python-authority-precommit.json
           python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-freeze-precommit.json
@@ -99,6 +105,7 @@ jobs:
           from pathlib import Path
 
           registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          surface = json.loads(Path('contracts/engine/dual-engine-public-surface-v2.json').read_text(encoding='utf-8'))
           assert registry['python_complete']['ready'] is True
           assert registry['python_complete']['rust_resume_allowed'] is False
           assert registry['python_complete']['rust_retired'] is True
@@ -106,6 +113,11 @@ jobs:
           assert registry['policy']['rust_retirement_is_independent_of_python_complete'] is True
           assert registry['policy']['python_hardening_continues_while_rust_retired'] is True
           assert registry['policy']['rust_transition_capabilities_deferred_while_retired'] is True
+          assert surface['python_surface']['public_command_count'] == 245
+
+          readme = Path('README.md').read_text(encoding='utf-8')
+          assert '245 executable public command paths' in readme
+          assert '257 public command paths' not in readme
 
           checklist = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
           assert 'FEATURE/PARITY RESUME ALLOWED' not in checklist
@@ -137,12 +149,14 @@ jobs:
           set -euo pipefail
           test ! -e tools/tmp_python_only_retirement_repair.py
           test ! -e tools/tmp_python_only_retirement_continuity_fix.py
+          test ! -e tools/tmp_public_surface_doc_sync.py
           test ! -e .github/workflows/tmp-python-completion-phase-exit-materializer.yml
           python tools/refresh_manifest.py --check
           python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
           python -m unittest tests.runtime.test_python_capability_completeness -v
           python -m unittest tests.runtime.test_python_authority -v
           python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python -m unittest tests.runtime.test_release_action_pins -v
           python tools/certify_python_capability_completeness.py --out /tmp/completeness.json
           python tools/certify_python_authority.py --out /tmp/python-authority.json
           python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-freeze.json
@@ -158,6 +172,7 @@ jobs:
           rust = json.loads(Path('/tmp/rust-freeze.json').read_text(encoding='utf-8'))
           completion = json.loads(Path('/tmp/completion.json').read_text(encoding='utf-8'))
           registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          surface = json.loads(Path('contracts/engine/dual-engine-public-surface-v2.json').read_text(encoding='utf-8'))
 
           assert completeness['ok'] is True, completeness
           assert completeness['exact_head'] == head, completeness
@@ -194,6 +209,11 @@ jobs:
           assert registry['policy']['rust_retirement_is_independent_of_python_complete'] is True
           assert registry['policy']['python_hardening_continues_while_rust_retired'] is True
           assert registry['policy']['rust_transition_capabilities_deferred_while_retired'] is True
+          assert surface['python_surface']['public_command_count'] == 245
+
+          readme = Path('README.md').read_text(encoding='utf-8')
+          assert '245 executable public command paths' in readme
+          assert '257 public command paths' not in readme
 
           checklist = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
           assert 'FEATURE/PARITY RESUME ALLOWED' not in checklist
