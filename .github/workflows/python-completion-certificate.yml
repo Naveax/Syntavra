@@ -1,0 +1,142 @@
+name: Python Completion Certificate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "contracts/python/**"
+      - "syntavra_runtime/**"
+      - "tools/**"
+      - "tests/runtime/**"
+      - ".github/workflows/python-completion-certificate.yml"
+      - ".github/workflows/release-main-merge-gate.yml"
+      - "pyproject.toml"
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-completion-certificate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  platform-smoke:
+    name: platform-smoke / ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+          - os: windows-latest
+            platform: windows
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Clean non-editable install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Generate exact-head platform receipt
+        run: python tools/python_completion_platform_smoke.py --repo . --platform ${{ matrix.platform }} --out python-completion-${{ matrix.platform }}.json
+
+      - name: Upload platform receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-completion-platform-${{ matrix.platform }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: python-completion-${{ matrix.platform }}.json
+          if-no-files-found: error
+
+  certificate:
+    name: exact-head completion certificate
+    needs: platform-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Download exact-head platform receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: python-completion-platform-*-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/python-completion-platform
+          merge-multiple: true
+
+      - name: Run completion regression and aggregate repository validation
+        run: |
+          python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
+          python tools/validate.py
+          python tools/validate_release.py --smoke --output ${{ runner.temp }}/python-completion-release-validation.json
+
+      - name: Generate machine-readable completion certificate
+        run: |
+          python tools/certify_python_completion_certificate_v1.py --repo . --platform-evidence ${{ runner.temp }}/python-completion-platform/python-completion-linux.json --platform-evidence ${{ runner.temp }}/python-completion-platform/python-completion-windows.json --out ${{ runner.temp }}/python-completion-certificate.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "python-completion-certificate.json").read_text(encoding="utf-8"))
+          assert report["ok"] is True, report
+          assert report["implementation_ready"] is True, report
+          assert report["platform_runtime_ready"] is True, report
+          assert report["external_superiority_proven"] is False, report
+          if report["lifecycle_state"] == "certified":
+              assert report["phase_exit_ready"] is True, report
+              assert report["certificate_status"] == "PASS", report
+              assert report["python_complete_ready"] is True, report
+              assert report["rust_resume_allowed"] is True, report
+          else:
+              assert report["phase_exit_ready"] is False, report
+              assert report["certificate_status"] == "NOT_YET_ADMITTED", report
+              assert report["python_complete_ready"] is False, report
+              assert report["rust_resume_allowed"] is False, report
+          PY
+
+      - name: Enforce exact clean candidate head
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Upload completion certificate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-completion-certificate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/python-completion-certificate.json
+          if-no-files-found: error
