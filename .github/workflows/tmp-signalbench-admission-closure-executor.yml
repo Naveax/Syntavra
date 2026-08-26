@@ -60,7 +60,7 @@ jobs:
           assert boundary["ok"] is True, boundary
           assert boundary["python"]["module_count"] == 212, boundary["python"]
           contract = json.loads(Path("contracts/python/core-legacy-route-reference-v1.json").read_text(encoding="utf-8"))
-          assert contract["expected_side_effect_sha256"] == "e7b6a2166f6f515be5de34883a4c20f49346917dba600b37edba5ea627c9a493"
+          assert contract["derived_freeze"]["expected_side_effect_sha256"] == "e7b6a2166f6f515be5de34883a4c20f49346917dba600b37edba5ea627c9a493"
           text = Path("syntavra_runtime/prerelease_cli.py").read_text(encoding="utf-8")
           assert "compatibility = {" in text
           assert '"provider_observed_pairs"' in text
