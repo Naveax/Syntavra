@@ -1,0 +1,93 @@
+name: Temporary Context Decision Trace Main Manifest Reconcile
+
+on:
+  push:
+    branches:
+      - automation/context-decision-trace-v1-main-manifest-reconcile-20260828
+    paths:
+      - .github/workflows/tmp-context-decision-trace-main-manifest-reconcile.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-context-decision-trace-main-manifest-reconcile
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN: 3d8a58c4c8000551002857894815fcdba1f447f4
+  CANDIDATE_BRANCH: automation/context-decision-trace-v1-main-manifest-candidate-20260828
+  EXPECTED_RELEASE_GATE_DIGEST: fa88a51f849cf7f583f2a0dfcbf8d0745cd3c81b1c685993a7f1938357fe22b0
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact admitted main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Materialize manifest-only candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+
+          python -m pip install -e . >/dev/null
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+
+          expected="$EXPECTED_RELEASE_GATE_DIGEST  .github/workflows/release-main-merge-gate.yml"
+          grep -Fx "$expected" MANIFEST.sha256
+
+          test "$(git diff --name-only)" = "MANIFEST.sha256"
+          git diff --check
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add MANIFEST.sha256
+          git commit -m "chore: reconcile release gate manifest after context trace merge"
+
+      - name: Validate exact manifest candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_context_decision_trace_v1 -v
+          python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
+          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          python tools/validate.py
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json release-smoke.json platform-registry.json native-dry-run.json r38-user-head
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Publish validated candidate branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN"
+          test "$(git diff --name-only "$EXPECTED_MAIN" HEAD)" = "MANIFEST.sha256"
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "candidate_sha=$(git rev-parse HEAD)"
+          echo "candidate_tree=$(git rev-parse HEAD^{tree})"
