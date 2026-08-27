@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  reconcile-and-validate:
+  materialize:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -47,14 +47,13 @@ jobs:
       - name: Install runtime
         run: python -m pip install -e .
 
-      - name: Reconcile Python completion with Rust retirement
-        run: python tools/tmp_python_only_retirement_repair.py
-
-      - name: Reconcile Python-only continuation authority
-        run: python tools/tmp_python_only_retirement_continuity_fix.py
-
-      - name: Synchronize README public surface to canonical inventory
-        run: python tools/tmp_public_surface_doc_sync.py
+      - name: Materialize Python-active Rust-retired authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/tmp_python_only_retirement_repair.py
+          python tools/tmp_python_only_retirement_continuity_fix.py
+          python tools/tmp_public_surface_doc_sync.py
 
       - name: Remove temporary surfaces and seal permanent manifest
         shell: bash
@@ -68,23 +67,15 @@ jobs:
           python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
           git diff --check
-
           python - <<'PY'
           import subprocess
           changed = subprocess.check_output(['git', 'diff', '--name-only', 'HEAD'], text=True).splitlines()
-          forbidden = [
-              path for path in changed
-              if path.startswith('crates/')
-              or path.startswith('native/')
-              or path.startswith('contracts/engine/')
-              or path.startswith('.github/workflows/remaining71-')
-              or path.startswith('tools/validate_remaining71_')
-          ]
+          forbidden = [path for path in changed if path.startswith('crates/') or path.startswith('native/') or path.startswith('contracts/engine/') or path.startswith('.github/workflows/remaining71-') or path.startswith('tools/validate_remaining71_')]
           assert not forbidden, forbidden
           assert 'contracts/engine/dual-engine-public-surface-v2.json' not in changed
           PY
 
-      - name: Validate Python-active Rust-retired candidate
+      - name: Validate dirty candidate surfaces
         shell: bash
         run: |
           set -euo pipefail
@@ -96,15 +87,11 @@ jobs:
           python tools/certify_python_capability_completeness.py --out /tmp/completeness-precommit.json
           python tools/certify_python_authority.py --out /tmp/python-authority-precommit.json
           python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-freeze-precommit.json
-          # The completion certifier deliberately requires a clean exact repository.
-          # Run it only after the permanent helper-free candidate has been committed.
           python tools/validate.py
           python tools/validate_release.py --smoke --output /tmp/release-smoke-precommit.json
-
           python - <<'PY'
           import json
           from pathlib import Path
-
           registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
           surface = json.loads(Path('contracts/engine/dual-engine-public-surface-v2.json').read_text(encoding='utf-8'))
           assert registry['python_complete']['ready'] is True
@@ -118,20 +105,17 @@ jobs:
           assert surface['python_surface']['public_command_count'] == 245
           assert surface['rust_surface']['native_public_command_count'] == 245
           assert surface['rust_surface']['missing_native_public_command_count'] == 0
-
           readme = Path('README.md').read_text(encoding='utf-8')
           assert '245 executable public command paths' in readme
           assert '257 public command paths' not in readme
-          assert 'FULL_DUAL_ENGINE_PARITY_PROVEN' in readme
+          assert readme.count('FULL_DUAL_ENGINE_PARITY_PROVEN') >= 2
           assert 'DUAL_ENGINE_PARITY_INCOMPLETE' not in readme
-
           checklist = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
           assert 'FEATURE/PARITY RESUME ALLOWED' not in checklist
           assert 'Lift Rust feature-freeze guard for feature/parity development' not in checklist
           assert 'Rust feature/parity development may resume.' not in checklist
           assert 'RETIRED/FROZEN — rust_resume_allowed=false' in checklist
           assert 'Capabilities 271–275 are Rust-transition work and remain deferred' in checklist
-
           live = Path('docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md').read_text(encoding='utf-8')
           assert 'PYTHON_COMPLETE = true' in live
           assert 'rust_resume_allowed = false' in live
@@ -139,7 +123,7 @@ jobs:
           assert '240–270' in live and '271–275' in live and '276–280' in live
           PY
 
-      - name: Commit permanent Python-only candidate
+      - name: Commit permanent helper-free candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -173,7 +157,6 @@ jobs:
           import json
           import subprocess
           from pathlib import Path
-
           head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           completeness = json.loads(Path('/tmp/completeness.json').read_text(encoding='utf-8'))
           authority = json.loads(Path('/tmp/python-authority.json').read_text(encoding='utf-8'))
@@ -181,35 +164,19 @@ jobs:
           completion = json.loads(Path('/tmp/completion.json').read_text(encoding='utf-8'))
           registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
           surface = json.loads(Path('contracts/engine/dual-engine-public-surface-v2.json').read_text(encoding='utf-8'))
-
-          assert completeness['ok'] is True, completeness
-          assert completeness['exact_head'] == head, completeness
-          assert completeness['python_complete_ready'] is True, completeness
-          assert completeness['rust_resume_allowed'] is False, completeness
-          assert completeness['rust']['feature_development_frozen'] is True, completeness
-
-          assert authority['ok'] is True, authority
-          assert authority['exact_head'] == head, authority
-          assert authority['python_complete_ready'] is True, authority
-          assert authority['rust']['resume_allowed'] is False, authority
-          assert authority['rust']['feature_development_frozen'] is True, authority
-
-          assert rust['ok'] is True, rust
-          assert rust['exact_head'] == head, rust
-          assert rust['python_complete_ready'] is True, rust
-          assert rust['rust_resume_allowed'] is False, rust
-          assert rust['rust']['feature_development_frozen'] is True, rust
-          assert rust['rust']['production_promotion_frozen'] is True, rust
-          assert rust['rust']['production_promoted'] == 174, rust
-          assert rust['rust']['remaining_parity_promotion'] == 71, rust
-
-          assert completion['ok'] is True, completion
-          assert completion['exact_head'] == head, completion
-          assert completion['implementation_ready'] is True, completion
-          assert completion['python_complete_ready'] is True, completion
-          assert completion['rust_resume_allowed'] is False, completion
-          assert completion['rust']['feature_development_frozen'] is True, completion
-
+          assert completeness['ok'] is True and completeness['exact_head'] == head
+          assert completeness['python_complete_ready'] is True and completeness['rust_resume_allowed'] is False
+          assert completeness['rust']['feature_development_frozen'] is True
+          assert authority['ok'] is True and authority['exact_head'] == head
+          assert authority['python_complete_ready'] is True and authority['rust']['resume_allowed'] is False
+          assert authority['rust']['feature_development_frozen'] is True
+          assert rust['ok'] is True and rust['exact_head'] == head
+          assert rust['python_complete_ready'] is True and rust['rust_resume_allowed'] is False
+          assert rust['rust']['feature_development_frozen'] is True and rust['rust']['production_promotion_frozen'] is True
+          assert rust['rust']['production_promoted'] == 174 and rust['rust']['remaining_parity_promotion'] == 71
+          assert completion['ok'] is True and completion['exact_head'] == head
+          assert completion['implementation_ready'] is True and completion['python_complete_ready'] is True
+          assert completion['rust_resume_allowed'] is False and completion['rust']['feature_development_frozen'] is True
           assert registry['python_complete']['ready'] is True
           assert registry['python_complete']['rust_resume_allowed'] is False
           assert registry['python_complete']['rust_retired'] is True
@@ -221,13 +188,11 @@ jobs:
           assert surface['python_surface']['public_command_count'] == 245
           assert surface['rust_surface']['native_public_command_count'] == 245
           assert surface['rust_surface']['missing_native_public_command_count'] == 0
-
           readme = Path('README.md').read_text(encoding='utf-8')
           assert '245 executable public command paths' in readme
           assert '257 public command paths' not in readme
-          assert 'FULL_DUAL_ENGINE_PARITY_PROVEN' in readme
+          assert readme.count('FULL_DUAL_ENGINE_PARITY_PROVEN') >= 2
           assert 'DUAL_ENGINE_PARITY_INCOMPLETE' not in readme
-
           checklist = Path('docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md').read_text(encoding='utf-8')
           assert 'FEATURE/PARITY RESUME ALLOWED' not in checklist
           assert 'Lift Rust feature-freeze guard for feature/parity development' not in checklist
