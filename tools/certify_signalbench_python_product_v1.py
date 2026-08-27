@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from syntavra_runtime.signalbench import ArmSpec, RunResult, SignalBenchProtocol, SignalBenchRunner, TaskSpec
 from syntavra_runtime.signalbench_hardened import UsageReceipt
 
@@ -155,8 +157,7 @@ def certify(repo: Path) -> dict[str, Any]:
     require(by_id["observability_attribution_v1"]["state"] == "certified", "Observability Attribution must be certified first")
     lifecycle_state = by_id["signalbench_python_product_v1"]["state"]
     require(lifecycle_state in {"partial", "implemented", "verified", "certified"}, "invalid SignalBench lifecycle state")
-    require(registry["python_complete"]["ready"] is False, "implementation pass cannot claim Python COMPLETE")
-    require(registry["python_complete"]["rust_resume_allowed"] is False, "implementation pass cannot resume Rust")
+    validate_python_complete_state(registry)
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
     return {
         "ok": True,

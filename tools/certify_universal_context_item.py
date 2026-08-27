@@ -188,12 +188,19 @@ def certify(repo: Path) -> dict[str, Any]:
 
     completeness = certify_completeness(repo)
     _require(completeness.get("ok") is True, "capability completeness is not valid")
-    _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
-    _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
+    _require(isinstance(completeness.get("python_complete_ready"), bool), "Python COMPLETE state must be boolean")
+    _require(isinstance(completeness.get("rust_resume_allowed"), bool), "Rust resume state must be boolean")
+    _require(
+        not completeness.get("rust_resume_allowed") or completeness.get("python_complete_ready") is True,
+        "Rust resume cannot precede Python COMPLETE",
+    )
 
     rust_freeze = certify_rust_freeze(repo)
     _require(rust_freeze.get("ok") is True, "Rust feature freeze is not certified")
-    _require(rust_freeze.get("rust_resume_allowed") is False, "Rust resume unexpectedly enabled")
+    _require(
+        rust_freeze.get("rust_resume_allowed") is completeness.get("rust_resume_allowed"),
+        "Rust freeze/current resume state disagreement",
+    )
     _require((rust_freeze.get("rust") or {}).get("production_promoted") == 174, "Rust production authority drift")
 
     _validate_compatibility()

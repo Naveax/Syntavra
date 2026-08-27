@@ -60,6 +60,8 @@ jobs:
           assert report['python']['product_behavior_authority'] is True
           assert report['python']['public_route_count'] == 245
           assert report['python']['execution_owner_count'] == 245
+          assert report['python_complete_ready'] is True
+          assert report['rust']['resume_allowed'] is False
           assert report['rust']['feature_development_frozen'] is True
           assert report['rust']['implemented_native_routes'] == 245
           assert report['rust']['implementation_missing_routes'] == 0
@@ -68,7 +70,6 @@ jobs:
           assert report['rust']['remaining_owned_routes'] == 71
           assert report['rust']['unowned_routes'] == 0
           assert report['rust']['atomic_promotion_target'] == 245
-          assert report['rust']['resume_allowed'] is False
           assert report['rust']['resume_claim'] == 'PYTHON_COMPLETE'
           PY
 

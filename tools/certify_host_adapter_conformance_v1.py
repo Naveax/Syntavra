@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from syntavra_runtime.adapter_platform import ADAPTERS, AdapterRegistry
 from syntavra_runtime.adapter_runtime import AdapterMaturity, AdapterPlatformRuntime
 from syntavra_runtime.host_adapters import KNOWN_HOSTS, host_spec, negotiate
@@ -155,8 +157,7 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(by_id["output_intelligence_v1"]["state"] == "certified", "Output Intelligence must be certified first")
     lifecycle_state = by_id["host_adapter_conformance_v1"]["state"]
     _require(lifecycle_state in {"partial", "implemented", "verified", "certified"}, "invalid host adapter lifecycle state")
-    _require(registry["python_complete"]["ready"] is False, "host adapter milestone cannot claim Python COMPLETE")
-    _require(registry["python_complete"]["rust_resume_allowed"] is False, "host adapter milestone cannot resume Rust")
+    validate_python_complete_state(registry)
 
     exact_head = _head(repo)
     return {

@@ -25,7 +25,7 @@ class PythonCompletionCertificateV1Tests(unittest.TestCase):
     def _registry(self) -> dict:
         return json.loads((ROOT / REGISTRY).read_text(encoding="utf-8"))
 
-    def test_completion_contract_is_strict_and_phase_exit_is_not_preclaimed(self) -> None:
+    def test_completion_contract_is_strict_and_phase_exit_is_admitted(self) -> None:
         contract = self._contract()
         self.assertEqual(contract["claim"], "PYTHON_COMPLETION_CERTIFICATE_V1")
         self.assertTrue(contract["strict"])
@@ -33,9 +33,11 @@ class PythonCompletionCertificateV1Tests(unittest.TestCase):
         registry = self._registry()
         by_id = {item["id"]: item for item in registry["capabilities"]}
         self.assertEqual(by_id["signalbench_python_product_v1"]["state"], "certified")
-        self.assertEqual(by_id["python_completion_certificate_v1"]["state"], "partial")
-        self.assertFalse(registry["python_complete"]["ready"])
+        self.assertEqual(by_id["python_completion_certificate_v1"]["state"], "certified")
+        self.assertTrue(by_id["python_completion_certificate_v1"]["certification_evidence"])
+        self.assertTrue(registry["python_complete"]["ready"])
         self.assertFalse(registry["python_complete"]["rust_resume_allowed"])
+        self.assertTrue(registry["python_complete"]["rust_retired"])
 
     def test_registry_derived_contract_freeze_matches_pinned_digest(self) -> None:
         contract = self._contract()

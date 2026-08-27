@@ -348,8 +348,12 @@ def certify(repo: Path) -> dict[str, Any]:
         bool(completeness.get("current_milestone")),
         "capability registry current milestone missing",
     )
-    _require(completeness.get("python_complete_ready") is False, "Python COMPLETE unexpectedly true")
-    _require(completeness.get("rust_resume_allowed") is False, "Rust resume unexpectedly true")
+    _require(isinstance(completeness.get("python_complete_ready"), bool), "Python COMPLETE state must be boolean")
+    _require(isinstance(completeness.get("rust_resume_allowed"), bool), "Rust resume state must be boolean")
+    _require(
+        not completeness.get("rust_resume_allowed") or completeness.get("python_complete_ready") is True,
+        "Rust resume cannot precede Python COMPLETE",
+    )
 
     rust_freeze = certify_rust_freeze(repo)
     _require(rust_freeze.get("ok") is True, "Rust feature freeze is not certified")
