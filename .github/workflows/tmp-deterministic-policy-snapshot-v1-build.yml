@@ -87,8 +87,8 @@ jobs:
           }
           caps.insert(trace_index + 1, row)
           order = registry.get('post_completion_milestone_order') or []
-          expected = ['runtime_contract_version_graph_v1', 'context_decision_trace_v1']
-          if order != expected:
+          expected_order = ['runtime_contract_version_graph_v1', 'context_decision_trace_v1']
+          if order != expected_order:
               raise SystemExit(f'unexpected pre-242 post-completion order: {order!r}')
           registry['post_completion_milestone_order'] = [*order, 'deterministic_policy_snapshot_v1']
           registry_path.write_text(json.dumps(registry, indent=2) + '\n', encoding='utf-8')
@@ -101,71 +101,60 @@ jobs:
               raise SystemExit('unable to extend post-completion prefix exactly once')
           text = text.replace(old_prefix, new_prefix, 1)
           old_cursor = '        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")\n'
-          new_cursor = (
-              '        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "implemented")\n'
-              '        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"], [])\n'
-              '        self.assertEqual(report["post_completion_current_milestone"], "deterministic_policy_snapshot_v1")\n'
-          )
+          new_cursor = '        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "implemented")\n        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"], [])\n        self.assertEqual(report["post_completion_current_milestone"], "deterministic_policy_snapshot_v1")\n'
           if text.count(old_cursor) != 1:
               raise SystemExit('unable to update post-completion cursor exactly once')
           completeness.write_text(text.replace(old_cursor, new_cursor, 1), encoding='utf-8')
 
           release = Path('.github/workflows/release-main-merge-gate.yml')
           text = release.read_text(encoding='utf-8')
-          old_test = '          python -m unittest tests.runtime.test_context_decision_trace_v1 -v\n'
-          new_test = old_test + '          python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v\n'
-          old_cert = '          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json\n'
-          new_cert = old_cert + '          python tools/certify_deterministic_policy_snapshot_v1.py --out /tmp/deterministic-policy-snapshot.json\n'
-          if text.count(old_test) != 1 or text.count(old_cert) != 1:
+          test_anchor = '          python -m unittest tests.runtime.test_context_decision_trace_v1 -v\n'
+          cert_anchor = '          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json\n'
+          if text.count(test_anchor) != 1 or text.count(cert_anchor) != 1:
               raise SystemExit('release gate context trace anchors drifted')
-          text = text.replace(old_test, new_test, 1).replace(old_cert, new_cert, 1)
+          text = text.replace(test_anchor, test_anchor + '          python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v\n', 1)
+          text = text.replace(cert_anchor, cert_anchor + '          python tools/certify_deterministic_policy_snapshot_v1.py --out /tmp/deterministic-policy-snapshot.json\n', 1)
           release.write_text(text, encoding='utf-8')
 
           pins = Path('tests/runtime/test_release_action_pins.py')
           text = pins.read_text(encoding='utf-8')
-          anchor = '    ".github/workflows/context-decision-trace.yml",\n'
-          if text.count(anchor) != 1:
+          pin_anchor = '    ".github/workflows/context-decision-trace.yml",\n'
+          if text.count(pin_anchor) != 1:
               raise SystemExit('action pin workflow anchor drifted')
-          pins.write_text(text.replace(anchor, anchor + '    ".github/workflows/deterministic-policy-snapshot.yml",\n', 1), encoding='utf-8')
+          pins.write_text(text.replace(pin_anchor, pin_anchor + '    ".github/workflows/deterministic-policy-snapshot.yml",\n', 1), encoding='utf-8')
 
           trace_cert = Path('tools/certify_context_decision_trace_v1.py')
-          text = trace_cert.read_text(encoding='utf-8')
-          old = '''    implementation_ready = True
-    admission_ready = upstream_state == "certified" and lifecycle_state in {"implemented", "verified", "certified"}
-    if admission_ready:
-        _require(current in {CAPABILITY_ID, "post_completion_complete"}, f"admission-ready trace has wrong current milestone: {current}")
-    else:
-        _require(current == UPSTREAM_ID, f"stacked trace prep must remain blocked on upstream milestone: {current}")
-'''
-          new = '''    implementation_ready = True
-    admission_ready = upstream_state == "certified" and lifecycle_state in {"implemented", "verified", "certified"}
-    if upstream_state != "certified":
-        _require(current == UPSTREAM_ID, f"stacked trace prep must remain blocked on upstream milestone: {current}")
-    elif lifecycle_state == "certified":
-        _require(current != CAPABILITY_ID, f"certified Context Decision Trace cannot remain the current milestone: {current}")
-    else:
-        _require(current == CAPABILITY_ID, f"active Context Decision Trace has wrong current milestone: {current}")
-'''
-          if text.count(old) != 1:
-              raise SystemExit('Context Decision Trace certifier lifecycle block drifted')
-          trace_cert.write_text(text.replace(old, new, 1), encoding='utf-8')
+          lines = trace_cert.read_text(encoding='utf-8').splitlines()
+          start = lines.index('    implementation_ready = True')
+          end = lines.index('    runtime = _smoke()', start)
+          replacement = [
+              '    implementation_ready = True',
+              '    admission_ready = upstream_state == "certified" and lifecycle_state in {"implemented", "verified", "certified"}',
+              '    if upstream_state != "certified":',
+              '        _require(current == UPSTREAM_ID, f"stacked trace prep must remain blocked on upstream milestone: {current}")',
+              '    elif lifecycle_state == "certified":',
+              '        _require(current != CAPABILITY_ID, f"certified Context Decision Trace cannot remain the current milestone: {current}")',
+              '    else:',
+              '        _require(current == CAPABILITY_ID, f"active Context Decision Trace has wrong current milestone: {current}")',
+              '',
+          ]
+          trace_cert.write_text('\n'.join(lines[:start] + replacement + lines[end:]) + '\n', encoding='utf-8')
 
           trace_test = Path('tests/runtime/test_context_decision_trace_v1.py')
-          text = trace_test.read_text(encoding='utf-8')
-          anchor = '    def test_trace_does_not_copy_task_or_signal_metadata_payload(self) -> None:\n'
-          regression = '''    def test_certifier_allows_downstream_cursor_after_trace_certification(self) -> None:
-        from pathlib import Path
-
-        root = Path(__file__).resolve().parents[2]
-        source = (root / "tools/certify_context_decision_trace_v1.py").read_text(encoding="utf-8")
-        self.assertIn('elif lifecycle_state == "certified":', source)
-        self.assertIn('current != CAPABILITY_ID', source)
-        self.assertNotIn('current in {CAPABILITY_ID, "post_completion_complete"}', source)
-
-'''
-          if text.count(anchor) != 1:
-              raise SystemExit('Context Decision Trace test anchor drifted')
-          trace_test.write_text(text.replace(anchor, regression + anchor, 1), encoding='utf-8')
+          lines = trace_test.read_text(encoding='utf-8').splitlines()
+          anchor = lines.index('    def test_trace_does_not_copy_task_or_signal_metadata_payload(self) -> None:')
+          regression = [
+              '    def test_certifier_allows_downstream_cursor_after_trace_certification(self) -> None:',
+              '        from pathlib import Path',
+              '',
+              '        root = Path(__file__).resolve().parents[2]',
+              '        source = (root / "tools/certify_context_decision_trace_v1.py").read_text(encoding="utf-8")',
+              '        self.assertIn(\'elif lifecycle_state == "certified":\', source)',
+              '        self.assertIn(\'current != CAPABILITY_ID\', source)',
+              '        self.assertNotIn(\'current in {CAPABILITY_ID, "post_completion_complete"}\', source)',
+              '',
+          ]
+          trace_test.write_text('\n'.join(lines[:anchor] + regression + lines[anchor:]) + '\n', encoding='utf-8')
 
           dual_path = Path('contracts/engine/dual-engine-public-surface-v2.json')
           dual = json.loads(dual_path.read_text(encoding='utf-8'))
@@ -184,24 +173,28 @@ jobs:
           python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
           git diff --check
-
-          expected="$(printf '%s\n' \
-            .github/workflows/deterministic-policy-snapshot.yml \
-            .github/workflows/release-main-merge-gate.yml \
-            MANIFEST.sha256 \
-            contracts/engine/dual-engine-public-surface-v2.json \
-            contracts/python/capability-completeness-registry-v1.json \
-            contracts/python/deterministic-policy-snapshot-v1.json \
-            syntavra_runtime/deterministic_policy_snapshot.py \
-            tests/runtime/test_context_decision_trace_v1.py \
-            tests/runtime/test_deterministic_policy_snapshot_v1.py \
-            tests/runtime/test_python_capability_completeness.py \
-            tests/runtime/test_release_action_pins.py \
-            tools/certify_context_decision_trace_v1.py \
-            tools/certify_deterministic_policy_snapshot_v1.py | sort)"
-          changed="$(git diff --name-only "$EXPECTED_MAIN" | sort)"
-          printf '%s\n' "$changed"
-          test "$changed" = "$expected"
+          python - <<'PY'
+          import subprocess
+          expected = sorted([
+              '.github/workflows/deterministic-policy-snapshot.yml',
+              '.github/workflows/release-main-merge-gate.yml',
+              'MANIFEST.sha256',
+              'contracts/engine/dual-engine-public-surface-v2.json',
+              'contracts/python/capability-completeness-registry-v1.json',
+              'contracts/python/deterministic-policy-snapshot-v1.json',
+              'syntavra_runtime/deterministic_policy_snapshot.py',
+              'tests/runtime/test_context_decision_trace_v1.py',
+              'tests/runtime/test_deterministic_policy_snapshot_v1.py',
+              'tests/runtime/test_python_capability_completeness.py',
+              'tests/runtime/test_release_action_pins.py',
+              'tools/certify_context_decision_trace_v1.py',
+              'tools/certify_deterministic_policy_snapshot_v1.py',
+          ])
+          changed = sorted(filter(None, subprocess.check_output(['git', 'diff', '--name-only', '0c8a67fea942362ba4a4bb58b0eab1939b3a517f'], text=True).splitlines()))
+          print('candidate paths:', changed)
+          if changed != expected:
+              raise SystemExit(f'candidate path drift: expected={expected!r} got={changed!r}')
+          PY
 
       - name: Squash prepared tree into one exact candidate commit
         shell: bash
@@ -211,24 +204,9 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git reset --soft "$EXPECTED_MAIN"
           git add -A
-          expected="$(printf '%s\n' \
-            .github/workflows/deterministic-policy-snapshot.yml \
-            .github/workflows/release-main-merge-gate.yml \
-            MANIFEST.sha256 \
-            contracts/engine/dual-engine-public-surface-v2.json \
-            contracts/python/capability-completeness-registry-v1.json \
-            contracts/python/deterministic-policy-snapshot-v1.json \
-            syntavra_runtime/deterministic_policy_snapshot.py \
-            tests/runtime/test_context_decision_trace_v1.py \
-            tests/runtime/test_deterministic_policy_snapshot_v1.py \
-            tests/runtime/test_python_capability_completeness.py \
-            tests/runtime/test_release_action_pins.py \
-            tools/certify_context_decision_trace_v1.py \
-            tools/certify_deterministic_policy_snapshot_v1.py | sort)"
-          staged="$(git diff --cached --name-only | sort)"
-          test "$staged" = "$expected"
           git commit -m "Implement Deterministic Policy Snapshot v1"
           test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN"
+          test "$(git diff --name-only "$EXPECTED_MAIN" HEAD | wc -l)" -eq 13
 
       - name: Validate exact candidate head
         shell: bash
@@ -236,7 +214,6 @@ jobs:
           set -euo pipefail
           python -m pip install -e . >/dev/null
           rm -rf syntavra_runtime.egg-info
-
           python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v
           python -m unittest tests.runtime.test_context_decision_trace_v1 -v
           python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
@@ -244,7 +221,6 @@ jobs:
           python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v
           python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
           python -m unittest tests.runtime.test_release_action_pins -v
-
           python tools/certify_deterministic_policy_snapshot_v1.py --out /tmp/deterministic-policy-snapshot.json
           python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
@@ -255,7 +231,6 @@ jobs:
           python tools/validate.py
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
           python tools/refresh_manifest.py --check
-
           python - <<'PY'
           from pathlib import Path
           import json
@@ -282,11 +257,11 @@ jobs:
           assert registry['python_complete']['rust_resume_allowed'] is False
           assert registry['python_complete']['rust_retired'] is True
 
-          def lines(*argv: str) -> list[str]:
+          def output_lines(*argv: str) -> list[str]:
               out = subprocess.check_output(argv, text=True)
               return [line for line in out.splitlines() if line]
 
-          dirty = sorted(set(lines('git', 'diff', '--name-only') + lines('git', 'ls-files', '--others', '--exclude-standard')))
+          dirty = sorted(set(output_lines('git', 'diff', '--name-only') + output_lines('git', 'ls-files', '--others', '--exclude-standard')))
           print('validator side effects:', dirty)
           unexpected = []
           for raw in dirty:
@@ -297,7 +272,6 @@ jobs:
           if unexpected:
               raise SystemExit(f'unexpected validator side effects: {unexpected}')
           PY
-
           git reset --hard HEAD
           git clean -fd
           git diff --check
