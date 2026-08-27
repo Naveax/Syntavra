@@ -612,6 +612,27 @@
       "acceptance": "Deterministic Python contract/schema dependency graph with fail-closed unsafe or missing references, metadata-only external contract leaves, content-addressed identity, explicit transitive downstream invalidation, exact-head CI and Release Main enforcement. Python COMPLETE stays sealed and Rust stays retired/frozen."
     },
     {
+      "id": "context_decision_trace_v1",
+      "group": "post-completion-context-policy",
+      "state": "implemented",
+      "classification": "NEW",
+      "required_for_python_complete": false,
+      "implementation_evidence": [
+        "contracts/python/context-decision-trace-v1.json",
+        "syntavra_runtime/context_decision_trace.py",
+        "syntavra_runtime/adaptive_context_policy.py",
+        "contracts/python/adaptive-context-policy-v1.json",
+        "contracts/python/runtime-contract-version-graph-v1.json",
+        "tools/certify_context_decision_trace_v1.py",
+        "tests/runtime/test_context_decision_trace_v1.py",
+        ".github/workflows/context-decision-trace.yml",
+        ".github/workflows/release-main-merge-gate.yml",
+        "tests/runtime/test_release_action_pins.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Deterministic reference-only trace of include/omit/compress/retrieve/reset/abstain decisions from verified policy receipts, with recommended/effective separation, deterministic replay and fail-closed tamper detection. Policy snapshot and evidence-journal ownership stay with later capabilities; Python COMPLETE remains sealed and Rust stays retired/frozen."
+    },
+    {
       "id": "external_superiority_adoption_evidence",
       "group": "external-proof",
       "state": "external",
@@ -631,6 +652,7 @@
     "rust_retired": true
   },
   "post_completion_milestone_order": [
-    "runtime_contract_version_graph_v1"
+    "runtime_contract_version_graph_v1",
+    "context_decision_trace_v1"
   ]
 }

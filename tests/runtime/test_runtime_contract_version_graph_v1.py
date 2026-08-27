@@ -10,6 +10,7 @@ from tools.certify_runtime_contract_version_graph_v1 import certify
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "contracts/python/runtime-contract-version-graph-v1.json"
+WORKFLOW = ROOT / ".github/workflows/runtime-contract-version-graph.yml"
 
 
 def _write(path: Path, value: dict) -> None:
@@ -142,6 +143,13 @@ class RuntimeContractVersionGraphV1Tests(unittest.TestCase):
         self.assertTrue(contract["ownership_policy"]["no_public_cli_route"])
         self.assertTrue(contract["ownership_policy"]["rust_feature_work_forbidden"])
         self.assertTrue(contract["dependency_policy"]["referenced_external_contracts_are_metadata_only_leaves"])
+
+    def test_exact_head_workflow_derives_post_completion_cursor_from_registry(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json')", workflow)
+        self.assertIn("expected_current = next(", workflow)
+        self.assertIn("assert report['post_completion_current_milestone'] == expected_current", workflow)
+        self.assertNotIn("assert report['post_completion_current_milestone'] == 'post_completion_complete'", workflow)
 
     def test_exact_head_certifier_passes_without_resuming_rust(self) -> None:
         report = certify(ROOT)

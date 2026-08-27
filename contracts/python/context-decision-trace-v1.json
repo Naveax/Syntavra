@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "family": "context-decision-trace",
+  "phase": "python-first-post-completion",
+  "claim": "CONTEXT_DECISION_TRACE_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/context_decision_trace.py",
+  "authorities": {
+    "adaptive_context_policy": "contracts/python/adaptive-context-policy-v1.json",
+    "adaptive_context_runtime": "syntavra_runtime/adaptive_context_policy.py",
+    "upstream_contract_graph": "contracts/python/runtime-contract-version-graph-v1.json",
+    "capability_registry": "contracts/python/capability-completeness-registry-v1.json"
+  },
+  "required_decision_types": [
+    "include",
+    "omit",
+    "compress",
+    "retrieve",
+    "reset",
+    "abstain"
+  ],
+  "supplementary_decision_types": [
+    "branch"
+  ],
+  "trace_policy": {
+    "deterministic": true,
+    "timestamp_free_identity": true,
+    "policy_receipt_hash_verified_before_trace": true,
+    "recommended_and_effective_decisions_separate": true,
+    "item_and_session_decisions_traced": true,
+    "retrieval_recorded_as_explicit_later_event": true,
+    "event_sequence_contiguous": true,
+    "event_hash_integrity": true,
+    "previous_event_hash_integrity": true,
+    "trace_hash_integrity": true,
+    "tamper_fails_closed": true
+  },
+  "mapping_policy": {
+    "KEEP": "include",
+    "SUMMARIZE": "compress",
+    "COMPRESS": "compress",
+    "EXTERNALIZE": "omit",
+    "RETRIEVE": "retrieve",
+    "RESET": "reset",
+    "ABSTAIN": "abstain",
+    "BRANCH": "branch"
+  },
+  "ownership_policy": {
+    "reference_only": true,
+    "context_payload_storage_forbidden": true,
+    "persistent_journal_forbidden": true,
+    "policy_snapshot_ownership_forbidden": true,
+    "policy_recomputation_forbidden": true,
+    "side_effect_authority_forbidden": true,
+    "no_public_cli_route": true,
+    "rust_feature_work_forbidden": true
+  },
+  "enforcement": {
+    "tests": "tests/runtime/test_context_decision_trace_v1.py",
+    "certifier": "tools/certify_context_decision_trace_v1.py",
+    "exact_head_workflow": ".github/workflows/context-decision-trace.yml",
+    "release_main_gate": ".github/workflows/release-main-merge-gate.yml",
+    "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py"
+  },
+  "acceptance": "Deterministically trace include/omit/compress/retrieve/reset/abstain decisions from verified Adaptive Context Policy receipts, preserve recommended versus effective semantics, provide reference-only replay/tamper verification, and leave policy snapshots, evidence journals, payload storage, side effects, Rust work and production promotion outside this capability.",
+  "claim_boundary": "This contract records deterministic reference-only context decision traces. It does not claim policy snapshot authority (capability 242), evidence mutation journal authority (capability 243), context payload ownership, autonomous retrieval execution, Rust feature/parity work, or Rust production promotion."
+}
