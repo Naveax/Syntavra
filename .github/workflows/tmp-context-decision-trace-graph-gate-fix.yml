@@ -1,4 +1,4 @@
-name: Temporary Context Decision Trace Graph Gate Fix
+name: Temporary Context Decision Trace Public Surface Sync
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: tmp-context-decision-trace-v1-graph-gate-fix-20260827
+  group: tmp-context-decision-trace-public-surface-sync-20260827
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 45
     env:
       TARGET_BRANCH: agent/context-decision-trace-v1-post-completion-final
-      TARGET_HEAD: f926ef33ba3063d184d47cc11151f512f221337d
+      TARGET_HEAD: 42ff9b898a01bdd14dd6a1fbea6057fc021e5efc
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: "1"
     steps:
@@ -42,74 +42,61 @@ jobs:
           git fetch origin "$TARGET_BRANCH"
           observed="$(git rev-parse "origin/$TARGET_BRANCH")"
           test "$observed" = "$TARGET_HEAD"
-          git checkout -B graph-gate-fix "$TARGET_HEAD"
+          git checkout -B public-surface-sync "$TARGET_HEAD"
           test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
 
-      - name: Make post-completion cursor assertion future-proof
+      - name: Derive canonical Python public-surface snapshot
         shell: bash
         run: |
           set -euo pipefail
+          python tools/export_python_surface.py --output /tmp/python-surface-before.json
           python - <<'PY'
+          import hashlib
+          import json
           from pathlib import Path
 
-          workflow_path = Path('.github/workflows/runtime-contract-version-graph.yml')
-          workflow = workflow_path.read_text(encoding='utf-8')
-          old = "\n".join([
-              "          if report['lifecycle_state'] == 'certified':",
-              "              assert report['post_completion_current_milestone'] == 'post_completion_complete'",
-              "          else:",
-              "              assert report['lifecycle_state'] in {'implemented', 'verified'}",
-              "              assert report['post_completion_current_milestone'] == 'runtime_contract_version_graph_v1'",
-          ]) + "\n"
-          new = "\n".join([
-              "          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))",
-              "          by_id = {row.get('id'): row for row in registry.get('capabilities', []) if isinstance(row, dict)}",
-              "          order = registry.get('post_completion_milestone_order') or []",
-              "          expected_current = next(",
-              "              (milestone for milestone in order if (by_id.get(milestone) or {}).get('state') != 'certified'),",
-              "              'post_completion_complete',",
-              "          )",
-              "          assert report['post_completion_current_milestone'] == expected_current",
-              "          assert (by_id.get('runtime_contract_version_graph_v1') or {}).get('state') == report['lifecycle_state']",
-              "          if report['lifecycle_state'] == 'certified':",
-              "              assert expected_current != 'runtime_contract_version_graph_v1'",
-              "          else:",
-              "              assert report['lifecycle_state'] in {'implemented', 'verified'}",
-              "              assert expected_current == 'runtime_contract_version_graph_v1'",
-          ]) + "\n"
-          if workflow.count(old) != 1:
-              raise SystemExit(f'runtime graph workflow lifecycle anchor drift: {workflow.count(old)}')
-          workflow_path.write_text(workflow.replace(old, new, 1), encoding='utf-8')
+          surface = json.loads(Path('/tmp/python-surface-before.json').read_text(encoding='utf-8'))
+          contract_path = Path('contracts/engine/dual-engine-public-surface-v2.json')
+          contract = json.loads(contract_path.read_text(encoding='utf-8'))
+          python_row = contract['python_surface']
 
-          test_path = Path('tests/runtime/test_runtime_contract_version_graph_v1.py')
-          tests = test_path.read_text(encoding='utf-8')
-          anchor = 'CONTRACT = ROOT / "contracts/python/runtime-contract-version-graph-v1.json"\n'
-          addition = 'WORKFLOW = ROOT / ".github/workflows/runtime-contract-version-graph.yml"\n'
-          if tests.count(anchor) != 1 or addition in tests:
-              raise SystemExit('runtime graph test constant anchor drift')
-          tests = tests.replace(anchor, anchor + addition, 1)
-          marker = '    def test_exact_head_certifier_passes_without_resuming_rust(self) -> None:\n'
-          regression = "\n".join([
-              '    def test_exact_head_workflow_derives_post_completion_cursor_from_registry(self) -> None:',
-              '        workflow = WORKFLOW.read_text(encoding="utf-8")',
-              '        self.assertIn("registry = json.loads(Path(\'contracts/python/capability-completeness-registry-v1.json\')", workflow)',
-              '        self.assertIn("expected_current = next(", workflow)',
-              '        self.assertIn("assert report[\'post_completion_current_milestone\'] == expected_current", workflow)',
-              '        self.assertNotIn("assert report[\'post_completion_current_milestone\'] == \'post_completion_complete\'", workflow)',
-              '',
-          ]) + "\n"
-          if tests.count(marker) != 1:
-              raise SystemExit('runtime graph test insertion anchor drift')
-          test_path.write_text(tests.replace(marker, regression + marker, 1), encoding='utf-8')
+          commands = list(surface['cli_commands'])
+          digest = hashlib.sha256(
+              json.dumps(commands, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+          ).hexdigest()
+
+          assert surface['module_count'] == 214, surface['module_count']
+          assert python_row['module_count'] == 212, python_row
+          assert python_row['public_command_count'] == len(commands) == 245, (python_row, len(commands))
+          assert python_row['command_paths_sha256'] == digest, (python_row['command_paths_sha256'], digest)
+          assert contract['rust_surface']['native_public_command_count'] == 245
+          assert contract['rust_surface']['python_launcher_bridge_command_count'] == 0
+
+          python_row['module_count'] = surface['module_count']
+          contract_path.write_text(
+              json.dumps(contract, indent=2, sort_keys=True, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+          )
           PY
           python tools/refresh_manifest.py
           git diff --check
+          git diff --name-only "$TARGET_HEAD" | sort > /tmp/actual-paths.txt
+          cat > /tmp/expected-paths.txt <<'EOF'
+          MANIFEST.sha256
+          contracts/engine/dual-engine-public-surface-v2.json
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths.txt
+          sort -o /tmp/expected-paths.txt /tmp/expected-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
 
-      - name: Validate candidate before exact-head commit
+      - name: Validate reconciled candidate before commit
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install -e .
+          python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v
+          python tools/verify_dual_engine_public_surface.py > /tmp/dual-engine-boundary-precommit.json
+          python tools/report_missing_native_public_routes.py > /tmp/native-inventory-precommit.json
           python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
           python -m unittest tests.runtime.test_context_decision_trace_v1 -v
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph-precommit.json
@@ -119,10 +106,18 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+
+          boundary = json.loads(Path('/tmp/dual-engine-boundary-precommit.json').read_text(encoding='utf-8'))
+          inventory = json.loads(Path('/tmp/native-inventory-precommit.json').read_text(encoding='utf-8'))
           graph = json.loads(Path('/tmp/runtime-contract-version-graph-precommit.json').read_text(encoding='utf-8'))
           trace = json.loads(Path('/tmp/context-decision-trace-precommit.json').read_text(encoding='utf-8'))
           completeness = json.loads(Path('/tmp/python-capability-completeness-precommit.json').read_text(encoding='utf-8'))
           rust = json.loads(Path('/tmp/rust-feature-freeze-guard-precommit.json').read_text(encoding='utf-8'))
+
+          assert boundary['ok'] is True and boundary['python']['module_count'] == 214, boundary
+          assert boundary['python']['public_command_count'] == inventory['python']['derived_count'] == 245
+          assert boundary['python']['command_paths_sha256'] == inventory['python']['derived_sha256']
+          assert inventory['rust']['extra_native_routes'] == []
           assert graph['ok'] is True and graph['lifecycle_state'] == 'certified', graph
           assert graph['post_completion_current_milestone'] == 'context_decision_trace_v1', graph
           assert trace['ok'] is True and trace['admission_ready'] is True, trace
@@ -132,43 +127,54 @@ jobs:
           rm -rf syntavra_runtime.egg-info
           git diff --check
 
-      - name: Commit and revalidate exact full candidate
+      - name: Commit and revalidate exact candidate
         shell: bash
         run: |
           set -euo pipefail
-          git add -A
-          git diff --cached --name-only "$TARGET_HEAD" | sort > /tmp/actual-paths.txt
-          cat > /tmp/expected-paths.txt <<'EOF'
-          .github/workflows/runtime-contract-version-graph.yml
-          MANIFEST.sha256
-          tests/runtime/test_runtime_contract_version_graph_v1.py
-          EOF
-          sed -i 's/^          //' /tmp/expected-paths.txt
-          sort -o /tmp/expected-paths.txt /tmp/expected-paths.txt
-          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git add contracts/engine/dual-engine-public-surface-v2.json MANIFEST.sha256
+          git diff --cached --name-only "$TARGET_HEAD" | sort > /tmp/actual-staged-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-staged-paths.txt
           git config user.name syntavra-ci
           git config user.email syntavra-ci@users.noreply.github.com
-          git commit -m "ci: derive contract graph cursor from canonical registry"
-          full_commit="$(git rev-parse HEAD)"
-          full_tree="$(git rev-parse 'HEAD^{tree}')"
+          git commit -m "contract: reconcile Python public surface module count"
+          candidate_commit="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse 'HEAD^{tree}')"
+          printf '%s\n' "$candidate_commit" > /tmp/CANDIDATE_COMMIT.txt
+          printf '%s\n' "$candidate_tree" > /tmp/CANDIDATE_TREE.txt
+          printf '%s\n' "$TARGET_HEAD" > /tmp/PARENT_SHA.txt
 
+          python -m unittest tests.runtime.test_dual_engine_promotion_boundary -v
+          python tools/export_python_surface.py --output /tmp/python-surface-final.json
+          python tools/verify_dual_engine_public_surface.py > /tmp/dual-engine-boundary.json
+          python tools/report_missing_native_public_routes.py > /tmp/native-inventory.json
           python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
           python -m unittest tests.runtime.test_context_decision_trace_v1 -v
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
           python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
           python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
           python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          rm -rf syntavra_runtime.egg-info
           python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate.json
           python - <<'PY'
           import json
           import subprocess
           from pathlib import Path
+
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          surface = json.loads(Path('/tmp/python-surface-final.json').read_text(encoding='utf-8'))
+          boundary = json.loads(Path('/tmp/dual-engine-boundary.json').read_text(encoding='utf-8'))
+          inventory = json.loads(Path('/tmp/native-inventory.json').read_text(encoding='utf-8'))
           graph = json.loads(Path('/tmp/runtime-contract-version-graph.json').read_text(encoding='utf-8'))
           trace = json.loads(Path('/tmp/context-decision-trace.json').read_text(encoding='utf-8'))
           completeness = json.loads(Path('/tmp/python-capability-completeness.json').read_text(encoding='utf-8'))
           rust = json.loads(Path('/tmp/rust-feature-freeze-guard.json').read_text(encoding='utf-8'))
           completion = json.loads(Path('/tmp/python-completion-certificate.json').read_text(encoding='utf-8'))
-          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+
+          assert surface['module_count'] == boundary['python']['module_count'] == 214
+          assert boundary['ok'] is True and boundary['python']['public_command_count'] == 245, boundary
+          assert boundary['python']['public_command_count'] == inventory['python']['derived_count']
+          assert boundary['python']['command_paths_sha256'] == inventory['python']['derived_sha256']
+          assert inventory['rust']['extra_native_routes'] == []
           assert graph['ok'] is True and graph['exact_head'] == head and graph['lifecycle_state'] == 'certified', graph
           assert graph['post_completion_current_milestone'] == 'context_decision_trace_v1', graph
           assert trace['ok'] is True and trace['exact_head'] == head and trace['admission_ready'] is True, trace
@@ -183,30 +189,34 @@ jobs:
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
 
-          cp .github/workflows/runtime-contract-version-graph.yml /tmp/runtime-contract-version-graph.yml
-          printf '%s\n' "$full_tree" > /tmp/FULL_TREE.txt
-          printf '%s\n' "$TARGET_HEAD" > /tmp/PARENT_SHA.txt
-
-          git reset --hard "$TARGET_HEAD"
-          git checkout "$full_commit" -- MANIFEST.sha256 tests/runtime/test_runtime_contract_version_graph_v1.py
-          git add MANIFEST.sha256 tests/runtime/test_runtime_contract_version_graph_v1.py
-          git commit -m "test: make contract graph cursor lifecycle-aware"
-
-      - name: Push non-workflow fix only if PR head stayed unchanged
+      - name: Guard and push exact candidate
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin "$TARGET_BRANCH"
           observed="$(git rev-parse "origin/$TARGET_BRANCH")"
           test "$observed" = "$TARGET_HEAD"
+          test "$(git rev-parse HEAD^1)" = "$TARGET_HEAD"
+          test "$(git rev-parse HEAD)" = "$(cat /tmp/CANDIDATE_COMMIT.txt)"
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"
 
-      - name: Upload exact workflow handoff
+      - name: Upload reconciliation evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: context-decision-trace-graph-gate-fix-${{ github.sha }}
+          name: context-decision-trace-public-surface-sync-${{ github.sha }}
           path: |
-            /tmp/runtime-contract-version-graph.yml
-            /tmp/FULL_TREE.txt
+            /tmp/CANDIDATE_COMMIT.txt
+            /tmp/CANDIDATE_TREE.txt
             /tmp/PARENT_SHA.txt
-          if-no-files-found: error
+            /tmp/python-surface-before.json
+            /tmp/python-surface-final.json
+            /tmp/dual-engine-boundary.json
+            /tmp/native-inventory.json
+            /tmp/runtime-contract-version-graph.json
+            /tmp/context-decision-trace.json
+            /tmp/python-capability-completeness.json
+            /tmp/rust-feature-freeze-guard.json
+            /tmp/python-completion-certificate.json
+            /tmp/release-validation.json
+          if-no-files-found: warn
