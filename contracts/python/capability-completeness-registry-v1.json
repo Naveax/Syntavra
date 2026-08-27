@@ -37,7 +37,10 @@
     "python_complete_does_not_auto_resume_rust": true,
     "rust_retirement_is_independent_of_python_complete": true,
     "python_hardening_continues_while_rust_retired": true,
-    "rust_transition_capabilities_deferred_while_retired": true
+    "rust_transition_capabilities_deferred_while_retired": true,
+    "post_completion_python_hardening_tracked_separately": true,
+    "post_completion_milestones_do_not_reopen_python_complete": true,
+    "post_completion_milestones_cannot_auto_resume_rust": true
   },
   "milestone_order": [
     "python_authority_v1",
@@ -577,6 +580,27 @@
       "acceptance": "Exact-head Python Completion Certificate must pass all required internal gates plus Linux/Windows clean-install platform receipts before PYTHON_COMPLETE becomes true. Rust remains retired/frozen until a separate explicit reactivation decision; Python completion does not auto-resume Rust."
     },
     {
+      "id": "runtime_contract_version_graph_v1",
+      "group": "post-completion-contract-authority",
+      "state": "implemented",
+      "classification": "NEW",
+      "required_for_python_complete": false,
+      "implementation_evidence": [
+        "contracts/python/runtime-contract-version-graph-v1.json",
+        "syntavra_runtime/contract_version_graph.py",
+        "tools/certify_runtime_contract_version_graph_v1.py",
+        "tests/runtime/test_runtime_contract_version_graph_v1.py",
+        ".github/workflows/runtime-contract-version-graph.yml",
+        ".github/workflows/release-main-merge-gate.yml",
+        "tests/runtime/test_release_action_pins.py",
+        "contracts/python/capability-completeness-registry-v1.json",
+        "tools/certify_python_capability_completeness.py",
+        "tests/runtime/test_python_capability_completeness.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Deterministic Python contract/schema dependency graph with fail-closed unsafe or missing references, metadata-only external contract leaves, content-addressed identity, explicit transitive downstream invalidation, exact-head CI and Release Main enforcement. Python COMPLETE stays sealed and Rust stays retired/frozen."
+    },
+    {
       "id": "external_superiority_adoption_evidence",
       "group": "external-proof",
       "state": "external",
@@ -594,5 +618,8 @@
     "rust_resume_allowed": false,
     "external_superiority_required": false,
     "rust_retired": true
-  }
+  },
+  "post_completion_milestone_order": [
+    "runtime_contract_version_graph_v1"
+  ]
 }

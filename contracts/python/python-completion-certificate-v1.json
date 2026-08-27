@@ -45,11 +45,14 @@
     "basic_runtime_required": true
   },
   "contract_freeze": {
-    "mode": "registry-derived-certified-python-contracts",
+    "mode": "registry-derived-certified-python-contracts-completion-projection-v1",
     "expected_contract_count": 20,
-    "expected_sha256": "0247576817dd9195494a31cdd80888460717b49b21905242784247af189a90eb",
+    "expected_sha256": "1e36d28b7958b64b21916b83b0a8cfdd5d9f963fcf9351fc8ab54e496b806dbe",
     "self_contract_excluded": true,
-    "external_evidence_excluded": true
+    "external_evidence_excluded": true,
+    "registry_projection": "completion-relevant-fields-and-required-capabilities-v1",
+    "post_completion_registry_extensions_excluded": true,
+    "post_completion_exclusion_boundary": "Only post-completion policy/order/capability extensions with required_for_python_complete=false are excluded; completion-relevant authority, policy, milestone order, required capability rows, and persisted completion state remain hash-bound."
   },
   "lifecycle": {
     "allowed_states": [
