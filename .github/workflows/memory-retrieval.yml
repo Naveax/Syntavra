@@ -54,7 +54,7 @@ jobs:
           assert report['claim'] == 'MEMORY_RETRIEVAL_V1'
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['memory_intelligence_store_reused'] is True
           assert report['runtime']['session_memory_authority_reused'] is True

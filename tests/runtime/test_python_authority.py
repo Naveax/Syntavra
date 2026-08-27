@@ -43,6 +43,11 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertFalse(contract["rust_freeze"]["feature_development_allowed"])
         self.assertFalse(contract["rust_freeze"]["production_promotion_allowed"])
         self.assertFalse(contract["rust_freeze"]["native_counter_change_allowed"])
+        self.assertEqual(contract["rust_freeze"]["resume_requires"], "contracts/python/python-completion-certificate-v1.json")
+        self.assertFalse(contract["rust_freeze"]["resume_transition"]["python_complete_opens_rust_feature_development"])
+        self.assertFalse(contract["rust_freeze"]["resume_transition"]["python_complete_opens_remaining71_parity_work"])
+        self.assertTrue(contract["rust_freeze"]["resume_transition"]["explicit_reactivation_required"])
+        self.assertTrue(contract["rust_freeze"]["resume_transition"]["rust_retired_until_explicit_reactivation"])
         self.assertEqual(contract["expected"]["rust_implemented_native_routes"], 245)
         self.assertEqual(contract["expected"]["rust_implementation_missing_routes"], 0)
         self.assertEqual(contract["expected"]["rust_promoted_native_routes"], 174)
@@ -77,6 +82,7 @@ class PythonAuthorityTests(unittest.TestCase):
         self.assertEqual(report["rust"]["remaining_owned_routes"], 71)
         self.assertEqual(report["rust"]["unowned_routes"], 0)
         self.assertFalse(report["rust"]["resume_allowed"])
+        self.assertTrue(report["python_complete_ready"])
 
     def test_repository_validator_enforces_python_authority(self) -> None:
         required = {path.relative_to(ROOT).as_posix() for path in repository_validate.REQUIRED}

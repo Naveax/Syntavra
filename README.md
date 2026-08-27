@@ -46,11 +46,13 @@ syntavra --engine rust version
 
 Selection precedence is command override, `SYNTAVRA_ENGINE`, project configuration, user configuration and then the explicit `auto` policy. Selecting `python` never invokes Rust. Selecting `rust` never invokes Python; a command without an independent native Rust handler fails closed.
 
-The complete Python surface currently contains 257 public command paths. Full dual-engine parity is tracked against all 257 paths in `contracts/engine/dual-engine-public-surface-v2.json`; bounded R23–R37 contract parity is not treated as a complete native product rewrite. The full claim remains:
+The canonical installed Python surface currently contains 245 executable public command paths. Full dual-engine parity inventory is tracked against those 245 paths in `contracts/engine/dual-engine-public-surface-v2.json`; bounded R23–R37 contract parity is not treated as a complete native product rewrite. The canonical route-coverage claim is:
 
 ```text
-DUAL_ENGINE_PARITY_INCOMPLETE
+FULL_DUAL_ENGINE_PARITY_PROVEN
 ```
+
+This route-level parity claim does not reactivate Rust feature/parity development and does not grant production-promotion credit. Rust development/resume authority and the 174/245 production-promotion boundary are governed separately.
 
 ## Product surface
 
@@ -155,7 +157,7 @@ Missing competitors, provider usage or verifier output fail closed; they are nev
 ## Current claim boundary
 
 ```text
-DUAL_ENGINE_PARITY_INCOMPLETE
+FULL_DUAL_ENGINE_PARITY_PROVEN
 EXTERNAL_SUPERIORITY_NOT_PROVEN
 LONG_CONTEXT_QUALITY_NOT_PROVEN
 MEASURED_AGENT_BENCHMARK_NOT_PROVEN

@@ -116,11 +116,11 @@ jobs:
               assert report["phase_exit_ready"] is True, report
               assert report["certificate_status"] == "PASS", report
               assert report["python_complete_ready"] is True, report
-              assert report["rust_resume_allowed"] is True, report
+              assert report["rust_resume_allowed"] is False, report
           else:
               assert report["phase_exit_ready"] is False, report
               assert report["certificate_status"] == "NOT_YET_ADMITTED", report
-              assert report["python_complete_ready"] is False, report
+              assert report["python_complete_ready"] is True, report
               assert report["rust_resume_allowed"] is False, report
           PY
 

@@ -78,9 +78,18 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(maintenance.get("exception_may_change_promotion_authority") is False, "maintenance may not change promotion authority")
     _require(maintenance.get("explicit_reason_required") is True, "maintenance exception must require reason")
 
+    post_complete = contract.get("post_python_complete") or {}
+    _require(post_complete.get("rust_feature_development_allowed") is False, "retired Rust feature development unexpectedly enabled")
+    _require(post_complete.get("remaining71_parity_work_allowed") is False, "retired Remaining-71 work unexpectedly enabled")
+    _require(post_complete.get("rust_retired") is True, "Rust retirement state drift")
+    _require(post_complete.get("explicit_reactivation_required") is True, "Rust explicit-reactivation gate drift")
+    _require(post_complete.get("rust_production_promotion_allowed") is False, "post-completion production promotion must remain frozen")
+    _require(post_complete.get("native_counter_change_allowed") is False, "post-completion native counter changes must remain frozen")
+    _require(post_complete.get("promotion_authority_change_allowed") is False, "post-completion promotion authority changes must remain frozen")
+
     baseline = verify_baseline(repo, contract)
-    _require(baseline["python_complete"] is False, "Python COMPLETE unexpectedly true")
-    _require(baseline["rust_resume_allowed"] is False, "Rust resume unexpectedly true")
+    _require(baseline["python_complete"] is True, "Python COMPLETE is not admitted")
+    _require(baseline["rust_resume_allowed"] is False, "Rust must remain retired/frozen")
     _require(baseline["production_promoted"] == 174, "Rust promotion count drift")
     _require(baseline["remaining"] == 71, "Rust remaining count drift")
 
@@ -118,13 +127,13 @@ def certify(repo: Path) -> dict[str, Any]:
         "claim": "RUST_FEATURE_FREEZE_ENFORCED",
         "exact_head": exact_head,
         "guard_admission_ready": True,
-        "python_complete_ready": False,
-        "rust_resume_allowed": False,
+        "python_complete_ready": baseline["python_complete"],
+        "rust_resume_allowed": baseline["rust_resume_allowed"],
         "rust": {
             "implementation_coverage": baseline["implementation_coverage"],
             "production_promoted": baseline["production_promoted"],
             "remaining_parity_promotion": baseline["remaining"],
-            "feature_development_frozen": True,
+            "feature_development_frozen": not baseline["rust_resume_allowed"],
             "production_promotion_frozen": True,
         },
         "maintenance": {
@@ -132,7 +141,7 @@ def certify(repo: Path) -> dict[str, Any]:
             "native_only_explicit_exception_supported": True,
             "promotion_authority_exception_supported": False,
         },
-        "claim_boundary": "This certificate enforces the Python-first Rust feature/promotion freeze. It does not grant Rust parity, promotion, or Python COMPLETE.",
+        "claim_boundary": "This certificate enforces Rust retirement/freeze independently of Python COMPLETE. Rust feature/parity work and production promotion remain closed at 174/245 with 71 remaining until an explicit future reactivation authority changes that state.",
     }
 
 

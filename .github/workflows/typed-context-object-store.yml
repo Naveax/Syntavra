@@ -54,7 +54,7 @@ jobs:
           assert report['claim'] == 'TYPED_CONTEXT_OBJECT_STORE_V1'
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['declared_object_types'] == 16
           assert report['runtime']['all_types_roundtrip'] is True

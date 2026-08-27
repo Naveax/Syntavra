@@ -194,6 +194,7 @@ def check(
 
     changes = _changed_paths(repo, base, head)
     protected_changes: list[dict[str, str]] = []
+    allowed_resumed_changes: list[dict[str, str]] = []
     allowed_python_surface_metadata_changes: list[dict[str, str]] = []
     denied_changes: list[dict[str, str]] = []
     for row in changes:
@@ -202,6 +203,9 @@ def check(
             continue
         enriched = {**row, "class": path_class}
         protected_changes.append(enriched)
+        if baseline["rust_resume_allowed"] and path_class in {"native", "remaining71"}:
+            allowed_resumed_changes.append({**enriched, "allowance": "python-complete-rust-resume"})
+            continue
         if path_class == "promotion-authority" and _is_python_surface_metadata_sync(
             repo,
             base=base,
@@ -230,18 +234,19 @@ def check(
         "maintenance_reason_present": bool((maintenance_reason or "").strip()),
         "changed_path_count": len(changes),
         "protected_change_count": len(protected_changes),
+        "allowed_resumed_change_count": len(allowed_resumed_changes),
         "allowed_python_surface_metadata_change_count": len(
             allowed_python_surface_metadata_changes
         ),
         "denied_change_count": len(denied_changes),
         "protected_changes": protected_changes,
+        "allowed_resumed_changes": allowed_resumed_changes,
         "allowed_python_surface_metadata_changes": allowed_python_surface_metadata_changes,
         "denied_changes": denied_changes,
         "policy": (
-            "Ordinary Python-first CI denies native, Remaining-71 parity-program, and promotion-authority changes. "
-            "The sole content-scoped exception is canonical Python public-surface metadata synchronization inside "
-            "dual-engine-public-surface-v2.json; every non-Python field and every Rust/promotion field remains frozen. "
-            "An explicit maintenance exception may admit native-only repair changes, but never Remaining-71 or production-promotion authority changes."
+            "Before Python COMPLETE, ordinary CI denies native, Remaining-71 parity-program, and promotion-authority changes. "
+            "Python COMPLETE does not auto-resume Rust; native feature work and Remaining-71 parity work remain frozen while Rust is retired. "
+            "Canonical Python public-surface metadata synchronization remains the only content-scoped promotion-authority exception; explicit maintenance exceptions never grant production promotion."
         ),
     }
 

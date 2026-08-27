@@ -68,7 +68,7 @@ jobs:
           assert report['aider_mode'] == 'INSTRUCTION_ONLY'
           assert report['external_receipt_boundary'] is True
           assert report['internal_live_certified'] == 0
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['rust']['production_promoted'] == 174
           assert report['rust']['remaining_parity_promotion'] == 71

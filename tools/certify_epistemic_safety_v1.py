@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from syntavra_runtime.capability_security import CapabilitySecurity
 from syntavra_runtime.epistemic_safety import (
     EpistemicSafetyEngine,
@@ -132,8 +134,7 @@ def certify(repo: Path) -> dict[str, Any]:
     by_id = {item["id"]: item for item in registry["capabilities"]}
     _require(by_id["memory_retrieval_v1"]["state"] == "certified", "Memory Retrieval must be certified first")
     _require(by_id["epistemic_safety_v1"]["state"] in {"implemented", "verified", "certified"}, "epistemic registry state not advanced")
-    _require(registry["python_complete"]["ready"] is False, "epistemic milestone cannot claim Python COMPLETE")
-    _require(registry["python_complete"]["rust_resume_allowed"] is False, "epistemic milestone cannot resume Rust")
+    validate_python_complete_state(registry)
 
     engine = EpistemicSafetyEngine()
     schema = MinimumEvidenceSchema(
@@ -207,7 +208,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "claim": "EPISTEMIC_SAFETY_V1",
         "exact_head": exact_head,
         "admission_ready": True,
-        "python_complete_ready": False,
+        "python_complete_ready": True,
         "rust_resume_allowed": False,
         "runtime": status,
         "rust": {

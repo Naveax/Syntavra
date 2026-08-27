@@ -284,3 +284,20 @@ Python COMPLETE
 → 245/245 post-promotion certification
 → Python oracle window
 ```
+
+## 2026-08-26 Python Completion phase-exit admission
+
+- `python_completion_certificate_v1` advanced from `partial` to `certified` only after the dedicated implementation pass was merged and exact-head Linux/Windows clean-install receipts were available.
+- `PYTHON_COMPLETE = true` now means every required internal Python capability is certified; external superiority, adoption and marketplace maturity remain outside this repository-internal claim.
+- Rust feature development and Remaining-71 parity work may resume after Python COMPLETE.
+- Rust production promotion remains a separate authority boundary at **174/245 promoted, 71 remaining**. Python COMPLETE does not mutate the production promotion counter and does not itself grant 174→245 promotion.
+- The Rust freeze guard remains active for production-promotion authority and native promotion-counter changes while allowing post-completion feature/parity work.
+
+## 2026-08-26 Rust retirement override
+
+Python Completion Certificate may be PASS while Rust remains explicitly retired/frozen. `PYTHON_COMPLETE` is necessary but not sufficient for Rust reactivation. Until a separately admitted reactivation decision exists, `rust_resume_allowed=false`, native/Remaining-71 feature work stays closed, and the production baseline remains 174/245 with 71 remaining. Current active development continues on Python additions, hardening, fixes and certification.
+
+
+## 2026-08-26 Python continuation while Rust is retired
+
+The Rust retirement override does not end Python product development. While `rust_resume_allowed=false`, capabilities **240–270** continue as Python-side runtime/product hardening and additions in dependency order, capabilities **271–275** remain deferred because they are Rust-transition work, and capabilities **276–280** remain Python product-quality/composition work subject to their Python prerequisites. Python COMPLETE and Rust reactivation are separate state machines; no Python capability implicitly authorizes Rust feature/parity work or production promotion.

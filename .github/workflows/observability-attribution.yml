@@ -67,7 +67,7 @@ jobs:
           assert report['context_quality_slo_gate'] is True
           assert report['parallel_persistent_store'] is False
           assert report['public_cli_route'] is False
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['rust']['production_promoted'] == 174
           assert report['rust']['remaining_parity_promotion'] == 71

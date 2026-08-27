@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import re
 import subprocess
 import sys
 import traceback
@@ -13,6 +15,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from tools.python_phase_state import validate_python_complete_state
 
 from tools.certify_python_authority import _assert_no_route_identity_copy
 from tools.certify_python_authority import certify as certify_python_authority
@@ -132,6 +136,52 @@ def _validate_capabilities(repo: Path, contract: dict[str, Any]) -> tuple[list[d
     return capabilities, dict(sorted(state_counts.items())), dict(sorted(classification_counts.items()))
 
 
+
+def _validate_current_state_report_surfaces(
+    repo: Path,
+    *,
+    python_complete_ready: bool,
+) -> dict[str, Any]:
+    workflow_files = sorted((repo / ".github/workflows").glob("*.y*ml"))
+    certifier_files = sorted((repo / "tools").glob("certify*.py"))
+    stale: list[str] = []
+
+    if python_complete_ready:
+        for path in workflow_files:
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if (
+                    line.lstrip().startswith("assert ")
+                    and "python_complete_ready" in line
+                    and re.search(r"\bis\s+False\b", line)
+                ):
+                    stale.append(f"{path.relative_to(repo).as_posix()}:{lineno}:workflow")
+
+        for path in certifier_files:
+            source = path.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(source, filename=str(path))
+            except SyntaxError as exc:
+                raise AssertionError(f"unable to parse certifier for current-state consistency: {path}: {exc}") from exc
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Dict):
+                    continue
+                for key, value in zip(node.keys, node.values):
+                    if (
+                        isinstance(key, ast.Constant)
+                        and key.value == "python_complete_ready"
+                        and isinstance(value, ast.Constant)
+                        and value.value is False
+                    ):
+                        stale.append(f"{path.relative_to(repo).as_posix()}:{value.lineno}:certifier")
+
+    _require(not stale, f"stale Python COMPLETE current-state reports remain: {stale}")
+    return {
+        "checked": bool(python_complete_ready),
+        "workflow_files_scanned": len(workflow_files),
+        "certifier_files_scanned": len(certifier_files),
+        "stale_surfaces": stale,
+    }
+
 def _validate_enforcement(repo: Path) -> dict[str, str]:
     for relative in (WORKFLOW_RELATIVE, RELEASE_GATE_RELATIVE, PIN_POLICY_RELATIVE):
         _require((repo / relative).is_file(), f"missing registry enforcement surface: {relative.as_posix()}")
@@ -206,11 +256,12 @@ def certify(repo: Path) -> dict[str, Any]:
 
     enforcement = _validate_enforcement(repo)
 
+    phase_state = validate_python_complete_state(contract)
     python_authority = certify_python_authority(repo)
     _require(python_authority.get("ok") is True, "Python authority is not certified on this exact head")
     _require((python_authority.get("rust") or {}).get("production_promoted_routes") == 174, "Rust promotion baseline drift")
     _require((python_authority.get("rust") or {}).get("remaining_routes") == 71, "Rust remaining baseline drift")
-    _require((python_authority.get("rust") or {}).get("resume_allowed") is False, "Rust resume unexpectedly allowed")
+    _require((python_authority.get("rust") or {}).get("resume_allowed") is phase_state["rust_resume_allowed"], "Python authority Rust resume state disagrees with registry")
 
     capabilities, state_counts, classification_counts = _validate_capabilities(repo, contract)
     required_internal = [
@@ -219,13 +270,17 @@ def certify(repo: Path) -> dict[str, Any]:
     ]
     uncertified_required = [item["id"] for item in required_internal if item.get("state") != "certified"]
     computed_python_complete = not uncertified_required
+    current_state_report_consistency = _validate_current_state_report_surfaces(
+        repo, python_complete_ready=computed_python_complete
+    )
 
     python_complete = contract.get("python_complete") or {}
     _require(python_complete.get("claim") == "PYTHON_COMPLETE", "Python COMPLETE claim drift")
     _require(python_complete.get("requires_all_internal_required_capabilities_certified") is True, "Python COMPLETE no longer requires all internal capabilities")
     _require(python_complete.get("external_superiority_required") is False, "external superiority must not be manufactured as an implementation gate")
     _require(python_complete.get("ready") is computed_python_complete, "persisted Python COMPLETE readiness disagrees with registry state")
-    _require(python_complete.get("rust_resume_allowed") is computed_python_complete, "Rust resume readiness disagrees with Python COMPLETE")
+    _require(python_complete.get("rust_resume_allowed") is phase_state["rust_resume_allowed"], "Rust resume readiness disagrees with canonical phase state")
+    _require(python_complete.get("rust_retired") is phase_state["rust_retired"], "Rust retirement readiness disagrees with canonical phase state")
     exact_head = _head(repo)
     _require(bool(exact_head), "unable to resolve exact git HEAD")
 
@@ -252,16 +307,17 @@ def certify(repo: Path) -> dict[str, Any]:
         "uncertified_required_count": len(uncertified_required),
         "uncertified_required": uncertified_required,
         "python_complete_ready": computed_python_complete,
-        "rust_resume_allowed": computed_python_complete,
+        "current_state_report_consistency": current_state_report_consistency,
+        "rust_resume_allowed": phase_state["rust_resume_allowed"],
         "rust": {
             "implementation_coverage": 245,
             "production_promoted": 174,
             "remaining_parity_promotion": 71,
-            "feature_development_frozen": True,
+            "feature_development_frozen": not phase_state["rust_resume_allowed"],
         },
         "claim_boundary": (
             "This certificate proves that Syntavra tracks Python-first capability completeness with evidence-backed lifecycle states. "
-            "It admits the registry milestone itself but does not claim Python COMPLETE, external superiority, adoption, marketplace maturity, "
+            "It computes Python COMPLETE from the canonical required-capability registry and does not manufacture external superiority, adoption, marketplace maturity, "
             "or Rust Remaining-71 behavioral parity/promotion."
         ),
     }

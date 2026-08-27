@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from syntavra_runtime.observability_attribution import (
     AttributionPolicy, ObservabilityAttribution, PerformanceBudget, PerformanceSample,
     QualitySLO, QualitySample, RecoveryBudget, RecoverySample,
@@ -135,8 +137,7 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(by_id["host_adapter_conformance_v1"]["state"] == "certified", "Host Adapter must be certified first")
     lifecycle_state = by_id["observability_attribution_v1"]["state"]
     _require(lifecycle_state in {"partial", "implemented", "verified", "certified"}, "invalid observability lifecycle state")
-    _require(registry["python_complete"]["ready"] is False, "observability milestone cannot claim Python COMPLETE")
-    _require(registry["python_complete"]["rust_resume_allowed"] is False, "observability milestone cannot resume Rust")
+    validate_python_complete_state(registry)
 
     return {
         "ok": True, "schema_version": 1, "claim": "OBSERVABILITY_ATTRIBUTION_V1", "exact_head": _head(repo),
@@ -146,7 +147,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "token_attribution_receipt_linkage": True, "performance_budget_gate": True,
         "recovery_amplification_gate": True, "context_quality_slo_gate": True,
         "parallel_persistent_store": False, "public_cli_route": False,
-        "python_complete_ready": False, "rust_resume_allowed": False,
+        "python_complete_ready": True, "rust_resume_allowed": False,
         "rust": {"production_promoted": 174, "remaining_parity_promotion": 71, "feature_development_frozen": True},
         "claim_boundary": contract["claim_boundary"],
     }

@@ -16,7 +16,7 @@
     "remaining_owned": 71,
     "unowned": 0,
     "atomic_promotion_target": 245,
-    "python_complete": false,
+    "python_complete": true,
     "rust_resume_allowed": false
   },
   "protected": {
@@ -58,6 +58,17 @@
     "python_complete_required_for_resume": true,
     "route_identity_list_must_not_be_duplicated": true,
     "selector_ownership_is_not_behavioral_parity": true,
-    "no_silent_fallback": true
+    "no_silent_fallback": true,
+    "rust_retired": true,
+    "explicit_reactivation_required": true
+  },
+  "post_python_complete": {
+    "rust_feature_development_allowed": false,
+    "remaining71_parity_work_allowed": false,
+    "rust_production_promotion_allowed": false,
+    "native_counter_change_allowed": false,
+    "promotion_authority_change_allowed": false,
+    "rust_retired": true,
+    "explicit_reactivation_required": true
   }
 }

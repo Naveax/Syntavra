@@ -13,10 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.python_phase_state import validate_python_complete_state
+
 from tools import report_missing_native_public_routes as public_surface
 from tools import report_python_public_execution_contract as execution_contract
 
 CONTRACT_RELATIVE = Path("contracts/python/python-authority-v1.json")
+REGISTRY_RELATIVE = Path("contracts/python/capability-completeness-registry-v1.json")
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -61,6 +64,8 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(repo == ROOT, f"Python authority certifier must run against its own checkout: {repo} != {ROOT}")
 
     contract = _read_json(repo / CONTRACT_RELATIVE)
+    registry = _read_json(repo / REGISTRY_RELATIVE)
+    phase_state = validate_python_complete_state(registry)
     _require(contract.get("schema_version") == 1, "Python authority schema drift")
     _require(contract.get("family") == "python-authority", "Python authority family drift")
     _require(contract.get("phase") == "python-first", "Python authority phase drift")
@@ -200,6 +205,15 @@ def certify(repo: Path) -> dict[str, Any]:
         "Rust maintenance exception set drift",
     )
     _require(rust_freeze.get("resume_claim") == "PYTHON_COMPLETE", "Rust resume claim drift")
+    _require(
+        rust_freeze.get("resume_requires") == "contracts/python/python-completion-certificate-v1.json",
+        "Rust resume certificate authority drift",
+    )
+    transition = rust_freeze.get("resume_transition") or {}
+    for name in ("python_complete_opens_rust_feature_development", "python_complete_opens_remaining71_parity_work"):
+        _require(transition.get(name) is False, f"Rust retirement transition unexpectedly enabled: {name}")
+    for name in ("python_complete_does_not_grant_production_promotion", "production_promotion_remains_separate", "explicit_reactivation_required", "rust_retired_until_explicit_reactivation"):
+        _require(transition.get(name) is True, f"Rust retirement transition disabled: {name}")
 
     required_true_policies = [
         "route_identity_authority_single_source",
@@ -222,6 +236,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "phase": "python-first",
         "claim": contract["claim"],
         "exact_head": exact_head,
+        "python_complete_ready": phase_state["ready"],
         "authority": authority,
         "enforcement": enforcement,
         "python": {
@@ -231,7 +246,7 @@ def certify(repo: Path) -> dict[str, Any]:
             "execution_owner_count": int(expected["python_execution_owners"]),
         },
         "rust": {
-            "feature_development_frozen": True,
+            "feature_development_frozen": not phase_state["rust_resume_allowed"],
             "implemented_native_routes": int(expected["rust_implemented_native_routes"]),
             "implementation_missing_routes": int(expected["rust_implementation_missing_routes"]),
             "production_promoted_routes": int(expected["rust_promoted_native_routes"]),
@@ -239,14 +254,14 @@ def certify(repo: Path) -> dict[str, Any]:
             "remaining_owned_routes": int(expected["remaining_owned_routes"]),
             "unowned_routes": int(expected["unowned_routes"]),
             "atomic_promotion_target": int(expected["atomic_promotion_target"]),
-            "resume_allowed": False,
+            "resume_allowed": phase_state["rust_resume_allowed"],
             "resume_requires": rust_freeze["resume_requires"],
             "resume_claim": rust_freeze["resume_claim"],
         },
         "claim_boundary": (
             "This certificate establishes Python-first feature-development authority and freezes Rust production promotion at 174/245. "
             "Rust implementation coverage may be 245/245 without granting production promotion. "
-            "It does not claim Python COMPLETE, does not grant Rust promotion credit, and does not certify Remaining-71 behavioral parity."
+            "Python COMPLETE does not auto-resume Rust. Rust remains retired/frozen at 174/245 with 71 remaining until a separate explicit reactivation decision."
         ),
     }
 

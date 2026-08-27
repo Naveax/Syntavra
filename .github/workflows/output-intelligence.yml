@@ -57,7 +57,7 @@ jobs:
           assert report['claim'] == 'OUTPUT_INTELLIGENCE_V1'
           assert report['exact_head'] == head
           assert report['runtime_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['exact_output_store_reused'] is True
           assert report['runtime']['terminal_output_engine_reused'] is True
