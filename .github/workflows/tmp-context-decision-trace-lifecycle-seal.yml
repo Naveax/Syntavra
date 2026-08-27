@@ -1,0 +1,179 @@
+name: Temporary Context Decision Trace Lifecycle Seal
+
+on:
+  push:
+    branches:
+      - automation/context-decision-trace-v1-lifecycle-seal-20260828
+    paths:
+      - .github/workflows/tmp-context-decision-trace-lifecycle-seal.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-context-decision-trace-lifecycle-seal
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN: 6aec1fafc596f1078b0ea043dcea9d5a157df6f3
+  CANDIDATE_BRANCH: agent/context-decision-trace-v1-lifecycle-certification
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact admitted main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Materialize lifecycle certification candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+
+          python -m pip install -e . >/dev/null
+          rm -rf syntavra_runtime.egg-info
+
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          registry_path = Path('contracts/python/capability-completeness-registry-v1.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          rows = [row for row in registry['capabilities'] if row.get('id') == 'context_decision_trace_v1']
+          if len(rows) != 1:
+              raise SystemExit(f'expected exactly one context_decision_trace_v1 row, got {len(rows)}')
+          row = rows[0]
+          if row.get('state') != 'implemented':
+              raise SystemExit(f"unexpected pre-seal state: {row.get('state')!r}")
+          if row.get('certification_evidence') != []:
+              raise SystemExit('context_decision_trace_v1 already has certification evidence')
+
+          row['state'] = 'certified'
+          row['certification_evidence'] = [
+              'contracts/python/context-decision-trace-v1.json',
+              'syntavra_runtime/context_decision_trace.py',
+              'syntavra_runtime/adaptive_context_policy.py',
+              'contracts/python/adaptive-context-policy-v1.json',
+              'contracts/python/runtime-contract-version-graph-v1.json',
+              'tools/certify_context_decision_trace_v1.py',
+              'tests/runtime/test_context_decision_trace_v1.py',
+              '.github/workflows/context-decision-trace.yml',
+              '.github/workflows/release-main-merge-gate.yml',
+              'tests/runtime/test_release_action_pins.py',
+              'contracts/python/capability-completeness-registry-v1.json',
+              'tools/certify_python_capability_completeness.py',
+              'tests/runtime/test_python_capability_completeness.py',
+          ]
+          registry_path.write_text(json.dumps(registry, indent=2) + '\n', encoding='utf-8')
+
+          test_path = Path('tests/runtime/test_python_capability_completeness.py')
+          text = test_path.read_text(encoding='utf-8')
+          old = '        self.assertEqual(report["post_completion_current_milestone"], "context_decision_trace_v1")\n'
+          new = (
+              '        self.assertEqual(by_id["context_decision_trace_v1"]["state"], "certified")\n'
+              '        self.assertTrue(by_id["context_decision_trace_v1"]["certification_evidence"])\n'
+              '        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")\n'
+          )
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one lifecycle cursor assertion, got {text.count(old)}')
+          test_path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' MANIFEST.sha256 contracts/python/capability-completeness-registry-v1.json tests/runtime/test_python_capability_completeness.py | sort)"
+          test "$changed" = "$expected"
+          git diff --check
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add MANIFEST.sha256 contracts/python/capability-completeness-registry-v1.json tests/runtime/test_python_capability_completeness.py
+          git commit -m "certify Context Decision Trace v1 lifecycle"
+
+      - name: Validate exact lifecycle candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/refresh_manifest.py --check
+          python -m unittest tests.runtime.test_context_decision_trace_v1 -v
+          python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
+          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          python tools/validate.py
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import subprocess
+          from tools.refresh_manifest import GENERATED_FILES, is_generated_path
+
+          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          by_id = {row.get('id'): row for row in registry.get('capabilities', []) if isinstance(row, dict)}
+          row = by_id['context_decision_trace_v1']
+          assert row['state'] == 'certified'
+          assert row['certification_evidence']
+          assert registry['python_complete']['ready'] is True
+          assert registry['python_complete']['rust_resume_allowed'] is False
+          assert registry['python_complete']['rust_retired'] is True
+
+          def lines(*argv: str) -> list[str]:
+              out = subprocess.check_output(argv, text=True)
+              return [line for line in out.splitlines() if line]
+
+          tracked = lines('git', 'diff', '--name-only')
+          untracked = lines('git', 'ls-files', '--others', '--exclude-standard')
+          dirty = sorted(set(tracked + untracked))
+          print('validator side effects:', dirty)
+
+          unexpected: list[str] = []
+          for raw in dirty:
+              rel = Path(raw)
+              allowed = is_generated_path(rel) or rel.name in GENERATED_FILES or rel.suffix == '.pyc'
+              if not allowed:
+                  unexpected.append(raw)
+          if unexpected:
+              raise SystemExit(f'unexpected validator side effects: {unexpected}')
+          PY
+
+          git reset --hard HEAD
+          git clean -fd
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python tools/refresh_manifest.py --check
+
+      - name: Publish validated lifecycle candidate branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN"
+          changed="$(git diff --name-only "$EXPECTED_MAIN" HEAD | sort)"
+          expected="$(printf '%s\n' MANIFEST.sha256 contracts/python/capability-completeness-registry-v1.json tests/runtime/test_python_capability_completeness.py | sort)"
+          test "$changed" = "$expected"
+          if git ls-remote --exit-code --heads origin "refs/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            echo "candidate branch already exists; refusing to overwrite"
+            exit 1
+          fi
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "candidate_sha=$(git rev-parse HEAD)"
+          echo "candidate_tree=$(git rev-parse HEAD^{tree})"
