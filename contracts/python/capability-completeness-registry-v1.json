@@ -614,7 +614,7 @@
     {
       "id": "context_decision_trace_v1",
       "group": "post-completion-context-policy",
-      "state": "implemented",
+      "state": "certified",
       "classification": "NEW",
       "required_for_python_complete": false,
       "implementation_evidence": [
@@ -629,7 +629,21 @@
         ".github/workflows/release-main-merge-gate.yml",
         "tests/runtime/test_release_action_pins.py"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/context-decision-trace-v1.json",
+        "syntavra_runtime/context_decision_trace.py",
+        "syntavra_runtime/adaptive_context_policy.py",
+        "contracts/python/adaptive-context-policy-v1.json",
+        "contracts/python/runtime-contract-version-graph-v1.json",
+        "tools/certify_context_decision_trace_v1.py",
+        "tests/runtime/test_context_decision_trace_v1.py",
+        ".github/workflows/context-decision-trace.yml",
+        ".github/workflows/release-main-merge-gate.yml",
+        "tests/runtime/test_release_action_pins.py",
+        "contracts/python/capability-completeness-registry-v1.json",
+        "tools/certify_python_capability_completeness.py",
+        "tests/runtime/test_python_capability_completeness.py"
+      ],
       "acceptance": "Deterministic reference-only trace of include/omit/compress/retrieve/reset/abstain decisions from verified policy receipts, with recommended/effective separation, deterministic replay and fail-closed tamper detection. Policy snapshot and evidence-journal ownership stay with later capabilities; Python COMPLETE remains sealed and Rust stays retired/frozen."
     },
     {

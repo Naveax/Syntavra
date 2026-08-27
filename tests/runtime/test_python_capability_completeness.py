@@ -126,7 +126,9 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])
         self.assertNotIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
         self.assertEqual(report["current_milestone"], "python_complete")
-        self.assertEqual(report["post_completion_current_milestone"], "context_decision_trace_v1")
+        self.assertEqual(by_id["context_decision_trace_v1"]["state"], "certified")
+        self.assertTrue(by_id["context_decision_trace_v1"]["certification_evidence"])
+        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")
         self.assertEqual(report["post_completion_milestone_order"], EXPECTED_POST_COMPLETION_PREFIX)
         self.assertEqual(report["uncertified_required"], [])
 
