@@ -47,6 +47,24 @@ new_claim = (
 if text.count(old_claim) != 1:
     raise AssertionError("README dual-engine claim text drift")
 text = text.replace(old_claim, new_claim, 1)
+
+old_boundary = (
+    "## Current claim boundary\n\n"
+    "```text\n"
+    "DUAL_ENGINE_PARITY_INCOMPLETE\n"
+    "EXTERNAL_SUPERIORITY_NOT_PROVEN\n"
+)
+new_boundary = (
+    "## Current claim boundary\n\n"
+    "```text\n"
+    "FULL_DUAL_ENGINE_PARITY_PROVEN\n"
+    "EXTERNAL_SUPERIORITY_NOT_PROVEN\n"
+)
+if text.count(old_boundary) != 1:
+    raise AssertionError("README current claim-boundary dual-engine state drift")
+text = text.replace(old_boundary, new_boundary, 1)
+if "DUAL_ENGINE_PARITY_INCOMPLETE" in text:
+    raise AssertionError("README still contains stale dual-engine parity claim")
 README.write_text(text, encoding="utf-8")
 
 print(json.dumps({
