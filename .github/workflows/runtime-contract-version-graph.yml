@@ -64,11 +64,20 @@ jobs:
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
           assert report['python_complete_ready'] is True
+          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
+          by_id = {row.get('id'): row for row in registry.get('capabilities', []) if isinstance(row, dict)}
+          order = registry.get('post_completion_milestone_order') or []
+          expected_current = next(
+              (milestone for milestone in order if (by_id.get(milestone) or {}).get('state') != 'certified'),
+              'post_completion_complete',
+          )
+          assert report['post_completion_current_milestone'] == expected_current
+          assert (by_id.get('runtime_contract_version_graph_v1') or {}).get('state') == report['lifecycle_state']
           if report['lifecycle_state'] == 'certified':
-              assert report['post_completion_current_milestone'] == 'post_completion_complete'
+              assert expected_current != 'runtime_contract_version_graph_v1'
           else:
               assert report['lifecycle_state'] in {'implemented', 'verified'}
-              assert report['post_completion_current_milestone'] == 'runtime_contract_version_graph_v1'
+              assert expected_current == 'runtime_contract_version_graph_v1'
           assert report['graph']['node_count'] >= 20
           assert report['graph']['edge_count'] > 0
           assert report['graph']['metadata_leaf_count'] >= 0
