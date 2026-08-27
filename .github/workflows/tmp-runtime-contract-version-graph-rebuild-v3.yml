@@ -1,0 +1,299 @@
+name: Temporary Runtime Contract Version Graph Rebuild v3
+
+on:
+  push:
+    branches:
+      - automation/runtime-contract-version-graph-rebuild-v2-20260827
+    paths:
+      - ".github/workflows/tmp-runtime-contract-version-graph-rebuild-v3.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-runtime-contract-version-graph-rebuild-v3
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+      BASE_SHA: c0dc3c7689aaad08f0f7d92fe9544b32f76cbacf
+      OLD_BASE_SHA: 1292e0d3f4cee4c156006e165052fd1165067fdd
+      OLD_HEAD_SHA: 5844faa70501c792b70b2334ad2c82bd7adeae3d
+      TARGET_BRANCH: automation/runtime-contract-version-graph-rebuild-v2-20260827
+      HELPER_V2: .github/workflows/tmp-runtime-contract-version-graph-rebuild-v2.yml
+      HELPER_V3: .github/workflows/tmp-runtime-contract-version-graph-rebuild-v3.yml
+    steps:
+      - name: Checkout exact staging head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Rebuild 240 with completion-stable registry freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test "$(git rev-parse HEAD^^)" = "$BASE_SHA"
+          git fetch --no-tags origin \
+            refs/heads/agent/runtime-contract-version-graph-v1-post-completion-prep:refs/remotes/origin/runtime-contract-version-graph-v1-post-completion-prep
+          test "$(git rev-parse refs/remotes/origin/runtime-contract-version-graph-v1-post-completion-prep)" = "$OLD_HEAD_SHA"
+          test "$(git rev-parse ${OLD_HEAD_SHA}^)" = "$OLD_BASE_SHA"
+
+          git diff --binary "$OLD_BASE_SHA" "$OLD_HEAD_SHA" -- . ':(exclude)MANIFEST.sha256' > /tmp/runtime-contract-version-graph-v1.patch
+          git apply --3way --index /tmp/runtime-contract-version-graph-v1.patch
+          test -z "$(git diff --name-only --diff-filter=U)"
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          certifier = Path('tools/certify_python_completion_certificate_v1.py')
+          text = certifier.read_text(encoding='utf-8')
+          start = text.index('def derive_contract_freeze(')
+          end = text.index('\ndef validate_platform_evidence(', start)
+          replacement = '''def _completion_registry_projection(registry: dict[str, Any]) -> dict[str, Any]:
+              """Return only state that was authoritative for the Python COMPLETE decision.
+
+              Post-completion milestone/order/policy extensions remain trackable in the canonical
+              registry, but cannot retroactively rewrite the already-admitted completion corpus.
+              Any change to completion-relevant policy, required capability rows, milestone order,
+              authority, vocabulary, or persisted completion state remains hash-bound.
+              """
+              policy = {
+                  str(key): value
+                  for key, value in (registry.get("policy") or {}).items()
+                  if not str(key).startswith("post_completion_")
+              }
+              required_capabilities = [
+                  capability
+                  for capability in (registry.get("capabilities") or [])
+                  if isinstance(capability, dict)
+                  and capability.get("required_for_python_complete") is True
+              ]
+              return {
+                  "schema_version": registry.get("schema_version"),
+                  "family": registry.get("family"),
+                  "phase": registry.get("phase"),
+                  "claim": registry.get("claim"),
+                  "strict": registry.get("strict"),
+                  "authority": registry.get("authority"),
+                  "state_vocabulary": registry.get("state_vocabulary"),
+                  "classification_vocabulary": registry.get("classification_vocabulary"),
+                  "policy": policy,
+                  "milestone_order": registry.get("milestone_order"),
+                  "capabilities": required_capabilities,
+                  "python_complete": registry.get("python_complete"),
+              }
+
+
+          def derive_contract_freeze(repo: Path, registry: dict[str, Any]) -> dict[str, Any]:
+              rows: dict[str, str] = {}
+              registry_relative = REGISTRY.as_posix()
+              for capability in registry.get("capabilities") or []:
+                  if not isinstance(capability, dict):
+                      continue
+                  capability_id = str(capability.get("id") or "")
+                  if capability_id == SELF_ID or capability.get("classification") == "EXTERNAL":
+                      continue
+                  if capability.get("required_for_python_complete") is not True:
+                      continue
+                  _require(capability.get("state") == "certified", f"prior required capability not certified: {capability_id}")
+                  for relative in capability.get("certification_evidence") or []:
+                      if not isinstance(relative, str):
+                          continue
+                      if not relative.startswith("contracts/python/") or not relative.endswith(".json"):
+                          continue
+                      path = repo / relative
+                      _require(path.is_file(), f"contract freeze authority missing: {relative}")
+                      if relative == registry_relative:
+                          rows[relative] = _sha256_bytes(canonical_json(_completion_registry_projection(registry)))
+                      else:
+                          rows[relative] = _sha256_bytes(path.read_bytes())
+              ordered = [{"path": path, "sha256": rows[path]} for path in sorted(rows)]
+              return {
+                  "mode": "registry-derived-certified-python-contracts-completion-projection-v1",
+                  "contract_count": len(ordered),
+                  "sha256": hashlib.sha256(canonical_json(ordered)).hexdigest(),
+                  "contracts": ordered,
+              }
+
+'''
+          replacement = '\n'.join(line[10:] if line.startswith('          ') else line for line in replacement.splitlines())
+          text = text[:start] + replacement + text[end + 1:]
+
+          old = '''    _require(freeze_cfg.get("mode") == freeze["mode"], "Python contract freeze mode drift")\n    _require(int(freeze_cfg.get("expected_contract_count", -1)) == freeze["contract_count"], "Python contract freeze count drift")'''
+          new = '''    _require(freeze_cfg.get("mode") == freeze["mode"], "Python contract freeze mode drift")\n    _require(\n        freeze_cfg.get("registry_projection") == "completion-relevant-fields-and-required-capabilities-v1",\n        "Python contract freeze registry projection drift",\n    )\n    _require(\n        freeze_cfg.get("post_completion_registry_extensions_excluded") is True,\n        "post-completion registry extensions must remain outside the completed Python freeze",\n    )\n    _require(int(freeze_cfg.get("expected_contract_count", -1)) == freeze["contract_count"], "Python contract freeze count drift")'''
+          if old not in text:
+              raise SystemExit('completion freeze validation anchor missing')
+          text = text.replace(old, new, 1)
+          certifier.write_text(text, encoding='utf-8')
+
+          tests = Path('tests/runtime/test_python_completion_certificate_v1.py')
+          text = tests.read_text(encoding='utf-8')
+          if 'import copy\n' not in text:
+              text = text.replace('from __future__ import annotations\n\n', 'from __future__ import annotations\n\nimport copy\n', 1)
+          anchor = '''    def test_platform_receipts_require_both_exact_head_operating_systems(self) -> None:\n'''
+          addition = '''    def test_post_completion_registry_extensions_do_not_rewrite_completion_freeze(self) -> None:\n        registry = self._registry()\n        baseline = derive_contract_freeze(ROOT, registry)\n        mutated = copy.deepcopy(registry)\n        mutated.setdefault("policy", {})["post_completion_future_hardening"] = True\n        mutated.setdefault("post_completion_milestone_order", []).append("future_post_completion_capability")\n        mutated.setdefault("capabilities", []).append(\n            {\n                "id": "future_post_completion_capability",\n                "group": "post-completion-test",\n                "state": "planned",\n                "classification": "NEW",\n                "required_for_python_complete": False,\n                "implementation_evidence": [],\n                "certification_evidence": [],\n                "acceptance": "test-only post-completion extension",\n            }\n        )\n        observed = derive_contract_freeze(ROOT, mutated)\n        self.assertEqual(observed["sha256"], baseline["sha256"])\n        self.assertEqual(observed["contracts"], baseline["contracts"])\n\n    def test_completion_relevant_registry_drift_changes_completion_freeze(self) -> None:\n        registry = self._registry()\n        baseline = derive_contract_freeze(ROOT, registry)\n        mutated = copy.deepcopy(registry)\n        row = next(item for item in mutated["capabilities"] if item.get("required_for_python_complete") is True)\n        row["acceptance"] = str(row.get("acceptance") or "") + " completion-drift"\n        observed = derive_contract_freeze(ROOT, mutated)\n        self.assertNotEqual(observed["sha256"], baseline["sha256"])\n\n'''
+          if anchor not in text:
+              raise SystemExit('completion test insertion anchor missing')
+          text = text.replace(anchor, addition + anchor, 1)
+          tests.write_text(text, encoding='utf-8')
+
+          contract_path = Path('contracts/python/python-completion-certificate-v1.json')
+          contract = json.loads(contract_path.read_text(encoding='utf-8'))
+          freeze = contract.setdefault('contract_freeze', {})
+          freeze['mode'] = 'registry-derived-certified-python-contracts-completion-projection-v1'
+          freeze['registry_projection'] = 'completion-relevant-fields-and-required-capabilities-v1'
+          freeze['post_completion_registry_extensions_excluded'] = True
+          freeze['post_completion_exclusion_boundary'] = (
+              'Only post-completion policy/order/capability extensions with required_for_python_complete=false are excluded; '
+              'completion-relevant authority, policy, milestone order, required capability rows, and persisted completion state remain hash-bound.'
+          )
+          contract_path.write_text(json.dumps(contract, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+          git rm -f "$HELPER_V2" "$HELPER_V3"
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.certify_python_completion_certificate_v1 import derive_contract_freeze
+
+          root = Path('.').resolve()
+          registry_path = root / 'contracts/python/capability-completeness-registry-v1.json'
+          contract_path = root / 'contracts/python/python-completion-certificate-v1.json'
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          contract = json.loads(contract_path.read_text(encoding='utf-8'))
+          freeze = derive_contract_freeze(root, registry)
+          contract['contract_freeze']['expected_contract_count'] = freeze['contract_count']
+          contract['contract_freeze']['expected_sha256'] = freeze['sha256']
+          contract_path.write_text(json.dumps(contract, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(freeze, indent=2, sort_keys=True))
+          PY
+
+          python tools/refresh_manifest.py
+          git add -A
+
+          cat > /tmp/expected-paths.txt <<'EOF'
+          .github/workflows/release-main-merge-gate.yml
+          .github/workflows/runtime-contract-version-graph.yml
+          MANIFEST.sha256
+          contracts/python/capability-completeness-registry-v1.json
+          contracts/python/python-completion-certificate-v1.json
+          contracts/python/runtime-contract-version-graph-v1.json
+          syntavra_runtime/contract_version_graph.py
+          tests/runtime/test_python_capability_completeness.py
+          tests/runtime/test_python_completion_certificate_v1.py
+          tests/runtime/test_release_action_pins.py
+          tests/runtime/test_runtime_contract_version_graph_v1.py
+          tools/certify_python_capability_completeness.py
+          tools/certify_python_completion_certificate_v1.py
+          tools/certify_runtime_contract_version_graph_v1.py
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths.txt
+          git diff --name-only "$BASE_SHA" | sort > /tmp/actual-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          test "$(wc -l < /tmp/actual-paths.txt)" -eq 14
+          ! grep -q 'tmp-runtime-contract-version-graph-rebuild-v' /tmp/actual-paths.txt
+
+          python -m pip install -e .
+          python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
+          python -m unittest tests.runtime.test_python_capability_completeness -v
+          python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
+          python -m unittest tests.runtime.test_release_action_pins -v
+
+          python tools/certify_runtime_contract_version_graph_v1.py --repo . --out /tmp/runtime-contract-version-graph.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
+          python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          graph = json.loads(Path('/tmp/runtime-contract-version-graph.json').read_text(encoding='utf-8'))
+          completeness = json.loads(Path('/tmp/python-capability-completeness.json').read_text(encoding='utf-8'))
+          completion = json.loads(Path('/tmp/python-completion-certificate.json').read_text(encoding='utf-8'))
+          rust = json.loads(Path('/tmp/rust-feature-freeze-guard.json').read_text(encoding='utf-8'))
+
+          assert graph['ok'] is True and graph['lifecycle_state'] == 'implemented', graph
+          assert graph['python_complete_ready'] is True, graph
+          assert graph['post_completion_current_milestone'] == 'runtime_contract_version_graph_v1', graph
+          assert graph['rust_resume_allowed'] is False, graph
+
+          assert completeness['ok'] is True, completeness
+          assert completeness['current_milestone'] == 'python_complete', completeness
+          assert completeness['post_completion_current_milestone'] == 'runtime_contract_version_graph_v1', completeness
+          assert completeness['post_completion_milestone_order'] == ['runtime_contract_version_graph_v1'], completeness
+          assert completeness['python_complete_ready'] is True, completeness
+          assert completeness['rust_resume_allowed'] is False, completeness
+          assert completeness['current_state_report_consistency']['stale_surfaces'] == [], completeness
+
+          assert completion['ok'] is True, completion
+          assert completion['python_complete_ready'] is True, completion
+          assert completion['rust_resume_allowed'] is False, completion
+          assert completion['gates']['python_contract_freeze'] is True, completion
+          assert completion['contract_freeze']['mode'] == 'registry-derived-certified-python-contracts-completion-projection-v1', completion
+
+          assert rust['ok'] is True, rust
+          assert rust['python_complete_ready'] is True, rust
+          assert rust['rust_resume_allowed'] is False, rust
+          assert rust['rust']['feature_development_frozen'] is True, rust
+          assert rust['rust']['production_promotion_frozen'] is True, rust
+          assert rust['rust']['production_promoted'] == 174, rust
+          assert rust['rust']['remaining_parity_promotion'] == 71, rust
+          PY
+
+          python tools/validate.py
+          python tools/validate_release.py --smoke --output /tmp/runtime-contract-version-graph-release-validation.json
+          python tools/refresh_manifest.py --check
+
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          git diff --check
+          git add -A
+          test -z "$(git diff --name-only --diff-filter=U)"
+
+          git config user.name Naveax
+          git config user.email Omersevik095@gmail.com
+          git commit -m 'python: rebuild runtime contract version graph v1 after completion'
+
+          python tools/refresh_manifest.py --check
+          python tools/certify_runtime_contract_version_graph_v1.py --repo . --out /tmp/runtime-contract-version-graph-postcommit.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness-postcommit.json
+          python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate-postcommit.json
+          rm -rf syntavra_runtime.egg-info
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+          final_commit="$(git rev-parse HEAD)"
+          final_tree="$(git rev-parse HEAD^{tree})"
+          printf 'FINAL_COMMIT=%s\nFINAL_TREE=%s\n' "$final_commit" "$final_tree"
+          printf '{"base_sha":"%s","final_commit":"%s","final_tree":"%s"}\n' "$BASE_SHA" "$final_commit" "$final_tree" > /tmp/runtime-contract-version-graph-rebuild-v3.json
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Upload rebuild receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: runtime-contract-version-graph-rebuild-v3-${{ github.sha }}
+          path: |
+            /tmp/runtime-contract-version-graph-rebuild-v3.json
+            /tmp/runtime-contract-version-graph.json
+            /tmp/python-capability-completeness.json
+            /tmp/python-completion-certificate.json
+            /tmp/rust-feature-freeze-guard.json
+            /tmp/runtime-contract-version-graph-release-validation.json
+          if-no-files-found: warn
