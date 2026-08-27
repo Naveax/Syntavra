@@ -1,0 +1,114 @@
+name: Deterministic Policy Snapshot
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "contracts/python/deterministic-policy-snapshot-v1.json"
+      - "contracts/python/adaptive-context-policy-v1.json"
+      - "contracts/python/context-decision-trace-v1.json"
+      - "contracts/python/runtime-contract-version-graph-v1.json"
+      - "contracts/python/capability-completeness-registry-v1.json"
+      - "contracts/engine/dual-engine-public-surface-v2.json"
+      - "syntavra_runtime/deterministic_policy_snapshot.py"
+      - "syntavra_runtime/adaptive_context_policy.py"
+      - "syntavra_runtime/context_decision_trace.py"
+      - "syntavra_runtime/contract_version_graph.py"
+      - "tools/certify_deterministic_policy_snapshot_v1.py"
+      - "tests/runtime/test_deterministic_policy_snapshot_v1.py"
+      - "tests/runtime/test_python_capability_completeness.py"
+      - ".github/workflows/deterministic-policy-snapshot.yml"
+      - ".github/workflows/release-main-merge-gate.yml"
+      - "tests/runtime/test_release_action_pins.py"
+      - "MANIFEST.sha256"
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deterministic-policy-snapshot-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deterministic-policy-snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run Deterministic Policy Snapshot regression suite
+        run: python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v
+
+      - name: Verify dual-engine public surface snapshot
+        run: python tools/verify_dual_engine_public_surface.py
+
+      - name: Generate exact-head Deterministic Policy Snapshot certificate
+        run: |
+          python tools/certify_deterministic_policy_snapshot_v1.py --repo . --out /tmp/deterministic-policy-snapshot.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/deterministic-policy-snapshot.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ok'] is True, report
+          assert report['claim'] == 'DETERMINISTIC_POLICY_SNAPSHOT_V1'
+          assert report['exact_head'] == head
+          assert report['implementation_ready'] is True
+          assert report['python_complete_ready'] is True
+          assert report['upstream_context_decision_trace_state'] == 'certified'
+          assert report['admission_ready'] is True
+          assert report['post_completion_current_milestone'] in {'deterministic_policy_snapshot_v1', 'post_completion_complete'}
+          assert report['python_module_count'] >= 215
+          assert report['public_command_count'] == 245
+          assert report['runtime']['deterministic_snapshot'] is True
+          assert report['runtime']['timestamp_free_identity'] is True
+          assert report['runtime']['contract_graph_node_hash_bound'] is True
+          assert report['runtime']['runtime_implementation_hash_bound'] is True
+          assert report['runtime']['receipt_config_match_required'] is True
+          assert report['runtime']['trace_receipt_link_verified'] is True
+          assert report['runtime']['reference_only_binding'] is True
+          assert report['runtime']['tamper_fails_closed'] is True
+          assert report['rust_resume_allowed'] is False
+          assert report['rust']['production_promoted'] == 174
+          assert report['rust']['remaining_parity_promotion'] == 71
+          PY
+
+      - name: Enforce clean exact-head repository
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload Deterministic Policy Snapshot evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: deterministic-policy-snapshot-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/deterministic-policy-snapshot.json
+          if-no-files-found: error
