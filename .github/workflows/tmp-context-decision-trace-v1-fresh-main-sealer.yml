@@ -1,4 +1,4 @@
-name: Temporary Context Decision Trace Fresh Main Sealer
+name: Temporary Context Decision Trace Fresh Main Materializer
 
 on:
   push:
@@ -8,23 +8,24 @@ on:
       - ".github/workflows/tmp-context-decision-trace-v1-fresh-main-sealer.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: tmp-context-decision-trace-v1-fresh-main-sealer-20260827
+  group: tmp-context-decision-trace-v1-fresh-main-materializer-20260827
   cancel-in-progress: false
 
 jobs:
-  seal:
+  materialize:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     env:
       TARGET_BRANCH: agent/context-decision-trace-v1-post-completion-final
       TARGET_PRE_HEAD: 151939bf9c275ddab10275bdac4c0e77112030aa
+      EXPECTED_FINAL_TREE: bca04b590e0f6d6287b51fd12d255fad9da8fbdf
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: "1"
     steps:
-      - name: Checkout exact exporter head
+      - name: Checkout exact materializer head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
@@ -35,48 +36,45 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Switch to immutable target pre-head
+      - name: Switch to immutable validated target pre-head
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin "$TARGET_BRANCH"
           observed="$(git rev-parse "origin/$TARGET_BRANCH")"
           test "$observed" = "$TARGET_PRE_HEAD"
-          git checkout -B context-decision-trace-final "origin/$TARGET_BRANCH"
+          git checkout -B context-decision-trace-materialize "origin/$TARGET_BRANCH"
           test "$(git rev-parse HEAD)" = "$TARGET_PRE_HEAD"
 
-      - name: Reconcile capability 241 onto certified capability 240
+      - name: Rebuild exact previously validated final tree
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from __future__ import annotations
-
           import json
           from pathlib import Path
 
-          UPSTREAM = "runtime_contract_version_graph_v1"
-          CAPABILITY = "context_decision_trace_v1"
+          upstream_id = "runtime_contract_version_graph_v1"
+          capability_id = "context_decision_trace_v1"
 
           registry_path = Path("contracts/python/capability-completeness-registry-v1.json")
           registry = json.loads(registry_path.read_text(encoding="utf-8"))
-          if registry.get("post_completion_milestone_order") != [UPSTREAM]:
-              raise SystemExit(f"unexpected fresh-main post-completion order: {registry.get('post_completion_milestone_order')}")
+          if registry.get("post_completion_milestone_order") != [upstream_id]:
+              raise SystemExit("unexpected post-completion order")
           rows = registry.get("capabilities") or []
-          by_id = {row.get("id"): row for row in rows if isinstance(row, dict)}
-          upstream = by_id.get(UPSTREAM) or {}
-          if upstream.get("state") != "certified":
-              raise SystemExit(f"capability 240 must already be certified: {upstream.get('state')}")
-          if CAPABILITY in by_id:
-              raise SystemExit("capability 241 already exists on target pre-head")
-          python_complete = registry.get("python_complete") or {}
-          if python_complete.get("ready") is not True or python_complete.get("rust_resume_allowed") is not False or python_complete.get("rust_retired") is not True:
-              raise SystemExit(f"post-completion authority drift: {python_complete}")
-
           ids = [row.get("id") for row in rows if isinstance(row, dict)]
-          upstream_index = ids.index(UPSTREAM)
+          by_id = {row.get("id"): row for row in rows if isinstance(row, dict)}
+          if (by_id.get(upstream_id) or {}).get("state") != "certified":
+              raise SystemExit("capability 240 is not certified")
+          if capability_id in by_id:
+              raise SystemExit("capability 241 already exists")
+          phase = registry.get("python_complete") or {}
+          if phase.get("ready") is not True or phase.get("rust_resume_allowed") is not False or phase.get("rust_retired") is not True:
+              raise SystemExit("post-completion authority drift")
+
           row = {
-              "id": CAPABILITY,
+              "id": capability_id,
               "group": "post-completion-context-policy",
               "state": "implemented",
               "classification": "NEW",
@@ -96,43 +94,33 @@ jobs:
               "certification_evidence": [],
               "acceptance": "Deterministic reference-only trace of include/omit/compress/retrieve/reset/abstain decisions from verified policy receipts, with recommended/effective separation, deterministic replay and fail-closed tamper detection. Policy snapshot and evidence-journal ownership stay with later capabilities; Python COMPLETE remains sealed and Rust stays retired/frozen."
           }
-          rows.insert(upstream_index + 1, row)
+          rows.insert(ids.index(upstream_id) + 1, row)
           registry["capabilities"] = rows
-          registry["post_completion_milestone_order"] = [UPSTREAM, CAPABILITY]
+          registry["post_completion_milestone_order"] = [upstream_id, capability_id]
           registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
           test_path = Path("tests/runtime/test_python_capability_completeness.py")
           text = test_path.read_text(encoding="utf-8")
-          constant_anchor = 'CONTRACT = ROOT / "contracts/python/capability-completeness-registry-v1.json"\n'
-          constant = (
-              '\nEXPECTED_POST_COMPLETION_PREFIX = [\n'
-              '    "runtime_contract_version_graph_v1",\n'
-              '    "context_decision_trace_v1",\n'
-              ']\n'
-          )
-          if text.count(constant_anchor) != 1:
-              raise SystemExit("completeness test constant anchor drift")
-          text = text.replace(constant_anchor, constant_anchor + constant, 1)
-          old_order = '        self.assertEqual(contract["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])\n'
-          new_order = (
-              '        self.assertEqual(\n'
-              '            contract["post_completion_milestone_order"][: len(EXPECTED_POST_COMPLETION_PREFIX)],\n'
-              '            EXPECTED_POST_COMPLETION_PREFIX,\n'
-              '        )\n'
-          )
-          if text.count(old_order) != 1:
-              raise SystemExit("completeness registry-order assertion drift")
-          text = text.replace(old_order, new_order, 1)
-          old_current = '        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")\n'
-          new_current = '        self.assertEqual(report["post_completion_current_milestone"], "context_decision_trace_v1")\n'
-          if text.count(old_current) != 1:
-              raise SystemExit("completeness current-milestone assertion drift")
-          text = text.replace(old_current, new_current, 1)
-          old_report_order = '        self.assertEqual(report["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])\n'
-          new_report_order = '        self.assertEqual(report["post_completion_milestone_order"], EXPECTED_POST_COMPLETION_PREFIX)\n'
-          if text.count(old_report_order) != 1:
-              raise SystemExit("completeness report-order assertion drift")
-          text = text.replace(old_report_order, new_report_order, 1)
+          anchor = 'CONTRACT = ROOT / "contracts/python/capability-completeness-registry-v1.json"\n'
+          addition = '\nEXPECTED_POST_COMPLETION_PREFIX = [\n    "runtime_contract_version_graph_v1",\n    "context_decision_trace_v1",\n]\n'
+          if text.count(anchor) != 1:
+              raise SystemExit("completeness constant anchor drift")
+          text = text.replace(anchor, anchor + addition, 1)
+          old = '        self.assertEqual(contract["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])\n'
+          new = '        self.assertEqual(\n            contract["post_completion_milestone_order"][: len(EXPECTED_POST_COMPLETION_PREFIX)],\n            EXPECTED_POST_COMPLETION_PREFIX,\n        )\n'
+          if text.count(old) != 1:
+              raise SystemExit("completeness order anchor drift")
+          text = text.replace(old, new, 1)
+          old = '        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")\n'
+          new = '        self.assertEqual(report["post_completion_current_milestone"], "context_decision_trace_v1")\n'
+          if text.count(old) != 1:
+              raise SystemExit("completeness current anchor drift")
+          text = text.replace(old, new, 1)
+          old = '        self.assertEqual(report["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])\n'
+          new = '        self.assertEqual(report["post_completion_milestone_order"], EXPECTED_POST_COMPLETION_PREFIX)\n'
+          if text.count(old) != 1:
+              raise SystemExit("completeness report order anchor drift")
+          text = text.replace(old, new, 1)
           test_path.write_text(text, encoding="utf-8")
 
           release_path = Path(".github/workflows/release-main-merge-gate.yml")
@@ -140,7 +128,7 @@ jobs:
           test_anchor = "          python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v\n"
           cert_anchor = "          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json\n"
           if release.count(test_anchor) != 1 or release.count(cert_anchor) != 1:
-              raise SystemExit("release-main capability-240 anchors drifted")
+              raise SystemExit("release-main capability-240 anchor drift")
           release = release.replace(test_anchor, test_anchor + "          python -m unittest tests.runtime.test_context_decision_trace_v1 -v\n", 1)
           release = release.replace(cert_anchor, cert_anchor + "          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json\n", 1)
           release_path.write_text(release, encoding="utf-8")
@@ -149,100 +137,49 @@ jobs:
           pins = pins_path.read_text(encoding="utf-8")
           pin_anchor = '    ".github/workflows/runtime-contract-version-graph.yml",\n'
           if pins.count(pin_anchor) != 1:
-              raise SystemExit("release action-pin capability-240 anchor drifted")
-          pins = pins.replace(pin_anchor, pin_anchor + '    ".github/workflows/context-decision-trace.yml",\n', 1)
-          pins_path.write_text(pins, encoding="utf-8")
+              raise SystemExit("release pin anchor drift")
+          pins_path.write_text(pins.replace(pin_anchor, pin_anchor + '    ".github/workflows/context-decision-trace.yml",\n', 1), encoding="utf-8")
           PY
 
           python tools/refresh_manifest.py
-          git diff --check
-
-      - name: Install runtime and validate candidate tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install -e .
-          python -m unittest tests.runtime.test_context_decision_trace_v1 -v
-          python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
-          python -m unittest tests.runtime.test_python_capability_completeness -v
-          python -m unittest tests.runtime.test_release_action_pins -v
-          python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
-          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
-          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
-          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
-          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
-          python tools/validate.py
-          python tools/validate_release.py --smoke --output /tmp/context-decision-trace-release-validation.json
-          rm -rf syntavra_runtime.egg-info
-          python tools/refresh_manifest.py --check
-          git diff --check
-
-      - name: Commit exact validated final tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name syntavra-ci
-          git config user.email syntavra-ci@users.noreply.github.com
           git add -A
-          git commit -m "python: implement Context Decision Trace v1"
-          echo "FINAL_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "FINAL_TREE=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_ENV"
+          actual_tree="$(git write-tree)"
+          printf 'validated tree: %s\n' "$actual_tree"
+          test "$actual_tree" = "$EXPECTED_FINAL_TREE"
+          cp .github/workflows/release-main-merge-gate.yml /tmp/release-main-merge-gate.final.yml
 
-      - name: Revalidate exact committed head
+      - name: Commit only non-workflow seal files
         shell: bash
         run: |
           set -euo pipefail
-          python tools/refresh_manifest.py --check
-          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace-postcommit.json
-          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph-postcommit.json
-          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness-postcommit.json
-          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard-postcommit.json
-          python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate-postcommit.json
-          python - <<'PY'
-          import json
-          import subprocess
-          from pathlib import Path
-          trace = json.loads(Path('/tmp/context-decision-trace-postcommit.json').read_text(encoding='utf-8'))
-          completion = json.loads(Path('/tmp/python-completion-certificate-postcommit.json').read_text(encoding='utf-8'))
-          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-          assert trace['ok'] is True and trace['exact_head'] == head, trace
-          assert trace['admission_ready'] is True, trace
-          assert trace['upstream_runtime_contract_graph_state'] == 'certified', trace
-          assert trace['post_completion_current_milestone'] == 'context_decision_trace_v1', trace
-          assert trace['rust_resume_allowed'] is False, trace
-          assert completion['ok'] is True and completion['python_complete_ready'] is True and completion['rust_resume_allowed'] is False, completion
-          PY
-          python tools/validate.py
-          rm -rf syntavra_runtime.egg-info
-          git diff --check
-          test -z "$(git status --porcelain --untracked-files=all)"
-
-      - name: Package exact validated final tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          export_dir=/tmp/context-decision-trace-fresh-main-final
-          rm -rf "$export_dir"
-          mkdir -p "$export_dir"
-          cat > /tmp/context-decision-trace-final-paths.txt <<'EOF'
-          .github/workflows/release-main-merge-gate.yml
+          git checkout "$TARGET_PRE_HEAD" -- .github/workflows/release-main-merge-gate.yml
+          git add -A
+          git diff --cached --name-only "$TARGET_PRE_HEAD" | sort > /tmp/actual-paths.txt
+          cat > /tmp/expected-paths.txt <<'EOF'
           MANIFEST.sha256
           contracts/python/capability-completeness-registry-v1.json
           tests/runtime/test_python_capability_completeness.py
           tests/runtime/test_release_action_pins.py
           EOF
-          sed -i 's/^          //' /tmp/context-decision-trace-final-paths.txt
-          while IFS= read -r path; do
-            mkdir -p "$export_dir/$(dirname "$path")"
-            cp "$path" "$export_dir/$path"
-          done < /tmp/context-decision-trace-final-paths.txt
-          printf '%s\n' "$FINAL_COMMIT" > "$export_dir/COMMIT_SHA.txt"
-          printf '%s\n' "$FINAL_TREE" > "$export_dir/TREE_SHA.txt"
-          printf '%s\n' "$TARGET_PRE_HEAD" > "$export_dir/PARENT_SHA.txt"
+          sed -i 's/^          //' /tmp/expected-paths.txt
+          sort -o /tmp/expected-paths.txt /tmp/expected-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git config user.name syntavra-ci
+          git config user.email syntavra-ci@users.noreply.github.com
+          git commit -m "python: materialize Context Decision Trace v1 seal"
 
-      - name: Upload exact validated final tree
+      - name: Push four-file seal only if target stayed unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          observed="$(git rev-parse "origin/$TARGET_BRANCH")"
+          test "$observed" = "$TARGET_PRE_HEAD"
+          git push origin "HEAD:$TARGET_BRANCH"
+
+      - name: Upload exact validated workflow payload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: context-decision-trace-fresh-main-final-${{ github.sha }}
-          path: /tmp/context-decision-trace-fresh-main-final
+          name: context-decision-trace-release-gate-final-${{ github.sha }}
+          path: /tmp/release-main-merge-gate.final.yml
           if-no-files-found: error
