@@ -1,0 +1,102 @@
+name: Temporary Context Decision Trace Builder v3 Export
+
+on:
+  push:
+    branches:
+      - automation/context-decision-trace-v1-builder-20260827
+    paths:
+      - ".github/workflows/tmp-context-decision-trace-builder-v3.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-context-decision-trace-builder-v3-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact builder head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime dependencies once
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          rm -rf syntavra_runtime.egg-info
+
+      - name: Build and fully validate export tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/tmp_context_decision_trace_builder_patch_v2.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/tmp_context_decision_trace_builder_v1.py')
+          text = path.read_text(encoding='utf-8')
+          old = '    run("git", "push", "origin", f"HEAD:{TARGET_BRANCH}")\n'
+          new = '    print("PUSH_SKIPPED_FOR_VALIDATED_EXPORT")\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'push anchor count drift: {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git rm -f .github/workflows/tmp-context-decision-trace-builder-v3.yml
+          python tools/tmp_context_decision_trace_builder_v1.py
+
+      - name: Package exact validated tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=e0d43611560296c269269d020f1a3961b92be8fc
+          export_dir=/tmp/context-decision-trace-final
+          rm -rf "$export_dir"
+          mkdir -p "$export_dir"
+          cat > /tmp/context-decision-trace-paths.txt <<'EOF'
+          .github/workflows/context-decision-trace.yml
+          .github/workflows/release-main-merge-gate.yml
+          MANIFEST.sha256
+          contracts/python/capability-completeness-registry-v1.json
+          contracts/python/context-decision-trace-v1.json
+          syntavra_runtime/context_decision_trace.py
+          tests/runtime/test_context_decision_trace_v1.py
+          tests/runtime/test_python_capability_completeness.py
+          tests/runtime/test_release_action_pins.py
+          tools/certify_context_decision_trace_v1.py
+          EOF
+          sed -i 's/^          //' /tmp/context-decision-trace-paths.txt
+          git diff --name-only "$base" HEAD | sort > /tmp/context-decision-trace-actual.txt
+          sort /tmp/context-decision-trace-paths.txt > /tmp/context-decision-trace-expected.txt
+          diff -u /tmp/context-decision-trace-expected.txt /tmp/context-decision-trace-actual.txt
+          test "$(wc -l < /tmp/context-decision-trace-actual.txt)" -eq 10
+          while IFS= read -r path; do
+            mkdir -p "$export_dir/$(dirname "$path")"
+            cp "$path" "$export_dir/$path"
+          done < /tmp/context-decision-trace-paths.txt
+          git rev-parse HEAD > "$export_dir/COMMIT_SHA.txt"
+          git rev-parse 'HEAD^{tree}' > "$export_dir/TREE_SHA.txt"
+          cp /tmp/context-decision-trace-actual.txt "$export_dir/PATHS.txt"
+          python tools/refresh_manifest.py --check
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Upload exact validated export
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: context-decision-trace-final-${{ github.sha }}
+          path: /tmp/context-decision-trace-final
+          if-no-files-found: error
