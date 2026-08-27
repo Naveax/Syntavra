@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "family": "runtime-contract-version-graph",
+  "phase": "python-first",
+  "claim": "RUNTIME_CONTRACT_VERSION_GRAPH_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/contract_version_graph.py",
+  "roots": [
+    "contracts/python"
+  ],
+  "dependency_policy": {
+    "recursive_contract_reference_discovery": true,
+    "referenced_external_contracts_are_metadata_only_leaves": true,
+    "missing_dependency_fails_closed": true,
+    "path_escape_forbidden": true,
+    "schema_version_required": true,
+    "canonical_json_sha256_identity": true,
+    "duplicate_nodes_forbidden": true,
+    "deterministic_ordering": true,
+    "self_references_are_not_dependency_edges": true
+  },
+  "invalidation_policy": {
+    "changed_schema_or_content_invalidates_dependents": true,
+    "added_contract_invalidates_dependents": true,
+    "removed_contract_invalidates_dependents": true,
+    "transitive_reverse_dependency_closure": true,
+    "cycles_are_bounded_by_visited_identity": true,
+    "invalidation_receipt_content_addressed": true,
+    "silent_invalidation_forbidden": true
+  },
+  "ownership_policy": {
+    "metadata_only": true,
+    "no_persistent_store": true,
+    "no_public_cli_route": true,
+    "does_not_own_contract_contents": true,
+    "does_not_mutate_contracts": true,
+    "python_product_authority_preserved": true,
+    "rust_feature_work_forbidden": true
+  },
+  "enforcement": {
+    "tests": "tests/runtime/test_runtime_contract_version_graph_v1.py",
+    "certifier": "tools/certify_runtime_contract_version_graph_v1.py",
+    "exact_head_workflow": ".github/workflows/runtime-contract-version-graph.yml",
+    "release_main_gate": ".github/workflows/release-main-merge-gate.yml",
+    "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py"
+  },
+  "acceptance": "Build a deterministic version/dependency graph from Python capability contracts and referenced contract authorities, fail closed on missing or unsafe references, and emit explicit transitive downstream invalidation when schema/content changes.",
+  "claim_boundary": "This contract adds Python-side contract/schema dependency and invalidation metadata only. It does not reopen Rust feature/parity development, change Rust promotion authority, add a public command, or mutate product contracts."
+}

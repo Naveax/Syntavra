@@ -50,6 +50,41 @@ def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+
+def _completion_registry_projection(registry: dict[str, Any]) -> dict[str, Any]:
+    """Project the registry to state authoritative for the Python COMPLETE decision.
+
+    Post-completion tracking stays in the canonical registry but must not
+    retroactively rewrite the already-admitted completion corpus. Completion
+    authority, policy, milestone order, required capability rows, and persisted
+    completion state remain hash-bound.
+    """
+    policy = {
+        str(key): value
+        for key, value in (registry.get("policy") or {}).items()
+        if not str(key).startswith("post_completion_")
+    }
+    required_capabilities = [
+        capability
+        for capability in (registry.get("capabilities") or [])
+        if isinstance(capability, dict)
+        and capability.get("required_for_python_complete") is True
+    ]
+    return {
+        "schema_version": registry.get("schema_version"),
+        "family": registry.get("family"),
+        "phase": registry.get("phase"),
+        "claim": registry.get("claim"),
+        "strict": registry.get("strict"),
+        "authority": registry.get("authority"),
+        "state_vocabulary": registry.get("state_vocabulary"),
+        "classification_vocabulary": registry.get("classification_vocabulary"),
+        "policy": policy,
+        "milestone_order": registry.get("milestone_order"),
+        "capabilities": required_capabilities,
+        "python_complete": registry.get("python_complete"),
+    }
+
 def derive_contract_freeze(repo: Path, registry: dict[str, Any]) -> dict[str, Any]:
     rows: dict[str, str] = {}
     for capability in registry.get("capabilities") or []:
@@ -68,10 +103,15 @@ def derive_contract_freeze(repo: Path, registry: dict[str, Any]) -> dict[str, An
                 continue
             path = repo / relative
             _require(path.is_file(), f"contract freeze authority missing: {relative}")
-            rows[relative] = _sha256_bytes(path.read_bytes())
+            if relative == REGISTRY.as_posix():
+                rows[relative] = _sha256_bytes(
+                    canonical_json(_completion_registry_projection(registry))
+                )
+            else:
+                rows[relative] = _sha256_bytes(path.read_bytes())
     ordered = [{"path": path, "sha256": rows[path]} for path in sorted(rows)]
     return {
-        "mode": "registry-derived-certified-python-contracts",
+        "mode": "registry-derived-certified-python-contracts-completion-projection-v1",
         "contract_count": len(ordered),
         "sha256": hashlib.sha256(canonical_json(ordered)).hexdigest(),
         "contracts": ordered,
@@ -213,6 +253,14 @@ def certify(repo: Path, platform_evidence: Iterable[Path] = ()) -> dict[str, Any
     freeze = derive_contract_freeze(repo, registry)
     freeze_cfg = contract.get("contract_freeze") or {}
     _require(freeze_cfg.get("mode") == freeze["mode"], "Python contract freeze mode drift")
+    _require(
+        freeze_cfg.get("registry_projection") == "completion-relevant-fields-and-required-capabilities-v1",
+        "Python contract freeze registry projection drift",
+    )
+    _require(
+        freeze_cfg.get("post_completion_registry_extensions_excluded") is True,
+        "post-completion registry extensions must remain outside the completed Python freeze",
+    )
     _require(int(freeze_cfg.get("expected_contract_count", -1)) == freeze["contract_count"], "Python contract freeze count drift")
     expected_freeze_sha = freeze_cfg.get("expected_sha256")
     _require(isinstance(expected_freeze_sha, str) and len(expected_freeze_sha) == 64, "Python contract freeze digest is not pinned")
