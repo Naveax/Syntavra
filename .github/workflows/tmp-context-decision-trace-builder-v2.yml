@@ -1,0 +1,66 @@
+name: Temporary Context Decision Trace Builder v2
+
+on:
+  push:
+    branches:
+      - automation/context-decision-trace-v1-builder-20260827
+    paths:
+      - ".github/workflows/tmp-context-decision-trace-builder-v2.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-context-decision-trace-builder-v2
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact builder head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime dependencies once
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          rm -rf syntavra_runtime.egg-info
+
+      - name: Patch builder and build Context Decision Trace v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/tmp_context_decision_trace_builder_patch_v2.py
+          python tools/tmp_context_decision_trace_builder_v1.py
+
+      - name: Upload builder evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: context-decision-trace-builder-v2-${{ github.sha }}
+          path: |
+            /tmp/context-decision-trace.json
+            /tmp/context-decision-trace-postcommit.json
+            /tmp/runtime-contract-version-graph.json
+            /tmp/runtime-contract-version-graph-postcommit.json
+            /tmp/python-capability-completeness.json
+            /tmp/python-capability-completeness-postcommit.json
+            /tmp/rust-feature-freeze-guard.json
+            /tmp/rust-feature-freeze-guard-postcommit.json
+            /tmp/python-completion-certificate-postcommit.json
+            /tmp/context-decision-trace-release-validation.json
+          if-no-files-found: warn
