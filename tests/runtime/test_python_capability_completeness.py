@@ -19,6 +19,11 @@ from tools.certify_python_authority import _assert_no_route_identity_copy
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "contracts/python/capability-completeness-registry-v1.json"
 
+EXPECTED_POST_COMPLETION_PREFIX = [
+    "runtime_contract_version_graph_v1",
+    "context_decision_trace_v1",
+]
+
 
 class PythonCapabilityCompletenessTests(unittest.TestCase):
     def _contract(self) -> dict:
@@ -35,7 +40,10 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
             EXPECTED_MILESTONE_PREFIX,
         )
         self.assertEqual(len(contract["milestone_order"]), len(set(contract["milestone_order"])))
-        self.assertEqual(contract["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])
+        self.assertEqual(
+            contract["post_completion_milestone_order"][: len(EXPECTED_POST_COMPLETION_PREFIX)],
+            EXPECTED_POST_COMPLETION_PREFIX,
+        )
         self.assertTrue(set(contract["milestone_order"]).isdisjoint(contract["post_completion_milestone_order"]))
 
 
@@ -118,8 +126,8 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])
         self.assertNotIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
         self.assertEqual(report["current_milestone"], "python_complete")
-        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")
-        self.assertEqual(report["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])
+        self.assertEqual(report["post_completion_current_milestone"], "context_decision_trace_v1")
+        self.assertEqual(report["post_completion_milestone_order"], EXPECTED_POST_COMPLETION_PREFIX)
         self.assertEqual(report["uncertified_required"], [])
 
     def test_certifier_rejects_foreign_checkout(self) -> None:
