@@ -1,0 +1,96 @@
+name: Temporary Deterministic Policy Snapshot v1 Repair
+
+on:
+  push:
+    branches:
+      - automation/deterministic-policy-snapshot-v1-build-20260828
+    paths:
+      - .github/workflows/tmp-deterministic-policy-snapshot-v1-repair.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-deterministic-policy-snapshot-v1-repair
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN: 0c8a67fea942362ba4a4bb58b0eab1939b3a517f
+  HELPER_SHA: 762b8c3b9709c215320c1a238540814ab4d90b2f
+  SOURCE_SHA: aeb721dda1c661b6d5cf389657487e6e2eb7d5b2
+  CANDIDATE_BRANCH: agent/deterministic-policy-snapshot-v1-post-completion-final
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact failed helper head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.HELPER_SHA }}
+          fetch-depth: 0
+
+      - name: Extract original helper run blocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/tmp-deterministic-policy-snapshot-v1-build.yml').read_text(encoding='utf-8').splitlines()
+          names = [
+              'Guard canonical main and patch integration surfaces',
+              'Squash prepared tree into one exact candidate commit',
+              'Validate exact candidate head',
+              'Publish validated candidate branch once',
+          ]
+          for index, name in enumerate(names, start=1):
+              marker = f'      - name: {name}'
+              start = source.index(marker)
+              run_line = source.index('        run: |', start)
+              end = len(source)
+              for pos in range(run_line + 1, len(source)):
+                  if source[pos].startswith('      - name: '):
+                      end = pos
+                      break
+              block = []
+              for line in source[run_line + 1:end]:
+                  if line.startswith('          '):
+                      block.append(line[10:])
+                  elif not line.strip():
+                      block.append('')
+                  else:
+                      raise SystemExit(f'unexpected helper indentation in {name}: {line!r}')
+              path = Path(f'/tmp/dps-step-{index}.sh')
+              path.write_text('\n'.join(block).rstrip() + '\n', encoding='utf-8')
+          PY
+          for f in /tmp/dps-step-*.sh; do bash -n "$f"; done
+
+      - name: Checkout prepared product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime dependencies required by exporter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e . >/dev/null
+          rm -rf syntavra_runtime.egg-info
+
+      - name: Execute original guarded build pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in /tmp/dps-step-1.sh /tmp/dps-step-2.sh /tmp/dps-step-3.sh /tmp/dps-step-4.sh; do
+            echo "=== executing $f ==="
+            bash "$f"
+          done
