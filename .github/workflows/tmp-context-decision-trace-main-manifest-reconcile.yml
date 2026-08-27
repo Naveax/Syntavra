@@ -75,10 +75,40 @@ jobs:
           python tools/validate.py
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
 
-          rm -rf syntavra_runtime.egg-info
-          rm -f fusion-release-smoke.json release-smoke.json platform-registry.json native-dry-run.json r38-user-head
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          from tools.refresh_manifest import GENERATED_FILES, is_generated_path
+
+          def lines(*argv: str) -> list[str]:
+              out = subprocess.check_output(argv, text=True)
+              return [line for line in out.splitlines() if line]
+
+          tracked = lines("git", "diff", "--name-only")
+          untracked = lines("git", "ls-files", "--others", "--exclude-standard")
+          dirty = sorted(set(tracked + untracked))
+          print("validator side effects:", dirty)
+
+          unexpected: list[str] = []
+          for raw in dirty:
+              rel = Path(raw)
+              allowed = (
+                  is_generated_path(rel)
+                  or rel.name in GENERATED_FILES
+                  or rel.suffix == ".pyc"
+              )
+              if not allowed:
+                  unexpected.append(raw)
+
+          if unexpected:
+              raise SystemExit(f"unexpected validator side effects: {unexpected}")
+          PY
+
+          git reset --hard HEAD
+          git clean -fd
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
+          python tools/refresh_manifest.py --check
 
       - name: Publish validated candidate branch
         shell: bash
