@@ -24,9 +24,21 @@ def compute_python_phase_state(registry: dict[str, Any]) -> dict[str, Any]:
         if item.get("state") != "certified"
     ]
     ready = not uncertified
+    persisted = registry.get("python_complete") or {}
+    rust_resume_allowed = persisted.get("rust_resume_allowed")
+    rust_retired = persisted.get("rust_retired")
+    if not isinstance(rust_resume_allowed, bool):
+        raise AssertionError("persisted Rust resume readiness must be boolean")
+    if not isinstance(rust_retired, bool):
+        raise AssertionError("persisted Rust retirement state must be boolean")
+    if rust_resume_allowed and not ready:
+        raise AssertionError("Rust resume cannot precede Python COMPLETE")
+    if rust_retired and rust_resume_allowed:
+        raise AssertionError("retired Rust cannot be resume-allowed")
     return {
         "ready": ready,
-        "rust_resume_allowed": ready,
+        "rust_resume_allowed": rust_resume_allowed,
+        "rust_retired": rust_retired,
         "required_internal": required,
         "required_internal_count": len(required),
         "uncertified_required": uncertified,
@@ -46,5 +58,7 @@ def validate_python_complete_state(registry: dict[str, Any]) -> dict[str, Any]:
     if persisted.get("ready") is not state["ready"]:
         raise AssertionError("persisted Python COMPLETE readiness disagrees with required capability state")
     if persisted.get("rust_resume_allowed") is not state["rust_resume_allowed"]:
-        raise AssertionError("persisted Rust resume readiness disagrees with Python COMPLETE")
+        raise AssertionError("persisted Rust resume readiness drift")
+    if persisted.get("rust_retired") is not state["rust_retired"]:
+        raise AssertionError("persisted Rust retirement state drift")
     return state

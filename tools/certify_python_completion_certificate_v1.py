@@ -250,7 +250,7 @@ def certify(repo: Path, platform_evidence: Iterable[Path] = ()) -> dict[str, Any
         and platform["ready"]
         and lifecycle_state == (contract.get("lifecycle") or {}).get("pass_state")
     )
-    phase_exit_ready = certificate_candidate_ready and persisted_ready and persisted_rust_resume
+    phase_exit_ready = certificate_candidate_ready and persisted_ready
 
     return {
         "ok": True,
@@ -285,7 +285,7 @@ def certify(repo: Path, platform_evidence: Iterable[Path] = ()) -> dict[str, Any
         "rust": {
             "production_promoted": 174,
             "remaining_parity_promotion": 71,
-            "feature_development_frozen": not phase_exit_ready,
+            "feature_development_frozen": not persisted_rust_resume,
         },
         "claim_boundary": contract["claim_boundary"],
     }

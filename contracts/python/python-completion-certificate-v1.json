@@ -47,7 +47,7 @@
   "contract_freeze": {
     "mode": "registry-derived-certified-python-contracts",
     "expected_contract_count": 20,
-    "expected_sha256": "7a86a039d53ad7f5c8824cc40d22f5fc62f61e1194d1e9fb28ea318ec4349eb5",
+    "expected_sha256": "0247576817dd9195494a31cdd80888460717b49b21905242784247af189a90eb",
     "self_contract_excluded": true,
     "external_evidence_excluded": true
   },
@@ -61,7 +61,8 @@
     "pass_state": "certified",
     "implementation_pass_must_not_open_python_complete": true,
     "python_complete_requires_certificate_pass": true,
-    "rust_resume_requires_certificate_pass": true
+    "rust_resume_is_separate_explicit_decision": true,
+    "python_complete_does_not_auto_resume_rust": true
   },
-  "claim_boundary": "This certificate proves repository-internal Python product completion gates only. It does not manufacture external superiority, adoption, marketplace maturity, or Rust Remaining-71 parity/promotion. A partial/implemented/verified lifecycle is implementation evidence, not a PYTHON_COMPLETE PASS."
+  "claim_boundary": "This certificate proves repository-internal Python product completion gates only. It does not manufacture external superiority, adoption, marketplace maturity, or Rust Remaining-71 parity/promotion. Python COMPLETE does not auto-resume Rust; Rust remains retired/frozen until a separate explicit reactivation decision."
 }

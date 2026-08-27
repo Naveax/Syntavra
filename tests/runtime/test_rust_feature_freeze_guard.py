@@ -26,8 +26,8 @@ class RustFeatureFreezeGuardTests(unittest.TestCase):
         self.assertFalse(contract["policy"]["native_counter_change_allowed"])
         self.assertFalse(contract["policy"]["remaining71_parity_work_allowed"])
         self.assertFalse(contract["policy"]["promotion_authority_change_allowed"])
-        self.assertTrue(contract["post_python_complete"]["rust_feature_development_allowed"])
-        self.assertTrue(contract["post_python_complete"]["remaining71_parity_work_allowed"])
+        self.assertFalse(contract["post_python_complete"]["rust_feature_development_allowed"])
+        self.assertFalse(contract["post_python_complete"]["remaining71_parity_work_allowed"])
         self.assertFalse(contract["post_python_complete"]["rust_production_promotion_allowed"])
         self.assertFalse(contract["post_python_complete"]["native_counter_change_allowed"])
         self.assertFalse(contract["post_python_complete"]["promotion_authority_change_allowed"])
@@ -35,7 +35,7 @@ class RustFeatureFreezeGuardTests(unittest.TestCase):
         self.assertEqual(contract["expected"]["rust_production_promoted"], 174)
         self.assertEqual(contract["expected"]["remaining_parity_promotion"], 71)
         self.assertTrue(contract["expected"]["python_complete"])
-        self.assertTrue(contract["expected"]["rust_resume_allowed"])
+        self.assertFalse(contract["expected"]["rust_resume_allowed"])
 
     def test_protected_path_classes_are_explicit(self) -> None:
         contract = self._contract()
@@ -52,16 +52,16 @@ class RustFeatureFreezeGuardTests(unittest.TestCase):
         self.assertEqual(baseline["production_promoted"], 174)
         self.assertEqual(baseline["remaining"], 71)
         self.assertTrue(baseline["python_complete"])
-        self.assertTrue(baseline["rust_resume_allowed"])
+        self.assertFalse(baseline["rust_resume_allowed"])
 
-    def test_python_complete_allows_native_feature_change_without_promotion(self) -> None:
+    def test_python_complete_does_not_auto_resume_native_feature_change(self) -> None:
         changed = [{"status": "M", "path": "native/syntavra-native/src/main.rs", "role": "path"}]
         with patch("tools.check_rust_feature_freeze._changed_paths", return_value=changed):
             report = check(ROOT, base="base", head="head")
-        self.assertTrue(report["ok"])
-        self.assertEqual(report["allowed_resumed_change_count"], 1)
-        self.assertEqual(report["allowed_resumed_changes"][0]["class"], "native")
-        self.assertEqual(report["denied_change_count"], 0)
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["allowed_resumed_change_count"], 0)
+        self.assertEqual(report["denied_change_count"], 1)
+        self.assertEqual(report["denied_changes"][0]["class"], "native")
 
     def test_explicit_security_exception_may_admit_native_only_repair(self) -> None:
         changed = [{"status": "M", "path": "native/syntavra-native/src/main.rs", "role": "path"}]
@@ -157,14 +157,14 @@ class RustFeatureFreezeGuardTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["denied_changes"][0]["class"], "promotion-authority")
 
-    def test_python_complete_allows_remaining71_parity_change(self) -> None:
+    def test_python_complete_does_not_auto_resume_remaining71_parity_change(self) -> None:
         changed = [{"status": "M", "path": "tools/validate_remaining71_agent_differential.py", "role": "path"}]
         with patch("tools.check_rust_feature_freeze._changed_paths", return_value=changed):
             report = check(ROOT, base="base", head="head")
-        self.assertTrue(report["ok"])
-        self.assertEqual(report["allowed_resumed_change_count"], 1)
-        self.assertEqual(report["allowed_resumed_changes"][0]["class"], "remaining71")
-        self.assertEqual(report["denied_change_count"], 0)
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["allowed_resumed_change_count"], 0)
+        self.assertEqual(report["denied_change_count"], 1)
+        self.assertEqual(report["denied_changes"][0]["class"], "remaining71")
 
     def test_exception_requires_known_type_and_explicit_reason(self) -> None:
         with patch("tools.check_rust_feature_freeze._changed_paths", return_value=[]):
@@ -178,11 +178,11 @@ class RustFeatureFreezeGuardTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertTrue(report["guard_admission_ready"])
         self.assertTrue(report["python_complete_ready"])
-        self.assertTrue(report["rust_resume_allowed"])
+        self.assertFalse(report["rust_resume_allowed"])
         self.assertEqual(report["rust"]["implementation_coverage"], 245)
         self.assertEqual(report["rust"]["production_promoted"], 174)
         self.assertEqual(report["rust"]["remaining_parity_promotion"], 71)
-        self.assertFalse(report["rust"]["feature_development_frozen"])
+        self.assertTrue(report["rust"]["feature_development_frozen"])
         self.assertTrue(report["rust"]["production_promotion_frozen"])
 
     def test_certifier_rejects_foreign_checkout(self) -> None:

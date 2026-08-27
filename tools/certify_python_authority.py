@@ -210,13 +210,10 @@ def certify(repo: Path) -> dict[str, Any]:
         "Rust resume certificate authority drift",
     )
     transition = rust_freeze.get("resume_transition") or {}
-    for name in (
-        "python_complete_opens_rust_feature_development",
-        "python_complete_opens_remaining71_parity_work",
-        "python_complete_does_not_grant_production_promotion",
-        "production_promotion_remains_separate",
-    ):
-        _require(transition.get(name) is True, f"Rust resume transition disabled: {name}")
+    for name in ("python_complete_opens_rust_feature_development", "python_complete_opens_remaining71_parity_work"):
+        _require(transition.get(name) is False, f"Rust retirement transition unexpectedly enabled: {name}")
+    for name in ("python_complete_does_not_grant_production_promotion", "production_promotion_remains_separate", "explicit_reactivation_required", "rust_retired_until_explicit_reactivation"):
+        _require(transition.get(name) is True, f"Rust retirement transition disabled: {name}")
 
     required_true_policies = [
         "route_identity_authority_single_source",
@@ -264,7 +261,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "claim_boundary": (
             "This certificate establishes Python-first feature-development authority and freezes Rust production promotion at 174/245. "
             "Rust implementation coverage may be 245/245 without granting production promotion. "
-            "After Python COMPLETE, Rust feature/parity work may resume while production promotion remains frozen at 174/245; this certificate grants no promotion credit."
+            "Python COMPLETE does not auto-resume Rust. Rust remains retired/frozen at 174/245 with 71 remaining until a separate explicit reactivation decision."
         ),
     }
 

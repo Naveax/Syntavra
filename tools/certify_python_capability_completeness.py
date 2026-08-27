@@ -228,7 +228,8 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(python_complete.get("requires_all_internal_required_capabilities_certified") is True, "Python COMPLETE no longer requires all internal capabilities")
     _require(python_complete.get("external_superiority_required") is False, "external superiority must not be manufactured as an implementation gate")
     _require(python_complete.get("ready") is computed_python_complete, "persisted Python COMPLETE readiness disagrees with registry state")
-    _require(python_complete.get("rust_resume_allowed") is computed_python_complete, "Rust resume readiness disagrees with Python COMPLETE")
+    _require(python_complete.get("rust_resume_allowed") is phase_state["rust_resume_allowed"], "Rust resume readiness disagrees with canonical phase state")
+    _require(python_complete.get("rust_retired") is phase_state["rust_retired"], "Rust retirement readiness disagrees with canonical phase state")
     exact_head = _head(repo)
     _require(bool(exact_head), "unable to resolve exact git HEAD")
 
@@ -255,12 +256,12 @@ def certify(repo: Path) -> dict[str, Any]:
         "uncertified_required_count": len(uncertified_required),
         "uncertified_required": uncertified_required,
         "python_complete_ready": computed_python_complete,
-        "rust_resume_allowed": computed_python_complete,
+        "rust_resume_allowed": phase_state["rust_resume_allowed"],
         "rust": {
             "implementation_coverage": 245,
             "production_promoted": 174,
             "remaining_parity_promotion": 71,
-            "feature_development_frozen": not computed_python_complete,
+            "feature_development_frozen": not phase_state["rust_resume_allowed"],
         },
         "claim_boundary": (
             "This certificate proves that Syntavra tracks Python-first capability completeness with evidence-backed lifecycle states. "

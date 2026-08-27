@@ -245,7 +245,7 @@ def check(
         "denied_changes": denied_changes,
         "policy": (
             "Before Python COMPLETE, ordinary CI denies native, Remaining-71 parity-program, and promotion-authority changes. "
-            "After Python COMPLETE, native feature work and Remaining-71 parity work may resume, while production-promotion authority and native promotion counters remain frozen. "
+            "Python COMPLETE does not auto-resume Rust; native feature work and Remaining-71 parity work remain frozen while Rust is retired. "
             "Canonical Python public-surface metadata synchronization remains the only content-scoped promotion-authority exception; explicit maintenance exceptions never grant production promotion."
         ),
     }

@@ -36,7 +36,8 @@ class PythonCompletionCertificateV1Tests(unittest.TestCase):
         self.assertEqual(by_id["python_completion_certificate_v1"]["state"], "certified")
         self.assertTrue(by_id["python_completion_certificate_v1"]["certification_evidence"])
         self.assertTrue(registry["python_complete"]["ready"])
-        self.assertTrue(registry["python_complete"]["rust_resume_allowed"])
+        self.assertFalse(registry["python_complete"]["rust_resume_allowed"])
+        self.assertTrue(registry["python_complete"]["rust_retired"])
 
     def test_registry_derived_contract_freeze_matches_pinned_digest(self) -> None:
         contract = self._contract()
