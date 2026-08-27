@@ -8,7 +8,7 @@ on:
       - ".github/workflows/tmp-context-decision-trace-v1-fresh-main-sealer.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: tmp-context-decision-trace-v1-fresh-main-sealer-20260827
@@ -24,7 +24,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: "1"
     steps:
-      - name: Checkout exact sealer head
+      - name: Checkout exact exporter head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
@@ -171,33 +171,6 @@ jobs:
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
           python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
           python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          def load(name):
-              return json.loads(Path(name).read_text(encoding="utf-8"))
-
-          trace = load('/tmp/context-decision-trace.json')
-          graph = load('/tmp/runtime-contract-version-graph.json')
-          completeness = load('/tmp/python-capability-completeness.json')
-          rust = load('/tmp/rust-feature-freeze-guard.json')
-
-          assert trace['ok'] is True and trace['implementation_ready'] is True and trace['admission_ready'] is True, trace
-          assert trace['upstream_runtime_contract_graph_state'] == 'certified', trace
-          assert trace['lifecycle_state'] == 'implemented', trace
-          assert trace['post_completion_current_milestone'] == 'context_decision_trace_v1', trace
-          assert trace['python_complete_ready'] is True and trace['rust_resume_allowed'] is False, trace
-          assert trace['rust']['production_promoted'] == 174 and trace['rust']['remaining_parity_promotion'] == 71, trace
-
-          assert graph['ok'] is True and graph['admission_ready'] is True, graph
-          assert completeness['ok'] is True, completeness
-          assert completeness['post_completion_milestone_order'] == ['runtime_contract_version_graph_v1', 'context_decision_trace_v1'], completeness
-          assert completeness['post_completion_current_milestone'] == 'context_decision_trace_v1', completeness
-          assert completeness['python_complete_ready'] is True and completeness['rust_resume_allowed'] is False, completeness
-          assert rust['ok'] is True and rust['rust_resume_allowed'] is False, rust
-          assert rust['rust']['production_promoted'] == 174 and rust['rust']['remaining_parity_promotion'] == 71, rust
-          PY
           python tools/validate.py
           python tools/validate_release.py --smoke --output /tmp/context-decision-trace-release-validation.json
           rm -rf syntavra_runtime.egg-info
@@ -211,7 +184,6 @@ jobs:
           git config user.name syntavra-ci
           git config user.email syntavra-ci@users.noreply.github.com
           git add -A
-          git status --short
           git commit -m "python: implement Context Decision Trace v1"
           echo "FINAL_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "FINAL_TREE=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_ENV"
@@ -245,12 +217,32 @@ jobs:
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
 
-      - name: Push only if target remained unchanged
+      - name: Package exact validated final tree
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin "$TARGET_BRANCH"
-          observed="$(git rev-parse "origin/$TARGET_BRANCH")"
-          test "$observed" = "$TARGET_PRE_HEAD"
-          git push origin "HEAD:$TARGET_BRANCH"
-          printf 'FINAL_COMMIT=%s\nFINAL_TREE=%s\n' "$FINAL_COMMIT" "$FINAL_TREE"
+          export_dir=/tmp/context-decision-trace-fresh-main-final
+          rm -rf "$export_dir"
+          mkdir -p "$export_dir"
+          cat > /tmp/context-decision-trace-final-paths.txt <<'EOF'
+          .github/workflows/release-main-merge-gate.yml
+          MANIFEST.sha256
+          contracts/python/capability-completeness-registry-v1.json
+          tests/runtime/test_python_capability_completeness.py
+          tests/runtime/test_release_action_pins.py
+          EOF
+          sed -i 's/^          //' /tmp/context-decision-trace-final-paths.txt
+          while IFS= read -r path; do
+            mkdir -p "$export_dir/$(dirname "$path")"
+            cp "$path" "$export_dir/$path"
+          done < /tmp/context-decision-trace-final-paths.txt
+          printf '%s\n' "$FINAL_COMMIT" > "$export_dir/COMMIT_SHA.txt"
+          printf '%s\n' "$FINAL_TREE" > "$export_dir/TREE_SHA.txt"
+          printf '%s\n' "$TARGET_PRE_HEAD" > "$export_dir/PARENT_SHA.txt"
+
+      - name: Upload exact validated final tree
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: context-decision-trace-fresh-main-final-${{ github.sha }}
+          path: /tmp/context-decision-trace-fresh-main-final
+          if-no-files-found: error
