@@ -171,7 +171,6 @@ jobs:
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
           python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
           python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
-          python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -183,7 +182,6 @@ jobs:
           graph = load('/tmp/runtime-contract-version-graph.json')
           completeness = load('/tmp/python-capability-completeness.json')
           rust = load('/tmp/rust-feature-freeze-guard.json')
-          completion = load('/tmp/python-completion-certificate.json')
 
           assert trace['ok'] is True and trace['implementation_ready'] is True and trace['admission_ready'] is True, trace
           assert trace['upstream_runtime_contract_graph_state'] == 'certified', trace
@@ -199,7 +197,6 @@ jobs:
           assert completeness['python_complete_ready'] is True and completeness['rust_resume_allowed'] is False, completeness
           assert rust['ok'] is True and rust['rust_resume_allowed'] is False, rust
           assert rust['rust']['production_promoted'] == 174 and rust['rust']['remaining_parity_promotion'] == 71, rust
-          assert completion['ok'] is True and completion['python_complete_ready'] is True and completion['rust_resume_allowed'] is False, completion
           PY
           python tools/validate.py
           python tools/validate_release.py --smoke --output /tmp/context-decision-trace-release-validation.json
@@ -234,12 +231,14 @@ jobs:
           import subprocess
           from pathlib import Path
           trace = json.loads(Path('/tmp/context-decision-trace-postcommit.json').read_text(encoding='utf-8'))
+          completion = json.loads(Path('/tmp/python-completion-certificate-postcommit.json').read_text(encoding='utf-8'))
           head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           assert trace['ok'] is True and trace['exact_head'] == head, trace
           assert trace['admission_ready'] is True, trace
           assert trace['upstream_runtime_contract_graph_state'] == 'certified', trace
           assert trace['post_completion_current_milestone'] == 'context_decision_trace_v1', trace
           assert trace['rust_resume_allowed'] is False, trace
+          assert completion['ok'] is True and completion['python_complete_ready'] is True and completion['rust_resume_allowed'] is False, completion
           PY
           python tools/validate.py
           rm -rf syntavra_runtime.egg-info
