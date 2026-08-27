@@ -105,40 +105,34 @@ jobs:
           python tools/refresh_manifest.py
           git diff --check
 
-      - name: Validate exact full candidate
+      - name: Validate candidate before exact-head commit
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install -e .
           python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
           python -m unittest tests.runtime.test_context_decision_trace_v1 -v
-          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
-          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
-          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
-          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
-          python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate.json
+          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph-precommit.json
+          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace-precommit.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness-precommit.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard-precommit.json
           python - <<'PY'
           import json
           from pathlib import Path
-          graph = json.loads(Path('/tmp/runtime-contract-version-graph.json').read_text(encoding='utf-8'))
-          trace = json.loads(Path('/tmp/context-decision-trace.json').read_text(encoding='utf-8'))
-          completeness = json.loads(Path('/tmp/python-capability-completeness.json').read_text(encoding='utf-8'))
-          rust = json.loads(Path('/tmp/rust-feature-freeze-guard.json').read_text(encoding='utf-8'))
-          completion = json.loads(Path('/tmp/python-completion-certificate.json').read_text(encoding='utf-8'))
+          graph = json.loads(Path('/tmp/runtime-contract-version-graph-precommit.json').read_text(encoding='utf-8'))
+          trace = json.loads(Path('/tmp/context-decision-trace-precommit.json').read_text(encoding='utf-8'))
+          completeness = json.loads(Path('/tmp/python-capability-completeness-precommit.json').read_text(encoding='utf-8'))
+          rust = json.loads(Path('/tmp/rust-feature-freeze-guard-precommit.json').read_text(encoding='utf-8'))
           assert graph['ok'] is True and graph['lifecycle_state'] == 'certified', graph
           assert graph['post_completion_current_milestone'] == 'context_decision_trace_v1', graph
           assert trace['ok'] is True and trace['admission_ready'] is True, trace
           assert completeness['ok'] is True and completeness['post_completion_current_milestone'] == 'context_decision_trace_v1', completeness
           assert rust['ok'] is True and rust['rust_resume_allowed'] is False, rust
-          assert completion['ok'] is True and completion['python_complete_ready'] is True and completion['rust_resume_allowed'] is False, completion
           PY
-          python tools/validate.py
-          python tools/validate_release.py --smoke --output /tmp/release-validation.json
           rm -rf syntavra_runtime.egg-info
-          python tools/refresh_manifest.py --check
           git diff --check
 
-      - name: Seal validated full tree and prepare split materialization
+      - name: Commit and revalidate exact full candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -157,9 +151,42 @@ jobs:
           git commit -m "ci: derive contract graph cursor from canonical registry"
           full_commit="$(git rev-parse HEAD)"
           full_tree="$(git rev-parse 'HEAD^{tree}')"
+
+          python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
+          python -m unittest tests.runtime.test_context_decision_trace_v1 -v
+          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
+          python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
+          python tools/certify_python_capability_completeness.py --out /tmp/python-capability-completeness.json
+          python tools/certify_rust_feature_freeze_guard.py --out /tmp/rust-feature-freeze-guard.json
+          python tools/certify_python_completion_certificate_v1.py --out /tmp/python-completion-certificate.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          graph = json.loads(Path('/tmp/runtime-contract-version-graph.json').read_text(encoding='utf-8'))
+          trace = json.loads(Path('/tmp/context-decision-trace.json').read_text(encoding='utf-8'))
+          completeness = json.loads(Path('/tmp/python-capability-completeness.json').read_text(encoding='utf-8'))
+          rust = json.loads(Path('/tmp/rust-feature-freeze-guard.json').read_text(encoding='utf-8'))
+          completion = json.loads(Path('/tmp/python-completion-certificate.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert graph['ok'] is True and graph['exact_head'] == head and graph['lifecycle_state'] == 'certified', graph
+          assert graph['post_completion_current_milestone'] == 'context_decision_trace_v1', graph
+          assert trace['ok'] is True and trace['exact_head'] == head and trace['admission_ready'] is True, trace
+          assert completeness['ok'] is True and completeness['exact_head'] == head and completeness['post_completion_current_milestone'] == 'context_decision_trace_v1', completeness
+          assert rust['ok'] is True and rust['exact_head'] == head and rust['rust_resume_allowed'] is False, rust
+          assert completion['ok'] is True and completion['python_complete_ready'] is True and completion['rust_resume_allowed'] is False, completion
+          PY
+          python tools/validate.py
+          python tools/validate_release.py --smoke --output /tmp/release-validation.json
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py --check
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
           cp .github/workflows/runtime-contract-version-graph.yml /tmp/runtime-contract-version-graph.yml
           printf '%s\n' "$full_tree" > /tmp/FULL_TREE.txt
           printf '%s\n' "$TARGET_HEAD" > /tmp/PARENT_SHA.txt
+
           git reset --hard "$TARGET_HEAD"
           git checkout "$full_commit" -- MANIFEST.sha256 tests/runtime/test_runtime_contract_version_graph_v1.py
           git add MANIFEST.sha256 tests/runtime/test_runtime_contract_version_graph_v1.py
