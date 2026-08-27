@@ -33,6 +33,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/python-completion-certificate.yml",
     ".github/workflows/runtime-contract-version-graph.yml",
     ".github/workflows/context-decision-trace.yml",
+    ".github/workflows/deterministic-policy-snapshot.yml",
 )
 PINNED_ACTIONS = {
     "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",

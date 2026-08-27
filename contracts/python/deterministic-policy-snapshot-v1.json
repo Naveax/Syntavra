@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "family": "deterministic-policy-snapshot",
+  "phase": "python-first-post-completion",
+  "claim": "DETERMINISTIC_POLICY_SNAPSHOT_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/deterministic_policy_snapshot.py",
+  "authorities": {
+    "adaptive_context_policy": "contracts/python/adaptive-context-policy-v1.json",
+    "adaptive_context_runtime": "syntavra_runtime/adaptive_context_policy.py",
+    "context_decision_trace": "contracts/python/context-decision-trace-v1.json",
+    "context_decision_trace_runtime": "syntavra_runtime/context_decision_trace.py",
+    "upstream_contract_graph": "contracts/python/runtime-contract-version-graph-v1.json",
+    "capability_registry": "contracts/python/capability-completeness-registry-v1.json"
+  },
+  "snapshot_policy": {
+    "deterministic": true,
+    "timestamp_free_identity": true,
+    "canonical_config": true,
+    "contract_graph_node_hash_bound": true,
+    "runtime_implementation_hash_bound": true,
+    "receipt_config_match_required": true,
+    "receipt_hash_verified_before_binding": true,
+    "trace_hash_verified_when_present": true,
+    "trace_receipt_link_verified": true,
+    "tamper_fails_closed": true
+  },
+  "replay_binding_policy": {
+    "snapshot_attached": true,
+    "snapshot_hash_required": true,
+    "policy_receipt_hash_required": true,
+    "context_decision_trace_hash_optional": true,
+    "reference_only_task_identity": true,
+    "task_payload_copy_forbidden": true,
+    "binding_hash_integrity": true
+  },
+  "ownership_policy": {
+    "reference_only": true,
+    "context_payload_storage_forbidden": true,
+    "persistent_snapshot_store_forbidden": true,
+    "policy_recomputation_forbidden": true,
+    "evidence_mutation_journal_forbidden": true,
+    "side_effect_authority_forbidden": true,
+    "no_public_cli_route": true,
+    "rust_feature_work_forbidden": true
+  },
+  "enforcement": {
+    "tests": "tests/runtime/test_deterministic_policy_snapshot_v1.py",
+    "certifier": "tools/certify_deterministic_policy_snapshot_v1.py",
+    "exact_head_workflow": ".github/workflows/deterministic-policy-snapshot.yml",
+    "release_main_gate": ".github/workflows/release-main-merge-gate.yml",
+    "immutable_action_pin_policy": "tests/runtime/test_release_action_pins.py"
+  },
+  "acceptance": "Deterministically snapshot the exact Adaptive Context Policy contract/runtime/config identity used for a task, attach that snapshot to a reference-only receipt/replay binding, verify receipt and optional Context Decision Trace linkage, and fail closed on identity or hash drift without duplicating dynamic policy state or context payloads.",
+  "claim_boundary": "This contract owns deterministic Adaptive Context Policy identity snapshots and reference-only receipt/replay bindings. It does not own policy decision recomputation, context payload storage, persistent snapshot storage, Evidence Mutation Journal authority (capability 243), task-local transactions, Rust feature/parity work, or Rust production promotion."
+}

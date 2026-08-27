@@ -647,6 +647,34 @@
       "acceptance": "Deterministic reference-only trace of include/omit/compress/retrieve/reset/abstain decisions from verified policy receipts, with recommended/effective separation, deterministic replay and fail-closed tamper detection. Policy snapshot and evidence-journal ownership stay with later capabilities; Python COMPLETE remains sealed and Rust stays retired/frozen."
     },
     {
+      "id": "deterministic_policy_snapshot_v1",
+      "group": "post-completion-context-policy",
+      "state": "implemented",
+      "classification": "NEW",
+      "required_for_python_complete": false,
+      "implementation_evidence": [
+        "contracts/python/deterministic-policy-snapshot-v1.json",
+        "syntavra_runtime/deterministic_policy_snapshot.py",
+        "contracts/python/adaptive-context-policy-v1.json",
+        "syntavra_runtime/adaptive_context_policy.py",
+        "contracts/python/context-decision-trace-v1.json",
+        "syntavra_runtime/context_decision_trace.py",
+        "contracts/python/runtime-contract-version-graph-v1.json",
+        "syntavra_runtime/contract_version_graph.py",
+        "tools/certify_deterministic_policy_snapshot_v1.py",
+        "tests/runtime/test_deterministic_policy_snapshot_v1.py",
+        ".github/workflows/deterministic-policy-snapshot.yml",
+        ".github/workflows/release-main-merge-gate.yml",
+        "tests/runtime/test_release_action_pins.py",
+        "contracts/engine/dual-engine-public-surface-v2.json",
+        "contracts/python/capability-completeness-registry-v1.json",
+        "tools/certify_python_capability_completeness.py",
+        "tests/runtime/test_python_capability_completeness.py"
+      ],
+      "certification_evidence": [],
+      "acceptance": "Deterministic exact Adaptive Context Policy contract/runtime/config snapshot attached to reference-only receipt/replay bindings, with verified receipt and optional Context Decision Trace linkage, timestamp-free identity, fail-closed tamper detection, no payload/storage/side-effect authority, Python COMPLETE sealed and Rust retired/frozen."
+    },
+    {
       "id": "external_superiority_adoption_evidence",
       "group": "external-proof",
       "state": "external",
@@ -667,6 +695,7 @@
   },
   "post_completion_milestone_order": [
     "runtime_contract_version_graph_v1",
-    "context_decision_trace_v1"
+    "context_decision_trace_v1",
+    "deterministic_policy_snapshot_v1"
   ]
 }
