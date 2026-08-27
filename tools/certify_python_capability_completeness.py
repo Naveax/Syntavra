@@ -181,6 +181,10 @@ def certify(repo: Path) -> dict[str, Any]:
     _require(isinstance(milestone_order, list), "milestone order missing")
     _require(milestone_order[: len(EXPECTED_MILESTONE_PREFIX)] == EXPECTED_MILESTONE_PREFIX, "canonical Python milestone order drift")
     _require(len(milestone_order) == len(set(milestone_order)), "duplicate milestone ids")
+    post_completion_order = contract.get("post_completion_milestone_order")
+    _require(isinstance(post_completion_order, list), "post-completion milestone order missing")
+    _require(len(post_completion_order) == len(set(post_completion_order)), "duplicate post-completion milestone ids")
+    _require(not set(milestone_order).intersection(post_completion_order), "completion and post-completion milestones overlap")
 
     authority = contract.get("authority") or {}
     expected_authority = {
@@ -202,6 +206,9 @@ def certify(repo: Path) -> dict[str, Any]:
         "no_silent_fallback",
         "state_advancement_requires_evidence",
         "certified_state_requires_certification_evidence",
+        "post_completion_python_hardening_tracked_separately",
+        "post_completion_milestones_do_not_reopen_python_complete",
+        "post_completion_milestones_cannot_auto_resume_rust",
     ]
     for key in required_true:
         _require(policy.get(key) is True, f"registry policy disabled: {key}")
@@ -216,6 +223,16 @@ def certify(repo: Path) -> dict[str, Any]:
     _require((python_authority.get("rust") or {}).get("resume_allowed") is phase_state["rust_resume_allowed"], "Python authority Rust resume state disagrees with registry")
 
     capabilities, state_counts, classification_counts = _validate_capabilities(repo, contract)
+    capability_by_id = {item["id"]: item for item in capabilities}
+    for milestone in post_completion_order:
+        row = capability_by_id.get(milestone)
+        _require(row is not None, f"post-completion milestone missing capability row: {milestone}")
+        _require(row.get("required_for_python_complete") is False, f"post-completion milestone cannot reopen Python COMPLETE: {milestone}")
+        _require(row.get("classification") != "EXTERNAL", f"post-completion milestone cannot be external proof: {milestone}")
+    post_completion_current_milestone = next(
+        (milestone for milestone in post_completion_order if (capability_by_id.get(milestone) or {}).get("state") != "certified"),
+        "post_completion_complete",
+    )
     required_internal = [
         item for item in capabilities
         if item.get("required_for_python_complete") is True and item.get("classification") != "EXTERNAL"
@@ -246,6 +263,8 @@ def certify(repo: Path) -> dict[str, Any]:
         "claim": contract["claim"],
         "exact_head": exact_head,
         "current_milestone": current_milestone,
+        "post_completion_current_milestone": post_completion_current_milestone,
+        "post_completion_milestone_order": post_completion_order,
         "registry_persisted_state": registry_entry["state"],
         "registry_certified": registry_entry["state"] == "certified",
         "registry_admission_ready": registry_entry["state"] in {"implemented", "verified", "certified"},

@@ -34,6 +34,8 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
             EXPECTED_MILESTONE_PREFIX,
         )
         self.assertEqual(len(contract["milestone_order"]), len(set(contract["milestone_order"])))
+        self.assertEqual(contract["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])
+        self.assertTrue(set(contract["milestone_order"]).isdisjoint(contract["post_completion_milestone_order"]))
 
     def test_registry_does_not_duplicate_route_identity_lists(self) -> None:
         contract = self._contract()
@@ -105,6 +107,8 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertNotIn("capability_completeness_registry_v1", report["uncertified_required"])
         self.assertNotIn("rust_feature_freeze_guard_v1", report["uncertified_required"])
         self.assertEqual(report["current_milestone"], "python_complete")
+        self.assertEqual(report["post_completion_current_milestone"], "runtime_contract_version_graph_v1")
+        self.assertEqual(report["post_completion_milestone_order"], ["runtime_contract_version_graph_v1"])
         self.assertEqual(report["uncertified_required"], [])
 
     def test_certifier_rejects_foreign_checkout(self) -> None:
