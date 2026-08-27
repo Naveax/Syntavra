@@ -54,41 +54,29 @@ jobs:
 
           workflow_path = Path('.github/workflows/runtime-contract-version-graph.yml')
           workflow = workflow_path.read_text(encoding='utf-8')
-          old = """          report = json.loads(Path('/tmp/runtime-contract-version-graph.json').read_text(encoding='utf-8'))
-          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-          assert report['ok'] is True, report
-          assert report['claim'] == 'RUNTIME_CONTRACT_VERSION_GRAPH_V1'
-          assert report['exact_head'] == head
-          assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is True
-          if report['lifecycle_state'] == 'certified':
-              assert report['post_completion_current_milestone'] == 'post_completion_complete'
-          else:
-              assert report['lifecycle_state'] in {'implemented', 'verified'}
-              assert report['post_completion_current_milestone'] == 'runtime_contract_version_graph_v1'
-"""
-          new = """          report = json.loads(Path('/tmp/runtime-contract-version-graph.json').read_text(encoding='utf-8'))
-          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))
-          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-          by_id = {row.get('id'): row for row in registry.get('capabilities', []) if isinstance(row, dict)}
-          order = registry.get('post_completion_milestone_order') or []
-          expected_current = next(
-              (milestone for milestone in order if (by_id.get(milestone) or {}).get('state') != 'certified'),
-              'post_completion_complete',
-          )
-          assert report['ok'] is True, report
-          assert report['claim'] == 'RUNTIME_CONTRACT_VERSION_GRAPH_V1'
-          assert report['exact_head'] == head
-          assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is True
-          assert report['post_completion_current_milestone'] == expected_current
-          assert (by_id.get('runtime_contract_version_graph_v1') or {}).get('state') == report['lifecycle_state']
-          if report['lifecycle_state'] == 'certified':
-              assert expected_current != 'runtime_contract_version_graph_v1'
-          else:
-              assert report['lifecycle_state'] in {'implemented', 'verified'}
-              assert expected_current == 'runtime_contract_version_graph_v1'
-"""
+          old = "\n".join([
+              "          if report['lifecycle_state'] == 'certified':",
+              "              assert report['post_completion_current_milestone'] == 'post_completion_complete'",
+              "          else:",
+              "              assert report['lifecycle_state'] in {'implemented', 'verified'}",
+              "              assert report['post_completion_current_milestone'] == 'runtime_contract_version_graph_v1'",
+          ]) + "\n"
+          new = "\n".join([
+              "          registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json').read_text(encoding='utf-8'))",
+              "          by_id = {row.get('id'): row for row in registry.get('capabilities', []) if isinstance(row, dict)}",
+              "          order = registry.get('post_completion_milestone_order') or []",
+              "          expected_current = next(",
+              "              (milestone for milestone in order if (by_id.get(milestone) or {}).get('state') != 'certified'),",
+              "              'post_completion_complete',",
+              "          )",
+              "          assert report['post_completion_current_milestone'] == expected_current",
+              "          assert (by_id.get('runtime_contract_version_graph_v1') or {}).get('state') == report['lifecycle_state']",
+              "          if report['lifecycle_state'] == 'certified':",
+              "              assert expected_current != 'runtime_contract_version_graph_v1'",
+              "          else:",
+              "              assert report['lifecycle_state'] in {'implemented', 'verified'}",
+              "              assert expected_current == 'runtime_contract_version_graph_v1'",
+          ]) + "\n"
           if workflow.count(old) != 1:
               raise SystemExit(f'runtime graph workflow lifecycle anchor drift: {workflow.count(old)}')
           workflow_path.write_text(workflow.replace(old, new, 1), encoding='utf-8')
@@ -101,7 +89,15 @@ jobs:
               raise SystemExit('runtime graph test constant anchor drift')
           tests = tests.replace(anchor, anchor + addition, 1)
           marker = '    def test_exact_head_certifier_passes_without_resuming_rust(self) -> None:\n'
-          regression = '''    def test_exact_head_workflow_derives_post_completion_cursor_from_registry(self) -> None:\n        workflow = WORKFLOW.read_text(encoding="utf-8")\n        self.assertIn("registry = json.loads(Path('contracts/python/capability-completeness-registry-v1.json')", workflow)\n        self.assertIn("expected_current = next(", workflow)\n        self.assertIn("assert report['post_completion_current_milestone'] == expected_current", workflow)\n        self.assertNotIn("assert report['post_completion_current_milestone'] == 'post_completion_complete'", workflow)\n\n'''
+          regression = "\n".join([
+              '    def test_exact_head_workflow_derives_post_completion_cursor_from_registry(self) -> None:',
+              '        workflow = WORKFLOW.read_text(encoding="utf-8")',
+              '        self.assertIn("registry = json.loads(Path(\'contracts/python/capability-completeness-registry-v1.json\')", workflow)',
+              '        self.assertIn("expected_current = next(", workflow)',
+              '        self.assertIn("assert report[\'post_completion_current_milestone\'] == expected_current", workflow)',
+              '        self.assertNotIn("assert report[\'post_completion_current_milestone\'] == \'post_completion_complete\'", workflow)',
+              '',
+          ]) + "\n"
           if tests.count(marker) != 1:
               raise SystemExit('runtime graph test insertion anchor drift')
           test_path.write_text(tests.replace(marker, regression + marker, 1), encoding='utf-8')
@@ -109,42 +105,11 @@ jobs:
           python tools/refresh_manifest.py
           git diff --check
 
-      - name: Validate candidate and create clean local commit
+      - name: Validate exact full candidate
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install -e .
-          python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
-          python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/graph-precommit.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          report = json.loads(Path('/tmp/graph-precommit.json').read_text(encoding='utf-8'))
-          assert report['ok'] is True, report
-          assert report['lifecycle_state'] == 'certified', report
-          assert report['post_completion_current_milestone'] == 'context_decision_trace_v1', report
-          assert report['rust_resume_allowed'] is False, report
-          PY
-          rm -rf syntavra_runtime.egg-info
-          git add -A
-          git diff --cached --name-only "$TARGET_HEAD" | sort > /tmp/actual-paths.txt
-          cat > /tmp/expected-paths.txt <<'EOF'
-          .github/workflows/runtime-contract-version-graph.yml
-          MANIFEST.sha256
-          tests/runtime/test_runtime_contract_version_graph_v1.py
-          EOF
-          sed -i 's/^          //' /tmp/expected-paths.txt
-          sort -o /tmp/expected-paths.txt /tmp/expected-paths.txt
-          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
-          git config user.name syntavra-ci
-          git config user.email syntavra-ci@users.noreply.github.com
-          git commit -m "ci: derive contract graph cursor from canonical registry"
-          echo "LOCAL_TREE=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_ENV"
-
-      - name: Revalidate exact clean candidate
-        shell: bash
-        run: |
-          set -euo pipefail
           python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
           python -m unittest tests.runtime.test_context_decision_trace_v1 -v
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
@@ -172,78 +137,49 @@ jobs:
           rm -rf syntavra_runtime.egg-info
           python tools/refresh_manifest.py --check
           git diff --check
-          test -z "$(git status --porcelain --untracked-files=all)"
 
-      - name: Create unreachable atomic Git commit object
+      - name: Seal validated full tree and prepare split materialization
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import base64
-          import json
-          import os
-          import subprocess
-          import urllib.request
-          from pathlib import Path
+          git add -A
+          git diff --cached --name-only "$TARGET_HEAD" | sort > /tmp/actual-paths.txt
+          cat > /tmp/expected-paths.txt <<'EOF'
+          .github/workflows/runtime-contract-version-graph.yml
+          MANIFEST.sha256
+          tests/runtime/test_runtime_contract_version_graph_v1.py
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths.txt
+          sort -o /tmp/expected-paths.txt /tmp/expected-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git config user.name syntavra-ci
+          git config user.email syntavra-ci@users.noreply.github.com
+          git commit -m "ci: derive contract graph cursor from canonical registry"
+          full_commit="$(git rev-parse HEAD)"
+          full_tree="$(git rev-parse 'HEAD^{tree}')"
+          cp .github/workflows/runtime-contract-version-graph.yml /tmp/runtime-contract-version-graph.yml
+          printf '%s\n' "$full_tree" > /tmp/FULL_TREE.txt
+          printf '%s\n' "$TARGET_HEAD" > /tmp/PARENT_SHA.txt
+          git reset --hard "$TARGET_HEAD"
+          git checkout "$full_commit" -- MANIFEST.sha256 tests/runtime/test_runtime_contract_version_graph_v1.py
+          git add MANIFEST.sha256 tests/runtime/test_runtime_contract_version_graph_v1.py
+          git commit -m "test: make contract graph cursor lifecycle-aware"
 
-          repo = 'Naveax/Syntavra'
-          parent = os.environ['TARGET_HEAD']
-          local_tree = os.environ['LOCAL_TREE']
-          token = os.environ['GH_TOKEN']
-          paths = [
-              '.github/workflows/runtime-contract-version-graph.yml',
-              'MANIFEST.sha256',
-              'tests/runtime/test_runtime_contract_version_graph_v1.py',
-          ]
+      - name: Push non-workflow fix only if PR head stayed unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          observed="$(git rev-parse "origin/$TARGET_BRANCH")"
+          test "$observed" = "$TARGET_HEAD"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
 
-          def api(method: str, suffix: str, payload=None):
-              data = None if payload is None else json.dumps(payload).encode('utf-8')
-              request = urllib.request.Request(
-                  f'https://api.github.com/repos/{repo}{suffix}',
-                  data=data,
-                  method=method,
-                  headers={
-                      'Authorization': f'Bearer {token}',
-                      'Accept': 'application/vnd.github+json',
-                      'X-GitHub-Api-Version': '2022-11-28',
-                      'Content-Type': 'application/json',
-                  },
-              )
-              with urllib.request.urlopen(request) as response:
-                  return json.loads(response.read().decode('utf-8'))
-
-          parent_tree = subprocess.check_output(['git', 'rev-parse', f'{parent}^{{tree}}'], text=True).strip()
-          entries = []
-          for path in paths:
-              raw = Path(path).read_bytes()
-              blob = api('POST', '/git/blobs', {
-                  'content': base64.b64encode(raw).decode('ascii'),
-                  'encoding': 'base64',
-              })
-              entries.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
-
-          tree = api('POST', '/git/trees', {'base_tree': parent_tree, 'tree': entries})
-          if tree['sha'] != local_tree:
-              raise SystemExit(f'atomic tree mismatch: API={tree["sha"]} local={local_tree}')
-          commit = api('POST', '/git/commits', {
-              'message': 'ci: derive contract graph cursor from canonical registry',
-              'tree': tree['sha'],
-              'parents': [parent],
-          })
-          Path('/tmp/atomic-commit.json').write_text(json.dumps({
-              'commit_sha': commit['sha'],
-              'tree_sha': tree['sha'],
-              'parent_sha': parent,
-              'changed_paths': paths,
-          }, indent=2) + '\n', encoding='utf-8')
-          print(json.dumps({'commit_sha': commit['sha'], 'tree_sha': tree['sha'], 'parent_sha': parent}))
-          PY
-
-      - name: Upload atomic commit handoff
+      - name: Upload exact workflow handoff
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: context-decision-trace-graph-gate-atomic-${{ github.sha }}
-          path: /tmp/atomic-commit.json
+          name: context-decision-trace-graph-gate-fix-${{ github.sha }}
+          path: |
+            /tmp/runtime-contract-version-graph.yml
+            /tmp/FULL_TREE.txt
+            /tmp/PARENT_SHA.txt
           if-no-files-found: error
