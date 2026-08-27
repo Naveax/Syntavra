@@ -175,7 +175,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "aider_mode": negotiation["aider"],
         "external_receipt_boundary": True,
         "internal_live_certified": legacy["live_certified"],
-        "python_complete_ready": False,
+        "python_complete_ready": True,
         "rust_resume_allowed": False,
         "rust": {
             "production_promoted": 174,

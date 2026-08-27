@@ -62,7 +62,7 @@ jobs:
           assert report['claim'] == 'UNIFIED_CONTEXT_NAMESPACE_V1'
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['syntavra_scheme'] is True
           assert report['runtime']['progressive_repo_directory_file_symbol_lines'] is True

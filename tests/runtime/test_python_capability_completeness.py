@@ -11,6 +11,7 @@ from tools.certify_python_capability_completeness import (
     EXPECTED_MILESTONE_PREFIX,
     EXPECTED_STATES,
     _validate_capabilities,
+    _validate_current_state_report_surfaces,
     certify,
 )
 from tools.certify_python_authority import _assert_no_route_identity_copy
@@ -34,6 +35,16 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
             EXPECTED_MILESTONE_PREFIX,
         )
         self.assertEqual(len(contract["milestone_order"]), len(set(contract["milestone_order"])))
+
+
+    def test_completed_phase_has_no_stale_current_state_reports(self) -> None:
+        report = _validate_current_state_report_surfaces(
+            ROOT, python_complete_ready=True
+        )
+        self.assertTrue(report["checked"])
+        self.assertEqual(report["stale_surfaces"], [])
+        self.assertGreater(report["workflow_files_scanned"], 0)
+        self.assertGreater(report["certifier_files_scanned"], 0)
 
     def test_registry_does_not_duplicate_route_identity_lists(self) -> None:
         contract = self._contract()

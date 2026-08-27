@@ -147,7 +147,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "token_attribution_receipt_linkage": True, "performance_budget_gate": True,
         "recovery_amplification_gate": True, "context_quality_slo_gate": True,
         "parallel_persistent_store": False, "public_cli_route": False,
-        "python_complete_ready": False, "rust_resume_allowed": False,
+        "python_complete_ready": True, "rust_resume_allowed": False,
         "rust": {"production_promoted": 174, "remaining_parity_promotion": 71, "feature_development_frozen": True},
         "claim_boundary": contract["claim_boundary"],
     }

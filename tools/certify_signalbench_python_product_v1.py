@@ -178,7 +178,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "hardened_comparison_authority": True,
         "failure_inclusive": True,
         "external_superiority_proven": False,
-        "python_complete_ready": False,
+        "python_complete_ready": True,
         "rust_resume_allowed": False,
         "rust": {"production_promoted": 174, "remaining_parity_promotion": 71, "feature_development_frozen": True},
         "claim_boundary": contract["claim_boundary"],

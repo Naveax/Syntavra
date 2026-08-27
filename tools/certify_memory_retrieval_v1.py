@@ -165,7 +165,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "claim": "MEMORY_RETRIEVAL_V1",
         "exact_head": exact_head,
         "admission_ready": True,
-        "python_complete_ready": False,
+        "python_complete_ready": True,
         "rust_resume_allowed": False,
         "runtime": MemoryRetrievalV1.status(),
         "rust": {

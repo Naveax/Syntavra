@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import re
 import subprocess
 import sys
 import traceback
@@ -134,6 +136,52 @@ def _validate_capabilities(repo: Path, contract: dict[str, Any]) -> tuple[list[d
     return capabilities, dict(sorted(state_counts.items())), dict(sorted(classification_counts.items()))
 
 
+
+def _validate_current_state_report_surfaces(
+    repo: Path,
+    *,
+    python_complete_ready: bool,
+) -> dict[str, Any]:
+    workflow_files = sorted((repo / ".github/workflows").glob("*.y*ml"))
+    certifier_files = sorted((repo / "tools").glob("certify*.py"))
+    stale: list[str] = []
+
+    if python_complete_ready:
+        for path in workflow_files:
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if (
+                    line.lstrip().startswith("assert ")
+                    and "python_complete_ready" in line
+                    and re.search(r"\bis\s+False\b", line)
+                ):
+                    stale.append(f"{path.relative_to(repo).as_posix()}:{lineno}:workflow")
+
+        for path in certifier_files:
+            source = path.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(source, filename=str(path))
+            except SyntaxError as exc:
+                raise AssertionError(f"unable to parse certifier for current-state consistency: {path}: {exc}") from exc
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Dict):
+                    continue
+                for key, value in zip(node.keys, node.values):
+                    if (
+                        isinstance(key, ast.Constant)
+                        and key.value == "python_complete_ready"
+                        and isinstance(value, ast.Constant)
+                        and value.value is False
+                    ):
+                        stale.append(f"{path.relative_to(repo).as_posix()}:{value.lineno}:certifier")
+
+    _require(not stale, f"stale Python COMPLETE current-state reports remain: {stale}")
+    return {
+        "checked": bool(python_complete_ready),
+        "workflow_files_scanned": len(workflow_files),
+        "certifier_files_scanned": len(certifier_files),
+        "stale_surfaces": stale,
+    }
+
 def _validate_enforcement(repo: Path) -> dict[str, str]:
     for relative in (WORKFLOW_RELATIVE, RELEASE_GATE_RELATIVE, PIN_POLICY_RELATIVE):
         _require((repo / relative).is_file(), f"missing registry enforcement surface: {relative.as_posix()}")
@@ -222,6 +270,9 @@ def certify(repo: Path) -> dict[str, Any]:
     ]
     uncertified_required = [item["id"] for item in required_internal if item.get("state") != "certified"]
     computed_python_complete = not uncertified_required
+    current_state_report_consistency = _validate_current_state_report_surfaces(
+        repo, python_complete_ready=computed_python_complete
+    )
 
     python_complete = contract.get("python_complete") or {}
     _require(python_complete.get("claim") == "PYTHON_COMPLETE", "Python COMPLETE claim drift")
@@ -256,6 +307,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "uncertified_required_count": len(uncertified_required),
         "uncertified_required": uncertified_required,
         "python_complete_ready": computed_python_complete,
+        "current_state_report_consistency": current_state_report_consistency,
         "rust_resume_allowed": phase_state["rust_resume_allowed"],
         "rust": {
             "implementation_coverage": 245,

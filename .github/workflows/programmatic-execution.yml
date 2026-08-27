@@ -62,7 +62,7 @@ jobs:
           assert report['claim'] == 'PROGRAMMATIC_EXECUTION_V1'
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['operations'] == ['call', 'map', 'parallel', 'filter', 'reduce']
           assert report['runtime']['large_result_externalized'] is True

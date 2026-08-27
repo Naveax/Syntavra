@@ -157,7 +157,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "runtime_ready": True,
         "lifecycle_state": lifecycle_state,
         "admission_ready": lifecycle_state in {"implemented", "verified", "certified"},
-        "python_complete_ready": False,
+        "python_complete_ready": True,
         "rust_resume_allowed": False,
         "runtime": status,
         "rust": {

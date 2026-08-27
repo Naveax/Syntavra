@@ -62,7 +62,7 @@ jobs:
           assert report['claim'] == 'CACHE_PROVIDER_BUDGET_V1'
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['provider_budget_engine'] is True
           assert report['runtime']['cache_roi'] is True

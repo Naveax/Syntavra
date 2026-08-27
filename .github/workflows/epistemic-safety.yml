@@ -58,7 +58,7 @@ jobs:
           assert report['claim'] == 'EPISTEMIC_SAFETY_V1'
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['epistemic_state_engine'] is True
           assert report['runtime']['prompt_injection_ingress_filter'] is True

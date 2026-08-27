@@ -158,7 +158,7 @@ def certify(repo: Path) -> dict[str, Any]:
         "claim": "CACHE_PROVIDER_BUDGET_V1",
         "exact_head": exact_head,
         "admission_ready": True,
-        "python_complete_ready": False,
+        "python_complete_ready": True,
         "rust_resume_allowed": False,
         "runtime": status,
         "rust": {"production_promoted": 174, "remaining_parity_promotion": 71, "feature_development_frozen": True},

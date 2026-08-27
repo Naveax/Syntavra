@@ -140,7 +140,7 @@ def certify() -> dict[str, Any]:
         "ok": True,
         "exact_head": exact_head,
         "admission_ready": True,
-        "python_complete_ready": False,
+        "python_complete_ready": True,
         "rust_resume_allowed": False,
         "runtime": runtime,
         "rust": {

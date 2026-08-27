@@ -54,7 +54,7 @@ jobs:
           assert report['claim'] == 'UNIVERSAL_CONTEXT_ITEM_V1'
           assert report['exact_head'] == head
           assert report['admission_ready'] is True
-          assert report['python_complete_ready'] is False
+          assert report['python_complete_ready'] is True
           assert report['rust_resume_allowed'] is False
           assert report['runtime']['roundtrip'] is True
           assert report['runtime']['tamper_fail_closed'] is True
