@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
@@ -46,6 +47,43 @@ class PythonCompletionCertificateV1Tests(unittest.TestCase):
         self.assertEqual(freeze["contract_count"], contract["contract_freeze"]["expected_contract_count"])
         self.assertEqual(freeze["sha256"], contract["contract_freeze"]["expected_sha256"])
         self.assertEqual(len(freeze["sha256"]), 64)
+
+    def test_post_completion_registry_extensions_do_not_rewrite_completion_freeze(self) -> None:
+        registry = self._registry()
+        baseline = derive_contract_freeze(ROOT, registry)
+        mutated = copy.deepcopy(registry)
+        mutated.setdefault("policy", {})["post_completion_future_hardening"] = True
+        mutated.setdefault("post_completion_milestone_order", []).append(
+            "future_post_completion_capability"
+        )
+        mutated.setdefault("capabilities", []).append(
+            {
+                "id": "future_post_completion_capability",
+                "group": "post-completion-test",
+                "state": "planned",
+                "classification": "NEW",
+                "required_for_python_complete": False,
+                "implementation_evidence": [],
+                "certification_evidence": [],
+                "acceptance": "test-only post-completion extension",
+            }
+        )
+        observed = derive_contract_freeze(ROOT, mutated)
+        self.assertEqual(observed["sha256"], baseline["sha256"])
+        self.assertEqual(observed["contracts"], baseline["contracts"])
+
+    def test_completion_relevant_registry_drift_changes_completion_freeze(self) -> None:
+        registry = self._registry()
+        baseline = derive_contract_freeze(ROOT, registry)
+        mutated = copy.deepcopy(registry)
+        row = next(
+            item
+            for item in mutated["capabilities"]
+            if item.get("required_for_python_complete") is True
+        )
+        row["acceptance"] = str(row.get("acceptance") or "") + " completion-drift"
+        observed = derive_contract_freeze(ROOT, mutated)
+        self.assertNotEqual(observed["sha256"], baseline["sha256"])
 
     def test_platform_receipts_require_both_exact_head_operating_systems(self) -> None:
         contract = self._contract()
