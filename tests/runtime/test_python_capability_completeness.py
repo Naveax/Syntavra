@@ -129,9 +129,9 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertEqual(report["current_milestone"], "python_complete")
         self.assertEqual(by_id["context_decision_trace_v1"]["state"], "certified")
         self.assertTrue(by_id["context_decision_trace_v1"]["certification_evidence"])
-        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "implemented")
-        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"], [])
-        self.assertEqual(report["post_completion_current_milestone"], "deterministic_policy_snapshot_v1")
+        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "certified")
+        self.assertTrue(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"])
+        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")
         self.assertEqual(report["post_completion_milestone_order"], EXPECTED_POST_COMPLETION_PREFIX)
         self.assertEqual(report["uncertified_required"], [])
 
