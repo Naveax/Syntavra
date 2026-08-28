@@ -12,6 +12,10 @@ on:
       - "tools/report_missing_native_public_routes.py"
       - ".github/workflows/r31-provider-prepare-inventory.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 

@@ -15,6 +15,10 @@ on:
       - "tools/verify_r31_provider_replay_parity.py"
       - ".github/workflows/r31-provider-replay-parity.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
