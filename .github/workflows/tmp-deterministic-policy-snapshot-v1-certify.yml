@@ -120,7 +120,8 @@ jobs:
           python tools/validate.py
           python tools/validate_release.py --smoke
           rm -rf syntavra_runtime.egg-info
-          rm -f fusion-release-smoke.json release-smoke.json platform-registry.json native-dry-run.json syntavra-component-measurement.json
+          rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json syntavra-component-measurement.json
+          git restore --source="$EXPECTED_MAIN" --worktree -- release-smoke.json
           git diff --check
 
       - name: Commit and publish exact certification candidate
