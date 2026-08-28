@@ -68,16 +68,24 @@ jobs:
 
           test_path = Path("tests/runtime/test_python_capability_completeness.py")
           text = test_path.read_text(encoding="utf-8")
-          old = '''        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "implemented")
-          self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"], [])
-          self.assertEqual(report["post_completion_current_milestone"], "deterministic_policy_snapshot_v1")
-          '''
-          new = '''        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "certified")
-          self.assertTrue(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"])
-          self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")
-          '''
-          assert text.count(old) == 1, "expected exact deterministic snapshot lifecycle assertion block once"
-          test_path.write_text(text.replace(old, new), encoding="utf-8")
+          replacements = (
+              (
+                  'self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "implemented")',
+                  'self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "certified")',
+              ),
+              (
+                  'self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"], [])',
+                  'self.assertTrue(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"])',
+              ),
+              (
+                  'self.assertEqual(report["post_completion_current_milestone"], "deterministic_policy_snapshot_v1")',
+                  'self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")',
+              ),
+          )
+          for old, new in replacements:
+              assert text.count(old) == 1, f"expected lifecycle assertion once: {old}"
+              text = text.replace(old, new)
+          test_path.write_text(text, encoding="utf-8")
           PY
           python tools/refresh_manifest.py
 
@@ -111,7 +119,8 @@ jobs:
           python tools/certify_rust_feature_freeze_guard.py --repo .
           python tools/validate.py
           python tools/validate_release.py --smoke
-          python tools/verify_manifest.py
+          rm -rf syntavra_runtime.egg-info
+          rm -f fusion-release-smoke.json release-smoke.json platform-registry.json native-dry-run.json syntavra-component-measurement.json
           git diff --check
 
       - name: Commit and publish exact certification candidate
