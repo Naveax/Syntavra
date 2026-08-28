@@ -137,8 +137,14 @@ jobs:
             'contracts/python/capability-completeness-registry-v1.json' \
             'tests/runtime/test_python_capability_completeness.py' | LC_ALL=C sort)"
           actual="$(git diff --name-only "$EXPECTED_MAIN"..HEAD | LC_ALL=C sort)"
+          parent="$(git rev-parse HEAD^)"
+          printf 'Expected committed diff:\n%s\nActual committed diff:\n%s\n' "$expected" "$actual"
+          printf 'Parent=%s\nExpected parent=%s\n' "$parent" "$EXPECTED_MAIN"
+          printf '%s\n' 'Working-tree diagnostics:'
+          git status --porcelain --untracked-files=all || true
           test "$actual" = "$expected"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN"
-          test -z "$(git status --porcelain --untracked-files=all)"
+          test "$parent" = "$EXPECTED_MAIN"
+          test -z "$(git diff --name-only)"
+          test -z "$(git diff --cached --name-only)"
           git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_MAIN" origin "HEAD:refs/heads/$TARGET_BRANCH"
           echo "CERTIFICATION_CANDIDATE_SHA=$(git rev-parse HEAD)"
