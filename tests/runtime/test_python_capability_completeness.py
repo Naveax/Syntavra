@@ -22,6 +22,7 @@ CONTRACT = ROOT / "contracts/python/capability-completeness-registry-v1.json"
 EXPECTED_POST_COMPLETION_PREFIX = [
     "runtime_contract_version_graph_v1",
     "context_decision_trace_v1",
+    "deterministic_policy_snapshot_v1",
 ]
 
 
@@ -128,7 +129,9 @@ class PythonCapabilityCompletenessTests(unittest.TestCase):
         self.assertEqual(report["current_milestone"], "python_complete")
         self.assertEqual(by_id["context_decision_trace_v1"]["state"], "certified")
         self.assertTrue(by_id["context_decision_trace_v1"]["certification_evidence"])
-        self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")
+        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "implemented")
+        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"], [])
+        self.assertEqual(report["post_completion_current_milestone"], "deterministic_policy_snapshot_v1")
         self.assertEqual(report["post_completion_milestone_order"], EXPECTED_POST_COMPLETION_PREFIX)
         self.assertEqual(report["uncertified_required"], [])
 

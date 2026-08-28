@@ -227,10 +227,12 @@ def certify(repo: Path) -> dict[str, Any]:
     )
     implementation_ready = True
     admission_ready = upstream_state == "certified" and lifecycle_state in {"implemented", "verified", "certified"}
-    if admission_ready:
-        _require(current in {CAPABILITY_ID, "post_completion_complete"}, f"admission-ready trace has wrong current milestone: {current}")
-    else:
+    if upstream_state != "certified":
         _require(current == UPSTREAM_ID, f"stacked trace prep must remain blocked on upstream milestone: {current}")
+    elif lifecycle_state == "certified":
+        _require(current != CAPABILITY_ID, f"certified Context Decision Trace cannot remain the current milestone: {current}")
+    else:
+        _require(current == CAPABILITY_ID, f"active Context Decision Trace has wrong current milestone: {current}")
 
     runtime = _smoke()
     exact_head = _head(repo)
