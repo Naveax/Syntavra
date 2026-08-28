@@ -1,0 +1,135 @@
+name: Temporary Deterministic Policy Snapshot v1 Lifecycle Certification
+
+on:
+  push:
+    branches:
+      - automation/deterministic-policy-snapshot-v1-certify-20260828
+    paths:
+      - ".github/workflows/tmp-deterministic-policy-snapshot-v1-certify.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-deterministic-policy-snapshot-v1-certify-20260828
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN: c6adace1cea9b40ed2efa6706da7a6875edf76f6
+  TARGET_BRANCH: agent/deterministic-policy-snapshot-v1-certification
+
+jobs:
+  certify-lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact admitted main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_MAIN }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Guard exact admitted main and target branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$TARGET_BRANCH" --no-tags
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_MAIN"
+
+      - name: Build lifecycle-only certification candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B "$TARGET_BRANCH" "$EXPECTED_MAIN"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry_path = Path("contracts/python/capability-completeness-registry-v1.json")
+          registry = json.loads(registry_path.read_text(encoding="utf-8"))
+          matches = [row for row in registry["capabilities"] if row.get("id") == "deterministic_policy_snapshot_v1"]
+          assert len(matches) == 1, matches
+          row = matches[0]
+          assert row["state"] == "implemented", row
+          assert row["required_for_python_complete"] is False, row
+          assert row["certification_evidence"] == [], row
+          evidence = list(row["implementation_evidence"])
+          assert evidence, row
+          row["state"] = "certified"
+          row["certification_evidence"] = evidence
+          registry_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+          test_path = Path("tests/runtime/test_python_capability_completeness.py")
+          text = test_path.read_text(encoding="utf-8")
+          old = '''        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "implemented")
+          self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"], [])
+          self.assertEqual(report["post_completion_current_milestone"], "deterministic_policy_snapshot_v1")
+          '''
+          new = '''        self.assertEqual(by_id["deterministic_policy_snapshot_v1"]["state"], "certified")
+          self.assertTrue(by_id["deterministic_policy_snapshot_v1"]["certification_evidence"])
+          self.assertEqual(report["post_completion_current_milestone"], "post_completion_complete")
+          '''
+          assert text.count(old) == 1, "expected exact deterministic snapshot lifecycle assertion block once"
+          test_path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+          python tools/refresh_manifest.py
+
+          expected="$(printf '%s\n' \
+            'MANIFEST.sha256' \
+            'contracts/python/capability-completeness-registry-v1.json' \
+            'tests/runtime/test_python_capability_completeness.py' | LC_ALL=C sort)"
+          actual="$(git diff --name-only | LC_ALL=C sort)"
+          printf 'Expected lifecycle diff:\n%s\nActual lifecycle diff:\n%s\n' "$expected" "$actual"
+          test "$actual" = "$expected"
+          git diff --check
+
+      - name: Validate lifecycle-only certification candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m unittest \
+            tests.runtime.test_deterministic_policy_snapshot_v1 \
+            tests.runtime.test_context_decision_trace_v1 \
+            tests.runtime.test_runtime_contract_version_graph_v1 \
+            tests.runtime.test_python_capability_completeness \
+            tests.runtime.test_python_behavior_freeze \
+            tests.runtime.test_release_action_pins -v
+          python tools/certify_deterministic_policy_snapshot_v1.py --repo .
+          python tools/certify_context_decision_trace_v1.py --repo .
+          python tools/certify_runtime_contract_version_graph_v1.py --repo .
+          python tools/certify_python_capability_completeness.py --repo .
+          python tools/verify_dual_engine_public_surface.py
+          python tools/certify_rust_feature_freeze_guard.py --repo .
+          python tools/validate.py
+          python tools/validate_release.py --smoke
+          python tools/verify_manifest.py
+          git diff --check
+
+      - name: Commit and publish exact certification candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.sha256 contracts/python/capability-completeness-registry-v1.json tests/runtime/test_python_capability_completeness.py
+          git commit -m "certify Deterministic Policy Snapshot v1 lifecycle"
+
+          expected="$(printf '%s\n' \
+            'MANIFEST.sha256' \
+            'contracts/python/capability-completeness-registry-v1.json' \
+            'tests/runtime/test_python_capability_completeness.py' | LC_ALL=C sort)"
+          actual="$(git diff --name-only "$EXPECTED_MAIN"..HEAD | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_MAIN" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "CERTIFICATION_CANDIDATE_SHA=$(git rev-parse HEAD)"
