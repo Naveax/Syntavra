@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: rust-feature-freeze-guard-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   rust-feature-freeze-guard:

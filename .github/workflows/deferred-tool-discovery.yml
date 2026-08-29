@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: deferred-tool-discovery-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deferred-tool-discovery:
