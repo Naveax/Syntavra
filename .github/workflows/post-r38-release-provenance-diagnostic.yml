@@ -12,6 +12,10 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   package-provenance:
     runs-on: ubuntu-24.04
