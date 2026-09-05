@@ -649,7 +649,7 @@
     {
       "id": "deterministic_policy_snapshot_v1",
       "group": "post-completion-context-policy",
-      "state": "implemented",
+      "state": "certified",
       "classification": "NEW",
       "required_for_python_complete": false,
       "implementation_evidence": [
@@ -671,7 +671,25 @@
         "tools/certify_python_capability_completeness.py",
         "tests/runtime/test_python_capability_completeness.py"
       ],
-      "certification_evidence": [],
+      "certification_evidence": [
+        "contracts/python/deterministic-policy-snapshot-v1.json",
+        "syntavra_runtime/deterministic_policy_snapshot.py",
+        "contracts/python/adaptive-context-policy-v1.json",
+        "syntavra_runtime/adaptive_context_policy.py",
+        "contracts/python/context-decision-trace-v1.json",
+        "syntavra_runtime/context_decision_trace.py",
+        "contracts/python/runtime-contract-version-graph-v1.json",
+        "syntavra_runtime/contract_version_graph.py",
+        "tools/certify_deterministic_policy_snapshot_v1.py",
+        "tests/runtime/test_deterministic_policy_snapshot_v1.py",
+        ".github/workflows/deterministic-policy-snapshot.yml",
+        ".github/workflows/release-main-merge-gate.yml",
+        "tests/runtime/test_release_action_pins.py",
+        "contracts/engine/dual-engine-public-surface-v2.json",
+        "contracts/python/capability-completeness-registry-v1.json",
+        "tools/certify_python_capability_completeness.py",
+        "tests/runtime/test_python_capability_completeness.py"
+      ],
       "acceptance": "Deterministic exact Adaptive Context Policy contract/runtime/config snapshot attached to reference-only receipt/replay bindings, with verified receipt and optional Context Decision Trace linkage, timestamp-free identity, fail-closed tamper detection, no payload/storage/side-effect authority, Python COMPLETE sealed and Rust retired/frozen."
     },
     {
