@@ -1,0 +1,55 @@
+name: Python Post-Completion 243-280
+
+on:
+  pull_request:
+    paths:
+      - "syntavra_runtime/post_completion_*.py"
+      - "contracts/python/capability-completeness-registry-v2.json"
+      - "tests/runtime/test_python_post_completion_capabilities_v2.py"
+      - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md"
+      - ".github/workflows/python-post-completion-243-280.yml"
+      - "MANIFEST.sha256"
+  push:
+    branches: [main]
+    paths:
+      - "syntavra_runtime/post_completion_*.py"
+      - "contracts/python/capability-completeness-registry-v2.json"
+      - "tests/runtime/test_python_post_completion_capabilities_v2.py"
+      - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md"
+      - ".github/workflows/python-post-completion-243-280.yml"
+      - "MANIFEST.sha256"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-post-completion-243-280-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+      - name: Unit certification
+        run: python -m unittest tests.runtime.test_python_post_completion_capabilities_v2 -v
+      - name: Capability certification report
+        run: python tools/certify_python_post_completion_capabilities_v2.py --output post-completion-certification.json
+      - name: Generate deterministic manifest candidate
+        run: python tools/refresh_manifest.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: python-post-completion-243-280-${{ github.sha }}
+          path: |
+            post-completion-certification.json
+            MANIFEST.sha256
+      - name: Require committed manifest to be exact
+        run: git diff --exit-code -- MANIFEST.sha256
+      - name: Repository validation
+        run: python tools/validate.py
