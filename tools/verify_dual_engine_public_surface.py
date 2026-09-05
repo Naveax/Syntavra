@@ -24,6 +24,20 @@ FROZEN_BRIDGE_COMMAND_COUNT = 0
 PROMOTED_NATIVE_COMMAND_COUNT = 245
 PROMOTED_BRIDGE_COMMAND_COUNT = 0
 
+# Capabilities 243-270 and 276-280 are deliberately composed behind the existing
+# public surface. These modules are internal implementation owners and therefore
+# must not create synthetic dual-engine public-module growth. Keep this list
+# exact so any unrelated Python module addition still fails the snapshot closed.
+_INTERNAL_POST_COMPLETION_MODULES = frozenset(
+    {
+        "syntavra_runtime.post_completion_common",
+        "syntavra_runtime.post_completion_context",
+        "syntavra_runtime.post_completion_evidence",
+        "syntavra_runtime.post_completion_product",
+        "syntavra_runtime.post_completion_runtime",
+    }
+)
+
 
 def _command_digest(commands: list[str]) -> str:
     payload = json.dumps(
@@ -58,6 +72,20 @@ def _inventory_state(total: int, native_count: int, bridge_count: int) -> str:
     )
 
 
+def _public_python_module_count(python_surface: dict[str, object]) -> int:
+    modules = python_surface.get("modules")
+    if not isinstance(modules, list) or not all(isinstance(value, str) for value in modules):
+        raise RuntimeError("Python module inventory is invalid")
+    module_set = set(modules)
+    missing_internal = sorted(_INTERNAL_POST_COMPLETION_MODULES - module_set)
+    if missing_internal:
+        raise RuntimeError(
+            "internal post-completion module inventory drift: "
+            f"missing {missing_internal!r}"
+        )
+    return len(modules) - len(_INTERNAL_POST_COMPLETION_MODULES)
+
+
 def verify(*, require_full: bool = False) -> dict[str, object]:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     python_surface = export_python_surface()
@@ -78,8 +106,9 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
     if not isinstance(python_row, dict) or not isinstance(rust_row, dict):
         raise RuntimeError("dual-engine surface summaries are missing")
 
+    public_python_module_count = _public_python_module_count(python_surface)
     expected_python = {
-        "module_count": python_surface["module_count"],
+        "module_count": public_python_module_count,
         "public_command_count": len(commands),
         "command_paths_sha256": _command_digest(commands),
         "digest_encoding": "canonical-json-array-utf8",
@@ -156,7 +185,8 @@ def verify(*, require_full: bool = False) -> dict[str, object]:
         "full": full,
         "inventory_state": inventory_state,
         "python": {
-            "module_count": python_surface["module_count"],
+            "module_count": public_python_module_count,
+            "internal_post_completion_module_count": len(_INTERNAL_POST_COMPLETION_MODULES),
             "public_command_count": total,
             "command_paths_sha256": _command_digest(commands),
         },
