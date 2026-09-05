@@ -57,11 +57,11 @@ jobs:
           python -m unittest tests.runtime.test_python_post_completion_evidence_integration -v
       - name: Capability certification report
         run: |
-          python tools/certify_python_post_completion_capabilities_v2.py --output post-completion-certification.json
+          python tools/certify_python_post_completion_capabilities_v2.py --output /tmp/post-completion-certification.json
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("post-completion-certification.json").read_text(encoding="utf-8"))
+          report = json.loads(Path("/tmp/post-completion-certification.json").read_text(encoding="utf-8"))
           assert report["ok"] is True, report
           assert report["claim"] == "PYTHON_POST_COMPLETION_280_CERTIFIED", report
           assert report["implemented_count"] == 33, report
@@ -98,7 +98,7 @@ jobs:
         with:
           name: python-post-completion-243-280-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            post-completion-certification.json
+            /tmp/post-completion-certification.json
             MANIFEST.sha256
       - name: Require committed manifest to be exact
         if: steps.manifest_sync.outputs.changed != 'true'
