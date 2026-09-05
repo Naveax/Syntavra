@@ -5,6 +5,7 @@ on:
     paths:
       - "syntavra_runtime/post_completion_*.py"
       - "contracts/python/capability-completeness-registry-v2.json"
+      - "contracts/python/python-post-completion-280-certificate-v1.json"
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
@@ -16,6 +17,7 @@ on:
     paths:
       - "syntavra_runtime/post_completion_*.py"
       - "contracts/python/capability-completeness-registry-v2.json"
+      - "contracts/python/python-post-completion-280-certificate-v1.json"
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
@@ -54,7 +56,21 @@ jobs:
           python -m unittest tests.runtime.test_python_post_completion_capabilities_v2 -v
           python -m unittest tests.runtime.test_python_post_completion_evidence_integration -v
       - name: Capability certification report
-        run: python tools/certify_python_post_completion_capabilities_v2.py --output post-completion-certification.json
+        run: |
+          python tools/certify_python_post_completion_capabilities_v2.py --output post-completion-certification.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("post-completion-certification.json").read_text(encoding="utf-8"))
+          assert report["ok"] is True, report
+          assert report["claim"] == "PYTHON_POST_COMPLETION_280_CERTIFIED", report
+          assert report["implemented_count"] == 33, report
+          assert report["certified_count"] == 33, report
+          assert report["certification_complete"] is True, report
+          assert report["uncertified"] == [], report
+          assert report["rust_resume_allowed"] is False, report
+          assert report["rust_retired"] is True, report
+          PY
       - name: Generate deterministic manifest candidate
         run: |
           rm -rf syntavra_runtime.egg-info

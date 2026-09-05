@@ -2,16 +2,20 @@
 
 Status authority for the Python-only continuation after the frozen `PYTHON_COMPLETE` v1 seal.
 
-## Scope
+## Status
 
-Python-active capabilities implemented in this pass:
+**Python post-completion capability scope is certified through capability 280.**
 
-- **243-270**: Python runtime/product hardening and additions.
+- **243-270**: implemented and certified by deterministic repository evidence.
 - **271-275**: deliberately deferred because they are Rust-transition capabilities and `rust_resume_allowed=false`.
-- **276-280**: Python product-quality/composition capabilities.
+- **276-280**: implemented and certified by deterministic repository evidence.
+- Active Python post-completion scope: **33/33 certified**.
+- Unit certification: **34/34 PASS**.
+- Canonical EvidenceStoreV2 / ArtifactStore integration certification: **2/2 PASS**.
 
 The frozen completion authority remains `contracts/python/capability-completeness-registry-v1.json`.
-The append-only Python post-completion authority is `contracts/python/capability-completeness-registry-v2.json`.
+The append-only implementation inventory is `contracts/python/capability-completeness-registry-v2.json`.
+The independent certification seal is `contracts/python/python-post-completion-280-certificate-v1.json`.
 
 ## Architecture rule
 
@@ -31,9 +35,20 @@ No second EvidenceStore, ArtifactStore, provider router, tool registry, host reg
 ### Product composition
 276 Feature Surface Budget, 277 Internal Capability Composition, 278 Product Profile Certification, 279 No-Silent-Fallback Receipt, 280 Context Quality SLO Gate.
 
-## Certification boundary
+## Certification evidence
 
-Repository implementation and deterministic tests may certify internal capability behavior. They do not manufacture external superiority, provider-billed savings, live third-party host certification, public adoption, registry publication or long-term maturity.
+The certification seal is grounded in GitHub Actions run `33987594435` on code head `55b95394cfc5a0239b81c5c54684e477d86a5b21`.
+
+That exact-head run passed:
+
+- 34 post-completion capability tests,
+- 2 canonical-store integration tests,
+- the machine-readable capability certifier,
+- deterministic manifest generation and synchronization.
+
+The manifest synchronization produced head `cd143bb21cf8875500efa55c5d1aa62862a02437`.
+
+Repository certification does not manufacture external superiority, provider-billed savings, live third-party host certification, public adoption, registry publication, or long-term maturity.
 
 Rust remains retired/frozen:
 
@@ -45,7 +60,9 @@ Rust production promotion = 174/245
 Remaining = 71
 ```
 
-## Exact continuation
+## Closure rule
 
 The dedicated exact-head gate is `.github/workflows/python-post-completion-243-280.yml`.
-It runs the post-completion unit suite, machine-readable certifier, deterministic manifest check and repository validator.
+It runs the unit and canonical-store integration suites, machine-readable certifier, deterministic manifest reconciliation and repository validator.
+
+A later code change to this Python post-completion surface invalidates the current head-level merge evidence and must pass the gate again. The historical source certification evidence remains immutable.
