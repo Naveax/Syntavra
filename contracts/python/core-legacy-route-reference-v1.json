@@ -53,7 +53,7 @@
   },
   "derived_freeze": {
     "expected_route_contract_sha256": "30c80601d447accf23772c33fc1f376279b2a7c13875f06ba29cb5e31dcad3d8",
-    "expected_side_effect_sha256": "e7b6a2166f6f515be5de34883a4c20f49346917dba600b37edba5ea627c9a493",
+    "expected_side_effect_sha256": "aaac2daa9decaa7e862135536af44282700ba23323d78f853c5f5524a22195a4",
     "expected_idempotency_sha256": "3e8fb30a0282e182595adb49c9f8bde96425d4cfed531cdf5eb9ac268569d721"
   },
   "rust_native_promotion_credit": false,
