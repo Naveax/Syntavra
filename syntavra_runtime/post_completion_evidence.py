@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Protocol, Sequence
 
+from .platform_common import _connect
 from .post_completion_common import content_receipt, is_sha256, sha256_digest, sorted_unique
 
 
@@ -11,8 +12,20 @@ LIFECYCLE_ACTIONS = ("ingest", "normalize", "derive", "compress", "supersede", "
 
 
 class JournalStore(Protocol):
+    path: Any
+
     def journal(self, *, item_id: str | None = None) -> list[dict[str, Any]]: ...
     def verify_journal(self) -> dict[str, Any]: ...
+    def _journal(
+        self,
+        db: Any,
+        *,
+        action: str,
+        item_id: str,
+        details: Mapping[str, Any] | None = None,
+        actor: str = "evidence-store-v2",
+        observed_at: str | None = None,
+    ) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -38,10 +51,11 @@ class MutationEvent:
 
 
 class EvidenceMutationJournal:
-    """Lifecycle overlay for the canonical EvidenceStoreV2 journal.
+    """Lifecycle overlay bound to the canonical EvidenceStoreV2 journal.
 
-    This object owns no database. It creates deterministic lifecycle event payloads
-    that are intended to be persisted by the existing evidence journal authority.
+    This object owns no database. Detached mode may build deterministic event
+    receipts, while persistence reuses the existing EvidenceStoreV2 SQLite path
+    and hash-chained `_journal` authority.
     """
 
     def __init__(self, store: JournalStore | None = None):
@@ -58,6 +72,45 @@ class EvidenceMutationJournal:
             "metadata": dict(event.metadata or {}),
         }
         return content_receipt("EVIDENCE_MUTATION_EVENT_V1", payload)
+
+    def persist(
+        self,
+        event: MutationEvent,
+        *,
+        actor: str = "python-post-completion",
+        observed_at: str | None = None,
+    ) -> dict[str, Any]:
+        if self.store is None:
+            raise RuntimeError("canonical EvidenceStoreV2 is required for persistence")
+        receipt = self.event(event)
+        details = {
+            "lifecycle_action": event.action,
+            "predecessor_ids": list(sorted_unique(event.predecessor_ids)),
+            "successor_id": event.successor_id,
+            "reason": str(event.reason),
+            "metadata": dict(event.metadata or {}),
+            "lifecycle_receipt_id": receipt["receipt_id"],
+        }
+        with _connect(self.store.path) as db:
+            journal_event = self.store._journal(
+                db,
+                action=f"lifecycle-{event.action}",
+                item_id=str(event.item_id),
+                details=details,
+                actor=actor,
+                observed_at=observed_at,
+            )
+        return content_receipt(
+            "EVIDENCE_MUTATION_JOURNAL_PERSIST_V1",
+            {
+                "ok": True,
+                "item_id": str(event.item_id),
+                "action": event.action,
+                "journal_event": journal_event["event_hash"],
+                "lifecycle_receipt_id": receipt["receipt_id"],
+                "canonical_store_reused": True,
+            },
+        )
 
     def verify(self) -> dict[str, Any]:
         if self.store is None:
