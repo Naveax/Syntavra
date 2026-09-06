@@ -4,11 +4,17 @@ on:
   pull_request:
     paths:
       - "syntavra_runtime/post_completion_*.py"
+      - "contracts/python/capability-completeness-registry-v1.json"
       - "contracts/python/capability-completeness-registry-v2.json"
       - "contracts/python/python-post-completion-280-certificate-v1.json"
+      - "contracts/python/README.md"
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
+      - "tests/runtime/test_python_post_completion_manifest_sync_coverage.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
+      - "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md"
+      - "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md"
       - "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md"
       - ".github/workflows/python-post-completion-243-280.yml"
       - "MANIFEST.sha256"
@@ -16,11 +22,17 @@ on:
     branches: [main]
     paths:
       - "syntavra_runtime/post_completion_*.py"
+      - "contracts/python/capability-completeness-registry-v1.json"
       - "contracts/python/capability-completeness-registry-v2.json"
       - "contracts/python/python-post-completion-280-certificate-v1.json"
+      - "contracts/python/README.md"
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
+      - "tests/runtime/test_python_post_completion_manifest_sync_coverage.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
+      - "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md"
+      - "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md"
       - "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md"
       - ".github/workflows/python-post-completion-243-280.yml"
       - "MANIFEST.sha256"
@@ -55,6 +67,7 @@ jobs:
         run: |
           python -m unittest tests.runtime.test_python_post_completion_capabilities_v2 -v
           python -m unittest tests.runtime.test_python_post_completion_evidence_integration -v
+          python -m unittest tests.runtime.test_python_post_completion_manifest_sync_coverage -v
       - name: Capability certification report
         run: |
           python tools/certify_python_post_completion_capabilities_v2.py --output /tmp/post-completion-certification.json
