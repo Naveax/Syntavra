@@ -141,6 +141,14 @@ class ReleaseMainProtectionWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("paths:", text)
         self.assertIn("name: release-main-merge-gate", text)
 
+    def test_merge_gate_replaces_superseded_pr_heads(self) -> None:
+        text = self.merge_gate_text
+        self.assertIn(
+            "group: release-main-merge-gate-${{ github.event.pull_request.number || github.ref }}",
+            text,
+        )
+        self.assertIn("cancel-in-progress: true", text)
+
     def test_merge_gate_runs_release_contracts_and_manifest_check(self) -> None:
         text = self.merge_gate_text
         self.assertIn("tests.runtime.test_release_main_protection", text)
