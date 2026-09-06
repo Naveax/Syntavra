@@ -18,13 +18,18 @@ class EvidenceRotationRecoveryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def _fixture(self, payload: bytes = b"rotation-recovery-payload") -> tuple[str, Path, Path, Path, Path, bytes, bytes]:
-        digest = self.store.put(payload, reference="recovery-fixture")
+    def _fixture(
+        self,
+        payload: bytes = b"rotation-recovery-payload",
+    ) -> tuple[str, str, Path, Path, Path, Path, bytes, bytes]:
+        handle = self.store.put(payload, reference="recovery-fixture")
+        digest = handle.removeprefix("sc://sha256/")
         object_path = self.store._object_path(digest)
         metadata_path = self.store._metadata_path(digest)
         backup_path = object_path.with_name(f".{object_path.name}.rotate-backup")
         staging_path = object_path.with_name(f".{object_path.name}.rotate-2")
         return (
+            handle,
             digest,
             object_path,
             metadata_path,
@@ -37,7 +42,8 @@ class EvidenceRotationRecoveryTests(unittest.TestCase):
     def test_staged_ciphertext_replace_failure_restores_original_object(self) -> None:
         payload = b"alpha" * 4096
         (
-            digest,
+            handle,
+            _digest,
             object_path,
             metadata_path,
             backup_path,
@@ -60,15 +66,16 @@ class EvidenceRotationRecoveryTests(unittest.TestCase):
         self.assertTrue(object_path.is_file())
         self.assertEqual(object_path.read_bytes(), original_ciphertext)
         self.assertEqual(metadata_path.read_bytes(), original_metadata)
-        self.assertEqual(self.store.get(digest), payload)
-        self.assertEqual(self.store.describe(digest)["encryption"]["key_version"], 1)
+        self.assertEqual(self.store.get(handle), payload)
+        self.assertEqual(self.store.describe(handle)["encryption"]["key_version"], 1)
         self.assertFalse(backup_path.exists())
         self.assertFalse(staging_path.exists())
         self.assertFalse(restore_path.exists())
 
     def test_rollback_failure_preserves_last_known_good_ciphertext_backup(self) -> None:
         (
-            digest,
+            handle,
+            _digest,
             object_path,
             metadata_path,
             backup_path,
@@ -115,7 +122,7 @@ class EvidenceRotationRecoveryTests(unittest.TestCase):
         self.assertTrue(backup_path.is_file())
         self.assertEqual(backup_path.read_bytes(), original_ciphertext)
         self.assertTrue(object_path.is_file())
-        self.assertEqual(self.store.describe(digest)["encryption"]["key_version"], 1)
+        self.assertEqual(self.store.describe(handle)["encryption"]["key_version"], 1)
 
 
 if __name__ == "__main__":
