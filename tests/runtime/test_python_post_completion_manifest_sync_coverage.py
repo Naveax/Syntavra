@@ -15,6 +15,16 @@ AUTHORITY_PATHS = (
     "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
     "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md",
 )
+RELEASE_TRUST_PATHS = (
+    ".github/workflows/publish-pre-release.yml",
+    ".github/workflows/post-r38-release-provenance-diagnostic.yml",
+    ".github/workflows/pre-release-candidate-receipt-plan.yml",
+    ".github/workflows/python-completion-certificate.yml",
+    "tests/runtime/test_release_action_pins.py",
+    "tests/runtime/test_pre_release_publish_workflow_contract.py",
+    "tests/runtime/test_pre_release_publication_attempt_ledger.py",
+    "tools/certify_python_completion_certificate_v1.py",
+)
 
 
 class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
@@ -26,6 +36,16 @@ class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
                 workflow.count(token),
                 2,
                 f"post-completion manifest sync must watch {relative} on pull_request and push",
+            )
+
+    def test_release_trust_paths_trigger_pull_request_and_push_sync(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for relative in RELEASE_TRUST_PATHS:
+            token = f'- "{relative}"'
+            self.assertGreaterEqual(
+                workflow.count(token),
+                2,
+                f"post-completion manifest sync must watch release trust path {relative}",
             )
 
     def test_manifest_sync_enforcement_remains_fail_closed(self):
