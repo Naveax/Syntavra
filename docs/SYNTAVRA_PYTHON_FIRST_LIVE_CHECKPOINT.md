@@ -9,7 +9,7 @@ This file is the volatile continuation authority. Historical checkpoints remain 
 Latest completed admitted maintenance merge before this continuation refresh:
 
 ```text
-2646ea8a9d0865f3b70df59ff522ec64f2146351
+6adb6500568bc830b4115ce3c3044f779541a057
 ```
 
 This is a recorded baseline, not a self-updating assertion that this Markdown file can somehow know the SHA of the future commit that contains itself.
@@ -20,7 +20,7 @@ Python post-completion capability-closure base:
 bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
 ```
 
-PR #184 established the Python post-completion capability semantics. Later admitted changes through PR #192 are documentation/authority/CI hardening or evidence-driven Python runtime hardening; they do not add public routes, change capability-completeness state or change Rust promotion counters.
+PR #184 established the Python post-completion capability semantics. Later admitted changes through PR #196 are documentation/authority/CI hardening or evidence-driven Python runtime hardening. They do not add public routes, change capability-completeness state, reactivate Rust or change Rust promotion counters.
 
 ### Admitted continuation chain
 
@@ -28,18 +28,26 @@ PR #184 established the Python post-completion capability semantics. Later admit
 - PR #185 merged as `6e58b1ce80f55a3aa0d122a69ed30cc25db13eee`: documentation-only continuation authority reconciliation.
 - PR #188 merged as `b0c2863ea0605f16a6dcd70fc635200a12e47433`: Rust reactivation authority clarified; `PYTHON_COMPLETE` does not itself reactivate Rust.
 - PR #189 merged as `ac393d94ed5627ffc0c68b27a9fefde4972f8d68`: authority/continuation manifest-sync coverage hardened with regression protection.
-- PR #190 merged as `0526ae13bcf08e3fcbbd25b3d9f3dc42d0e5ae74`: volatile continuation surfaces refreshed and the manifest-sync coverage exercised on real authority-document changes.
+- PR #190 merged as `0526ae13bcf08e3fcbbd25b3d9f3dc42d0e5ae74`: volatile continuation surfaces refreshed and manifest-sync coverage exercised on real authority-document changes.
 - PR #191 merged as `a3f2283aff92922a2fe7dafb8a5e25816bb0d547`: zero-friction host-install rollback reporting hardened so attempted, successful and failed rollback operations remain distinct.
-- PR #192 merged as `2646ea8a9d0865f3b70df59ff522ec64f2146351`: encrypted evidence key-rotation recovery hardened so staged-install failure restores the original encrypted object and rollback failure preserves the last known-good ciphertext backup instead of silently deleting it.
+- PR #192 merged as `2646ea8a9d0865f3b70df59ff522ec64f2146351`: encrypted evidence key-rotation recovery hardened so staged-install failure restores the original encrypted object and rollback failure preserves the last known-good ciphertext backup.
+- PR #193 merged as `792c4f5a870d46b002085877293cd2938c801bfd`: volatile continuation authority refreshed after the evidence-recovery hardening admitted by PR #192.
+- PR #194 merged as `d86bfc93f1ee6af365353f973ebc5a2c992fc48f`: release trust-chain `actions/setup-node` immutable pin refreshed to v7; manifest-sync coverage/regression protection expanded for release-trust surfaces.
+- PR #195 merged as `3db646e98ab624af6030dd477eb02439f05d9bd5`: `HostInstallationManager` rollback recovery hardened so backup restoration is staged before live-target mutation, directory replacement has a safety-path recovery boundary and rollback failures remain explicit/recoverable.
+- PR #196 merged as `6adb6500568bc830b4115ce3c3044f779541a057`: release trust-chain `actions/download-artifact` immutable pin refreshed to v8.0.1 with fail-closed digest mismatch behavior preserved.
 
 ### Latest merge-push validation on the recorded baseline
 
-- Evidence Store v2 run `34047957896` — `SUCCESS`, including the evidence-rotation recovery fault-injection regressions, exact-head certificate, clean repository enforcement and artifact upload.
-- Python Post-Completion 243-280 run `34047958025` — `SUCCESS`, including exact committed manifest validation and aggregate repository validation.
-- Rust Feature Freeze Guard run `34047958021` — `SUCCESS`.
-- Release Package Provenance run `34047957923` — `SUCCESS`.
-- Python Completion Certificate run `34047957972` — `SUCCESS`, including Linux/Windows platform smoke, aggregate repository validation, machine-readable completion certificate, exact clean head enforcement and artifact upload.
-- Final merge SHA status after the push wave: **failure=0, in_progress=0, queued=0**.
+PR #196 merge SHA `6adb6500568bc830b4115ce3c3044f779541a057` produced 24 natural `push` workflow runs. The completed wave has **failure=0, in_progress=0, queued=0**.
+
+Critical recorded runs:
+
+- Python Post-Completion 243-280 run `34056626733` — `SUCCESS`, including exact committed manifest and aggregate repository validation.
+- Rust Feature Freeze Guard run `34056626618` — `SUCCESS`.
+- Release Package Provenance run `34056626644` — `SUCCESS`, including Python/npm/TypeScript/VS Code packaging checks, Rust publication-graph proof and non-publishing attestation.
+- Python Completion Certificate run `34056626735` — `SUCCESS`, including Linux/Windows platform smoke, v8 exact-head artifact download, aggregate repository validation, machine-readable completion certificate, exact clean-head enforcement and artifact upload.
+
+No equivalent workflow was manually dispatched or rerun to obtain this evidence.
 
 ## Canonical state
 
@@ -68,16 +76,19 @@ Remaining = 71
 - A new Python capability may be added only through a newly admitted roadmap/contract decision or concrete evidence-backed bug/hardening requirement.
 - External superiority, provider-billed savings, independent validation, live third-party certification, publication/adoption and maturity claims remain externally evidence-gated.
 
-## Latest evidence-driven maintenance result
+## Latest evidence-driven runtime maintenance result
 
-PR #192 closed the previously active `HARDEN` item for encrypted evidence key rotation:
+PR #195 is the latest admitted Python runtime hardening item:
 
-- backup creation is now the recovery boundary;
-- staged ciphertext installation failure restores the original encrypted object exactly;
-- rollback failure is surfaced instead of swallowed;
-- the last known-good ciphertext backup remains available when rollback itself fails;
-- recovery fault-injection tests run inside the Evidence Store v2 CI gate;
+- backup restoration is staged completely beside the live target before target mutation;
+- directory replacement uses a safety-path swap so failed staged installation can restore the previous live directory;
+- rollback failure is represented explicitly instead of erasing the original apply failure;
+- failed automatic rollback preserves transaction backup/recovery material;
+- explicit rollback remains retryable after failure;
+- regression coverage exercises staging failure, automatic rollback failure, staged directory install recovery and failed safety restore preservation across Linux/Windows assumptions;
 - no public command, capability-completeness state, Rust authority or 174/245 production-promotion counter changed.
+
+PRs #194 and #196 are release/CI trust-chain maintenance, not new runtime capability work. PR #193 is volatile authority reconciliation.
 
 There is **no currently evidenced internal Python maintenance blocker** recorded by this checkpoint. Do not manufacture a new implementation task merely to keep work moving. The next internal change requires new concrete evidence of a correctness, security, compatibility, performance, recovery, observability or authority regression, or a separately admitted new Python capability.
 
