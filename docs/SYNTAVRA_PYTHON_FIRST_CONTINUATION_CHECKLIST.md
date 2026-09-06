@@ -34,6 +34,7 @@ This document is the current operational continuation state for Syntavra. Histor
 - Phase 2 Rust Migration Matrix run `33991209797`: `SUCCESS` without Rust reactivation.
 - Release Main Merge Gate run `33991209704`: `SUCCESS`.
 - Merge-push package provenance run `34002526854`: `SUCCESS`.
+- Merge-push Python Completion Certificate run `34002526882`: `SUCCESS`, including Linux/Windows platform smoke, aggregate validation, machine-readable certificate, clean exact-head enforcement and artifact upload.
 
 The runtime-admitted state remains valid across documentation-only reconciliation commits unless those commits modify runtime/contracts/certification semantics.
 
@@ -84,7 +85,7 @@ Never turn a historical unchecked box directly into a new module without this re
 - [x] Merge PR #184 after all exact-head load-bearing gates passed.
 - [x] Verify `main` moved to `bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f`.
 - [x] Verify merge-push package provenance run `34002526854`.
-- [ ] Verify merge-push Python Completion Certificate run `34002526882` finishes `SUCCESS` on the admitted merge SHA.
+- [x] Verify merge-push Python Completion Certificate run `34002526882` finishes `SUCCESS` on the admitted merge SHA.
 - [ ] Finish and admit the documentation-only post-completion authority reconciliation without changing runtime semantics.
 - [ ] After documentation reconciliation, keep the internal roadmap closed unless new evidence or an explicitly admitted capability creates real work.
 
@@ -154,17 +155,18 @@ COMPLETED:
 - PR #184 merged
 - final exact-head Python 280 / legacy freeze / completion / Rust freeze / Release Main gates passed
 - merge-push package provenance passed
+- merge-push Python Completion Certificate passed
 
 VERIFIED:
 - final exact-head anchor 5fb67190c1bb9ab015b2a7ec63d8b5ee82b30da2
 - admitted runtime merge bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
+- merge-push Completion Certificate run 34002526882 SUCCESS
 
 BLOCKERS:
 - no internal Python implementation blocker
 - external proof/publication remains dependent on real external evidence/credentials
 
 NEXT EXACT TASK:
-- finish merge-push Completion Certificate verification
 - admit documentation reconciliation
 - thereafter perform only evidence-driven maintenance, explicit new Python capability work, or legitimate external-proof operations
 ```
