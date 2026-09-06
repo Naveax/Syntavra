@@ -1,369 +1,174 @@
 # Syntavra Python-First Continuation Checklist
 
-Status checkpoint: **2026-08-26**
+Status checkpoint: **2026-09-06**
 
-This document is the operational continuation state for Syntavra. It intentionally separates product development from PR #132 release-authority hardening.
+This document is the current operational continuation state for Syntavra. Historical planning decomposition belongs in Git history and the append-only roadmap; unchecked boxes from older versions of this checklist must not be treated as proof of missing implementation.
 
 ## Hard rules
 
-- [x] The Python-first implementation/certification phase is complete; Python remains the frozen reference/oracle for Rust differential work.
-- [x] Rust code, tests, ownership records and contracts are retained.
-- [x] `PYTHON_COMPLETE = true`; Rust remains retired/frozen and does not auto-resume from Python completion.
-- [x] Rust production promotion baseline stays **174/245** with **71** remaining until the separate promotion authority passes.
-- [x] Remaining owned stays **71**, unowned stays **0** unless the canonical inventory changes for a separately reviewed reason.
-- [x] Rust feature/parity work remains retired for now; only narrow maintenance exceptions are allowed.
-- [x] Do not change the native production counter or perform 174→245 promotion before differential and promotion gates pass.
-- [x] The master roadmap is append-only. Existing roadmap material must not be deleted, shortened or rewritten.
-- [x] Reuse the frozen Python contracts, behavior vectors and receipts as the Rust migration oracle instead of creating parallel authorities.
+- [x] `PYTHON_COMPLETE(v1) = true` remains the frozen original Python completion authority.
+- [x] Python post-completion capabilities **240-270** are implemented/certified.
+- [x] Python product/composition capabilities **276-280** are implemented/certified.
+- [x] Active Python post-completion scope **243-270 + 276-280 = 33/33 certified**.
+- [x] Capabilities **271-275** are Rust-transition work and remain deliberately deferred.
+- [x] `rust_resume_allowed = false`.
+- [x] Rust feature/parity development remains retired/frozen.
+- [x] Rust production promotion remains **174/245** with **71** remaining.
+- [x] Remaining owned stays **71**, unowned stays **0** unless a separately reviewed canonical inventory change says otherwise.
+- [x] The master roadmap is append-only. Do not rewrite historical roadmap material to make the current state look cleaner.
+- [x] Reuse canonical owners. Do not create parallel EvidenceStore, ArtifactStore, provider router, tool registry, host registry, memory database or public command family without a separately justified architecture change.
+- [x] External superiority, adoption and maturity claims remain evidence-gated and cannot be manufactured by repository self-certification.
 
-Maintenance exceptions remain narrow and must never bypass the separate production-promotion authority.
+## Current admitted runtime state
 
-## Repository state at checkpoint
+- PR #184 (`Complete Python post-completion capabilities 243-280`) merged to `main` as `bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f`.
+- Final pre-merge exact-head anchor: `5fb67190c1bb9ab015b2a7ec63d8b5ee82b30da2`.
+- Python Post-Completion 243-280 run `33991209646`: `SUCCESS`.
+- Python Core Legacy Route Reference run `33991209695`: `SUCCESS`.
+- Python Phase 1 Acceptance run `33991209720`: `SUCCESS`.
+- Python Behavior Freeze run `33991209770`: `SUCCESS`.
+- Python Reference Suite run `33991209714`: `SUCCESS`.
+- Python Completion Certificate run `33991209785`: `SUCCESS`.
+- Rust Feature Freeze Guard run `33991209715`: `SUCCESS`.
+- Dual Engine Promotion Boundary run `33991209444`: `SUCCESS`.
+- Phase 2 Rust Migration Matrix run `33991209797`: `SUCCESS` without Rust reactivation.
+- Release Main Merge Gate run `33991209704`: `SUCCESS`.
+- Merge-push package provenance run `34002526854`: `SUCCESS`.
+- Merge-push Python Completion Certificate run `34002526882`: `SUCCESS`, including Linux/Windows platform smoke, aggregate validation, machine-readable certificate, clean exact-head enforcement and artifact upload.
 
-- PR #174 (`Implement Python Completion Certificate v1`) merged to `main` as `e2ead74f70aef8cbf4da333bf19698231b45327b`.
-- Merge-push Python Completion Certificate run `32979620715` passed Linux, Windows, aggregate validation and exact-head certificate generation.
-- Active phase-exit branch: `agent/python-completion-phase-exit-v1`.
-- Python Completion Certificate lifecycle is `certified`; the canonical registry records `PYTHON_COMPLETE = true`, `rust_resume_allowed = false`, and Rust retired/frozen.
-- Rust feature/parity work remains retired/frozen at **174/245** with **71** remaining while Python additions, hardening, fixes and certification continue.
-- External superiority, adoption, marketplace maturity and long-lived real-world claims remain external-evidence claims and are not manufactured by repository self-certification.
+The runtime-admitted state remains valid across documentation-only reconciliation commits unless those commits modify runtime/contracts/certification semantics.
+
+## Canonical authorities
+
+Use these before deciding whether work is actually missing:
+
+1. `contracts/python/capability-completeness-registry-v1.json` — frozen Python completion authority.
+2. `contracts/python/capability-completeness-registry-v2.json` — append-only post-completion implementation inventory.
+3. `contracts/python/python-post-completion-280-certificate-v1.json` — independent post-completion certification seal.
+4. `docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md` — human-readable closure/status authority.
+5. `docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md` — append-only long-form roadmap/history.
+6. `docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md` — volatile continuation authority.
+
+## Current internal roadmap status
+
+- [x] Capabilities 236-239 authority/completion boundary established.
+- [x] Capability 240 Runtime Contract Version Graph certified.
+- [x] Capability 241 Context Decision Trace certified.
+- [x] Capability 242 Deterministic Policy Snapshot certified.
+- [x] Capabilities 243-270 implemented and certified through the Python post-completion closure.
+- [ ] Capabilities 271-275 remain deferred while Rust is retired. This is intentional, not incomplete Python work.
+- [x] Capabilities 276-280 implemented and certified through the Python post-completion closure.
+
+**No currently authorized internal Python capability remains incomplete in roadmap 236-280.**
+
+A later bug, security issue, compatibility issue or newly admitted Python capability is valid work. Do not invent duplicate implementations merely because an older planning document contains an unchecked box.
+
+## Historical P0/P1 wave interpretation
+
+Older versions of this file contained large unchecked P0/P1 wave lists covering Evidence Store, typed context, programmatic execution, tool discovery, context policy, memory, safety, SignalBench and related work.
+
+Those lists are historical planning decomposition. They are **not** the current completeness registry. Many of their primitives were subsequently implemented, hardened, unified or certified under canonical contracts and later roadmap capabilities.
+
+When reviewing an old item, classify it against the current repository first:
+
+- `EXISTS` — implementation already exists.
+- `HARDEN` — implementation exists and needs concrete strengthening.
+- `UNIFY` — existing primitives should be composed behind one authority.
+- `NEW` — genuinely new implementation is required.
+- `CERTIFY` — implementation exists but needs valid certification/evidence.
+- `EXTERNAL` — proof cannot legitimately be created inside the repository.
+
+Never turn a historical unchecked box directly into a new module without this reconciliation.
 
 ## Immediate exact task
 
-- [x] Merge PR #174 after exact-head completion, Release Main, Rust Freeze, Capability Completeness and SignalBench gates passed.
-- [x] Verify merge-push Completion Certificate run `32979620715` on `main`.
-- [x] Materialize the final Python phase-exit registry, authority and Rust-resume transition without changing production promotion.
-- [ ] Reconcile all historical milestone certifiers with the canonical post-completion global lifecycle state.
-- [ ] Remove all temporary phase-exit helper files and verify a helper-free manifest/diff.
-- [ ] Open the final phase-exit PR from `agent/python-completion-phase-exit-v1`.
-- [ ] Require exact-head Linux + Windows Completion Certificate `PASS` plus all load-bearing CI on the final PR head.
-- [ ] Merge the final phase-exit seal only after every exact-head gate is green.
-- [ ] Re-read fresh `main`, then continue Python additions, hardening, fixes and certification. Do not resume Rust/Remaining-71 work unless explicitly reactivated later.
+- [x] Merge PR #184 after all exact-head load-bearing gates passed.
+- [x] Verify `main` moved to `bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f`.
+- [x] Verify merge-push package provenance run `34002526854`.
+- [x] Verify merge-push Python Completion Certificate run `34002526882` finishes `SUCCESS` on the admitted merge SHA.
+- [ ] Finish and admit the documentation-only post-completion authority reconciliation without changing runtime semantics.
+- [ ] After documentation reconciliation, keep the internal roadmap closed unless new evidence or an explicitly admitted capability creates real work.
 
-## Existing Python baseline: do not reimplement blindly
+## Remaining legitimate work classes
 
-These are **EXISTS → HARDEN / UNIFY / CERTIFY**, not blank TODOs:
+### Python-active maintenance
 
-- [x] Fail-closed command rewrite/compaction framework.
-- [x] 100+ command-specific output compactors and exact-output recovery.
-- [x] Canonical terminal execution, exact disk spooling and streaming summaries.
-- [x] Stable/volatile prompt-cache segmentation and stable-prefix planning.
-- [x] Deterministic SQLite StructuralIndex.
-- [x] Python AST backend, optional tree-sitter backend and deterministic lexical fallback.
-- [x] Repository graph/PageRank/blast-radius/hotspot/coupling style analyses.
-- [x] SQLite FTS5 repository query path.
-- [x] Multi-account provider pool and adaptive model/provider routing foundations.
-- [x] OpenAI-compatible, Anthropic and Gemini gateway contracts.
-- [x] Hybrid BM25/cosine memory foundation.
-- [x] Secret/credential/JWT/private-key redaction and security gates.
-- [x] Compact MCP wire/evidence foundation and bounded MCP profiles.
-- [x] Project-aware verifier discovery.
-- [x] Bounded repository tool loop with search/inspect/impact/diff/verifier actions.
-- [x] Exact structured-edit compilation and delivery modes.
-- [x] `syntavra agent run` and `agent replay` surfaces.
-- [x] Python SDK/product surface, dashboard/PWA and VS Code surfaces.
-- [x] Receipt/gate foundations for SignalBench and measured provider usage.
+Allowed when supported by evidence:
 
-Before creating a new module, inspect the current primitive and prefer composition or contract extension over a duplicate implementation.
+- correctness bugs,
+- security fixes,
+- compatibility regressions,
+- performance regressions,
+- observability/recovery hardening,
+- newly admitted Python capabilities with explicit contract/acceptance criteria.
 
-## Status labels for the roadmap
+### External evidence / operations
 
-Every capability should be classified as one of:
+These remain open but are **not** missing Python implementation:
 
-- `EXISTS`: reviewable implementation already exists.
-- `HARDEN`: implementation exists but correctness/security/observability needs strengthening.
-- `UNIFY`: multiple existing primitives should be composed behind one canonical contract.
-- `NEW`: real new implementation is required.
-- `CERTIFY`: implementation exists but exact-head/product/benchmark certification is required.
-- `EXTERNAL`: proof cannot legitimately be manufactured inside the repository.
+- [ ] Provider-observed SignalBench / competitor benchmark evidence.
+- [ ] Independent validation outside repository self-certification.
+- [ ] Live third-party host/provider integration certification where required.
+- [ ] Actual package/registry publication when credentials and release authority are available.
+- [ ] Public adoption and long-term maturity evidence.
 
-## Canonical Python milestone order
+### Rust-transition work
 
-Do these in order. Do not begin item N+1 until N has acceptance tests and an exact-head receipt.
+Do not begin while Rust is retired:
 
-- [x] `python_authority_v1`
-- [x] `capability_completeness_registry_v1`
-- [x] `rust_feature_freeze_guard_v1`
-- [x] `universal_context_item_v1`
-- [x] `evidence_store_v2`
-- [x] `typed_context_object_store_v1`
-- [x] `programmatic_execution_v1`
-- [x] `deferred_tool_discovery_v1`
-- [x] `unified_context_namespace_v1`
-- [x] `multi_graph_retrieval_v1`
-- [x] `adaptive_context_policy_v1`
-- [x] `context_reset_handoff_v1`
-- [x] `memory_retrieval_v1`
-- [x] `epistemic_safety_v1`
-- [x] `cache_provider_budget_v1`
-- [x] `output_intelligence_v1`
-- [x] `host_adapter_conformance_v1`
-- [x] `observability_attribution_v1`
-- [x] `signalbench_python_product_v1`
-- [x] `python_completion_certificate_v1`
+- [ ] Capability 271 Python-to-Rust Contract Export.
+- [ ] Capability 272 Python-to-Rust Differential Snapshot.
+- [ ] Capability 273 Rust Resume Gate.
+- [ ] Capability 274 Atomic Rust Promotion Planner.
+- [ ] Capability 275 Post-Promotion Python Oracle.
+- [ ] Remaining-71 active differential/port program.
+- [ ] Any 174→245 production promotion.
 
-## Wave P0-A: authority / contracts / reproducibility
+These require a separate explicit reviewed/admitted Rust-reactivation authority. Python completion alone is insufficient.
 
-- [ ] Python authority manifest.
-- [ ] Python-only development mode.
-- [ ] Rust feature-freeze guard.
-- [ ] Native promotion counter guard.
-- [ ] Capability completeness registry.
-- [ ] Capability states: planned / partial / implemented / verified / certified.
-- [ ] Public primitive surface budget.
-- [ ] Contract/schema version policy.
-- [ ] Deterministic fixture catalog.
-- [ ] Golden behavior catalog.
-- [ ] Exact behavior snapshot.
-- [ ] Reproducibility capsule.
-- [ ] Exact-head certification primitive.
-- [ ] CI Python-first profile.
+## CI discipline
 
-Exit gate: Python authority explicit, Rust feature freeze machine-enforced, public surface stable, behavior snapshot reproducible.
+Before any dispatch/rerun:
 
-## Wave P0-B: Evidence Store v2 / universal ContextItem
-
-- [ ] Universal `ContextItem`.
-- [ ] Universal `EvidenceItem`.
-- [ ] Content-addressed storage and exact hashing.
-- [ ] Provenance, trust and taint.
-- [ ] Freshness and context leases.
-- [ ] Recovery handles and integrity proof.
-- [ ] Parent/derived lineage.
-- [ ] Secret/PII-aware storage policy.
-- [ ] Retention/garbage collection.
-- [ ] Evidence mutation journal.
-
-## Wave P0-C: typed context objects
-
-- [ ] `GitDiff`
-- [ ] `TestRun`
-- [ ] `CompilerDiagnostics`
-- [ ] `ASTGraph`
-- [ ] `DependencyGraph`
-- [ ] `SearchResultSet`
-- [ ] `LogStream`
-- [ ] `BrowserDOM`
-- [ ] `TraceSet`
-- [ ] `MetricSeries`
-- [ ] `DataFrame`
-- [ ] `FileSnapshot`
-- [ ] `SymbolSnapshot`
-- [ ] `ToolSchemaSet`
-- [ ] `MemoryObservation`
-- [ ] `TaskStateSnapshot`
-- [ ] exact / structural / semantic / bounded-preview representations.
-- [ ] deterministic serialization roundtrip tests.
-
-## Wave P0-D: programmatic tool execution
-
-- [ ] Execution-program runtime.
-- [ ] call/map/parallel/filter/reduce.
-- [ ] sort/top_k/group_by/join/diff.
-- [ ] regex/jsonpath/structural-query primitives.
-- [ ] Intermediate result suppression.
-- [ ] Typed artifact references.
-- [ ] Bounded return.
-- [ ] Execution receipts.
-- [ ] Timeout/cancellation.
-- [ ] Side-effect classification.
-
-## Wave P0-E: tool discovery / MCP virtualization
-
-- [ ] Deferred tool loading.
-- [ ] Tool namespace tree.
-- [ ] Two-stage discovery.
-- [ ] Semantic tool families.
-- [ ] Capability fingerprints.
-- [ ] Host capability negotiation.
-- [ ] Tool-schema token budget.
-- [ ] Discovery cache.
-- [ ] Compatibility/health registry.
-- [ ] Risk labels.
-- [ ] Tool virtualization.
-- [ ] No-tool-needed classifier.
-- [ ] Unknown/ambiguous tool fail-closed behavior.
-
-## Wave P0-F: context namespace / progressive disclosure
-
-- [ ] `syntavra://` unified namespace.
-- [ ] L0/L1/L2/L3 views.
-- [ ] Progressive descent: repo → directory → file → symbol → lines.
-- [ ] Context browser.
-- [ ] `why` explanation.
-- [ ] `reveal` exact recovery.
-- [ ] Retrieval trajectory recording.
-
-## Wave P0-G: multi-graph / repository intelligence
-
-- [ ] Semantic graph.
-- [ ] Temporal graph.
-- [ ] Causal graph.
-- [ ] Entity graph.
-- [ ] Code graph.
-- [ ] Task graph.
-- [ ] Provenance graph.
-- [ ] Permission/security graph.
-- [ ] Unify AST/symbol/import/call/inheritance/dependency indexing.
-- [ ] Test-to-source relation.
-- [ ] Git history / changed-file / blame weighting.
-- [ ] PageRank-style importance.
-- [ ] BM25 + vector adapter + reranker + query expansion.
-- [ ] Ensemble retrieval.
-- [ ] Task-aware map budget.
-
-## Wave P0-H: Adaptive Context Policy v1
-
-Each candidate must be able to carry: importance, task relevance, freshness, trust, taint, security risk, compression risk, recovery cost, provider cost, information gain, redundancy and confidence.
-
-Policy actions:
-
-- [ ] KEEP_EXACT
-- [ ] KEEP_STRUCTURAL
-- [ ] KEEP_SEMANTIC
-- [ ] SUMMARIZE
-- [ ] COMPRESS
-- [ ] EXTERNALIZE
-- [ ] RETRIEVE_ON_DEMAND
-- [ ] RESET
-- [ ] BRANCH
-- [ ] ABSTAIN
-
-Policy dimensions:
-
-- [ ] task-aware
-- [ ] model-aware
-- [ ] provider-aware
-- [ ] repository-aware
-- [ ] language-aware
-- [ ] security-aware
-- [ ] reasoning-level-aware
-- [ ] deterministic default policy
-- [ ] explainable decision receipt
-- [ ] shadow mode for experimental policy
-
-## Wave P0-I: context reset / structured handoff
-
-- [ ] Context age/occupancy/compaction/recovery/drift/retry signals.
-- [ ] CONTINUE / COMPACT / RESET / BRANCH decisions.
-- [ ] Structured handoff compiler.
-- [ ] Handoff verifier.
-- [ ] Evidence handles, git state and security state preserved.
-- [ ] Reset benchmark arms.
-
-## Wave P0-J: memory / QMD-class retrieval
-
-- [ ] Episodic memory.
-- [ ] Semantic memory.
-- [ ] Procedural memory.
-- [ ] Project/user/temporal memory.
-- [ ] Observation timeline.
-- [ ] Provenance/supersession/conflict/dedupe.
-- [ ] Consolidation/forgetting/importance/recency.
-- [ ] BM25/vector/reranking/query expansion.
-- [ ] Progressive retrieval and transcript search.
-- [ ] Cross-agent memory/evidence handoff.
-- [ ] Exact recovery.
-
-## Wave P1: reliability / safety / cost
-
-- [ ] Epistemic state engine.
-- [ ] Context Critic.
-- [ ] Missing-evidence detection.
-- [ ] Information gain / marginal utility.
-- [ ] Universal taint propagation and instruction/data separation.
-- [ ] Prompt-injection ingress filter.
-- [ ] Minimum evidence schemas.
-- [ ] Safe action / commit gate and evidence certificates.
-- [ ] Agentic abstention.
-- [ ] Context leases + dependency invalidation.
-- [ ] Prompt Cache Compiler / ROI / cache-bust attribution.
-- [ ] Provider-aware budget engine.
-- [ ] Output intelligence.
-- [ ] Cross-host/SDK conformance.
-- [ ] Observability and decision attribution.
-- [ ] Fault injection.
-- [ ] Semantic preservation verifier.
-- [ ] Context quality SLO gate.
-
-## Wave P1-G: SignalBench / external proof
-
-Frozen arms should keep repo, commit, task, model, provider, context window, permissions, timeout, cache policy, hardware class and verifier equal.
-
-- [ ] Plain host baseline.
-- [ ] RTK arm.
-- [ ] Headroom arm.
-- [ ] Token Saver arm.
-- [ ] Caveman-style arm.
-- [ ] Aider/RepoMap-style arm.
-- [ ] OpenClaw native/QMD arm where reproducible.
-- [ ] Combined competitor arm.
-- [ ] Syntavra minimal.
-- [ ] Syntavra balanced.
-- [ ] Syntavra adaptive.
-
-Primary metric: **provider-observed total cost / verified successful tasks**.
-
-Secondary metrics: tokens/task, wall-time/task, recovery amplification, critical-evidence recall, context precision/recall, tool-selection accuracy, unsafe-action rate, correct/over-abstention, CPU/RAM/disk overhead and cache hit rate.
-
-## Python COMPLETE gate
-
-- [x] No required Python capability remains incomplete in the completeness registry.
-- [x] Required unit/integration/security tests PASS.
-- [x] Exact recovery PASS.
-- [x] Deterministic replay PASS.
-- [x] Clean install PASS.
-- [x] Fresh repository smoke PASS.
-- [x] Windows basic runtime PASS.
-- [x] Linux basic runtime PASS.
-- [x] SignalBench Python product suite PASS.
-- [x] Python behavior freeze generated.
-- [x] Python contract freeze generated.
-- [x] Python exact-head certification PASS.
-- [x] Python Completion Certificate generated.
-
-Python COMPLETE proves implementation/certification. It does **not** manufacture external superiority, adoption or maturity claims.
-
-## Rust retirement boundary after Python COMPLETE
-
-- [x] `PYTHON_COMPLETE = true` is independent from Rust reactivation.
-- [x] `rust_resume_allowed = false` while Rust is retired.
-- [x] Rust feature/parity development remains frozen.
-- [x] Rust production promotion remains **174/245** with **71** remaining.
-- [x] Remaining owned stays **71** and unowned stays **0** unless a separately reviewed canonical inventory change says otherwise.
-- [x] Python remains the active product/feature/hardening authority.
-- [ ] Do not export or consume the Python→Rust migration corpus as an active port plan while Rust is retired.
-- [ ] Do not start Remaining-71 differential/port work while Rust is retired.
-- [ ] Reactivate Rust only through a separate explicit, reviewed and admitted reactivation authority.
-- [ ] Even after a future reactivation, production promotion remains a separate gate from feature/parity work.
+1. inspect queued/waiting/in-progress runs for the same SHA/workflow/input,
+2. if an equivalent run exists, track its `run_id` instead of starting another,
+3. never use rerun as polling,
+4. continue independent source/authority work while CI runs,
+5. preserve a stable exact head whenever a final certification set is already running.
 
 ## Required end-of-session checkpoint
 
-Update this block after every implementation session:
-
 ```text
-CURRENT HEAD:
-<sha>
+CURRENT ADMITTED RUNTIME MAIN:
+bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
 
-ACTIVE BRANCH:
-<branch>
+DOCUMENTATION RECONCILIATION BRANCH:
+agent/post-completion-doc-reconciliation-20260906
 
 PYTHON STATUS:
-<active Python capability / hardening / certification item>
+PYTHON_COMPLETE(v1)=true; post-completion 243-270 + 276-280 = 33/33 certified; no authorized internal Python roadmap gap remains in 236-280
 
 RUST STATUS:
 RETIRED/FROZEN — rust_resume_allowed=false; production promotion 174/245; 71 remaining
 
 COMPLETED:
-- ...
+- PR #184 merged
+- final exact-head Python 280 / legacy freeze / completion / Rust freeze / Release Main gates passed
+- merge-push package provenance passed
+- merge-push Python Completion Certificate passed
 
 VERIFIED:
-- ...
+- final exact-head anchor 5fb67190c1bb9ab015b2a7ec63d8b5ee82b30da2
+- admitted runtime merge bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
+- merge-push Completion Certificate run 34002526882 SUCCESS
 
 BLOCKERS:
-- ...
+- no internal Python implementation blocker
+- external proof/publication remains dependent on real external evidence/credentials
 
 NEXT EXACT TASK:
-- ...
+- admit documentation reconciliation
+- thereafter perform only evidence-driven maintenance, explicit new Python capability work, or legitimate external-proof operations
 ```
 
 ## Copy/paste continuation message
@@ -371,16 +176,14 @@ NEXT EXACT TASK:
 ```text
 Continue Syntavra in Python-active / Rust-retired mode.
 
-Read docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md, this checklist, the append-only Python-first roadmap, and contracts/python/capability-completeness-registry-v1.json before choosing work.
+Read the live checkpoint, this checklist, the append-only Python-first roadmap, capability-completeness-registry-v1.json, capability-completeness-registry-v2.json, and SYNTAVRA_PYTHON_POST_COMPLETION_280.md before choosing work.
 
 Hard rules:
-- Python is the active product/feature/hardening authority.
-- PYTHON_COMPLETE may be true while Rust remains retired.
-- rust_resume_allowed=false until a separate explicit Rust-reactivation authority is admitted.
-- Rust feature/parity work stays frozen at 174/245 production promotion with 71 remaining.
-- Do not start Remaining-71 differential/port work and do not change Rust promotion counters.
-- Continue Python roadmap capabilities in dependency order, reusing canonical owners instead of adding parallel stores/engines.
-- Capabilities 271–275 are Rust-transition work and remain deferred while Rust is retired.
+- PYTHON_COMPLETE(v1)=true and Python post-completion scope through 280 is internally certified, except 271-275 which are deliberately deferred Rust-transition work.
+- Do not treat historical unchecked P0/P1 wave boxes as current missing implementation.
+- Reuse canonical owners and classify proposed work as EXISTS/HARDEN/UNIFY/NEW/CERTIFY/EXTERNAL before adding modules.
+- rust_resume_allowed=false; Rust feature/parity work stays frozen at 174/245 with 71 remaining.
+- Do not start capabilities 271-275, Remaining-71 port work or Rust promotion without a separate explicit reactivation authority.
 - Keep external superiority/adoption/maturity claims evidence-gated.
-- Before any workflow dispatch/rerun, check queued/in_progress equivalent runs; never use rerun as polling.
+- Before any workflow dispatch/rerun, check queued/in-progress equivalent runs and never rerun as polling.
 ```
