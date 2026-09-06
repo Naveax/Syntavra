@@ -1,52 +1,81 @@
 # Syntavra Python-First Live Checkpoint
 
-Updated: **2026-08-26**
+Updated: **2026-09-06**
 
-This file is the volatile continuation authority. Historical checkpoints remain historical; the capability registry and append-only roadmap are the machine-readable/long-form authorities.
+This file is the volatile continuation authority. Historical checkpoints remain in Git history; the capability registries, the append-only roadmap and the dedicated post-completion closure document remain the machine-readable/long-form authorities.
 
-## Current admitted base
+## Current admitted runtime base
 
-- `main`: `e2ead74f70aef8cbf4da333bf19698231b45327b` before the final Python-only phase-exit seal.
-- SignalBench Python product lifecycle: certified.
-- Python Completion Certificate v1: implementation admitted and phase-exit lifecycle being sealed on `agent/python-completion-phase-exit-v1`.
-- Python feature/hardening authority: active.
-- Rust feature/parity development: retired/frozen.
-- Rust production promotion: 174/245.
-- Remaining Rust parity/promotion set: 71.
+- PR #184 (`Complete Python post-completion capabilities 243-280`) merged to `main` as `bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f`.
+- Final pre-merge exact-head anchor: `5fb67190c1bb9ab015b2a7ec63d8b5ee82b30da2`.
+- Final exact-head Python post-completion gate: run `33991209646` — `SUCCESS`.
+- Final exact-head Release Main Merge Gate: run `33991209704` — `SUCCESS`.
+- Final exact-head Python Completion Certificate: run `33991209785` — `SUCCESS`.
+- Final exact-head Rust Feature Freeze Guard: run `33991209715` — `SUCCESS`.
+- Final exact-head Phase 2 Rust Migration Matrix: run `33991209797` — `SUCCESS` without granting Rust reactivation or production-promotion credit.
+- Merge-push package provenance on `main`: run `34002526854` — `SUCCESS`.
+- Python feature/hardening authority remains active for future admitted work, bug fixes and evidence-driven hardening.
+- Rust feature/parity development remains retired/frozen.
+- Rust production promotion remains **174/245** with **71** remaining.
 
-## Canonical post-completion state
+Documentation-only commits after the runtime merge do not change the admitted runtime authority above unless they modify runtime/contracts/certification semantics.
 
-The phase-exit seal deliberately separates Python completion from Rust reactivation:
+## Canonical state
 
 ```text
-PYTHON_COMPLETE = true
+PYTHON_COMPLETE(v1) = true
+Python post-completion 240-270 = implemented/certified
+Python post-completion 276-280 = implemented/certified
+Active Python post-completion scope 243-270 + 276-280 = 33/33 certified
+Rust-transition capabilities 271-275 = deferred
 rust_resume_allowed = false
 rust_retired = true
 Rust production promotion = 174/245
 Remaining = 71
 ```
 
-Python Completion is necessary evidence for any hypothetical future Rust reactivation, but it is not sufficient authority to reactivate Rust. A separate explicit reviewed/admitted decision is required.
+`PYTHON_COMPLETE(v1)` is the original frozen completion seal. It does not mean development can never continue. The later Python post-completion roadmap has now also been implemented and certified through capability 280, except for 271-275 because those items are explicitly Rust-transition work.
 
-## Active development direction
+## Current development interpretation
 
-Syntavra continues as a Python-active product/runtime while Rust is retired:
+- Capabilities **240-270** are no longer open implementation TODOs.
+- Capabilities **271-275** are deliberately deferred while Rust is retired.
+- Capabilities **276-280** are no longer open implementation TODOs.
+- The active Python post-completion scope represented by 243-270 plus 276-280 is **33/33 certified**.
+- Existing canonical owners must still be reused instead of creating parallel databases, stores, engines, routers or public surfaces without need.
+- A new Python capability may be added only through a newly admitted roadmap/contract decision or concrete bug/hardening requirement. Do not invent work merely to keep the roadmap moving.
+- External superiority, provider-billed savings, independent validation, live third-party certification, publication/adoption and maturity claims remain externally evidence-gated.
 
-- Python roadmap capabilities 240–270 remain active in dependency order.
-- Roadmap capabilities 271–275 are Rust-transition work and remain deferred.
-- Python product-quality/composition capabilities 276–280 remain active when their Python prerequisites are satisfied.
-- Existing canonical owners must be reused instead of creating parallel databases, stores, engines or public surfaces without need.
-- External superiority, adoption and maturity claims remain externally evidence-gated.
-- Implementation admission and lifecycle certification remain separate boundaries where the repository already uses that discipline.
+## Historical checklist interpretation
+
+Older versions of `docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md` contained large P0/P1 wave lists with unchecked boxes. Those boxes were planning decomposition, not a trustworthy inventory of current missing implementation. Many of those primitives are now represented by certified contracts and later capabilities.
+
+Use these as current authority instead:
+
+1. `contracts/python/capability-completeness-registry-v1.json` — frozen Python completion authority.
+2. `contracts/python/capability-completeness-registry-v2.json` — append-only post-completion implementation inventory.
+3. `contracts/python/python-post-completion-280-certificate-v1.json` — independent post-completion certification seal.
+4. `docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md` — human-readable closure/status authority.
+5. `docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md` — append-only long-form roadmap/history.
 
 ## Current exact task
 
-1. Seal `agent/python-completion-phase-exit-v1` helper-free with `PYTHON_COMPLETE=true`, `rust_resume_allowed=false`, `rust_retired=true`.
-2. Require Python Completion, Python Authority, Capability Completeness, Rust Freeze, repository validation, release smoke and exact-head PR gates to agree on that state.
-3. Do not merge without explicit authorization.
-4. After phase-exit admission, re-read fresh `main` and rebuild capability 240 `runtime_contract_version_graph_v1` on top of the admitted retirement authority.
-5. Continue to capability 241 `context_decision_trace_v1` only after capability 240 implementation/lifecycle admission.
+1. Keep the certified Python 236-280 internal scope closed unless new evidence exposes a real regression or a new capability is explicitly admitted.
+2. Do **not** start capabilities 271-275, Remaining-71 port work or Rust promotion while `rust_resume_allowed=false`.
+3. Treat repository bugs, security fixes, compatibility fixes and evidence-driven hardening as valid Python-active maintenance even though the roadmap is closed.
+4. Keep external proof separate from repository self-certification. Provider-observed benchmarks, independent/live host validation, publication credentials and public maturity cannot be manufactured by an internal certifier.
+5. Do not reopen historical wave checkboxes as duplicate implementations. Classify any proposed work as `EXISTS`, `HARDEN`, `UNIFY`, `NEW`, `CERTIFY` or `EXTERNAL` against the current canonical owners first.
+
+## Remaining legitimate evidence/operations work
+
+These are not evidence that Python implementation is incomplete:
+
+- provider-observed SignalBench / competitor benchmark evidence,
+- live third-party host/provider integration certification where required,
+- independent validation outside repository self-certification,
+- actual package/registry publication when credentials and release authority are available,
+- public adoption and long-term maturity evidence.
 
 ## CI discipline
 
-Before dispatch/rerun, inspect queued/in-progress equivalent runs. Track an existing run by `run_id`; never rerun as polling. CI waiting is used for independent source/authority review instead of creating duplicate runs.
+Before any workflow dispatch/rerun, inspect queued/in-progress equivalent runs. Track an existing `run_id`; never rerun as polling. When a SHA already has an equivalent queued or running workflow, preserve it and continue independent work instead of creating duplicate Actions.
