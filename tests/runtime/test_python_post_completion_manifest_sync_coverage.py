@@ -20,9 +20,11 @@ RELEASE_TRUST_PATHS = (
     ".github/workflows/post-r38-release-provenance-diagnostic.yml",
     ".github/workflows/pre-release-candidate-receipt-plan.yml",
     ".github/workflows/python-completion-certificate.yml",
+    ".github/workflows/release-main-merge-gate.yml",
     "tests/runtime/test_release_action_pins.py",
     "tests/runtime/test_pre_release_publish_workflow_contract.py",
     "tests/runtime/test_pre_release_publication_attempt_ledger.py",
+    "tests/runtime/test_release_main_protection.py",
     "tools/certify_python_completion_certificate_v1.py",
 )
 RUNTIME_HARDEN_PATHS = (
