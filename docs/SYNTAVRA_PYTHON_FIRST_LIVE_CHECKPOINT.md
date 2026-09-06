@@ -4,23 +4,23 @@ Updated: **2026-09-06**
 
 This file is the volatile continuation authority. Historical checkpoints remain in Git history; the capability registries, the append-only roadmap and the dedicated post-completion closure document remain the machine-readable/long-form authorities.
 
-## Latest recorded repository baseline and admitted runtime base
+## Latest recorded repository baseline and admitted runtime authority
 
-Latest completed continuation-checkpoint merge before this maintenance record:
+Latest completed admitted maintenance merge before this maintenance record:
 
 ```text
-0526ae13bcf08e3fcbbd25b3d9f3dc42d0e5ae74
+a3f2283aff92922a2fe7dafb8a5e25816bb0d547
 ```
 
 This is a recorded baseline, not a self-updating assertion that this Markdown file can somehow know the SHA of the future commit that contains itself.
 
-Current admitted runtime semantics base:
+Python post-completion capability-closure base:
 
 ```text
 bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
 ```
 
-PR #184 (`Complete Python post-completion capabilities 243-280`) established the current runtime implementation semantics. Later admitted changes through PR #190 are documentation/authority/CI hardening and do not change public routes, capability implementation state or Rust promotion counters. The rollback-reporting maintenance recorded below is evidence-driven Python runtime hardening and does not admit a new roadmap capability.
+PR #184 established the current Python post-completion capability semantics. Later admitted changes through PR #191 are documentation/authority/CI hardening or evidence-driven Python runtime hardening; they do not add public routes, change capability-completeness state or change Rust promotion counters. PR #191 is the latest admitted runtime-hardening baseline before the evidence-rotation maintenance recorded below.
 
 ### Admitted continuation chain
 
@@ -29,13 +29,14 @@ PR #184 (`Complete Python post-completion capabilities 243-280`) established the
 - PR #188 merged as `b0c2863ea0605f16a6dcd70fc635200a12e47433`: current Rust reactivation authority clarified; `PYTHON_COMPLETE` does not itself reactivate Rust.
 - PR #189 merged as `ac393d94ed5627ffc0c68b27a9fefde4972f8d68`: current authority/continuation manifest-sync coverage hardened with regression protection.
 - PR #190 merged as `0526ae13bcf08e3fcbbd25b3d9f3dc42d0e5ae74`: volatile continuation checklist/live checkpoint refreshed and the manifest-sync coverage added by PR #189 exercised on real authority-document changes.
+- PR #191 merged as `a3f2283aff92922a2fe7dafb8a5e25816bb0d547`: zero-friction host-install rollback reporting hardened so rollback attempts, successful rollbacks and rollback failures remain distinct instead of silently claiming failed recovery as successful.
 
 ### Latest merge-push validation on the recorded baseline
 
-- Python Post-Completion 243-280 run `34042037279` — `SUCCESS`.
-- Rust Feature Freeze Guard run `34042037258` — `SUCCESS`.
-- Release Package Provenance run `34042037259` — `SUCCESS`.
-- Python Completion Certificate run `34042037288` — `SUCCESS`, including Linux/Windows platform smoke, aggregate repository validation, machine-readable completion certificate, exact clean head enforcement and artifact upload.
+- Python Post-Completion 243-280 run `34044517379` — `SUCCESS`.
+- Rust Feature Freeze Guard run `34044517320` — `SUCCESS`.
+- Release Package Provenance run `34044517342` — `SUCCESS`.
+- Python Completion Certificate run `34044517390` — `SUCCESS`, including Linux/Windows platform smoke, aggregate repository validation, machine-readable completion certificate, exact clean head enforcement and artifact upload.
 - Final merge SHA status after the push wave: **failure=0, in_progress=0, queued=0**.
 
 ## Canonical state
@@ -69,11 +70,12 @@ Remaining = 71
 
 The current maintenance item is classified **HARDEN**, not `NEW`:
 
-- `ZeroFrictionManager.install()` previously swallowed host rollback exceptions in failure paths.
-- A post-host failure could therefore list every applied transaction under `rolled_back_transactions` even when one of those rollback calls failed.
-- A partial multi-host apply could also lose the rollback failure behind the original apply exception.
-- The hardening requires rollback attempts, successful rollbacks and rollback failures to remain distinct, with no silent success claim.
-- Regression coverage must exercise both a post-host failure with a partially failed rollback and a partial multi-host apply whose rollback also fails.
+- `_reencrypt_object()` moves the original encrypted evidence object to a backup before installing the newly encrypted staging object.
+- The previous implementation marked the replacement as recoverable only after the second `os.replace()` succeeded. If that second replace failed, recovery was skipped even though the original object had already been moved to the backup path.
+- The previous rollback path also swallowed rollback exceptions and the `finally` block unconditionally deleted the backup, so a failed restore could destroy the last known-good ciphertext.
+- The hardening must treat creation of the backup as the recovery boundary, keep that backup intact until object bytes, metadata and the SQLite index are all restored, and expose rollback failure instead of silently discarding it.
+- Regression coverage must exercise both a staged-ciphertext install failure with exact restoration and a rollback failure where the last known-good encrypted backup remains available.
+- The recovery regressions must run in the existing Evidence Store v2 CI gate, not merely exist as an unexecuted test file.
 - This maintenance does not add a public command, alter Python capability-completeness state, reactivate Rust or change the 174/245 production-promotion baseline.
 
 ## Current authorities
