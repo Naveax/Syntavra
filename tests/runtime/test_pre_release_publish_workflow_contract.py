@@ -78,7 +78,7 @@ class PreReleasePublishWorkflowContractTests(unittest.TestCase):
         self.assertIn("production_versions_must_be_available': True", text)
         self.assertRegex(
             text,
-            r"(?s)actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020.*?node-version: '22'.*?Probe live registry version availability",
+            r"(?s)actions/setup-node@820762786026740c76f36085b0efc47a31fe5020.*?node-version: '22'.*?Probe live registry version availability",
         )
 
     def test_external_actions_are_immutable_full_sha_pins(self) -> None:
@@ -91,7 +91,7 @@ class PreReleasePublishWorkflowContractTests(unittest.TestCase):
         expected = {
             "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
             "actions/setup-python": "a26af69be951a213d495a4c3e4e4022e16d87065",
-            "actions/setup-node": "49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "actions/setup-node": "820762786026740c76f36085b0efc47a31fe5020",
             "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02",
             "actions/download-artifact": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
             "pypa/gh-action-pypi-publish": "dc37677b2e1c63e2034f94d8a5b11f265b73ba33",
