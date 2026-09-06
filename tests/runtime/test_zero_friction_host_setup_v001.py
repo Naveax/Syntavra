@@ -4,8 +4,11 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND
+from syntavra_runtime.host_installation import InstallationResult
 from syntavra_runtime.zero_friction import ZeroFrictionManager
 
 
@@ -66,6 +69,79 @@ class ZeroFrictionHostSetupV001Tests(unittest.TestCase):
             self.assertNotIn(project.resolve(), manager.state_root.resolve().parents)
             stats = manager.stats()
             self.assertEqual(stats["onboarding"]["host_installations"], 0)
+
+    def test_post_host_failure_reports_only_successful_rollbacks(self) -> None:
+        class RollbackManager:
+            def rollback(self, transaction_id: str) -> SimpleNamespace:
+                if transaction_id == "tx-fail":
+                    raise OSError("rollback blocked")
+                return SimpleNamespace(status="rolled-back")
+
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            manager = ZeroFrictionManager(project)
+            host_results = [{"host": "codex", "verification": {"ok": True}}]
+            with (
+                patch.object(
+                    manager,
+                    "_host_installations",
+                    return_value=(host_results, ["tx-ok", "tx-fail"]),
+                ),
+                patch.object(manager, "_host_manager", return_value=RollbackManager()),
+                patch(
+                    "syntavra_runtime.zero_friction.atomic_write_json",
+                    side_effect=RuntimeError("config write failed"),
+                ),
+            ):
+                result = manager.install(dry_run=False)
+
+            self.assertFalse(result["ok"])
+            self.assertIn("config write failed", result["error"])
+            self.assertEqual(
+                result["rollback_attempted_transactions"],
+                ["tx-fail", "tx-ok"],
+            )
+            self.assertEqual(result["rolled_back_transactions"], ["tx-ok"])
+            self.assertFalse(result["rollback_ok"])
+            self.assertEqual(
+                result["rollback_failures"],
+                [
+                    {
+                        "transaction_id": "tx-fail",
+                        "error": "OSError: rollback blocked",
+                    }
+                ],
+            )
+
+    def test_partial_host_apply_surfaces_rollback_failure(self) -> None:
+        class PartialApplyManager:
+            def apply(self, host: str, *, scope: str, dry_run: bool) -> InstallationResult:
+                if host == "codex":
+                    return InstallationResult(
+                        transaction_id="tx-codex",
+                        host=host,
+                        scope=scope,
+                        root="/tmp/project",
+                        status="applied",
+                        changes=(),
+                        verification={"ok": True},
+                        created_at=0.0,
+                    )
+                raise RuntimeError("second host apply failed")
+
+            def rollback(self, transaction_id: str) -> SimpleNamespace:
+                raise OSError(f"rollback blocked for {transaction_id}")
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ZeroFrictionManager(Path(directory))
+            with patch.object(manager, "_host_manager", return_value=PartialApplyManager()):
+                with self.assertRaisesRegex(RuntimeError, "rollback incomplete") as caught:
+                    manager._host_installations(("codex", "claude-code"), dry_run=False)
+
+            message = str(caught.exception)
+            self.assertIn("second host apply failed", message)
+            self.assertIn("tx-codex", message)
+            self.assertIn("rollback blocked for tx-codex", message)
 
 
 if __name__ == "__main__":
