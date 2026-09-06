@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -73,6 +74,13 @@ class PythonCoreLegacyReferenceArchitectureTests(unittest.TestCase):
             manager = StateBackupManager(state, project_id="fixture-project")
             with self.assertRaisesRegex(BackupError, "invalid encrypted backup"):
                 manager.verify(source, encrypted=True)
+
+    def test_behavior_freeze_parser_pack_is_exact_pinned(self) -> None:
+        pyproject = tomllib.loads((self.repo / "pyproject.toml").read_text(encoding="utf-8"))
+        required = "tree-sitter-language-pack==1.16.2"
+        self.assertIn(required, pyproject["project"]["dependencies"])
+        self.assertIn(required, pyproject["project"]["optional-dependencies"]["code-intelligence"])
+        self.assertNotIn("tree-sitter-language-pack>=0.9", pyproject["project"]["dependencies"])
 
     def test_bootstrap_hash_policy_allows_discovery_but_strict_requires_hashes(self) -> None:
         bootstrap = copy.deepcopy(self.contract)

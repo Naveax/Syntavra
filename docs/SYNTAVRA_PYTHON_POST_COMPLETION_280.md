@@ -100,6 +100,19 @@ The reconciliation did **not** relax the reference architecture:
 
 The final exact-head Core Legacy, Phase 1, Behavior Freeze, Reference Suite, Completion Certificate and Release Main gates all passed after that reconciliation.
 
+## Dependency-freeze determinism repair
+
+The documentation-only PR #185 merge exposed a reproducibility defect in the frozen core/legacy side-effect projection rather than a new Python route or behavior implementation gap.
+
+- PR #185 exact-head Core Legacy evidence had installed `tree-sitter-language-pack 1.16.1` and recorded the `run code-intel` cache side effect at `home/.xdg/cache/tree-sitter-language-pack/v1.16.1/.download.lock`.
+- The subsequent `main` Python Completion Certificate run `34024953168` installed `tree-sitter-language-pack 1.16.2` because the runtime dependency allowed `tree-sitter-language-pack>=0.9`.
+- Recomputing the successful PR filesystem-delta projection with **only** `v1.16.1` replaced by `v1.16.2` reproduces the merge-observed side-effect digest exactly: `60b52ea7690b664ecb77d9ad9c1c339bb5d616a95a1f521e0e30cec7bc299d80`.
+- No route-contract digest or idempotency digest change is required to explain the failure.
+
+The repair therefore exact-pins `tree-sitter-language-pack==1.16.2` in both the base runtime dependency and the `code-intelligence` optional dependency, re-freezes only the proven core/legacy side-effect digest for that parser-pack version, and adds a regression that forbids silently widening that behavior-critical dependency again.
+
+This repair does **not** add or remove public routes, authorize Rust feature/parity work, grant Rust production-promotion credit, or change the external-evidence claim boundary. Future parser-pack upgrades require deliberate dependency and behavior-freeze evidence updates instead of being admitted implicitly by a floating version range.
+
 ## Rust retirement boundary
 
 ```text
