@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from syntavra_runtime.engine_entry import CODEX_BRIDGE_COMMAND
-from syntavra_runtime.host_installation import HostInstallationManager
+from syntavra_runtime.host_installation import HostInstallationManager, HostInstallationRollbackError
 
 
 class HostInstallationV4Tests(unittest.TestCase):
@@ -119,6 +121,144 @@ class HostInstallationV4Tests(unittest.TestCase):
         rows = self.manager.transactions(host="cursor")
         self.assertEqual(rows[0]["transaction_id"], result.transaction_id)
         self.assertEqual(rows[0]["status"], "applied")
+
+    def test_explicit_rollback_staging_failure_keeps_live_target_and_backup(self):
+        config = self.project / ".codex" / "config.toml"
+        config.parent.mkdir(parents=True)
+        original = 'model = "before"\n'
+        config.write_text(original, encoding="utf-8")
+        result = self.manager.apply("codex")
+        live_bytes = config.read_bytes()
+        config_change = next(change for change in result.changes if change.path == ".codex/config.toml")
+        backup = Path(config_change.backup_path)
+        backup_bytes = backup.read_bytes()
+        real_copy2 = shutil.copy2
+
+        def fail_backup_stage(source, destination, *args, **kwargs):
+            if Path(source).resolve(strict=False) == backup.resolve(strict=False):
+                raise OSError("forced backup staging failure")
+            return real_copy2(source, destination, *args, **kwargs)
+
+        with mock.patch("syntavra_runtime.host_installation.shutil.copy2", side_effect=fail_backup_stage):
+            with self.assertRaises(HostInstallationRollbackError) as caught:
+                self.manager.rollback(result.transaction_id)
+
+        self.assertIsNone(caught.exception.apply_error)
+        self.assertIn("forced backup staging failure", str(caught.exception.rollback_error))
+        self.assertEqual(config.read_bytes(), live_bytes)
+        self.assertEqual(backup.read_bytes(), backup_bytes)
+        self.assertEqual(self.manager.transactions(host="codex")[0]["status"], "applied")
+
+        rolled = self.manager.rollback(result.transaction_id)
+        self.assertEqual(rolled.status, "rolled-back")
+        self.assertEqual(config.read_text(encoding="utf-8"), original)
+
+    def test_apply_rollback_failure_reports_both_errors_and_preserves_backup(self):
+        config = self.project / ".codex" / "config.toml"
+        config.parent.mkdir(parents=True)
+        original = 'model = "before"\n'
+        config.write_text(original, encoding="utf-8")
+        real_copy2 = shutil.copy2
+
+        def fail_backup_stage(source, destination, *args, **kwargs):
+            source_path = Path(source)
+            if "host-installations" in source_path.parts and "backup" in source_path.parts:
+                raise OSError("forced automatic rollback staging failure")
+            return real_copy2(source, destination, *args, **kwargs)
+
+        with mock.patch.object(self.manager, "verify", return_value={"ok": False, "reasons": ["forced verify failure"]}):
+            with mock.patch("syntavra_runtime.host_installation.shutil.copy2", side_effect=fail_backup_stage):
+                with self.assertRaises(HostInstallationRollbackError) as caught:
+                    self.manager.apply("codex")
+
+        error = caught.exception
+        self.assertIsInstance(error.apply_error, RuntimeError)
+        self.assertIn("forced verify failure", str(error.apply_error))
+        self.assertIn("forced automatic rollback staging failure", str(error.rollback_error))
+        self.assertTrue(config.is_file())
+        self.assertNotEqual(config.read_text(encoding="utf-8"), original)
+        transaction = self.manager.storage / error.transaction_id
+        backups = list((transaction / "backup").rglob("config.toml"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(encoding="utf-8"), original)
+
+    def test_directory_install_failure_restores_preexisting_live_directory(self):
+        installed_skill = self.project / ".agents" / "skills" / "syntavra"
+        installed_skill.mkdir(parents=True)
+        marker = installed_skill / "USER.txt"
+        marker.write_text("keep me\n", encoding="utf-8")
+        real_replace = os.replace
+        failure_injected = False
+
+        def fail_staged_directory_install(source, destination):
+            nonlocal failure_injected
+            source_path = Path(source)
+            is_staged_skill = (
+                source_path.is_dir()
+                and (source_path / "SKILL.md").is_file()
+                and (source_path / "REFERENCE.md").is_file()
+            )
+            if is_staged_skill and not failure_injected:
+                failure_injected = True
+                raise OSError("forced staged directory install failure")
+            return real_replace(source, destination)
+
+        with mock.patch("syntavra_runtime.host_installation.os.replace", side_effect=fail_staged_directory_install):
+            with self.assertRaises(OSError):
+                self.manager.apply("codex")
+
+        self.assertTrue(failure_injected)
+        self.assertTrue(marker.is_file())
+        self.assertEqual(marker.read_text(encoding="utf-8"), "keep me\n")
+        self.assertFalse((self.project / ".codex" / "config.toml").exists())
+        self.assertFalse(list(installed_skill.parent.glob(".syntavra.syntavra-safety-*")))
+
+    def test_directory_install_and_safety_restore_failure_preserves_safety_directory(self):
+        installed_skill = self.project / ".agents" / "skills" / "syntavra"
+        installed_skill.mkdir(parents=True)
+        marker = installed_skill / "USER.txt"
+        marker.write_text("last known good\n", encoding="utf-8")
+        real_replace = os.replace
+        staged_failure_injected = False
+        safety_failure_injected = False
+
+        def fail_staged_install_and_safety_restore(source, destination):
+            nonlocal staged_failure_injected, safety_failure_injected
+            source_path = Path(source)
+            destination_path = Path(destination)
+            is_staged_skill = (
+                source_path.is_dir()
+                and (source_path / "SKILL.md").is_file()
+                and (source_path / "REFERENCE.md").is_file()
+            )
+            is_safety_restore = (
+                source_path.is_dir()
+                and (source_path / "USER.txt").is_file()
+                and destination_path.name == "syntavra"
+            )
+            if is_staged_skill:
+                staged_failure_injected = True
+                raise OSError("forced staged directory install failure")
+            if is_safety_restore:
+                safety_failure_injected = True
+                raise OSError("forced safety restore failure")
+            return real_replace(source, destination)
+
+        with mock.patch(
+            "syntavra_runtime.host_installation.os.replace",
+            side_effect=fail_staged_install_and_safety_restore,
+        ):
+            with self.assertRaises(RuntimeError) as caught:
+                self.manager.apply("codex")
+
+        self.assertTrue(staged_failure_injected)
+        self.assertTrue(safety_failure_injected)
+        self.assertIn("safety_path=", str(caught.exception))
+        self.assertFalse(installed_skill.exists())
+        safety = list(installed_skill.parent.glob(".syntavra.syntavra-safety-*"))
+        self.assertEqual(len(safety), 1)
+        self.assertEqual((safety[0] / "USER.txt").read_text(encoding="utf-8"), "last known good\n")
+        self.assertFalse((self.project / ".codex" / "config.toml").exists())
 
 
 if __name__ == "__main__":

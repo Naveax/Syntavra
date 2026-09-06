@@ -25,6 +25,10 @@ RELEASE_TRUST_PATHS = (
     "tests/runtime/test_pre_release_publication_attempt_ledger.py",
     "tools/certify_python_completion_certificate_v1.py",
 )
+RUNTIME_HARDEN_PATHS = (
+    "syntavra_runtime/host_installation.py",
+    "tests/runtime/test_host_installation_v4.py",
+)
 
 
 class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
@@ -46,6 +50,16 @@ class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
                 workflow.count(token),
                 2,
                 f"post-completion manifest sync must watch release trust path {relative}",
+            )
+
+    def test_runtime_hardening_paths_trigger_pull_request_and_push_sync(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for relative in RUNTIME_HARDEN_PATHS:
+            token = f'- "{relative}"'
+            self.assertGreaterEqual(
+                workflow.count(token),
+                2,
+                f"post-completion manifest sync must watch runtime hardening path {relative}",
             )
 
     def test_manifest_sync_enforcement_remains_fail_closed(self):

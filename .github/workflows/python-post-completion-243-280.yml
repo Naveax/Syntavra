@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "syntavra_runtime/post_completion_*.py"
+      - "syntavra_runtime/host_installation.py"
       - "contracts/python/capability-completeness-registry-v1.json"
       - "contracts/python/capability-completeness-registry-v2.json"
       - "contracts/python/python-post-completion-280-certificate-v1.json"
@@ -11,6 +12,7 @@ on:
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
       - "tests/runtime/test_python_post_completion_manifest_sync_coverage.py"
+      - "tests/runtime/test_host_installation_v4.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
       - "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
       - "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md"
@@ -30,6 +32,7 @@ on:
     branches: [main]
     paths:
       - "syntavra_runtime/post_completion_*.py"
+      - "syntavra_runtime/host_installation.py"
       - "contracts/python/capability-completeness-registry-v1.json"
       - "contracts/python/capability-completeness-registry-v2.json"
       - "contracts/python/python-post-completion-280-certificate-v1.json"
@@ -37,6 +40,7 @@ on:
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
       - "tests/runtime/test_python_post_completion_manifest_sync_coverage.py"
+      - "tests/runtime/test_host_installation_v4.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
       - "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
       - "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md"
