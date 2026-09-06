@@ -189,10 +189,13 @@ class HostInstallationV4Tests(unittest.TestCase):
         marker.write_text("keep me\n", encoding="utf-8")
         real_replace = os.replace
         installed_skill_key = os.path.normcase(os.path.abspath(os.fspath(installed_skill)))
+        failure_injected = False
 
         def fail_staged_directory_install(source, destination):
+            nonlocal failure_injected
             destination_key = os.path.normcase(os.path.abspath(os.fspath(destination)))
-            if destination_key == installed_skill_key:
+            if destination_key == installed_skill_key and not failure_injected:
+                failure_injected = True
                 raise OSError("forced staged directory install failure")
             return real_replace(source, destination)
 
@@ -200,6 +203,7 @@ class HostInstallationV4Tests(unittest.TestCase):
             with self.assertRaises(OSError):
                 self.manager.apply("codex")
 
+        self.assertTrue(failure_injected)
         self.assertTrue(marker.is_file())
         self.assertEqual(marker.read_text(encoding="utf-8"), "keep me\n")
         self.assertFalse((self.project / ".codex" / "config.toml").exists())
