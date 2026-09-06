@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -53,8 +54,10 @@ def _reencrypt_object(
     plaintext_path = Path(plaintext_name)
     staging_path = object_path.with_name(f".{object_path.name}.rotate-{target_version}")
     backup_path = object_path.with_name(f".{object_path.name}.rotate-backup")
+    restore_path = object_path.with_name(f".{object_path.name}.rotate-restore")
     original_stored_size = object_path.stat().st_size
-    replaced = False
+    backup_created = False
+    preserve_backup = False
     try:
         with os.fdopen(plaintext_fd, "w+b") as plaintext:
             store._decrypt_to(digest, plaintext)
@@ -69,8 +72,8 @@ def _reencrypt_object(
 
         backup_path.unlink(missing_ok=True)
         os.replace(object_path, backup_path)
+        backup_created = True
         os.replace(staging_path, object_path)
-        replaced = True
 
         updated_metadata = json.loads(json.dumps(original_metadata))
         updated_metadata["stored_bytes"] = stored_size
@@ -91,24 +94,47 @@ def _reencrypt_object(
         backup_path.unlink(missing_ok=True)
         return True, stored_size
     except Exception as exc:
-        if replaced and backup_path.exists():
+        rollback_error: Exception | None = None
+        if backup_created and backup_path.exists():
             try:
-                object_path.unlink(missing_ok=True)
-                os.replace(backup_path, object_path)
+                restore_path.unlink(missing_ok=True)
+                # Keep the original encrypted backup intact until every recovery
+                # surface (object, metadata and index) has been restored. Recovery
+                # is a cold failure path, so one extra local copy is preferable to
+                # destroying the last known-good ciphertext on a partial rollback.
+                shutil.copy2(backup_path, restore_path)
+                os.replace(restore_path, object_path)
                 atomic_write_json(metadata_path, original_metadata, mode=0o600)
                 with store._transaction() as db:
-                    db.execute(
+                    changed = db.execute(
                         "UPDATE evidence_objects SET stored_bytes=?,key_version=? WHERE digest=?",
                         (original_stored_size, source_version, digest),
-                    )
-            except Exception:
-                pass
+                    ).rowcount
+                    if changed != 1:
+                        raise EvidenceError(f"evidence index object missing during rollback: {digest}")
+                backup_path.unlink(missing_ok=True)
+            except Exception as rollback_exc:
+                rollback_error = rollback_exc
+                preserve_backup = backup_path.exists()
+
+        if rollback_error is not None:
+            detail = f"{type(rollback_error).__name__}: {rollback_error}"
+            backup_detail = (
+                f"; backup preserved at {backup_path}"
+                if preserve_backup
+                else "; rollback backup unavailable"
+            )
+            raise EvidenceError(
+                f"evidence key rotation failed for {digest}; rollback failed: {detail}{backup_detail}"
+            ) from exc
         if isinstance(exc, EvidenceError):
             raise
         raise EvidenceError(f"evidence key rotation failed for {digest}") from exc
     finally:
         staging_path.unlink(missing_ok=True)
-        backup_path.unlink(missing_ok=True)
+        restore_path.unlink(missing_ok=True)
+        if not preserve_backup:
+            backup_path.unlink(missing_ok=True)
         _wipe(plaintext_path)
 
 
