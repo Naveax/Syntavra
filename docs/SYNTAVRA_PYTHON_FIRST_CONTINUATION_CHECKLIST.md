@@ -27,47 +27,68 @@ This document is the current operational continuation state for Syntavra. Histor
 Current repository `main`:
 
 ```text
-ac393d94ed5627ffc0c68b27a9fefde4972f8d68
+2646ea8a9d0865f3b70df59ff522ec64f2146351
 ```
 
-Current admitted runtime semantics base remains PR #184:
+Python post-completion capability-closure base remains PR #184:
 
 ```text
 bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
 ```
 
-Later admitted changes through PR #189 are documentation/authority/CI hardening and do not change runtime implementation semantics, public routes, Rust promotion counters or capability implementation state.
+Later admitted changes through PR #192 are documentation/authority/CI hardening or evidence-driven Python runtime hardening. They do not add public routes, reopen the closed Python capability roadmap, reactivate Rust or change the 174/245 production-promotion baseline.
 
-### PR #184 — Python post-completion closure
+### Admitted continuation chain
 
-- PR #184 (`Complete Python post-completion capabilities 243-280`) merged as `bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f`.
+#### PR #184 — Python post-completion closure
+
+- Merged as `bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f`.
 - Final pre-merge exact-head anchor: `5fb67190c1bb9ab015b2a7ec63d8b5ee82b30da2`.
 - Active Python post-completion scope **243-270 + 276-280 = 33/33 certified**.
 - Capabilities **271-275** remain deliberately deferred Rust-transition work.
 
-### PR #185 — continuation authority reconciliation
+#### PR #185 — continuation authority reconciliation
 
-- PR #185 (`Reconcile Python post-completion continuation authority`) merged as `6e58b1ce80f55a3aa0d122a69ed30cc25db13eee`.
+- Merged as `6e58b1ce80f55a3aa0d122a69ed30cc25db13eee`.
 - Final docs reconciliation anchor: `9849c52c17393a2e7321bc486cd5afd436b58655`.
 - Runtime/contracts/Rust/public-command semantics were unchanged.
 
-### PR #188 — Rust reactivation authority clarification
+#### PR #188 — Rust reactivation authority clarification
 
-- PR #188 (`Clarify roadmap Rust reactivation authority`) merged as `b0c2863ea0605f16a6dcd70fc635200a12e47433`.
+- Merged as `b0c2863ea0605f16a6dcd70fc635200a12e47433`.
 - Final exact-head anchor: `d900d11f383a54be0e3d426ac515298e99c3af7a`.
 - Current authority explicitly preserves `rust_resume_allowed=false`, `rust_retired=true`, and requires separate explicit reactivation authority.
 
-### PR #189 — manifest-sync authority coverage hardening
+#### PR #189 — manifest-sync authority coverage hardening
 
-- PR #189 (`Harden post-completion manifest sync authority coverage`) merged as `ac393d94ed5627ffc0c68b27a9fefde4972f8d68`.
-- Final pre-merge same-tree anchor: `778585c19ccf793a0b64e30c7023b41c9e2c473c`.
-- Added regression coverage so current continuation/authority surfaces trigger deterministic manifest synchronization on both pull requests and `main` pushes.
-- Final exact-head PR gates completed with **failure=0, in_progress=0, queued=0** before merge.
-- Merge-push Python Post-Completion run `34037136103`: `SUCCESS`.
-- Merge-push Rust Feature Freeze Guard run `34037136061`: `SUCCESS`.
-- Merge-push Release Package Provenance run `34037136089`: `SUCCESS`.
-- Merge-push Python Completion Certificate run `34037136077`: `SUCCESS`, including Linux/Windows smoke, aggregate repository validation, machine-readable certificate, exact clean head and artifact upload.
-- Merge SHA `ac393d94ed5627ffc0c68b27a9fefde4972f8d68` finished with **failure=0, in_progress=0, queued=0**.
+- Merged as `ac393d94ed5627ffc0c68b27a9fefde4972f8d68`.
+- Added regression coverage so current continuation/authority surfaces trigger deterministic manifest synchronization on pull requests and `main` pushes.
+
+#### PR #190 — volatile continuation refresh
+
+- Merged as `0526ae13bcf08e3fcbbd25b3d9f3dc42d0e5ae74`.
+- Refreshed the volatile continuation surfaces and exercised PR #189 manifest-sync coverage against real authority-document changes.
+
+#### PR #191 — zero-friction rollback reporting hardening
+
+- Merged as `a3f2283aff92922a2fe7dafb8a5e25816bb0d547`.
+- Host-install rollback attempts, successful rollbacks and rollback failures now remain distinct instead of silently claiming failed recovery as successful.
+- Merge-push validation completed with **failure=0, in_progress=0, queued=0**.
+
+#### PR #192 — evidence key-rotation recovery hardening
+
+- Merged as `2646ea8a9d0865f3b70df59ff522ec64f2146351`.
+- Final pre-merge same-tree anchor: `aeb0f5be5962b48d2bba3df397f058e6fda361a7`.
+- Backup creation is now the recovery boundary for encrypted evidence key rotation.
+- Staged ciphertext install failure restores the original encrypted object exactly.
+- Rollback failure is surfaced and preserves the last known-good ciphertext backup.
+- Recovery fault-injection regressions run in the Evidence Store v2 CI gate.
+- Merge-push Evidence Store v2 run `34047957896`: `SUCCESS`.
+- Merge-push Python Post-Completion run `34047958025`: `SUCCESS`.
+- Merge-push Rust Feature Freeze Guard run `34047958021`: `SUCCESS`.
+- Merge-push Release Package Provenance run `34047957923`: `SUCCESS`.
+- Merge-push Python Completion Certificate run `34047957972`: `SUCCESS`, including Linux/Windows smoke, aggregate repository validation, machine-readable certificate, exact clean head and artifact upload.
+- Merge SHA `2646ea8a9d0865f3b70df59ff522ec64f2146351` finished with **failure=0, in_progress=0, queued=0**.
 
 ## Canonical authorities
 
@@ -94,7 +115,7 @@ Use these before deciding whether work is actually missing:
 
 **No currently authorized internal Python capability remains incomplete in roadmap 236-280.**
 
-A later bug, security issue, compatibility issue, performance regression or newly admitted Python capability is valid work. Do not invent duplicate implementations merely because an older planning document contains an unchecked box.
+A later bug, security issue, compatibility issue, performance regression or newly admitted Python capability is valid work when supported by concrete evidence. Do not invent duplicate implementations merely because an older planning document contains an unchecked box.
 
 ## Historical P0/P1 wave interpretation
 
@@ -119,15 +140,20 @@ Never turn a historical unchecked box directly into a new module without this re
 - [x] Documentation-only post-completion authority reconciliation admitted via PR #185.
 - [x] Rust reactivation authority clarified without reopening Rust via PR #188.
 - [x] Current authority/continuation manifest-sync coverage hardened via PR #189.
-- [x] PR #189 merge-push Post-Completion, Rust Freeze, Provenance and Completion gates verified on `ac393d94ed5627ffc0c68b27a9fefde4972f8d68`.
+- [x] Volatile continuation surfaces refreshed via PR #190.
+- [x] Zero-friction rollback reporting hardened and admitted via PR #191.
+- [x] Evidence key-rotation recovery hardened and admitted via PR #192.
+- [x] PR #192 merge-push Evidence Store / Post-Completion / Rust Freeze / Provenance / Completion validation passed on `2646ea8a9d0865f3b70df59ff522ec64f2146351`.
 - [ ] Keep the internal roadmap closed unless new evidence exposes a concrete regression or a new capability is explicitly admitted.
 - [ ] Continue only evidence-driven Python maintenance/hardening or legitimate external-proof/operations work.
+
+There is **no currently evidenced internal Python maintenance blocker** in this checkpoint. The absence of a current bug is not permission to invent one.
 
 ## Remaining legitimate work classes
 
 ### Python-active maintenance
 
-Allowed when supported by evidence:
+Allowed only when supported by evidence:
 
 - correctness bugs,
 - security fixes,
@@ -175,9 +201,9 @@ Before any dispatch/rerun:
 
 ```text
 CURRENT REPOSITORY MAIN:
-ac393d94ed5627ffc0c68b27a9fefde4972f8d68
+2646ea8a9d0865f3b70df59ff522ec64f2146351
 
-ADMITTED RUNTIME SEMANTICS BASE:
+PYTHON POST-COMPLETION CAPABILITY-CLOSURE BASE:
 bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
 
 PYTHON STATUS:
@@ -191,18 +217,20 @@ COMPLETED:
 - PR #185 continuation authority reconciliation merged
 - PR #188 Rust reactivation authority clarification merged
 - PR #189 manifest-sync authority coverage hardening merged
-- PR #189 merge-push Post-Completion / Rust Freeze / Provenance / Completion validation passed
+- PR #190 volatile continuation refresh merged
+- PR #191 zero-friction rollback reporting hardening merged
+- PR #192 evidence key-rotation recovery hardening merged
 
-VERIFIED:
-- current repository main ac393d94ed5627ffc0c68b27a9fefde4972f8d68
-- merge-push Python Post-Completion run 34037136103 SUCCESS
-- merge-push Rust Feature Freeze run 34037136061 SUCCESS
-- merge-push Release Package Provenance run 34037136089 SUCCESS
-- merge-push Python Completion Certificate run 34037136077 SUCCESS
+VERIFIED ON PR #192 MERGE SHA:
+- Evidence Store v2 run 34047957896 SUCCESS
+- Python Post-Completion run 34047958025 SUCCESS
+- Rust Feature Freeze run 34047958021 SUCCESS
+- Release Package Provenance run 34047957923 SUCCESS
+- Python Completion Certificate run 34047957972 SUCCESS
 - merge SHA failure=0, in_progress=0, queued=0
 
 BLOCKERS:
-- no internal Python implementation blocker
+- no current internal Python implementation or maintenance blocker is evidenced
 - Rust transition intentionally blocked by rust_resume_allowed=false
 - external proof/publication remains dependent on real external evidence/credentials
 
@@ -226,5 +254,6 @@ Hard rules:
 - PYTHON_COMPLETE does not itself reactivate Rust.
 - Do not start capabilities 271-275, Remaining-71 port work or Rust promotion without a separate explicit reactivation authority.
 - Keep external superiority/adoption/maturity claims evidence-gated.
+- Do not invent an internal task when no concrete regression or newly admitted capability exists.
 - Before any workflow dispatch/rerun, check queued/in-progress equivalent runs and never rerun as polling.
 ```
