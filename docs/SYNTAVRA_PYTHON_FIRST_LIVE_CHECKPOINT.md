@@ -6,10 +6,10 @@ This file is the volatile continuation authority. Historical checkpoints remain 
 
 ## Latest recorded repository baseline and admitted runtime authority
 
-Latest completed admitted maintenance merge before this continuation refresh:
+Latest completed admitted continuation merge before this maintenance record:
 
 ```text
-2646ea8a9d0865f3b70df59ff522ec64f2146351
+792c4f5a870d46b002085877293cd2938c801bfd
 ```
 
 This is a recorded baseline, not a self-updating assertion that this Markdown file can somehow know the SHA of the future commit that contains itself.
@@ -20,7 +20,7 @@ Python post-completion capability-closure base:
 bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
 ```
 
-PR #184 established the Python post-completion capability semantics. Later admitted changes through PR #192 are documentation/authority/CI hardening or evidence-driven Python runtime hardening; they do not add public routes, change capability-completeness state or change Rust promotion counters.
+PR #184 established the Python post-completion capability semantics. Later admitted changes through PR #193 are documentation/authority/CI hardening or evidence-driven Python runtime hardening; they do not add public routes, change capability-completeness state or change Rust promotion counters. The latest admitted runtime-hardening baseline remains PR #192; PR #193 is a continuation-authority refresh only.
 
 ### Admitted continuation chain
 
@@ -31,15 +31,13 @@ PR #184 established the Python post-completion capability semantics. Later admit
 - PR #190 merged as `0526ae13bcf08e3fcbbd25b3d9f3dc42d0e5ae74`: volatile continuation surfaces refreshed and the manifest-sync coverage exercised on real authority-document changes.
 - PR #191 merged as `a3f2283aff92922a2fe7dafb8a5e25816bb0d547`: zero-friction host-install rollback reporting hardened so attempted, successful and failed rollback operations remain distinct.
 - PR #192 merged as `2646ea8a9d0865f3b70df59ff522ec64f2146351`: encrypted evidence key-rotation recovery hardened so staged-install failure restores the original encrypted object and rollback failure preserves the last known-good ciphertext backup instead of silently deleting it.
+- PR #193 merged as `792c4f5a870d46b002085877293cd2938c801bfd`: volatile continuation authority refreshed after PR #192; runtime/contracts/Rust/public-command semantics were unchanged.
 
 ### Latest merge-push validation on the recorded baseline
 
-- Evidence Store v2 run `34047957896` — `SUCCESS`, including the evidence-rotation recovery fault-injection regressions, exact-head certificate, clean repository enforcement and artifact upload.
-- Python Post-Completion 243-280 run `34047958025` — `SUCCESS`, including exact committed manifest validation and aggregate repository validation.
-- Rust Feature Freeze Guard run `34047958021` — `SUCCESS`.
-- Release Package Provenance run `34047957923` — `SUCCESS`.
-- Python Completion Certificate run `34047957972` — `SUCCESS`, including Linux/Windows platform smoke, aggregate repository validation, machine-readable completion certificate, exact clean head enforcement and artifact upload.
-- Final merge SHA status after the push wave: **failure=0, in_progress=0, queued=0**.
+- PR #193 merge-push Python Completion Certificate run `34049884980` — `SUCCESS`, including Linux/Windows platform smoke, aggregate repository validation, machine-readable completion certificate, exact clean head enforcement and artifact upload.
+- PR #193 merge SHA `792c4f5a870d46b002085877293cd2938c801bfd` finished with **failure=0, in_progress=0, queued=0**.
+- The latest runtime-hardening baseline, PR #192, separately completed Evidence Store v2 run `34047957896`, Python Post-Completion run `34047958025`, Rust Feature Freeze Guard run `34047958021`, Release Package Provenance run `34047957923` and Python Completion Certificate run `34047957972`, all `SUCCESS`.
 
 ## Canonical state
 
@@ -68,18 +66,19 @@ Remaining = 71
 - A new Python capability may be added only through a newly admitted roadmap/contract decision or concrete evidence-backed bug/hardening requirement.
 - External superiority, provider-billed savings, independent validation, live third-party certification, publication/adoption and maturity claims remain externally evidence-gated.
 
-## Latest evidence-driven maintenance result
+## Current evidence-driven maintenance
 
-PR #192 closed the previously active `HARDEN` item for encrypted evidence key rotation:
+PR #192 closed the encrypted evidence key-rotation recovery `HARDEN` item. A new concrete `HARDEN` item is now evidenced in `HostInstallationManager` and is being addressed by PR #195:
 
-- backup creation is now the recovery boundary;
-- staged ciphertext installation failure restores the original encrypted object exactly;
-- rollback failure is surfaced instead of swallowed;
-- the last known-good ciphertext backup remains available when rollback itself fails;
-- recovery fault-injection tests run inside the Evidence Store v2 CI gate;
-- no public command, capability-completeness state, Rust authority or 174/245 production-promotion counter changed.
+- both automatic apply rollback and explicit `rollback()` removed the live target before the previous backup had been successfully staged for restoration;
+- if backup copy/staging failed, the active path could be left missing even though the last-known-good backup still existed inside the transaction;
+- directory installation used the same destructive ordering, removing an existing directory before the staged replacement had been installed successfully;
+- an automatic rollback exception could replace the original apply failure without preserving both causes;
+- existing `tests/runtime/test_host_installation_v4.py` covered successful rollback but did not fault-inject backup staging failure, automatic rollback failure or directory staged-install failure;
+- PR #195 stages restore data completely before mutating the live target, uses a safety-path swap for directory replacement, preserves recovery material on rollback failure, carries both apply and rollback errors when applicable, and adds regressions to the existing Host Adapter Conformance/Codex integration test surface;
+- this maintenance does not add a public command, alter Python capability-completeness state, reactivate Rust or change the 174/245 production-promotion baseline.
 
-There is **no currently evidenced internal Python maintenance blocker** recorded by this checkpoint. Do not manufacture a new implementation task merely to keep work moving. The next internal change requires new concrete evidence of a correctness, security, compatibility, performance, recovery, observability or authority regression, or a separately admitted new Python capability.
+Do not broaden PR #195 into unrelated host/runtime work. Its acceptance boundary is recovery correctness, exact preservation of last-known-good state, explicit failure reporting and regression coverage through existing CI.
 
 ## Current authorities
 
@@ -96,12 +95,13 @@ Use these before deciding whether work is actually missing:
 
 ## Current exact task
 
-1. Keep the certified Python 236-280 internal scope closed unless new evidence exposes a real regression or a new capability is explicitly admitted.
-2. Do **not** start capabilities 271-275, Remaining-71 port work or Rust promotion while `rust_resume_allowed=false`.
-3. Treat repository bugs, security fixes, compatibility fixes, performance regressions and evidence-driven hardening as valid Python-active maintenance only when supported by concrete evidence.
-4. Keep external proof separate from repository self-certification. Provider-observed benchmarks, independent/live host validation, publication credentials and public maturity cannot be manufactured by an internal certifier.
-5. Do not reopen historical wave checkboxes as duplicate implementations. Classify proposed work as `EXISTS`, `HARDEN`, `UNIFY`, `NEW`, `CERTIFY` or `EXTERNAL` against current canonical owners first.
-6. Preserve exact-head CI discipline: before dispatch/rerun, inspect equivalent queued/in-progress work and never rerun as polling.
+1. Complete PR #195 host-installation rollback recovery hardening against its current evidence and regressions; do not expand scope without new evidence.
+2. Keep the certified Python 236-280 internal scope closed unless new evidence exposes a real regression or a new capability is explicitly admitted.
+3. Do **not** start capabilities 271-275, Remaining-71 port work or Rust promotion while `rust_resume_allowed=false`.
+4. Treat repository bugs, security fixes, compatibility fixes, performance regressions and evidence-driven hardening as valid Python-active maintenance only when supported by concrete evidence.
+5. Keep external proof separate from repository self-certification. Provider-observed benchmarks, independent/live host validation, publication credentials and public maturity cannot be manufactured by an internal certifier.
+6. Do not reopen historical wave checkboxes as duplicate implementations. Classify proposed work as `EXISTS`, `HARDEN`, `UNIFY`, `NEW`, `CERTIFY` or `EXTERNAL` against current canonical owners first.
+7. Preserve exact-head CI discipline: before dispatch/rerun, inspect equivalent queued/in-progress work and never rerun as polling.
 
 ## Remaining legitimate evidence/operations work
 
