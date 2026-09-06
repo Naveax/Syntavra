@@ -51,6 +51,28 @@ class InstallationResult:
     created_at: float
 
 
+class HostInstallationRollbackError(RuntimeError):
+    """A host installation rollback failed after an apply or explicit rollback request."""
+
+    def __init__(
+        self,
+        *,
+        transaction_id: str,
+        rollback_error: Exception,
+        apply_error: Exception | None = None,
+    ):
+        self.transaction_id = transaction_id
+        self.rollback_error = rollback_error
+        self.apply_error = apply_error
+        details = [
+            f"transaction_id={transaction_id}",
+            f"rollback_error={type(rollback_error).__name__}: {rollback_error}",
+        ]
+        if apply_error is not None:
+            details.insert(1, f"apply_error={type(apply_error).__name__}: {apply_error}")
+        super().__init__("host installation rollback failed: " + "; ".join(details))
+
+
 class HostInstallationManager:
     """Atomic, reversible installer for Syntavra host integrations.
 
@@ -162,17 +184,95 @@ class HostInstallationManager:
             temporary.unlink(missing_ok=True)
 
     @staticmethod
-    def _copy_tree_atomic(source: Path, target: Path) -> None:
+    def _path_exists(path: Path) -> bool:
+        return path.exists() or path.is_symlink()
+
+    @classmethod
+    def _remove_path(cls, path: Path) -> None:
+        if not cls._path_exists(path):
+            return
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
+
+    @classmethod
+    def _replace_staged_path(cls, staged: Path, target: Path) -> None:
+        """Install a fully staged path without discarding the last live directory."""
         target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = target.parent / f".{target.name}.syntavra-{uuid.uuid4().hex}"
-        shutil.copytree(source, temporary, symlinks=False)
+        if not cls._path_exists(target):
+            os.replace(staged, target)
+            return
+
+        target_is_dir = target.is_dir() and not target.is_symlink()
+        staged_is_dir = staged.is_dir() and not staged.is_symlink()
+        if not target_is_dir and not staged_is_dir:
+            os.replace(staged, target)
+            return
+
+        safety = target.parent / f".{target.name}.syntavra-safety-{uuid.uuid4().hex}"
+        os.replace(target, safety)
         try:
-            if target.exists():
-                shutil.rmtree(target)
-            os.replace(temporary, target)
+            os.replace(staged, target)
+        except Exception as install_exc:
+            try:
+                os.replace(safety, target)
+            except Exception as restore_exc:
+                raise RuntimeError(
+                    "host target replacement and live-target recovery both failed: "
+                    f"target={target}; safety_path={safety}; "
+                    f"install_error={type(install_exc).__name__}: {install_exc}; "
+                    f"restore_error={type(restore_exc).__name__}: {restore_exc}"
+                ) from restore_exc
+            raise
+        else:
+            cls._remove_path(safety)
+
+    @classmethod
+    def _stage_path_copy(cls, source: Path, target: Path, *, symlinks: bool) -> Path:
+        """Copy a source completely beside target before any live-target mutation."""
+        target.parent.mkdir(parents=True, exist_ok=True)
+        staged = target.parent / f".{target.name}.syntavra-stage-{uuid.uuid4().hex}"
+        try:
+            if source.is_dir() and not source.is_symlink():
+                shutil.copytree(source, staged, symlinks=symlinks)
+            elif source.is_symlink():
+                staged.symlink_to(os.readlink(source), target_is_directory=source.is_dir())
+            else:
+                shutil.copy2(source, staged)
+        except Exception:
+            cls._remove_path(staged)
+            raise
+        return staged
+
+    @classmethod
+    def _copy_tree_atomic(cls, source: Path, target: Path) -> None:
+        staged = cls._stage_path_copy(source, target, symlinks=False)
+        try:
+            cls._replace_staged_path(staged, target)
         finally:
-            if temporary.exists():
-                shutil.rmtree(temporary, ignore_errors=True)
+            cls._remove_path(staged)
+
+    @classmethod
+    def _restore_previous(cls, target: Path, *, existed: bool, backup_path: str) -> None:
+        if not existed:
+            cls._remove_path(target)
+            return
+        if not backup_path:
+            raise FileNotFoundError(f"missing host installation backup for existing target: {target}")
+        backup = Path(backup_path)
+        if not cls._path_exists(backup):
+            raise FileNotFoundError(f"host installation backup missing: {backup}")
+        staged = cls._stage_path_copy(backup, target, symlinks=True)
+        try:
+            cls._replace_staged_path(staged, target)
+        finally:
+            cls._remove_path(staged)
+
+    @classmethod
+    def _rollback_applied(cls, applied: list[tuple[Path, bool, str]]) -> None:
+        for target, existed, backup_path in reversed(applied):
+            cls._restore_previous(target, existed=existed, backup_path=backup_path)
 
     @staticmethod
     def _managed_text(existing: str, block: str) -> str:
@@ -304,29 +404,23 @@ class HostInstallationManager:
                     self._atomic_file(target, payload)
                 else:
                     self._copy_tree_atomic(payload, target)
+                applied.append((target, existed, backup_path))
                 after_hash = self._digest(target)
                 action = "updated" if existed else "created"
                 changes.append(InstallationChange(relative, kind, action, existed, before_hash, after_hash, backup_path))
-                applied.append((target, existed, backup_path))
             verification = self.verify(normalized, scope=scope)
             if not verification["ok"]:
                 raise RuntimeError(f"installation verification failed: {verification['reasons']}")
             status = "applied"
-        except Exception:
-            for target, existed, backup_path in reversed(applied):
-                if target.is_dir() and not target.is_symlink():
-                    shutil.rmtree(target, ignore_errors=True)
-                else:
-                    target.unlink(missing_ok=True)
-                if existed and backup_path:
-                    backup = Path(backup_path)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    if backup.is_dir() and not backup.is_symlink():
-                        shutil.copytree(backup, target, symlinks=True)
-                    elif backup.is_symlink():
-                        target.symlink_to(os.readlink(backup))
-                    else:
-                        shutil.copy2(backup, target)
+        except Exception as apply_exc:
+            try:
+                self._rollback_applied(applied)
+            except Exception as rollback_exc:
+                raise HostInstallationRollbackError(
+                    transaction_id=transaction_id,
+                    apply_error=apply_exc,
+                    rollback_error=rollback_exc,
+                ) from rollback_exc
             shutil.rmtree(transaction, ignore_errors=True)
             raise
 
@@ -419,31 +513,25 @@ class HostInstallationManager:
         original = json.loads(str(row["manifest_json"]))
         root = Path(str(row["root"])).resolve(strict=False)
         rolled: list[InstallationChange] = []
-        for raw in reversed(original["changes"]):
-            change = InstallationChange(**raw)
-            target = self._safe_target(root, change.path)
-            if target.is_dir() and not target.is_symlink():
-                shutil.rmtree(target, ignore_errors=True)
-            else:
-                target.unlink(missing_ok=True)
-            if change.existed and change.backup_path:
-                backup = Path(change.backup_path)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if backup.is_dir() and not backup.is_symlink():
-                    shutil.copytree(backup, target, symlinks=True)
-                elif backup.is_symlink():
-                    target.symlink_to(os.readlink(backup))
-                else:
-                    shutil.copy2(backup, target)
-            rolled.append(InstallationChange(
-                path=change.path,
-                kind=change.kind,
-                action="restored" if change.existed else "removed",
-                existed=change.existed,
-                before_hash=change.after_hash,
-                after_hash=self._digest(target),
-                backup_path=change.backup_path,
-            ))
+        try:
+            for raw in reversed(original["changes"]):
+                change = InstallationChange(**raw)
+                target = self._safe_target(root, change.path)
+                self._restore_previous(target, existed=change.existed, backup_path=change.backup_path)
+                rolled.append(InstallationChange(
+                    path=change.path,
+                    kind=change.kind,
+                    action="restored" if change.existed else "removed",
+                    existed=change.existed,
+                    before_hash=change.after_hash,
+                    after_hash=self._digest(target),
+                    backup_path=change.backup_path,
+                ))
+        except Exception as rollback_exc:
+            raise HostInstallationRollbackError(
+                transaction_id=transaction_id,
+                rollback_error=rollback_exc,
+            ) from rollback_exc
         verification = {"ok": True, "rolled_back": True}
         result = InstallationResult(
             transaction_id=transaction_id,
