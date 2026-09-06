@@ -27,7 +27,7 @@ This document is the current operational continuation state for Syntavra. Histor
 Current repository `main`:
 
 ```text
-792c4f5a870d46b002085877293cd2938c801bfd
+2646ea8a9d0865f3b70df59ff522ec64f2146351
 ```
 
 Python post-completion capability-closure base remains PR #184:
@@ -36,7 +36,7 @@ Python post-completion capability-closure base remains PR #184:
 bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
 ```
 
-Later admitted changes through PR #193 are documentation/authority/CI hardening or evidence-driven Python runtime hardening. They do not add public routes, reopen the closed Python capability roadmap, reactivate Rust or change the 174/245 production-promotion baseline. The latest admitted runtime-hardening baseline remains PR #192; PR #193 is documentation-only continuation authority refresh.
+Later admitted changes through PR #192 are documentation/authority/CI hardening or evidence-driven Python runtime hardening. They do not add public routes, reopen the closed Python capability roadmap, reactivate Rust or change the 174/245 production-promotion baseline.
 
 ### Admitted continuation chain
 
@@ -87,15 +87,8 @@ Later admitted changes through PR #193 are documentation/authority/CI hardening 
 - Merge-push Python Post-Completion run `34047958025`: `SUCCESS`.
 - Merge-push Rust Feature Freeze Guard run `34047958021`: `SUCCESS`.
 - Merge-push Release Package Provenance run `34047957923`: `SUCCESS`.
-- Merge-push Python Completion Certificate run `34047957972`: `SUCCESS`.
+- Merge-push Python Completion Certificate run `34047957972`: `SUCCESS`, including Linux/Windows smoke, aggregate repository validation, machine-readable certificate, exact clean head and artifact upload.
 - Merge SHA `2646ea8a9d0865f3b70df59ff522ec64f2146351` finished with **failure=0, in_progress=0, queued=0**.
-
-#### PR #193 — continuation authority refresh after evidence recovery
-
-- Merged as `792c4f5a870d46b002085877293cd2938c801bfd`.
-- Refreshed the volatile continuation authority after PR #192 without changing runtime/contracts/Rust/public-command semantics.
-- Merge-push Python Completion Certificate run `34049884980`: `SUCCESS`, including Linux/Windows smoke, aggregate repository validation, machine-readable certificate, exact clean head and artifact upload.
-- Merge SHA `792c4f5a870d46b002085877293cd2938c801bfd` finished with **failure=0, in_progress=0, queued=0**.
 
 ## Canonical authorities
 
@@ -150,25 +143,11 @@ Never turn a historical unchecked box directly into a new module without this re
 - [x] Volatile continuation surfaces refreshed via PR #190.
 - [x] Zero-friction rollback reporting hardened and admitted via PR #191.
 - [x] Evidence key-rotation recovery hardened and admitted via PR #192.
-- [x] Continuation authority refreshed after evidence recovery via PR #193.
-- [ ] Complete PR #195 host-installation rollback recovery hardening without broadening scope.
-- [ ] Prove backup staging failure leaves the live target intact and backup available.
-- [ ] Prove automatic apply rollback failure reports both the apply cause and rollback cause and preserves recovery material.
-- [ ] Prove directory staged-install failure restores the pre-existing live directory through the safety-path swap.
+- [x] PR #192 merge-push Evidence Store / Post-Completion / Rust Freeze / Provenance / Completion validation passed on `2646ea8a9d0865f3b70df59ff522ec64f2146351`.
 - [ ] Keep the internal roadmap closed unless new evidence exposes a concrete regression or a new capability is explicitly admitted.
 - [ ] Continue only evidence-driven Python maintenance/hardening or legitimate external-proof/operations work.
 
-### Active HARDEN evidence — PR #195
-
-The current internal maintenance blocker is concrete recovery correctness in `HostInstallationManager`:
-
-- the prior automatic apply rollback and explicit rollback paths removed the live target before staging the backup restore;
-- a backup copy/staging failure could therefore leave the active path missing;
-- directory replacement similarly removed the old directory before the staged replacement had been installed;
-- automatic rollback failure could obscure the original apply failure rather than carrying both causes;
-- existing successful-rollback tests did not fault-inject these failure modes.
-
-PR #195 must reuse the canonical host installer and existing Host Adapter Conformance/Codex integration test surfaces. It must not introduce a parallel installer, new public command family, Rust work or capability-completeness changes.
+There is **no currently evidenced internal Python maintenance blocker** in this checkpoint. The absence of a current bug is not permission to invent one.
 
 ## Remaining legitimate work classes
 
@@ -222,7 +201,7 @@ Before any dispatch/rerun:
 
 ```text
 CURRENT REPOSITORY MAIN:
-792c4f5a870d46b002085877293cd2938c801bfd
+2646ea8a9d0865f3b70df59ff522ec64f2146351
 
 PYTHON POST-COMPLETION CAPABILITY-CLOSURE BASE:
 bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
@@ -241,27 +220,22 @@ COMPLETED:
 - PR #190 volatile continuation refresh merged
 - PR #191 zero-friction rollback reporting hardening merged
 - PR #192 evidence key-rotation recovery hardening merged
-- PR #193 continuation authority refresh merged
 
-VERIFIED ON PR #193 MERGE SHA:
-- Python Completion Certificate run 34049884980 SUCCESS
+VERIFIED ON PR #192 MERGE SHA:
+- Evidence Store v2 run 34047957896 SUCCESS
+- Python Post-Completion run 34047958025 SUCCESS
+- Rust Feature Freeze run 34047958021 SUCCESS
+- Release Package Provenance run 34047957923 SUCCESS
+- Python Completion Certificate run 34047957972 SUCCESS
 - merge SHA failure=0, in_progress=0, queued=0
 
-ACTIVE HARDEN:
-- PR #195 host-installation rollback recovery
-- stage backup restores before live-target mutation
-- preserve safety/backup recovery material on failure
-- carry apply + rollback causes when automatic rollback fails
-- regressions run through existing host-installation CI surfaces
-
 BLOCKERS:
-- PR #195 recovery correctness must pass exact-head CI before merge
+- no current internal Python implementation or maintenance blocker is evidenced
 - Rust transition intentionally blocked by rust_resume_allowed=false
 - external proof/publication remains dependent on real external evidence/credentials
 
 NEXT EXACT TASK:
-- finish and certify PR #195 without unrelated scope growth
-- after admission, return to evidence-driven maintenance/external operations only
+- perform only evidence-driven Python maintenance/hardening, explicitly admitted new Python capability work, or legitimate external-proof/operations
 - do not start Rust-transition work without separate explicit reactivation authority
 ```
 
@@ -280,6 +254,6 @@ Hard rules:
 - PYTHON_COMPLETE does not itself reactivate Rust.
 - Do not start capabilities 271-275, Remaining-71 port work or Rust promotion without a separate explicit reactivation authority.
 - Keep external superiority/adoption/maturity claims evidence-gated.
-- Current evidence-driven HARDEN item is PR #195 host-installation rollback recovery; do not broaden it without new evidence.
+- Do not invent an internal task when no concrete regression or newly admitted capability exists.
 - Before any workflow dispatch/rerun, check queued/in-progress equivalent runs and never rerun as polling.
 ```

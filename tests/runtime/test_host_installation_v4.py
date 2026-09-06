@@ -188,12 +188,18 @@ class HostInstallationV4Tests(unittest.TestCase):
         marker = installed_skill / "USER.txt"
         marker.write_text("keep me\n", encoding="utf-8")
         real_replace = os.replace
-        installed_skill_key = os.path.normcase(os.path.abspath(os.fspath(installed_skill)))
+        failure_injected = False
 
         def fail_staged_directory_install(source, destination):
-            source_name = os.path.basename(os.path.normpath(os.fspath(source)))
-            destination_key = os.path.normcase(os.path.abspath(os.fspath(destination)))
-            if destination_key == installed_skill_key and source_name.startswith(".syntavra.syntavra-stage-"):
+            nonlocal failure_injected
+            source_path = Path(source)
+            is_staged_skill = (
+                source_path.is_dir()
+                and (source_path / "SKILL.md").is_file()
+                and (source_path / "REFERENCE.md").is_file()
+            )
+            if is_staged_skill and not failure_injected:
+                failure_injected = True
                 raise OSError("forced staged directory install failure")
             return real_replace(source, destination)
 
@@ -201,6 +207,7 @@ class HostInstallationV4Tests(unittest.TestCase):
             with self.assertRaises(OSError):
                 self.manager.apply("codex")
 
+        self.assertTrue(failure_injected)
         self.assertTrue(marker.is_file())
         self.assertEqual(marker.read_text(encoding="utf-8"), "keep me\n")
         self.assertFalse((self.project / ".codex" / "config.toml").exists())
@@ -212,16 +219,24 @@ class HostInstallationV4Tests(unittest.TestCase):
         marker = installed_skill / "USER.txt"
         marker.write_text("last known good\n", encoding="utf-8")
         real_replace = os.replace
-        installed_skill_key = os.path.normcase(os.path.abspath(os.fspath(installed_skill)))
+        staged_failure_injected = False
+        safety_failure_injected = False
 
         def fail_staged_install_and_safety_restore(source, destination):
-            source_name = os.path.basename(os.path.normpath(os.fspath(source)))
-            destination_key = os.path.normcase(os.path.abspath(os.fspath(destination)))
-            if destination_key == installed_skill_key and (
-                source_name.startswith(".syntavra.syntavra-stage-")
-                or source_name.startswith(".syntavra.syntavra-safety-")
-            ):
-                raise OSError(f"forced directory replace failure: {source_name}")
+            nonlocal staged_failure_injected, safety_failure_injected
+            source_path = Path(source)
+            is_staged_skill = (
+                source_path.is_dir()
+                and (source_path / "SKILL.md").is_file()
+                and (source_path / "REFERENCE.md").is_file()
+            )
+            is_safety_snapshot = source_path.is_dir() and (source_path / "USER.txt").is_file()
+            if is_staged_skill:
+                staged_failure_injected = True
+                raise OSError("forced staged directory install failure")
+            if is_safety_snapshot:
+                safety_failure_injected = True
+                raise OSError("forced safety restore failure")
             return real_replace(source, destination)
 
         with mock.patch(
@@ -231,6 +246,8 @@ class HostInstallationV4Tests(unittest.TestCase):
             with self.assertRaises(RuntimeError) as caught:
                 self.manager.apply("codex")
 
+        self.assertTrue(staged_failure_injected)
+        self.assertTrue(safety_failure_injected)
         self.assertIn("safety_path=", str(caught.exception))
         self.assertFalse(installed_skill.exists())
         safety = list(installed_skill.parent.glob(".syntavra.syntavra-safety-*"))
