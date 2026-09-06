@@ -1,0 +1,113 @@
+name: Python Post-Completion 243-280
+
+on:
+  pull_request:
+    paths:
+      - "syntavra_runtime/post_completion_*.py"
+      - "contracts/python/capability-completeness-registry-v2.json"
+      - "contracts/python/python-post-completion-280-certificate-v1.json"
+      - "tests/runtime/test_python_post_completion_capabilities_v2.py"
+      - "tests/runtime/test_python_post_completion_evidence_integration.py"
+      - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md"
+      - ".github/workflows/python-post-completion-243-280.yml"
+      - "MANIFEST.sha256"
+  push:
+    branches: [main]
+    paths:
+      - "syntavra_runtime/post_completion_*.py"
+      - "contracts/python/capability-completeness-registry-v2.json"
+      - "contracts/python/python-post-completion-280-certificate-v1.json"
+      - "tests/runtime/test_python_post_completion_capabilities_v2.py"
+      - "tests/runtime/test_python_post_completion_evidence_integration.py"
+      - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md"
+      - ".github/workflows/python-post-completion-243-280.yml"
+      - "MANIFEST.sha256"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: python-post-completion-243-280-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Install Python runtime
+        run: python -m pip install -e .
+      - name: Unit and canonical-store certification
+        run: |
+          python -m unittest tests.runtime.test_python_post_completion_capabilities_v2 -v
+          python -m unittest tests.runtime.test_python_post_completion_evidence_integration -v
+      - name: Capability certification report
+        run: |
+          python tools/certify_python_post_completion_capabilities_v2.py --output /tmp/post-completion-certification.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("/tmp/post-completion-certification.json").read_text(encoding="utf-8"))
+          assert report["ok"] is True, report
+          assert report["claim"] == "PYTHON_POST_COMPLETION_280_CERTIFIED", report
+          assert report["implemented_count"] == 33, report
+          assert report["certified_count"] == 33, report
+          assert report["certification_complete"] is True, report
+          assert report["uncertified"] == [], report
+          assert report["rust_resume_allowed"] is False, report
+          assert report["rust_retired"] is True, report
+          PY
+      - name: Generate deterministic manifest candidate
+        run: |
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+      - name: Synchronize exact manifest on PR branch
+        id: manifest_sync
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- MANIFEST.sha256; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.sha256
+          git commit -m "manifest: synchronize Python post-completion 243-280"
+          git push origin "HEAD:${HEAD_REF}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Upload exact-head evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && steps.manifest_sync.outputs.changed != 'true'
+        with:
+          name: python-post-completion-243-280-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/post-completion-certification.json
+            MANIFEST.sha256
+      - name: Require committed manifest to be exact
+        if: steps.manifest_sync.outputs.changed != 'true'
+        run: git diff --exit-code -- MANIFEST.sha256
+      - name: Repository validation
+        if: steps.manifest_sync.outputs.changed != 'true'
+        run: python tools/validate.py
+      - name: Enforce clean exact-head repository
+        if: always()
+        run: |
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
