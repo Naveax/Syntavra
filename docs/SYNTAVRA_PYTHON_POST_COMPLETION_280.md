@@ -119,6 +119,10 @@ This repair does **not** add or remove public routes, authorize Rust feature/par
 
 The documentation is now reconciled to the canonical authority: `PYTHON_COMPLETE` is a necessary but insufficient precondition; Rust remains retired until a separate explicit reviewed/admitted reactivation authority exists, and production promotion remains a separate gate even after any hypothetical future reactivation. This wording correction changes no route, implementation, promotion counter, or Rust authority state.
 
+## Roadmap appendix authority marker
+
+`docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md` is append-only and intentionally retains historical execution-order and phase-exit wording. Its 2026-09-06 current-authority marker explicitly classifies any older `PYTHON_COMPLETE → lift Rust freeze` sequence as historical/superseded rather than active reactivation authority. The canonical transition remains fail-closed: `rust_resume_allowed=false`, `rust_retired=true`, and production promotion stays at `174/245` until separately admitted authority changes those states.
+
 ## Rust retirement boundary
 
 ```text
