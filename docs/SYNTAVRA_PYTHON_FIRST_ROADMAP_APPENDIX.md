@@ -2,6 +2,21 @@
 
 Status checkpoint: **2026-08-18**
 
+## Current authority — 2026-09-06
+
+This appendix is append-only historical roadmap material. Any earlier sequence or sentence in this file that implies `PYTHON_COMPLETE` directly lifts the Rust feature freeze or authorizes Remaining-71 feature/parity work is superseded by the later Rust retirement override and the canonical Python authority contract.
+
+Current admitted state:
+
+- `PYTHON_COMPLETE = true`
+- `rust_resume_allowed = false`
+- `rust_retired = true`
+- Rust production promotion remains `174/245`, with `71` remaining.
+- Rust feature/parity work requires a separate explicit reviewed/admitted reactivation authority.
+- Production promotion remains a separate gate even after any future reactivation.
+
+The historical execution diagrams and 2026-08-26 phase-exit wording below are retained for provenance only; they are not current reactivation authority.
+
 This appendix extends the existing master roadmap. It does not delete, replace or invalidate previous roadmap material.
 
 ## Non-destructive roadmap rule
