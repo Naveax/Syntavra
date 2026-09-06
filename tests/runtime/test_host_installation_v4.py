@@ -225,16 +225,21 @@ class HostInstallationV4Tests(unittest.TestCase):
         def fail_staged_install_and_safety_restore(source, destination):
             nonlocal staged_failure_injected, safety_failure_injected
             source_path = Path(source)
+            destination_path = Path(destination)
             is_staged_skill = (
                 source_path.is_dir()
                 and (source_path / "SKILL.md").is_file()
                 and (source_path / "REFERENCE.md").is_file()
             )
-            is_safety_snapshot = source_path.is_dir() and (source_path / "USER.txt").is_file()
+            is_safety_restore = (
+                source_path.is_dir()
+                and (source_path / "USER.txt").is_file()
+                and destination_path.name == "syntavra"
+            )
             if is_staged_skill:
                 staged_failure_injected = True
                 raise OSError("forced staged directory install failure")
-            if is_safety_snapshot:
+            if is_safety_restore:
                 safety_failure_injected = True
                 raise OSError("forced safety restore failure")
             return real_replace(source, destination)
