@@ -22,6 +22,6 @@ The important split is:
 - Rust production-promotion authority remains frozen at `174/245` by the Python behavior/acceptance and Phase 2 migration boundaries.
 - The remaining `71` routes are therefore a parity/promotion set, not an implementation-missing set.
 
-During the Python-first phase, Python is the feature-development and product-behavior authority. Rust feature development, production promotion, and native promotion-counter changes remain disabled until a later `PYTHON_COMPLETE` certificate explicitly opens the Rust resume gate.
+Python remains the feature-development and product-behavior authority. `PYTHON_COMPLETE=true` is a necessary but insufficient prerequisite for any future Rust reactivation: it does not itself set `rust_resume_allowed=true`, authorize Rust feature/parity work, change native promotion counters, or promote routes beyond the frozen `174/245` production baseline. Rust reactivation requires a separate explicit reviewed/admitted authority, and production promotion remains independently gated after any such reactivation.
 
 `tools/certify_python_authority.py` certifies this boundary from the existing authorities without persisting another 245-route or 71-route identity list. The authority is fail-closed through `tools/validate.py`, the PR/ref-scoped `.github/workflows/python-authority.yml` exact-head workflow, `.github/workflows/release-main-merge-gate.yml`, and the immutable action trust policy in `tests/runtime/test_release_action_pins.py`; the certifier verifies that these enforcement bindings remain present.
