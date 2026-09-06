@@ -175,7 +175,7 @@ jobs:
           python -m unittest tests.runtime.test_release_main_protection -v
 
       - name: Download exact-head candidate receipt authority
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: pre-release-candidate-receipt-plan-${{ steps.authority.outputs.target_head }}
           path: /tmp/candidate-receipt
@@ -304,7 +304,7 @@ jobs:
       RECEIPT_RUN_ID: ${{ needs.authority.outputs.receipt_run_id }}
     steps:
       - name: Download exact-head provenance bundle
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -312,7 +312,7 @@ jobs:
           run-id: ${{ env.PROVENANCE_RUN_ID }}
 
       - name: Download exact-head candidate receipt plan
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: pre-release-candidate-receipt-plan-${{ env.TARGET_HEAD }}
           path: /tmp/receipt
@@ -514,7 +514,7 @@ jobs:
         with:
           ref: ${{ env.TARGET_HEAD }}
           fetch-depth: 0
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -583,7 +583,7 @@ jobs:
         with:
           node-version: '22'
           registry-url: https://registry.npmjs.org
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -643,7 +643,7 @@ jobs:
         with:
           node-version: '22'
           registry-url: https://registry.npmjs.org
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -756,7 +756,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-package-provenance-${{ env.TARGET_HEAD }}
           path: /tmp/provenance
@@ -858,7 +858,7 @@ jobs:
       - name: Download same-run public visibility evidence
         if: always()
         continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: pre-release-publication-visibility-*
           path: /tmp/publication-visibility-artifacts
