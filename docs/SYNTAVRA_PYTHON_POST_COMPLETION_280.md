@@ -45,7 +45,10 @@ Load-bearing exact-head evidence on that anchor:
 - Phase 2 Rust Migration Matrix — run `33991209797` — `SUCCESS` without Rust reactivation.
 - Release Main Merge Gate — run `33991209704` — `SUCCESS`.
 
-Merge-push package provenance on admitted `main` run `34002526854` also completed `SUCCESS`.
+Merge-push evidence on admitted `main`:
+
+- Release Package Provenance — run `34002526854` — `SUCCESS`.
+- Python Completion Certificate — run `34002526882` — `SUCCESS`, including Linux and Windows platform smoke, aggregate repository validation, machine-readable completion certificate, clean exact-head enforcement and certificate artifact upload.
 
 ## Independent source certificate versus final merge evidence
 
