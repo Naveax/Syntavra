@@ -39,7 +39,11 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run Evidence Store regression tests
-        run: python -m unittest tests.runtime.test_evidence_store_v2 -v
+        run: |
+          python -m unittest \
+            tests.runtime.test_evidence_store_v2 \
+            tests.runtime.test_evidence_rotation_recovery \
+            -v
 
       - name: Generate exact-head Evidence Store certificate
         run: |
