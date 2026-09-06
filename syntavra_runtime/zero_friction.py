@@ -42,6 +42,28 @@ class InstallPlan:
     mental_model: tuple[str, ...] = ("setup", "status", "run", "prove")
 
 
+class _HostInstallationBatchError(RuntimeError):
+    def __init__(
+        self,
+        cause: Exception,
+        *,
+        rollback_attempted_transactions: list[str],
+        rolled_back_transactions: list[str],
+        rollback_failures: list[dict[str, str]],
+    ) -> None:
+        self.cause = cause
+        self.rollback_attempted_transactions = tuple(rollback_attempted_transactions)
+        self.rolled_back_transactions = tuple(rolled_back_transactions)
+        self.rollback_failures = tuple(dict(item) for item in rollback_failures)
+        message = f"{type(cause).__name__}: {cause}"
+        if rollback_failures:
+            detail = "; ".join(
+                f"{item['transaction_id']}={item['error']}" for item in rollback_failures
+            )
+            message = f"{message}; rollback incomplete: {detail}"
+        super().__init__(message)
+
+
 class ZeroFrictionManager:
     """One-command, backup-first, verified pre-release product installer."""
 
@@ -118,6 +140,31 @@ class ZeroFrictionManager:
             min(59.0, 5.0 + len(actions) * 1.5),
         )
 
+    @staticmethod
+    def _rollback_transactions(
+        manager: HostInstallationManager,
+        transaction_ids: list[str],
+    ) -> tuple[list[str], list[str], list[dict[str, str]]]:
+        attempted: list[str] = []
+        rolled_back: list[str] = []
+        failures: list[dict[str, str]] = []
+        for transaction_id in reversed(transaction_ids):
+            attempted.append(transaction_id)
+            try:
+                result = manager.rollback(transaction_id)
+                if result.status != "rolled-back":
+                    raise RuntimeError(f"unexpected rollback status: {result.status}")
+            except Exception as error:
+                failures.append(
+                    {
+                        "transaction_id": transaction_id,
+                        "error": f"{type(error).__name__}: {error}",
+                    }
+                )
+            else:
+                rolled_back.append(transaction_id)
+        return attempted, rolled_back, failures
+
     def _host_installations(self, targets: tuple[str, ...], *, dry_run: bool) -> tuple[list[dict[str, Any]], list[str]]:
         if not targets:
             return [], []
@@ -130,13 +177,16 @@ class ZeroFrictionManager:
                 results.append(asdict(result))
                 if not dry_run:
                     applied.append(result.transaction_id)
-        except Exception:
-            for transaction_id in reversed(applied):
-                try:
-                    manager.rollback(transaction_id)
-                except Exception:
-                    pass
-            raise
+        except Exception as error:
+            if not applied:
+                raise
+            attempted, rolled_back, rollback_failures = self._rollback_transactions(manager, applied)
+            raise _HostInstallationBatchError(
+                error,
+                rollback_attempted_transactions=attempted,
+                rolled_back_transactions=rolled_back,
+                rollback_failures=rollback_failures,
+            ) from error
         return results, applied
 
     def install(self, *, all_hosts: bool = False, dry_run: bool = True, profile: str = "minimal") -> dict[str, Any]:
@@ -176,21 +226,33 @@ class ZeroFrictionManager:
                 }
                 atomic_write_json(self.state_root / "install-receipt.json", receipt, mode=0o600)
         except Exception as error:
-            if applied_transactions:
+            reported_error = error
+            rollback_attempted_transactions: list[str] = []
+            rolled_back_transactions: list[str] = []
+            rollback_failures: list[dict[str, str]] = []
+            if isinstance(error, _HostInstallationBatchError):
+                reported_error = error.cause
+                rollback_attempted_transactions = list(error.rollback_attempted_transactions)
+                rolled_back_transactions = list(error.rolled_back_transactions)
+                rollback_failures = [dict(item) for item in error.rollback_failures]
+            elif applied_transactions:
                 manager = self._host_manager()
-                for transaction_id in reversed(applied_transactions):
-                    try:
-                        manager.rollback(transaction_id)
-                    except Exception:
-                        pass
+                (
+                    rollback_attempted_transactions,
+                    rolled_back_transactions,
+                    rollback_failures,
+                ) = self._rollback_transactions(manager, applied_transactions)
             return {
                 "ok": False,
                 "dry_run": dry_run,
                 "profile": profile,
                 "plan": asdict(plan),
                 "host_results": host_results,
-                "error": f"{type(error).__name__}: {error}",
-                "rolled_back_transactions": applied_transactions,
+                "error": f"{type(reported_error).__name__}: {reported_error}",
+                "rollback_attempted_transactions": rollback_attempted_transactions,
+                "rolled_back_transactions": rolled_back_transactions,
+                "rollback_failures": rollback_failures,
+                "rollback_ok": len(rolled_back_transactions) == len(rollback_attempted_transactions) and not rollback_failures,
                 "wall_time_ms": (time.perf_counter() - started) * 1000.0,
             }
         return {
