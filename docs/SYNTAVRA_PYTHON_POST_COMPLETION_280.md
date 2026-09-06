@@ -113,6 +113,12 @@ The repair therefore exact-pins `tree-sitter-language-pack==1.16.2` in both the 
 
 This repair does **not** add or remove public routes, authorize Rust feature/parity work, grant Rust production-promotion credit, or change the external-evidence claim boundary. Future parser-pack upgrades require deliberate dependency and behavior-freeze evidence updates instead of being admitted implicitly by a floating version range.
 
+## Authority wording reconciliation
+
+`contracts/python/README.md` previously described `PYTHON_COMPLETE` as directly opening the Rust resume gate. That prose predated the current canonical `python-authority-v1.json` transition policy and contradicted its fail-closed state.
+
+The documentation is now reconciled to the canonical authority: `PYTHON_COMPLETE` is a necessary but insufficient precondition; Rust remains retired until a separate explicit reviewed/admitted reactivation authority exists, and production promotion remains a separate gate even after any hypothetical future reactivation. This wording correction changes no route, implementation, promotion counter, or Rust authority state.
+
 ## Rust retirement boundary
 
 ```text
