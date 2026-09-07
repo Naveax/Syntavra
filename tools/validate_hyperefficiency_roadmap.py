@@ -32,6 +32,24 @@ def validate() -> list[str]:
     index = json.loads(INDEX.read_text(encoding="utf-8"))
     rows: list[list[object]] = []
 
+    try:
+        expected_count = int(index["imported_count"])
+        source_start, source_end = (int(value) for value in index["source_range"])
+        canonical_start, canonical_end = (int(value) for value in index["canonical_range"])
+        mapping_offset = int(index["mapping_offset"])
+    except (KeyError, TypeError, ValueError):
+        return ["index-range"]
+
+    if _range_size(index.get("source_range")) != expected_count:
+        errors.append("index-source-range-count")
+    if _range_size(index.get("canonical_range")) != expected_count:
+        errors.append("index-canonical-range-count")
+    if canonical_start != source_start + mapping_offset or canonical_end != source_end + mapping_offset:
+        errors.append("index-mapping-range")
+
+    expected_next_source = source_start
+    expected_next_canonical = canonical_start
+
     for meta in index["shards"]:
         relative = str(meta["path"])
         path = ROOT / relative
@@ -80,38 +98,51 @@ def validate() -> list[str]:
         if _range_size(meta.get("canonical_range")) != declared_count:
             errors.append(f"canonical-range-count:{relative}")
 
+        try:
+            meta_source = [int(value) for value in meta["source_range"]]
+            meta_canonical = [int(value) for value in meta["canonical_range"]]
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"meta-range:{relative}")
+            continue
+
+        if meta_source[0] != expected_next_source:
+            errors.append(f"source-shard-gap:{relative}:{meta_source[0]}!={expected_next_source}")
+        if meta_canonical[0] != expected_next_canonical:
+            errors.append(f"canonical-shard-gap:{relative}:{meta_canonical[0]}!={expected_next_canonical}")
+        expected_next_source = meta_source[1] + 1
+        expected_next_canonical = meta_canonical[1] + 1
+
         if shard_rows:
             try:
                 first_source = int(shard_rows[0][0])
                 last_source = int(shard_rows[-1][0])
                 first_canonical = int(shard_rows[0][1])
                 last_canonical = int(shard_rows[-1][1])
-                source_range = [int(value) for value in meta["source_range"]]
-                canonical_range = [int(value) for value in meta["canonical_range"]]
-            except (IndexError, KeyError, TypeError, ValueError):
+            except (IndexError, TypeError, ValueError):
                 errors.append(f"row-boundary:{relative}")
             else:
-                if [first_source, last_source] != source_range:
+                if [first_source, last_source] != meta_source:
                     errors.append(f"source-boundary:{relative}")
-                if [first_canonical, last_canonical] != canonical_range:
+                if [first_canonical, last_canonical] != meta_canonical:
                     errors.append(f"canonical-boundary:{relative}")
 
         rows.extend(shard_rows)
 
-    expected_count = int(index.get("imported_count", 1284))
-    if expected_count != 1284:
-        errors.append(f"index-count:{expected_count}")
+    if expected_next_source != source_end + 1:
+        errors.append("source-shard-coverage")
+    if expected_next_canonical != canonical_end + 1:
+        errors.append("canonical-shard-coverage")
     if len(rows) != expected_count:
-        errors.append(f"count:{len(rows)}")
+        errors.append(f"count:{len(rows)}!={expected_count}")
         return errors
 
     source = [int(row[0]) for row in rows]
     canonical = [int(row[1]) for row in rows]
-    if source != list(range(1, 1285)):
+    if source != list(range(source_start, source_end + 1)):
         errors.append("source-sequence")
-    if canonical != list(range(281, 1565)):
+    if canonical != list(range(canonical_start, canonical_end + 1)):
         errors.append("canonical-sequence")
-    if any(c != s + 280 for s, c in zip(source, canonical)):
+    if any(c != s + mapping_offset for s, c in zip(source, canonical)):
         errors.append("mapping-offset")
 
     return errors
@@ -122,7 +153,13 @@ def main() -> int:
     if errors:
         print("HyperEfficiency roadmap invalid:", ", ".join(errors))
         return 1
-    print("HyperEfficiency roadmap verified: 1284 items; HE-0001..1284 -> CAP-0281..1564")
+    index = json.loads(INDEX.read_text(encoding="utf-8"))
+    print(
+        "HyperEfficiency roadmap verified: "
+        f"{index['imported_count']} items; "
+        f"HE-{int(index['source_range'][0]):04d}..{int(index['source_range'][1]):04d} -> "
+        f"CAP-{int(index['canonical_range'][0]):04d}..{int(index['canonical_range'][1]):04d}"
+    )
     return 0
 
 
