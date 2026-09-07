@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "family": "syntavra-ultra-low-token-frontier",
+  "status": "research_admitted_reconciliation",
+  "date": "2026-09-07",
+  "authority": "existing-hyperefficiency-and-token-economy-roadmap",
+  "no_new_capability_namespace": true,
+  "objective": "push eligible workloads toward zero or near-zero provider work while preserving verified task success",
+  "targets": {
+    "verified_repeated_provider_tokens": 0,
+    "easy_warm_stretch_max_tokens": 500,
+    "easy_frontier_stretch_max_tokens": 2000,
+    "normal_scoped_coding_stretch_max_tokens": 5000,
+    "hard_scoped_stretch_max_tokens": 8000,
+    "eligible_easy_avoidable_reduction_target": 0.97,
+    "eligible_easy_avoidable_reduction_stretch": 0.995,
+    "normal_scoped_avoidable_reduction_target": 0.95,
+    "normal_scoped_avoidable_reduction_stretch": 0.98,
+    "quality_non_inferior": true,
+    "unexplained_overflow": 0
+  },
+  "mechanisms": [
+    {"id":"U-P0-01","name":"Tool-Chain Fusion / Programmatic Tool Calling","classification":"UNIFY_HARDEN","owners":["ProgrammaticExecution","tool_pipeline","ProviderGateway"],"priority":"P0"},
+    {"id":"U-P0-02","name":"Zero-Inference Answer Synthesis","classification":"HARDEN_UNIFY","owners":["VerifierGatedInferenceSkip","OutputGovernor","SWIR"],"priority":"P0"},
+    {"id":"U-P0-03","name":"Verified Micro-Agent Macro Runtime","classification":"HARDEN_UNIFY","owners":["MacroFactory","deterministic_workflow_compiler","local_specialists"],"priority":"P0"},
+    {"id":"U-P0-04","name":"Current-Truth Contradiction Collapse","classification":"HARDEN","owners":["ActiveContextSupersessionGraph","semantic_state"],"priority":"P0"},
+    {"id":"U-P1-01","name":"Action-Preserving Observation Compressor","classification":"OPTIONAL_HARDEN","owners":["ToolOutputExternalizer","AdaptiveContextPolicy"],"priority":"P1"},
+    {"id":"U-P1-02","name":"Multi-Rubric Residual Code Pruner","classification":"OPTIONAL_HARDEN","owners":["repository_retrieval","TaskAwareResidualPruner"],"priority":"P1"},
+    {"id":"U-P1-03","name":"Cross-Lingual Token Arbitrage","classification":"NEW_HARDEN","owners":["TokenizerAwareSerializer","SWIR","ContextCompiler"],"priority":"P1"},
+    {"id":"U-P1-04","name":"Context Value Predictor","classification":"NEW_HARDEN","owners":["AdaptiveContextPolicy","ContextAdmissionController"],"priority":"P1"},
+    {"id":"U-P1-05","name":"Step-Level Reasoning Budgeter","classification":"HARDEN","owners":["ReasoningEffortGovernor","ProviderGateway"],"priority":"P1"},
+    {"id":"U-P1-06","name":"Provider Tokenizer Arbitrage Router","classification":"HARDEN","owners":["frontier_router","ProviderGateway","TokenPerSuccessOptimizer"],"priority":"P1"},
+    {"id":"U-P1-07","name":"Learned Tool Result Visibility Policy","classification":"HARDEN","owners":["ToolOutputExternalizer","AdaptiveContextPolicy"],"priority":"P1"}
+  ],
+  "waves": [
+    "TE-U0_ultra_low_baseline_and_reconciliation",
+    "TE-U1_tool_chain_fusion",
+    "TE-U2_action_preserving_observation_compression",
+    "TE-U3_multi_rubric_code_pruning",
+    "TE-U4_representation_and_tokenizer_arbitrage",
+    "TE-U5_context_value_and_step_reasoning",
+    "TE-U6_zero_inference_and_micro_agent_macros",
+    "TE-U7_compound_provider_receipt_promotion"
+  ],
+  "external_references": [
+    {"name":"CoACT","reference":"THU-Agent/CoACT; arXiv:2607.02911","claim":"external"},
+    {"name":"LaMR","reference":"arXiv:2605.15315","claim":"external"},
+    {"name":"Anthropic Programmatic Tool Calling","reference":"provider documentation","claim":"external"},
+    {"name":"Cross-Lingual Token Arbitrage","reference":"arXiv:2606.03618","claim":"external"}
+  ],
+  "hard_invariants": [
+    "DETERMINISTIC_REDUCTION_PRECEDES_LEARNED_COMPRESSION",
+    "NEXT_ACTION_PRESERVATION_DOES_NOT_REPLACE_VERIFIER_SUCCESS",
+    "EXACT_RAW_EVIDENCE_REMAINS_RECOVERABLE",
+    "NO_EXPANSION_UNDER_TARGET_TOKENIZER",
+    "INTERMEDIATE_TOOL_RESULTS_STAY_OUT_OF_PROVIDER_HISTORY_WHEN_FUSION_IS_VALID",
+    "USER_SECURITY_AND_EXACT_CONSTRAINTS_SURVIVE_CROSS_LINGUAL_REWRITE",
+    "MANDATORY_CONTEXT_CANNOT_BE_DROPPED_BY_VALUE_PREDICTOR",
+    "REASONING_BUDGET_CAN_ESCALATE_ON_UNCERTAINTY_OR_FAILURE",
+    "ROUTING_OPTIMIZES_VERIFIED_COST_NOT_TOKEN_COUNT_ONLY",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIM"
+  ],
+  "claim_boundary": "ultra-low token bands are engineering stretch targets until frozen equivalent workloads and paired provider receipts certify them"
+}

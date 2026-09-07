@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "family": "syntavra-token-economy-execution-backlog",
+  "status": "active_continuation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/token-economy-execution-backlog-v1.json",
+  "ultra_low_overlay": "contracts/python/ultra-low-token-frontier-v1.json",
+  "no_new_capability_namespace": true,
+  "base_backlog_remains_authoritative": true,
+  "priority_order": [
+    "TE-P0-01",
+    "TE-P0-02_03_04_09",
+    "U-P0-01",
+    "TE-P0-08",
+    "TE-P0-10_plus_U-P0-02",
+    "TE-P0-11_plus_U-P0-03",
+    "TE-P0-06_07_14",
+    "TE-P0-12_13",
+    "U-P0-04",
+    "U-P1-01_07",
+    "TE-U7"
+  ],
+  "new_items": [
+    {"id":"U-P0-01","name":"Tool-Chain Fusion / Programmatic Tool Calling","state":"TODO","class":"UNIFY_HARDEN"},
+    {"id":"U-P0-02","name":"Zero-Inference Answer Synthesis","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U-P0-03","name":"Verified Micro-Agent Macro Runtime","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U-P0-04","name":"Current-Truth Contradiction Collapse","state":"TODO","class":"HARDEN"},
+    {"id":"U-P1-01","name":"Action-Preserving Observation Compressor","state":"TODO","class":"OPTIONAL_HARDEN"},
+    {"id":"U-P1-02","name":"Multi-Rubric Residual Code Pruner","state":"TODO","class":"OPTIONAL_HARDEN"},
+    {"id":"U-P1-03","name":"Cross-Lingual Token Arbitrage","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U-P1-04","name":"Context Value Predictor","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U-P1-05","name":"Step-Level Reasoning Budgeter","state":"TODO","class":"HARDEN"},
+    {"id":"U-P1-06","name":"Provider Tokenizer Arbitrage Router","state":"TODO","class":"HARDEN"},
+    {"id":"U-P1-07","name":"Learned Tool Result Visibility Policy","state":"TODO","class":"HARDEN"}
+  ],
+  "waves": ["TE-U0","TE-U1","TE-U2","TE-U3","TE-U4","TE-U5","TE-U6","TE-U7"],
+  "stretch_targets": {
+    "verified_repeated_tokens": 0,
+    "easy_warm_max": 500,
+    "easy_frontier_max": 2000,
+    "normal_scoped_coding_max": 5000,
+    "hard_scoped_max": 8000,
+    "eligible_easy_avoidable_target": 0.97,
+    "eligible_easy_avoidable_stretch": 0.995,
+    "normal_scoped_avoidable_target": 0.95,
+    "normal_scoped_avoidable_stretch": 0.98
+  },
+  "measurement_additions": [
+    "intermediate_tool_tokens_prevented",
+    "fused_vs_sequential_provider_calls",
+    "next_action_preservation_rate",
+    "compression_action_divergence",
+    "multi_rubric_pruning_attribution",
+    "representation_candidate_tokens",
+    "rewrite_fallback_rate",
+    "reasoning_tokens_per_step",
+    "expected_vs_realized_verified_route_cost",
+    "zero_inference_answer_count",
+    "micro_agent_macro_success_rate"
+  ],
+  "hard_invariants": [
+    "V1_OPEN_WORK_REMAINS_ACTIVE",
+    "NO_NEW_CAP_NAMESPACE",
+    "DETERMINISTIC_ELIMINATION_BEFORE_LEARNED_COMPRESSION",
+    "QUALITY_VERIFIER_SECURITY_NON_INFERIOR",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIMS",
+    "EXTRA_RECOVERY_CALLS_COUNT_TOWARD_TOTAL_COST",
+    "ZERO_INFERENCE_OUTPUT_MUST_BE_EVIDENCE_BACKED",
+    "ROUTER_OPTIMIZES_VERIFIED_COST_NOT_RAW_TOKEN_COUNT"
+  ]
+}

@@ -5,11 +5,15 @@ on:
     paths:
       - 'contracts/python/hyperefficiency-roadmap-v1.json'
       - 'contracts/python/hyperefficiency/**'
+      - 'contracts/python/token-economy-execution-backlog-v2.json'
+      - 'contracts/python/ultra-low-token-frontier-v1.json'
       - 'docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md'
       - 'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md'
       - 'docs/UNIFIED_PLAN.md'
       - 'docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md'
       - 'docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md'
+      - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V2.md'
+      - 'docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V1.md'
       - 'docs/plans/hyperefficiency/**'
       - 'tests/runtime/test_hyperefficiency_roadmap.py'
       - 'tools/validate_hyperefficiency_roadmap.py'
@@ -19,11 +23,15 @@ on:
     paths:
       - 'contracts/python/hyperefficiency-roadmap-v1.json'
       - 'contracts/python/hyperefficiency/**'
+      - 'contracts/python/token-economy-execution-backlog-v2.json'
+      - 'contracts/python/ultra-low-token-frontier-v1.json'
       - 'docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md'
       - 'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md'
       - 'docs/UNIFIED_PLAN.md'
       - 'docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md'
       - 'docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md'
+      - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V2.md'
+      - 'docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V1.md'
       - 'docs/plans/hyperefficiency/**'
       - 'tests/runtime/test_hyperefficiency_roadmap.py'
       - 'tools/validate_hyperefficiency_roadmap.py'
@@ -73,9 +81,6 @@ jobs:
           assert value['family'] == 'syntavra-hyperefficiency-roadmap'
           assert value['default_state'] == 'admitted_reconciliation'
 
-          # Roadmap size is append-only and validated against exact shard hashes in
-          # the preceding step. Keep this authority check structural so future
-          # admitted shards do not require another stale hard-coded count edit.
           source_start, source_end = value['source_range']
           canonical_start, canonical_end = value['canonical_range']
           offset = value['mapping_offset']
@@ -96,6 +101,19 @@ jobs:
           assert authority['rust_retired'] is True
           assert authority['rust_production_promotion'] == '174/245'
           assert authority['rust_remaining'] == 71
+
+          backlog = json.loads(Path('contracts/python/token-economy-execution-backlog-v2.json').read_text(encoding='utf-8'))
+          frontier = json.loads(Path('contracts/python/ultra-low-token-frontier-v1.json').read_text(encoding='utf-8'))
+          assert backlog['schema_version'] == 2
+          assert backlog['no_new_capability_namespace'] is True
+          assert backlog['base_backlog_remains_authoritative'] is True
+          assert frontier['schema_version'] == 1
+          assert frontier['no_new_capability_namespace'] is True
+          assert frontier['targets']['verified_repeated_provider_tokens'] == 0
+          assert frontier['targets']['easy_warm_stretch_max_tokens'] == 500
+          assert frontier['targets']['easy_frontier_stretch_max_tokens'] == 2000
+          assert frontier['targets']['normal_scoped_coding_stretch_max_tokens'] == 5000
+          assert frontier['targets']['hard_scoped_stretch_max_tokens'] == 8000
           PY
 
       - name: Enforce exact clean head
