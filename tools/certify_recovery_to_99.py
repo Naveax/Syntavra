@@ -14,10 +14,15 @@ RECOVERY = ROOT / "contracts/python/recovery-to-99-v1.json"
 WORKLOADS = ROOT / "contracts/python/token-economy-frozen-workloads-v1.json"
 AUTHORITY = ROOT / "docs/CURRENT_RECOVERY_TO_99.md"
 RUNTIME = ROOT / "syntavra_runtime/agent_runtime.py"
+AUTONOMOUS = ROOT / "syntavra_runtime/autonomous_agent.py"
+RETRIEVAL = ROOT / "syntavra_runtime/agent_retrieval.py"
+RETRY = ROOT / "syntavra_runtime/retry_economics.py"
 CONTEXT = ROOT / "syntavra_runtime/agent_context_runtime.py"
 OBSERVATION = ROOT / "syntavra_runtime/provider_call_observation.py"
 SECURITY_TEST = ROOT / "tests/runtime/test_recovery_to_99_security.py"
 RUNTIME_TEST = ROOT / "tests/runtime/test_token_economy_rc1_runtime.py"
+RETRIEVAL_TEST = ROOT / "tests/runtime/test_agent_retrieval.py"
+RETRY_TEST = ROOT / "tests/runtime/test_retry_economics.py"
 BENCHMARK = ROOT / "benchmarks/token_economy_rc1_benchmark.py"
 WORKFLOW = ROOT / ".github/workflows/recovery-to-99-rc1.yml"
 
@@ -50,6 +55,9 @@ def certify() -> dict[str, Any]:
     workloads = json.loads(WORKLOADS.read_text(encoding="utf-8"))
     authority = AUTHORITY.read_text(encoding="utf-8")
     runtime = RUNTIME.read_text(encoding="utf-8")
+    autonomous = AUTONOMOUS.read_text(encoding="utf-8")
+    retrieval = RETRIEVAL.read_text(encoding="utf-8")
+    retry = RETRY.read_text(encoding="utf-8")
     context = CONTEXT.read_text(encoding="utf-8")
     observation = OBSERVATION.read_text(encoding="utf-8")
 
@@ -60,6 +68,7 @@ def certify() -> dict[str, Any]:
     _require(recovery["no_new_capability_namespace"] is True, "parallel capability namespace admitted")
     _require(float(recovery["scoring_policy"]["target_minimum"]) >= 9.9, "target minimum weakened")
     _require(recovery["scoring_policy"]["local_tokenizer_counts_are_not_provider_billed_proof"] is True, "provider proof boundary weakened")
+    _require(recovery["scoring_policy"]["provider_call_avoidance_requires_pre_inference_receipt_or_exact_replay_proof"] is True, "provider-call avoidance proof weakened")
     _require(len(recovery["canonical_owners"]) == 15, "canonical owner count drift")
     _require(len(set(recovery["canonical_owners"])) == 15, "duplicate canonical owner")
 
@@ -71,6 +80,14 @@ def certify() -> dict[str, Any]:
     for name, row in recovery["areas"].items():
         _require(float(row["target"]) >= 9.9, f"{name} target weakened")
         _require(bool(row["required_gates"]), f"{name} has no required gates")
+
+    runtime_gates = set(recovery["areas"]["runtime"]["required_gates"])
+    for required in (
+        "retry_economics_uses_exact_failure_plus_workspace_state_before_provider_call",
+        "same_failure_on_changed_exact_state_remains_repairable",
+        "uncertain_workspace_equivalence_never_suppresses_provider_inference",
+    ):
+        _require(required in runtime_gates, f"retry economics runtime gate missing: {required}")
 
     rows = workloads["workloads"]
     ids = [row["id"] for row in rows]
@@ -84,6 +101,7 @@ def certify() -> dict[str, Any]:
         "R99-1: Constant-context runtime",
         "R99-2: Retrieval and tool-call elimination",
         "R99-3: Verified inference elimination",
+        "R99-4: Repair-loop economics",
         "R99-5: Security/property closure",
         "R99-7: Provider proof",
         "R99-8: Release proof",
@@ -98,16 +116,38 @@ def certify() -> dict[str, Any]:
         "ProviderCallObservationLedger",
         "prepare_input_tokens",
         "max_inspect_total_bytes",
+        "QueryPushdownEngine",
+        "search_inspect",
     )
     for marker in runtime_markers:
         _require(marker in runtime, f"runtime recovery marker missing: {marker}")
     for marker in ("UNCHANGED", "SUPERSEDED", "raw_history_replayed"):
         _require(marker in context, f"constant-context marker missing: {marker}")
+    for marker in ("_filters", "unsupported repository filters", "unsupported repository projection fields"):
+        _require(marker in retrieval, f"retrieval fail-closed marker missing: {marker}")
+    for marker in (
+        "RetryEconomicsGovernor",
+        "workspace_state_fingerprint",
+        "STOP_EXACT_REPEAT",
+        "ALLOW_UNCERTAIN",
+        "provider_calls_avoided",
+    ):
+        _require(marker in retry, f"retry economics marker missing: {marker}")
+    for marker in ("RetryEconomicsGovernor", "workspace_state_fingerprint", "retry_economics"):
+        _require(marker in autonomous, f"autonomous-agent retry integration missing: {marker}")
     for marker in ("provider_proof_complete", "paired_token_comparison", "provider_observed"):
         _require(marker in observation, f"provider observation marker missing: {marker}")
 
-    for path in (SECURITY_TEST, RUNTIME_TEST, BENCHMARK):
+    for path in (SECURITY_TEST, RUNTIME_TEST, RETRIEVAL_TEST, RETRY_TEST, BENCHMARK):
         _require(path.is_file(), f"required recovery artifact missing: {path.relative_to(ROOT)}")
+
+    retry_test = RETRY_TEST.read_text(encoding="utf-8")
+    for marker in (
+        "test_exact_unchanged_failure_state_stops_before_third_provider_call",
+        "test_same_failure_on_changed_state_remains_repairable",
+        "test_governor_stops_only_exact_failure_state_repeat",
+    ):
+        _require(marker in retry_test, f"retry regression missing: {marker}")
 
     benchmark = _benchmark()
     exact_head = _head()
@@ -139,10 +179,15 @@ def certify() -> dict[str, Any]:
             "workload_contract": _sha(WORKLOADS),
             "current_authority": _sha(AUTHORITY),
             "agent_runtime": _sha(RUNTIME),
+            "autonomous_agent": _sha(AUTONOMOUS),
+            "agent_retrieval": _sha(RETRIEVAL),
+            "retry_economics": _sha(RETRY),
             "agent_context_runtime": _sha(CONTEXT),
             "provider_call_observation": _sha(OBSERVATION),
             "security_test": _sha(SECURITY_TEST),
             "runtime_test": _sha(RUNTIME_TEST),
+            "retrieval_test": _sha(RETRIEVAL_TEST),
+            "retry_test": _sha(RETRY_TEST),
             "benchmark": _sha(BENCHMARK),
             "workflow": _sha(WORKFLOW) if WORKFLOW.is_file() else "",
         },
