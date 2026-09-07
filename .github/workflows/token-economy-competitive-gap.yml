@@ -3,17 +3,21 @@ name: Token Economy Competitive Gap
 on:
   pull_request:
     paths:
+      - 'syntavra_runtime/tool_registry.py'
       - 'contracts/python/token-economy-competitive-gap-v1.json'
       - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_COMPETITIVE_GAP_V1.md'
       - 'tests/runtime/test_token_economy_competitive_gap.py'
+      - 'tests/runtime/test_tool_schema_cache_stability.py'
       - 'tools/certify_token_economy_competitive_gap.py'
       - '.github/workflows/token-economy-competitive-gap.yml'
   push:
     branches: [main]
     paths:
+      - 'syntavra_runtime/tool_registry.py'
       - 'contracts/python/token-economy-competitive-gap-v1.json'
       - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_COMPETITIVE_GAP_V1.md'
       - 'tests/runtime/test_token_economy_competitive_gap.py'
+      - 'tests/runtime/test_tool_schema_cache_stability.py'
       - 'tools/certify_token_economy_competitive_gap.py'
       - '.github/workflows/token-economy-competitive-gap.yml'
 
@@ -47,11 +51,16 @@ jobs:
         run: |
           set -euo pipefail
           python -m compileall -q \
+            syntavra_runtime/tool_registry.py \
             tests/runtime/test_token_economy_competitive_gap.py \
+            tests/runtime/test_tool_schema_cache_stability.py \
             tools/certify_token_economy_competitive_gap.py
 
       - name: Run competitive gap contract
-        run: python -m unittest tests.runtime.test_token_economy_competitive_gap -v
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_token_economy_competitive_gap -v
+          python -m unittest tests.runtime.test_tool_schema_cache_stability -v
 
       - name: Emit certification receipt
         run: python tools/certify_token_economy_competitive_gap.py
