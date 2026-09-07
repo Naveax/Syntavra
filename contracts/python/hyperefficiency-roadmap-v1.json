@@ -48,7 +48,7 @@
     "Repository-specific distillation"
   ],
   "shards": [
-    {"shard":"V3A","path":"contracts/python/hyperefficiency/roadmap-v1-v3a.json","source_range":[1,170],"canonical_range":[281,450],"count":170,"sha256":"a0bd16ca15a2de896a9e93b3200a136ac653f0896dc6064a9bb8f80399887a79"},
+    {"shard":"V3A","path":"contracts/python/hyperefficiency/roadmap-v1-v3a.json","source_range":[1,170],"canonical_range":[281,450],"count":170,"sha256":"1d17c496042a557b5850285c55690626dcfd43502ace36a7b8af9d77e49e29f2"},
     {"shard":"V3B","path":"contracts/python/hyperefficiency/roadmap-v1-v3b.json","source_range":[171,339],"canonical_range":[451,619],"count":169,"sha256":"326b2d50ec3f0d8135407d8cea62c96542d65a3736a84cc76f1f507887a6d5f3"},
     {"shard":"V4A","path":"contracts/python/hyperefficiency/roadmap-v1-v4a.json","source_range":[340,497],"canonical_range":[620,777],"count":158,"sha256":"11a6af019a239994785430edcf6f9ff8923bd280febe5470d3809d41fedd4b3d"},
     {"shard":"V4B","path":"contracts/python/hyperefficiency/roadmap-v1-v4b.json","source_range":[498,654],"canonical_range":[778,934],"count":157,"sha256":"eef7c39536d3b7db017eb9a10938224feb2e4e7ed93b516b7438ca7c0e263107"},
