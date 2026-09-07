@@ -1,7 +1,7 @@
 # Syntavra Recovery-to-9.9 Current Authority
 
 Status: **ACTIVE / CODE-FIRST / ROADMAP-FROZEN / CLAIM-FAIL-CLOSED**  
-Date: 2026-09-07  
+Date: 2026-09-08  
 Machine contract: `contracts/python/recovery-to-99-v1.json`
 
 This is the current execution entrypoint for recovery work. Historical HyperEfficiency, Token Economy and Ultra-Low Frontier documents remain lineage and research evidence. They do not outrank this file while the recovery gate is active.
@@ -21,6 +21,8 @@ Evidence levels:
 - **E6 RELEASE-PROVEN**: exact-head required CI, rollback, dogfood and release gates are green.
 
 No area receives `9.9` with an open required gate. Provider proof cannot exceed `5.0` without E5 evidence. Readiness cannot exceed `8.0` without E5 plus required exact-head CI.
+
+Provider-call avoidance is counted only when the call is prevented **before inference** by an exact local proof, verified replay, or equivalent provider-observed receipt. Rejecting a repeated answer after generation is not a token saving.
 
 ## 2. Canonical owner model
 
@@ -61,49 +63,46 @@ Exit: 50+ tool rounds remain bounded by active evidence, not transcript length.
 
 ### R99-2: Retrieval and tool-call elimination
 
-Implement in this order:
+Current integrated behavior:
 
-1. query pushdown with strict field projection, bounded top-k and local predicates;
-2. symbol/range retrieval as default, whole-file reads as bounded compatibility fallback;
-3. fused deterministic `search -> select -> ranged read` execution that exposes only the final compact observation to the model;
-4. no-change/delta responses for polling/repeated reads;
-5. negative-knowledge cache for verified no-result/no-change observations with dependency invalidation;
-6. counterfactual tool suppression when a local deterministic check proves a call cannot alter the decision state.
+1. query pushdown uses strict field projection, bounded top-k and local predicates;
+2. provider-controlled projection/filter material is allow-listed **before graph access**, including empty-result cases;
+3. ranged/symbol-scoped inspection is the preferred source path;
+4. deterministic `search -> select -> ranged read` may fuse into one local observation when identity is unique;
+5. ambiguous identities fail closed to candidate disclosure rather than guessing a source;
+6. intermediate graph rows stay local on a successful fused read;
+7. no-change/supersession receipts prevent raw observation recurrence.
 
-Exit: routine retrieval no longer spends one provider turn per deterministic transformation.
+Still open in this wave: dependency-invalidated negative-knowledge caching and broader counterfactual tool suppression.
+
+Exit: routine retrieval no longer spends one provider turn per deterministic transformation and unknown retrieval policy never bypasses validation because the result set happened to be empty.
 
 ### R99-3: Verified inference elimination
 
-Build an exact inference-skip lane around the existing verifier, evidence and execution owners.
+An exact inference-skip lane exists around the existing verifier, evidence and execution owners.
 
-Cache identity must include at minimum:
+Cache identity includes repository state plus task/verifier/policy material. Only fully verified results may be replayed. Exact hits may skip provider inference, but replayed patches still pass patch application and the verifier. Fingerprint mismatch, apply failure, verifier failure or uncertainty invalidates/falls back rather than fabricating success.
 
-- project scope;
-- exact repository/worktree state fingerprint;
-- normalized task/instruction identity;
-- verifier contract;
-- security/policy fingerprint;
-- relevant tool/schema/runtime versions.
-
-Only a previously **fully verified** patch/result may enter the cache. An exact hit may skip provider inference, but the replayed artifact still passes through patch application and the verifier. Any fingerprint mismatch, apply failure, verifier failure or uncertainty invalidates the hit and falls back to normal inference.
-
-Exit: B0/B8 exact repeats can legitimately record `provider_calls=0` without weakening verification.
+Exit: eligible exact repeats can legitimately record `provider_calls=0` without weakening verification.
 
 ### R99-4: Repair-loop economics
 
-The loop tracks:
+The repair loop now treats retry suppression as an **information-equivalence proof**, not as a textual-failure heuristic.
 
-- failure signature;
-- patch/diff signature;
-- newly acquired information;
-- verifier delta;
-- repository state delta;
-- repeated tool/result identity;
-- expected next-attempt value versus token cost.
+Required behavior:
 
-Repeated patch/failure loops are already forbidden; recovery hardening adds semantic early-stop and strategy-change rules. A provider judge is not called merely to decide whether another provider call is worthwhile.
+- fingerprint the exact mutable workspace before a repair provider call;
+- pair that fingerprint with the normalized verifier/apply failure fingerprint;
+- allow one repair presentation for a new exact `{failure, workspace-state}` pair;
+- if the same exact pair reappears, stop **before** another provider call and record `provider_calls_avoided`;
+- the same textual failure on a different exact workspace state remains eligible for repair;
+- if exact workspace equivalence cannot be proven, allow the provider call rather than risk a false stop;
+- keep repeated-patch protection independently, because identical patch recurrence and identical failure/state recurrence are different pathologies;
+- never call another provider merely to judge whether a provider retry is worthwhile.
 
-Exit: no long-tail retry storm can consume unbounded provider tokens without new evidence or explicit necessity.
+This replaces failure-only anti-loop logic, which could both waste inference on unchanged state and incorrectly stop a progressing repair that produced the same verifier message on a new worktree state.
+
+Exit: no exact unchanged failure/state pair is presented to the provider repeatedly, while state-changing repair trajectories remain available.
 
 ### R99-5: Security/property closure
 
@@ -118,6 +117,8 @@ Required suites cover:
 - mandatory instruction preservation;
 - cache fingerprint mutation;
 - inference-skip stale patch rejection;
+- retrieval projection/filter fail-closed behavior before graph access;
+- retry equivalence uncertainty preserving solve quality;
 - verifier-failure evidence retention.
 
 Default uncertainty behavior is exact/natural/fallback, never silent lossy success.
@@ -150,6 +151,7 @@ For every claimed workload family:
 - provider request/response identity when exposed;
 - fresh input, cached input, reasoning and output usage when exposed;
 - failed attempts included in cost;
+- retries prevented by inference-skip/retry-economics recorded separately from prompt compression;
 - baseline and candidate receipts retained and linked to the claim;
 - no arithmetic addition of overlapping component savings.
 
@@ -162,6 +164,8 @@ Exit: public savings claims resolve to paired receipt IDs.
 One exact-head recovery workflow must gate the critical surfaces:
 
 - constant-context/runtime tests;
+- retrieval fail-closed tests;
+- exact-state retry-economics tests;
 - security/property tests;
 - local token-economy regression benchmark;
 - provider envelope and observation contracts;
@@ -180,9 +184,9 @@ Exit: only then is `readiness >= 9.9` a defensible statement.
 | Area | 9.9 requires |
 |---|---|
 | Architecture | one canonical owner per active feature, zero duplicate persistent stores/public routers, explicit dependency/invalidation edges, roadmap rows reconciled without parallel namespace |
-| Token economics | >=95% provider-visible mass attributable, all retry/recovery/reacquisition counted, non-inferior quality, lower net verified provider cost on promoted workloads |
-| Security | exact recovery for all evicted evidence, property/fuzz coverage, stale/cross-scope reuse fails closed, mandatory evidence never silently lost |
-| Runtime | constant context, bounded retrieval, externalization, envelope binding, query pushdown, fusion and verified inference skip in the product path |
+| Token economics | >=95% provider-visible mass attributable, all retry/recovery/reacquisition counted, non-inferior quality, lower net verified provider cost on promoted workloads, pre-inference avoidance separated from post-generation rejection |
+| Security | exact recovery for all evicted evidence, property/fuzz coverage, stale/cross-scope reuse fails closed, retrieval policy validates before data access, mandatory evidence never silently lost |
+| Runtime | constant context, bounded retrieval, externalization, envelope binding, query pushdown, fusion, verified inference skip and exact-state retry economics in the product path |
 | Provider proof | paired provider-observed receipts, identical pair conditions, >=3 repetitions, receipt-linked claims |
 | Benchmark | frozen B0-B9, cold/warm separation, adversarial safety, end-to-end and long-horizon accounting, verified-cost Pareto reporting |
 | CI | all relevant required checks green on exact head, recovery gate required, exact-head artifacts, no duplicate manual dispatch |
@@ -193,12 +197,21 @@ Exit: only then is `readiness >= 9.9` a defensible statement.
 
 ## 5. Current hard blockers
 
-The following cannot be wished away by documentation:
+Closed since the first recovery authority revision:
+
+- query pushdown is integrated into the coding-agent provider path;
+- deterministic search/select/ranged-read fusion is integrated;
+- verified inference skip is integrated and re-verifies replayed artifacts;
+- retrieval projection/filter validation is fail-closed before graph access;
+- exact failure/workspace retry economics is integrated before provider inference.
+
+Still open and therefore score-capping:
 
 - paired real provider-observed A/B receipts have not yet been collected for the frozen corpus;
-- the coding-agent loop still needs full query-pushdown/fused retrieval and verified inference-skip integration;
-- the complete cache/delta/SWIR/invalidation property matrix is not yet closed;
-- exact-head recovery CI must turn green after the recovery commits;
-- B0-B9 provider replay/dogfood must be executed before provider proof/readiness can reach 9.9.
+- B0-B9 frozen real-task provider replay/dogfood has not yet closed;
+- the full cache/delta/SWIR/handle/invalidation property and fuzz matrix is not yet closed;
+- macro/verified workflow execution is not yet fully integrated into the coding-agent loop;
+- latest exact-head aggregate CI and release chain must be green after recovery commits;
+- a release candidate with zero known P0/P1 correctness blockers is not yet proven.
 
 These blockers are deliberately visible. Hiding them would improve the scorecard and degrade the product, a trade humans somehow keep rediscovering.
