@@ -120,6 +120,11 @@ def _catalog(repo: Path, project: Path, state: Path, fixture: dict[str, Any]) ->
     }
 
 
+def _canonical_name_key(value: str) -> tuple[str, str]:
+    text = str(value)
+    return text.casefold(), text
+
+
 def _mcp_stdio(repo: Path, project: Path, state: Path, fixture: dict[str, Any]) -> dict[str, Any]:
     requests = [
         {"jsonrpc": "2.0", "id": "init", "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
@@ -173,8 +178,9 @@ def _mcp_stdio(repo: Path, project: Path, state: Path, fixture: dict[str, Any]) 
         raise AssertionError("MCP ping drift")
     listed = by_id["list"].get("result", {}).get("tools") or []
     listed_names = [row.get("name") for row in listed]
-    if listed_names != list(MINIMAL_TOOLS):
-        raise AssertionError(f"MCP tools/list drift: {listed_names}")
+    expected_names = sorted(MINIMAL_TOOLS, key=_canonical_name_key)
+    if listed_names != expected_names:
+        raise AssertionError(f"MCP tools/list canonical-order drift: {listed_names} != {expected_names}")
     call = by_id["call"]
     result = call.get("result") or {}
     content = result.get("content") or []
