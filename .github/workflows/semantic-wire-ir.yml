@@ -45,6 +45,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install runtime dependencies
+        run: python -m pip install -e .
+
       - name: Compile Semantic Wire IR surface
         run: |
           set -euo pipefail
