@@ -72,7 +72,7 @@ class TokenEconomyCompetitiveGapTests(unittest.TestCase):
             "TE-3: Make prompt cache stability explicit",
             "TE-4: Push computation below the provider boundary",
             "TE-5: Turn repeated work into zero/near-zero inference",
-            "Component percentages may overlap",
+            "Public savings claims remain forbidden",
         ):
             self.assertIn(marker, self.plan)
 
