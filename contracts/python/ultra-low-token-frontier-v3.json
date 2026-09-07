@@ -1,0 +1,68 @@
+{
+  "schema_version": 3,
+  "family": "syntavra-ultra-low-token-frontier",
+  "status": "research_admitted_reconciliation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/ultra-low-token-frontier-v2.json",
+  "no_new_capability_namespace": true,
+  "objective": "discover the minimum verified provider work per workload family and keep lowering it when evidence permits",
+  "targets": {
+    "verified_repeated_provider_tokens": 0,
+    "easy_warm_floor_search_max_tokens": 100,
+    "easy_frontier_floor_search_max_tokens": 500,
+    "normal_scoped_coding_floor_search_max_tokens": 2000,
+    "hard_scoped_floor_search_max_tokens": 5000,
+    "quality_non_inferior": true,
+    "unexplained_overflow": 0
+  },
+  "mechanisms": [
+    {"id":"U3-P0-01","name":"Verified Token Floor Search / Budget Annealing","classification":"NEW_HARDEN","owners":["TokenPerSuccessOptimizer","offline_policy_evaluation","SignalBench"],"priority":"P0"},
+    {"id":"U3-P0-02","name":"Local Draft Verifier Frontier Residual Correction","classification":"UNIFY_HARDEN","owners":["local_specialists","VerifierGraph","ProviderGateway","edit_compiler"],"priority":"P0"},
+    {"id":"U3-P0-03","name":"Verifier-Guided Failure Projection","classification":"HARDEN_UNIFY","owners":["FailureOntology","QueryCompiler","ToolResultQueryPushdown","ContextAdmissionController"],"priority":"P0"},
+    {"id":"U3-P0-04","name":"Incremental State Handoff Content-Addressed Delta","classification":"HARDEN_PROVIDER_GATED","owners":["TypedContextObjectStore","ContextReplayBreaker","ProviderGateway","prompt_cache_state_adapters"],"priority":"P0"},
+    {"id":"U3-P1-01","name":"Task-Family Local Distillation Specialist Escalation","classification":"HARDEN_UNIFY","owners":["repository_specific_distillation","local_specialists","InferenceExceptionArchitecture"],"priority":"P1"},
+    {"id":"U3-P1-02","name":"Proof-Carrying Zero-Inference Result","classification":"HARDEN_UNIFY","owners":["ZeroInferenceAnswerSynthesis","VerifierGraph","EvidenceStore"],"priority":"P1"},
+    {"id":"U3-P1-03","name":"Pareto Workflow Selector","classification":"HARDEN","owners":["TokenPerSuccessOptimizer","frontier_router","workflow_compiler"],"priority":"P1"}
+  ],
+  "waves": ["TE-U15","TE-U16","TE-U17","TE-U18","TE-U19","TE-U20","TE-U21"],
+  "measurement_additions": [
+    "certified_token_floor_by_workload_family",
+    "floor_search_trial_count",
+    "floor_search_rollback_count",
+    "pareto_dominant_configuration_count",
+    "local_draft_route_choice",
+    "cloud_input_inflation_from_review",
+    "frontier_residual_correction_tokens",
+    "direct_generation_comparator_tokens",
+    "failure_projection_tokens_vs_raw",
+    "incremental_state_provider_usage",
+    "local_specialist_solve_rate",
+    "local_specialist_escalation_rate",
+    "proof_carrying_zero_inference_count",
+    "provider_tokens_per_verified_success"
+  ],
+  "hard_invariants": [
+    "V1_V2_FRONTIER_WORK_REMAINS_ACTIVE",
+    "NO_NEW_CAP_NAMESPACE",
+    "TOKEN_FLOOR_IS_WORKLOAD_SPECIFIC_NOT_UNIVERSAL",
+    "LOWER_BUDGET_CANNOT_WEAKEN_VERIFIER_OR_SECURITY",
+    "LOCAL_DRAFT_DISABLED_WHEN_EXPECTED_CLOUD_CORRECTION_COST_IS_WORSE",
+    "FAILURE_PROJECTION_PRESERVES_EXACT_RECOVERY",
+    "PROVIDER_STATE_HANDLE_SAVINGS_REQUIRE_PROVIDER_RECEIPTS",
+    "LOCAL_SPECIALIST_ESCALATES_ON_UNCERTAINTY_OR_INCOMPATIBLE_STATE",
+    "ZERO_INFERENCE_REQUIRES_COMPLETE_PROOF_RECEIPT",
+    "PARETO_SELECTION_OPTIMIZES_SUCCESSFUL_TASK_ECONOMICS",
+    "RECOVERY_RETRY_FALLBACK_CALLS_COUNT_END_TO_END",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIMS"
+  ],
+  "external_references": [
+    {"name":"CODESTRUCT","reference":"ACL 2026 / arXiv:2604.05407","claim":"external"},
+    {"name":"AB-RAG","reference":"arXiv:2606.29090","claim":"external"},
+    {"name":"Semantic Early-Stopping","reference":"arXiv:2606.27009","claim":"external"},
+    {"name":"CoDE-Stop","reference":"arXiv:2604.04930","claim":"external"},
+    {"name":"ESTAR","reference":"arXiv:2602.10004","claim":"external"},
+    {"name":"Local-Splitter","reference":"arXiv:2604.12301","claim":"external"},
+    {"name":"Thinking Economically HAB","reference":"ACL Findings 2026","claim":"external"}
+  ],
+  "claim_boundary": "v3 floor bands are research search targets until workload-specific frozen tasks and paired provider receipts certify them"
+}
