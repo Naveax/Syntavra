@@ -45,6 +45,8 @@ class ModelResult:
 class ModelGateway(Protocol):
     def complete(self, messages: Sequence[Mapping[str, str]], *, system: str = "") -> ModelResult: ...
 
+    def prepare_input_tokens(self, tokens: int) -> None: ...
+
 
 class _HTTPGateway:
     def __init__(self, config: GatewayConfig) -> None:
@@ -59,6 +61,18 @@ class _HTTPGateway:
         if config.token_envelope is not None and not config.token_envelope.provider_call_admissible:
             raise ValueError("token envelope does not admit a provider call")
         self.config = config
+
+    def prepare_input_tokens(self, tokens: int) -> None:
+        """Bind the current compiled provider packet to the active envelope.
+
+        Agent/runtime compilers call this immediately before dispatch. Replacing the
+        immutable config prevents stale token counts from silently carrying across
+        provider turns.
+        """
+        value = int(tokens)
+        if value < 0:
+            raise ValueError("prepared input tokens must be non-negative")
+        self.config = replace(self.config, prepared_input_tokens=value)
 
     def _api_key(self) -> str:
         if not self.config.api_key_env:
@@ -285,6 +299,13 @@ class SequenceModelGateway:
         self.responses = list(responses)
         self.model = model
         self.index = 0
+        self.prepared_input_tokens = 0
+        self.prepared_history: list[int] = []
+
+    def prepare_input_tokens(self, tokens: int) -> None:
+        value = max(0, int(tokens))
+        self.prepared_input_tokens = value
+        self.prepared_history.append(value)
 
     def complete(self, messages: Sequence[Mapping[str, str]], *, system: str = "") -> ModelResult:
         del messages, system
