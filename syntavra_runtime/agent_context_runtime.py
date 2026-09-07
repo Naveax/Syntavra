@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import deque
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from .tool_externalization import ToolOutputExternalizer
@@ -34,7 +34,12 @@ def _bounded_text(value: str, limit: int) -> str:
 
 
 def compact_value(value: Any, *, string_limit: int = 2048, list_limit: int = 12, depth: int = 0) -> Any:
-    """Deterministically bound model-visible metadata without mutating exact owners."""
+    """Deterministically bound optional model-visible metadata.
+
+    This helper is not allowed to decide that user/security/exact evidence is
+    expendable. Callers must restore mandatory fields exactly or fail the final
+    provider budget instead of silently truncating them.
+    """
     if depth >= 5:
         return "[depth-bounded]"
     if isinstance(value, str):
@@ -160,6 +165,8 @@ class ContextBudgetExceeded(RuntimeError):
 
 class ConstantContextState:
     """Active-evidence state that prevents raw tool-history growth across rounds."""
+
+    MANDATORY_BASE_KEYS = ("instruction", "user_instruction", "security_policy")
 
     def __init__(
         self,
@@ -304,6 +311,19 @@ class ConstantContextState:
         self._touch(key)
         return receipt
 
+    def _base_view(self, base: Mapping[str, Any]) -> Mapping[str, Any]:
+        view = compact_value(base, string_limit=4096, list_limit=12)
+        if not isinstance(view, Mapping):
+            raise TypeError("agent base context must remain an object")
+        output = dict(view)
+        for key in self.MANDATORY_BASE_KEYS:
+            if key in base:
+                value = base[key]
+                if not isinstance(value, str):
+                    raise TypeError(f"mandatory context field must be text: {key}")
+                output[key] = value
+        return output
+
     def compile(
         self,
         base: Mapping[str, Any],
@@ -314,7 +334,7 @@ class ConstantContextState:
     ) -> CompiledAgentContext:
         if token_budget <= 0 or byte_budget <= 0:
             raise ValueError("context budgets must be positive")
-        base_view = compact_value(base, string_limit=4096, list_limit=12)
+        base_view = self._base_view(base)
         active = [item.provider_view(include_preview=True) for item in self.active]
         previews_dropped = 0
 
@@ -326,6 +346,7 @@ class ConstantContextState:
                 "context_policy": {
                     "raw_history_replayed": False,
                     "exact_recovery_required": True,
+                    "mandatory_instruction_truncation": False,
                     "active_evidence_count": len(active),
                     "causal_receipt_count": len(self._causal),
                 },
