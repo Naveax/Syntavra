@@ -26,11 +26,11 @@ class FrozenFixture:
 
 
 def _only_changed(*allowed: str) -> str:
-    allowed_json = json.dumps(sorted(allowed))
+    expected_json = json.dumps(sorted(allowed))
     return (
         "import subprocess; "
         "changed=sorted(x for x in subprocess.check_output(['git','diff','--name-only'],text=True).splitlines() if x); "
-        f"assert changed=={allowed_json}, changed; "
+        f"assert changed=={expected_json}, changed; "
     )
 
 
@@ -42,12 +42,14 @@ def _fixtures() -> dict[str, FrozenFixture]:
         + _only_changed("value.py")
     )
     b1_verify = (
-        "from pathlib import Path; "
+        "from pathlib import Path; import runpy; "
         "source=Path('package.py').read_text(encoding='utf-8'); "
         "test=Path('test_value.py').read_text(encoding='utf-8'); "
         "assert 'RESULT = 7' in source and 'VALUE = 7' not in source; "
+        "assert '__all__ = [\'RESULT\']' in source or '__all__ = [\"RESULT\"]' in source; "
         "assert 'RESULT' in test and 'VALUE' not in test; "
-        "ns={}; exec(source,ns); assert ns.get('RESULT')==7; "
+        "ns={}; exec(source,ns); assert ns.get('RESULT')==7 and ns.get('__all__')==['RESULT']; "
+        "runpy.run_path('test_value.py'); "
         + _only_changed("package.py", "test_value.py")
     )
     b2_verify = (
@@ -58,12 +60,16 @@ def _fixtures() -> dict[str, FrozenFixture]:
         + _only_changed("clamp.py")
     )
     b3_verify = (
-        "from pathlib import Path; "
+        "from pathlib import Path; import runpy; "
         "sns={}; exec(Path('service.py').read_text(encoding='utf-8'),sns); "
         "assert sns['display_name']('  Ada   Lovelace ' )=='Ada Lovelace'; "
         "assert sns['display_name']('Grace')=='Grace'; "
+        "test=Path('test_service.py').read_text(encoding='utf-8'); "
+        "assert 'Ada Lovelace' in test and 'Grace' in test; "
+        "runpy.run_path('test_service.py'); "
         "assert Path('model.py').read_text(encoding='utf-8')=='class User:\n    def __init__(self, name):\n        self.name = name\n'; "
-        + _only_changed("service.py")
+        "assert Path('api.py').read_text(encoding='utf-8')=='from service import display_name\n\ndef render(user):\n    return display_name(user.name)\n'; "
+        + _only_changed("service.py", "test_service.py")
     )
     b4_verify = (
         "from pathlib import Path; "
@@ -140,6 +146,10 @@ def _fixtures() -> dict[str, FrozenFixture]:
                 "model.py": "class User:\n    def __init__(self, name):\n        self.name = name\n",
                 "service.py": "def display_name(value):\n    return value\n",
                 "api.py": "from service import display_name\n\ndef render(user):\n    return display_name(user.name)\n",
+                "test_service.py": (
+                    "from service import display_name\n"
+                    "assert display_name('  Ada   Lovelace ') == '  Ada   Lovelace '\n"
+                ),
             },
             b3_verify,
             "multi-file-implementation",
@@ -332,7 +342,7 @@ def materialize(root: Path) -> dict[str, Any]:
 
 
 def verify_initial_failures(manifest: Mapping[str, Any]) -> dict[str, Any]:
-    failures: list[str] = []
+    unexpected_passes: list[str] = []
     for row in manifest.get("tasks", []):
         task = TaskSpec(**{**row, "verifier": tuple(row["verifier"]), "permissions": tuple(row["permissions"])})
         result = subprocess.run(
@@ -347,11 +357,11 @@ def verify_initial_failures(manifest: Mapping[str, Any]) -> dict[str, Any]:
             check=False,
         )
         if result.returncode == 0:
-            failures.append(task.task_id)
+            unexpected_passes.append(task.task_id)
     return {
-        "ok": not failures,
+        "ok": not unexpected_passes,
         "checked": len(manifest.get("tasks", [])),
-        "unexpected_initial_passes": failures,
+        "unexpected_initial_passes": unexpected_passes,
     }
 
 
