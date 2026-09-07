@@ -305,21 +305,14 @@ The bounded catalogs preserve every numbered roadmap title and its originating p
 
 ## 13. Canonical imported catalog
 
-The 1,284 admitted identities are stored in bounded human-readable catalogs and mirrored by the machine-readable registry. This keeps continuation and reconciliation bounded instead of forcing every agent to ingest 1,284 rows to answer one question.
-
-- `docs/plans/hyperefficiency/CATALOG_V3.md` — HE-0001..0339 / CAP-0281..0619
-- `docs/plans/hyperefficiency/CATALOG_V4.md` — HE-0340..0654 / CAP-0620..0934
-- `docs/plans/hyperefficiency/CATALOG_V5.md` — HE-0655..0982 / CAP-0935..1262
-- `docs/plans/hyperefficiency/CATALOG_V6.md` — HE-0983..1284 / CAP-1263..1564
-
-Machine-readable authority:
+The 1,284 admitted identities are stored in eight bounded machine-readable shards. Each row preserves source number, canonical number, exact title, generation and source section without forcing future agents to ingest the entire roadmap.
 
 - `contracts/python/hyperefficiency-roadmap-v1.json` — canonical index, ranges and shard hashes
-- `contracts/python/hyperefficiency/roadmap-v1-v3a.json` ... `roadmap-v1-v6b.json` — bounded capability rows
+- `contracts/python/hyperefficiency/roadmap-v1-v3a.json` ... `roadmap-v1-v6b.json` — HE-0001..HE-1284 / CAP-0281..CAP-1564
 
 ## 14. Lossless source provenance
 
-The six supplied design inputs are retained under `docs/research/hyperefficiency/` as `precursor-a.md`, `precursor-b.md`, `v3.md`, `v4.md`, `v5.md` and `v6.md`. Their rationale is provenance; this roadmap and the machine-readable registry control canonical identity/state.
+The six supplied design inputs are retained losslessly under `docs/research/hyperefficiency/` as deterministic gzip snapshots: `precursor-a.md.gz`, `precursor-b.md.gz`, `v3.md.gz`, `v4.md.gz`, `v5.md.gz` and `v6.md.gz`. The root registry records both compressed and decompressed SHA-256 identities. Their rationale is provenance; this roadmap and the machine-readable registry control canonical identity/state.
 
 ## 15. Completion rule
 
