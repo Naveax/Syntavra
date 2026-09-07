@@ -1,0 +1,39 @@
+name: Provider Token Envelope
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/provider_token_envelope.py'
+      - 'contracts/python/provider-token-envelope-v1.json'
+      - 'docs/plans/SYNTAVRA_PROVIDER_TOKEN_ENVELOPE_V1.md'
+      - 'tests/runtime/test_provider_token_envelope.py'
+      - 'tools/certify_provider_token_envelope.py'
+      - '.github/workflows/provider-token-envelope.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'syntavra_runtime/provider_token_envelope.py'
+      - 'contracts/python/provider-token-envelope-v1.json'
+      - 'docs/plans/SYNTAVRA_PROVIDER_TOKEN_ENVELOPE_V1.md'
+      - 'tests/runtime/test_provider_token_envelope.py'
+      - 'tools/certify_provider_token_envelope.py'
+      - '.github/workflows/provider-token-envelope.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile policy surface
+        run: python -m compileall -q syntavra_runtime/provider_token_envelope.py tools/certify_provider_token_envelope.py tests/runtime/test_provider_token_envelope.py
+      - name: Run unit contract
+        run: python tests/runtime/test_provider_token_envelope.py
+      - name: Run certification receipt
+        run: python tools/certify_provider_token_envelope.py
