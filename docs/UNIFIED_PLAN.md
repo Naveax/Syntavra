@@ -29,9 +29,9 @@ Read in this order for new token-economy development:
 3. `docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md` — append-only long-form roadmap.
 4. `docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md` — architecture/reconciliation overlay.
 5. `docs/plans/SYNTAVRA_TOKEN_ECONOMY_COMPETITIVE_GAP_V1.md` — competitive research overlay.
-6. Token Economy Execution Backlogs V1..V5, newest: `docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V5.md`.
-7. Ultra-Low Token Frontiers V1..V4, newest: `docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V4.md`.
-8. Current machine-readable authority: `contracts/python/token-economy-execution-backlog-v5.json` and `contracts/python/ultra-low-token-frontier-v4.json`.
+6. Token Economy Execution Backlogs V1..V6, newest: `docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V6.md`.
+7. Ultra-Low Token Frontiers V1..V5, newest: `docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md`.
+8. Current machine-readable authority: `contracts/python/token-economy-execution-backlog-v6.json` and `contracts/python/ultra-low-token-frontier-v5.json`.
 9. Earlier backlog/frontier contracts remain append-only lineage and prerequisites.
 10. `contracts/python/hyperefficiency-roadmap-v1.json` — CAP-0281..CAP-1648 admission/state map.
 11. Existing Python-first completion registries/certificates — frozen <=280 authority.
@@ -70,6 +70,10 @@ UNDERSTAND
 -> STAY SILENT IF A SUBAGENT MESSAGE HAS NO VERIFIED VALUE
 -> ESCALATE MULTI-AGENT ONLY ON UNCERTAINTY
 -> PRUNE UNNECESSARY AGENT COMMUNICATION EDGES
+-> KEEP MEMORY MAINTENANCE PROVIDER-FREE BY DEFAULT
+-> ACCOUNT FOR FUTURE REACQUISITION BEFORE DROPPING CONTEXT
+-> CHOOSE THE CHEAPEST FAITHFUL COMMUNICATION MEDIUM
+-> ALLOCATE TOKENS BY MARGINAL VERIFIED VALUE
 -> LOCAL DRAFT ONLY WHEN RESIDUAL-CORRECTION ECONOMICS WIN
 -> CHEAP MODEL
 -> FRONTIER ONLY FOR RESIDUAL UNCERTAINTY
@@ -92,12 +96,16 @@ UNDERSTAND
 - Frontier Dependency Ratio
 - Inference-Free Task Fraction
 - Provider Calls Avoided
+- Memory-Maintenance Provider Tokens
+- Reacquisition Tokens / Calls / Latency
+- Retained Carry Cost vs Future Reacquisition Cost
+- Communication Medium Selected / Provider Tokens Avoided
+- Global Token Allocation by Lane
 - Intermediate Tool Tokens Prevented
 - Subagent Messages Avoided
 - Multi-Agent Escalations Avoided
 - Communication Edges Pruned
 - Debate Rounds Replaced by Local Specialists
-- Agent Data-Layer Tokens Avoided
 - Reacquisition Waste
 - MCP Schema Tokens / Turn
 - Tool Output Tokens / Turn
@@ -141,13 +149,20 @@ The product combines:
 - Incremental State Handoff / Content-Addressed Delta where provider semantics make savings real;
 - Task-Family Local Distillation / Specialist Escalation;
 - Proof-Carrying Zero-Inference Results and Pareto Workflow Selection;
-- **Strategic Silence / Communication Value Governor**;
-- **Selective Multi-Agent Escalation**;
-- **Agent Communication Graph Pruner**;
-- **Debate/Internalized Specialist Distillation**;
-- **Agent Data Optimization Layer** for stable schema IDs, field masks, optional-field elision, delta and typed receipts;
-- optional **Latent Agent Bus**, **Prefix-Affinity/KV-TTL Scheduler** and **Constraint-Space Compression** for compatible owned/local models only;
-- **Speculation Budget Governor**, with speculative work counted end-to-end;
+- Strategic Silence / Communication Value Governor;
+- Selective Multi-Agent Escalation;
+- Agent Communication Graph Pruner;
+- Debate/Internalized Specialist Distillation;
+- Agent Data Optimization Layer for stable schema IDs, field masks, optional-field elision, delta and typed receipts;
+- optional Latent Agent Bus, Prefix-Affinity/KV-TTL Scheduler and Constraint-Space Compression for compatible owned/local models only;
+- Speculation Budget Governor, with speculative work counted end-to-end;
+- **Zero-Token Memory Engine**, keeping ingest/index/link/dedup/TTL provider-free by default;
+- **Reacquisition Tax Governor** and **Future-Reuse Retention Predictor**, optimizing net cost rather than prompt size alone;
+- **Communication Medium Router** across silence/handle/SWIR/text and compatible local latent/KV media;
+- **Global Token Budget Auction**, allocating retrieval/context/tool/reasoning/output tokens by marginal verified value;
+- **Reacquisition-Aware Compaction Scheduler**;
+- **Entropy-Coded SWIR V2** with frequency-weighted target-tokenizer optimization and codebook amortization;
+- experimental **Reversible Source Minification** with exact source maps and end-to-end verifier gates;
 - SignalBench/provider receipts, rollback and workload-specific promotion.
 
 ## Execution waves
@@ -158,31 +173,31 @@ TE-U0..U7   = ultra-low V1
 TE-U8..U14  = ultra-low V2 structural edit/retrieval/early-stop frontier
 TE-U15..U21 = ultra-low V3 verified floor-search/residual-correction frontier
 TE-U22..U29 = ultra-low V4 communication/distillation/data-layer/local-serving frontier
+TE-U30..U36 = ultra-low V5 memory/reacquisition/global-budget/tokenizer frontier
 ```
 
-V4 waves:
+V5 waves:
 
 ```text
-TE-U22 strategic silence + selective escalation
-TE-U23 communication graph pruning
-TE-U24 debate/internalized specialist distillation
-TE-U25 agent data optimization layer
-TE-U26 local latent communication experiments
-TE-U27 local prefix-affinity/KV-TTL + constrained decoding
-TE-U28 speculation budget governance
-TE-U29 compound V4 floor certification
+TE-U30 zero-token memory engine
+TE-U31 reacquisition tax + future-reuse retention
+TE-U32 communication medium router
+TE-U33 global token budget auction
+TE-U34 entropy-coded SWIR v2
+TE-U35 reversible source minification + reacquisition-aware compaction
+TE-U36 compound V5 floor certification + next lower probe
 ```
 
 ## Engineering floor-search targets
 
-Earlier bands remain promotion lineage. V4 adds lower research probes:
+Earlier bands remain promotion lineage. V5 adds lower research probes:
 
 ```text
 verified repeated deterministic: 0 provider tokens
-easy/warm eligible:             0-50
-easy frontier-needed:           50-250
-normal scoped coding:           250-1,000
-hard scoped coding:             1,000-3,000 before necessity-backed overflow
+easy/warm eligible:             0-25
+easy frontier-needed:           25-150
+normal scoped coding:           150-750
+hard scoped coding:             750-2,500 before necessity-backed overflow
 unexplained provider overflow:  0
 quality/verifier/security:       non-inferior to frozen baseline
 ```
@@ -191,9 +206,9 @@ These are research probes, not current product claims or universal guarantees. A
 
 ## Continuous verified floor search
 
-After any band is certified, offline/shadow evaluation may probe lower again. Stop lowering when the next reduction worsens verified solve rate, security/constraint compliance, exact recovery, provider cost per successful task, or retry/recall/fallback burden.
+After any band is certified, offline/shadow evaluation may probe lower again. Stop lowering when the next reduction worsens verified solve rate, security/constraint compliance, exact recovery, provider cost per successful task, or retry/recall/reacquisition/fallback burden.
 
-Local KV/latent/constrained-decode speedups are compute/latency improvements unless provider-visible receipts prove token effects. Prompt-cache hits are not context-capacity reductions. Post-generation truncation is not provider-output savings.
+A smaller prompt is not a win if the agent later spends more provider/tool work reacquiring what was removed. Local KV/latent/constrained-decode speedups are compute/latency improvements unless provider-visible receipts prove token effects. Prompt-cache hits are not context-capacity reductions. Post-generation truncation is not provider-output savings.
 
 ## Non-destructive implementation rule
 
@@ -203,7 +218,7 @@ Reduction order defaults to:
 
 `drop -> dedup -> supersede -> contradiction collapse -> mask -> exact handle -> delta -> deterministic summary -> optional learned residual compression -> LLM summary`
 
-User/security/exact/verifier evidence is never removed merely to hit a target. All recovery/tool/retry/fallback/speculative calls count toward total economics.
+User/security/exact/verifier evidence is never removed merely to hit a target. All recovery/tool/retry/fallback/speculative/reacquisition calls count toward total economics.
 
 ## CI discipline
 
