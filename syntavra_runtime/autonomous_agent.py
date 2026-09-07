@@ -20,6 +20,7 @@ from .inference_skip_cache import (
     build_identity,
     repository_state_fingerprint,
 )
+from .retry_economics import RetryEconomicsGovernor, workspace_state_fingerprint
 
 
 def _now() -> str:
@@ -368,7 +369,7 @@ class AutonomousCodingAgent:
             )
 
         seen_patches: set[str] = set()
-        seen_failures: set[str] = set()
+        retry_governor = RetryEconomicsGovernor()
         attempts: list[AgentAttempt] = []
         previous_failure: dict[str, Any] | None = None
         total_tokens = 0
@@ -386,6 +387,13 @@ class AutonomousCodingAgent:
                 "changed_files": current_changed_files,
                 "previous_failure": previous_failure,
             }
+
+            workspace_fingerprint = workspace_state_fingerprint(workspace)
+            retry_decision = retry_governor.assess(previous_failure, workspace_fingerprint)
+            if not retry_decision.allow_provider:
+                stop_reason = retry_decision.reason
+                break
+
             cached_key = ""
             cache_hit = None
             if number == 1 and previous_failure is None and not current_diff and inference_identity is not None:
@@ -438,10 +446,6 @@ class AutonomousCodingAgent:
                 attempts.append(
                     AgentAttempt(number, patch_hash, False, apply_receipt, fingerprint, proposal.rationale, proposal.estimated_tokens, proposal.estimated_cost, AgentState.DIAGNOSING)
                 )
-                if fingerprint in seen_failures:
-                    stop_reason = "anti-loop: repeated patch application failure"
-                    break
-                seen_failures.add(fingerprint)
                 continue
 
             verifier = self.sandbox.run(
@@ -475,13 +479,10 @@ class AutonomousCodingAgent:
             attempts.append(
                 AgentAttempt(number, patch_hash, True, verifier, fingerprint, proposal.rationale, proposal.estimated_tokens, proposal.estimated_cost, AgentState.REPAIRING)
             )
-            if fingerprint in seen_failures:
-                stop_reason = "anti-loop: repeated verifier failure"
-                break
-            seen_failures.add(fingerprint)
             context = {**context, "previous_failure": previous_failure}
 
         final_diff, changed_files = self._diff(workspace)
+        context = {**context, "retry_economics": retry_governor.summary()}
         rollback_complete = True
         if final_state != AgentState.COMPLETED or not task.retain_workspace:
             rollback_complete = self._cleanup(workspace, git_worktree)
