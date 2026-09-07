@@ -4,6 +4,12 @@ from collections import defaultdict
 from typing import Iterable
 
 from .models import ContextDecision, ContextItem, ContextPack
+from .provider_token_envelope import (
+    NecessityLease,
+    ProviderTokenEnvelope,
+    ProviderTokenEnvelopeCompiler,
+    TokenEnvelopePolicy,
+)
 from .util import canonical_json, sha256_bytes
 
 
@@ -169,4 +175,22 @@ def pack_context(
         total_utility,
         sections,
         tuple(reasons),
+    )
+
+
+def compile_provider_token_envelope(
+    *,
+    original_input_tokens: int,
+    original_output_budget_tokens: int,
+    input_leases: Iterable[NecessityLease],
+    output_leases: Iterable[NecessityLease] = (),
+    policy: TokenEnvelopePolicy | None = None,
+) -> ProviderTokenEnvelope:
+    """Canonical context-governor entry point for provider input/output admission."""
+
+    return ProviderTokenEnvelopeCompiler(policy).compile_from_leases(
+        original_input_tokens=original_input_tokens,
+        original_output_budget_tokens=original_output_budget_tokens,
+        input_leases=input_leases,
+        output_leases=output_leases,
     )

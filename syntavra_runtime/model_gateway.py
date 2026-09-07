@@ -9,6 +9,8 @@ import urllib.request
 from dataclasses import dataclass, field, replace
 from typing import Any, Mapping, Protocol, Sequence
 
+from .provider_token_envelope import ProviderTokenEnvelope
+
 
 class GatewayError(RuntimeError):
     pass
@@ -25,6 +27,8 @@ class GatewayConfig:
     temperature: float = 0.1
     api_mode: str = "auto"
     extra_headers: Mapping[str, str] = field(default_factory=dict)
+    token_envelope: ProviderTokenEnvelope | None = None
+    prepared_input_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,10 @@ class _HTTPGateway:
             raise ValueError("max_output_tokens is out of bounds")
         if not 0.0 <= config.temperature <= 2.0:
             raise ValueError("temperature must be between 0 and 2")
+        if int(config.prepared_input_tokens) < 0:
+            raise ValueError("prepared_input_tokens must be non-negative")
+        if config.token_envelope is not None and not config.token_envelope.provider_call_admissible:
+            raise ValueError("token envelope does not admit a provider call")
         self.config = config
 
     def _api_key(self) -> str:
@@ -117,6 +125,33 @@ class _HTTPGateway:
         visit(value)
         return output
 
+    def _enforce_token_envelope(self) -> None:
+        envelope = self.config.token_envelope
+        if envelope is None:
+            return
+        prepared = int(self.config.prepared_input_tokens)
+        if prepared <= 0 and envelope.original_input_tokens > 0:
+            raise GatewayError(
+                "token envelope requires tokenizer-observed prepared_input_tokens before provider dispatch"
+            )
+        if prepared > envelope.provider_input_budget_tokens:
+            raise GatewayError(
+                "prepared provider input exceeds token envelope: "
+                f"{prepared}>{envelope.provider_input_budget_tokens}"
+            )
+
+    def _effective_output_limit(self) -> int:
+        envelope = self.config.token_envelope
+        if envelope is None:
+            return self.config.max_output_tokens
+        return max(
+            1,
+            min(
+                int(self.config.max_output_tokens),
+                int(envelope.provider_output_budget_tokens),
+            ),
+        )
+
 
 class OpenAICompatibleGateway(_HTTPGateway):
     """OpenAI-compatible Responses or Chat Completions transport.
@@ -126,12 +161,14 @@ class OpenAICompatibleGateway(_HTTPGateway):
     """
 
     def complete(self, messages: Sequence[Mapping[str, str]], *, system: str = "") -> ModelResult:
+        self._enforce_token_envelope()
         endpoint = (self.config.endpoint or "https://api.openai.com/v1").rstrip("/")
         mode = self.config.api_mode.casefold()
         if mode == "auto":
             mode = "responses" if endpoint == "https://api.openai.com/v1" else "chat"
         key = self._api_key()
         headers = {"Authorization": f"Bearer {key}"} if key else {}
+        output_limit = self._effective_output_limit()
         if mode == "responses":
             input_messages: list[dict[str, str]] = []
             if system:
@@ -140,7 +177,7 @@ class OpenAICompatibleGateway(_HTTPGateway):
             payload = {
                 "model": self.config.model,
                 "input": input_messages,
-                "max_output_tokens": self.config.max_output_tokens,
+                "max_output_tokens": output_limit,
                 "temperature": self.config.temperature,
                 "store": False,
             }
@@ -169,7 +206,7 @@ class OpenAICompatibleGateway(_HTTPGateway):
             {
                 "model": self.config.model,
                 "messages": chat_messages,
-                "max_tokens": self.config.max_output_tokens,
+                "max_tokens": output_limit,
                 "temperature": self.config.temperature,
                 "stream": False,
             },
@@ -186,6 +223,7 @@ class OpenAICompatibleGateway(_HTTPGateway):
 
 class AnthropicGateway(_HTTPGateway):
     def complete(self, messages: Sequence[Mapping[str, str]], *, system: str = "") -> ModelResult:
+        self._enforce_token_envelope()
         endpoint = (self.config.endpoint or "https://api.anthropic.com/v1").rstrip("/")
         key = self._api_key()
         raw = self._post(
@@ -194,7 +232,7 @@ class AnthropicGateway(_HTTPGateway):
                 "model": self.config.model,
                 "system": system,
                 "messages": [{"role": str(item["role"]), "content": str(item["content"])} for item in messages if str(item["role"]) in {"user", "assistant"}],
-                "max_tokens": self.config.max_output_tokens,
+                "max_tokens": self._effective_output_limit(),
                 "temperature": self.config.temperature,
             },
             {"x-api-key": key, "anthropic-version": "2023-06-01"},
@@ -208,6 +246,7 @@ class AnthropicGateway(_HTTPGateway):
 
 class GeminiGateway(_HTTPGateway):
     def complete(self, messages: Sequence[Mapping[str, str]], *, system: str = "") -> ModelResult:
+        self._enforce_token_envelope()
         endpoint = (self.config.endpoint or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
         key = self._api_key()
         contents = []
@@ -217,7 +256,7 @@ class GeminiGateway(_HTTPGateway):
         payload: dict[str, Any] = {
             "contents": contents,
             "generationConfig": {
-                "maxOutputTokens": self.config.max_output_tokens,
+                "maxOutputTokens": self._effective_output_limit(),
                 "temperature": self.config.temperature,
                 "responseMimeType": "application/json",
             },

@@ -1,6 +1,6 @@
 # Syntavra Provider Token Envelope v1
 
-Status: IMPLEMENTATION FOUNDATION / FAIL-CLOSED POLICY
+Status: RUNTIME ENFORCEMENT IN PROGRESS / FAIL-CLOSED POLICY
 
 This document hardens the Context Execution Compiler with one enforceable objective:
 
@@ -224,45 +224,55 @@ Simple tasks should often be far below 3K. The band is an upper target, not a mi
 
 A call above 8K must explain the overflow with necessity leases. Repeated unexplained overflow is a policy regression.
 
-## Runtime gaps this plan closes next
+## Runtime wiring state
 
-The repository already contains strong individual mechanisms, but several are not yet one enforced envelope.
+The envelope is now a runtime object, not only a roadmap concept.
 
-Priority wiring:
+Implemented in this slice:
 
-1. `context_governor.py`
-   - owns the provider envelope compiler;
-   - refuses optional context beyond the compiled input budget.
+1. `provider_token_envelope.py`
+   - compiles the 6K input / 2K output / 8K combined target;
+   - measures avoidable input/output reduction independently;
+   - requires evidence-backed necessity leases for mandatory material;
+   - marks irreducible overflow instead of silently truncating it.
 
-2. `adaptive_context_policy.py`
+2. `context_governor.py`
+   - exposes the canonical `compile_provider_token_envelope` entry point;
+   - keeps provider-budget ownership in the existing context-governor authority instead of creating a parallel policy plane.
+
+3. `model_gateway.py`
+   - accepts a compiled envelope;
+   - requires tokenizer-observed `prepared_input_tokens` before strict dispatch;
+   - rejects prepared input above the compiled input budget before HTTP;
+   - clamps provider generation limits to the compiled output budget before inference;
+   - refuses envelopes that failed admission.
+
+Remaining priority wiring:
+
+4. `adaptive_context_policy.py`
    - every `KEEP` decision must map to a lease or bounded optional allocation;
    - stale/recoverable items lose provider admission.
 
-3. `agent_runtime.py`
+5. `agent_runtime.py`
    - reduce initial repository packet;
    - line/symbol-ranged inspection instead of whole-file default;
    - keep only the active tool result raw;
    - compact previous tool turns to deterministic receipts;
    - success verifier logs become status + artifact handle;
-   - prevent quadratic message-history growth.
+   - prevent quadratic message-history growth;
+   - tokenize the final prepared request and pass that count into the gateway envelope.
 
-4. `model_gateway.py`
-   - receive the compiled input/output envelope;
-   - set provider output limit before inference;
-   - reject unproved input overflow;
-   - record actual provider usage against the envelope.
-
-5. `output_governor.py`
+6. `output_governor.py`
    - add novelty/necessity filtering after structured answer assembly;
    - never remove critical evidence just to meet a cosmetic percentage.
 
-6. `deferred_tool_discovery.py`
+7. `deferred_tool_discovery.py`
    - enforce schema-on-demand as the default large-catalog path.
 
-7. `tool_externalization.py` / evidence store
+8. `tool_externalization.py` / evidence store
    - guarantee exact recovery before raw tool payload eviction.
 
-8. `SavingsLedger` / provider receipt ledger
+9. `SavingsLedger` / provider receipt ledger
    - report avoidable-token reduction separately from total reduction;
    - provider receipts outrank local byte/token estimates.
 

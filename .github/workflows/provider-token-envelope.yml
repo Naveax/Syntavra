@@ -4,9 +4,12 @@ on:
   pull_request:
     paths:
       - 'syntavra_runtime/provider_token_envelope.py'
+      - 'syntavra_runtime/context_governor.py'
+      - 'syntavra_runtime/model_gateway.py'
       - 'contracts/python/provider-token-envelope-v1.json'
       - 'docs/plans/SYNTAVRA_PROVIDER_TOKEN_ENVELOPE_V1.md'
       - 'tests/runtime/test_provider_token_envelope.py'
+      - 'tests/runtime/test_model_gateway_token_envelope.py'
       - 'tools/certify_provider_token_envelope.py'
       - '.github/workflows/provider-token-envelope.yml'
   push:
@@ -14,9 +17,12 @@ on:
       - main
     paths:
       - 'syntavra_runtime/provider_token_envelope.py'
+      - 'syntavra_runtime/context_governor.py'
+      - 'syntavra_runtime/model_gateway.py'
       - 'contracts/python/provider-token-envelope-v1.json'
       - 'docs/plans/SYNTAVRA_PROVIDER_TOKEN_ENVELOPE_V1.md'
       - 'tests/runtime/test_provider_token_envelope.py'
+      - 'tests/runtime/test_model_gateway_token_envelope.py'
       - 'tools/certify_provider_token_envelope.py'
       - '.github/workflows/provider-token-envelope.yml'
 
@@ -32,8 +38,17 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile policy surface
-        run: python -m compileall -q syntavra_runtime/provider_token_envelope.py tools/certify_provider_token_envelope.py tests/runtime/test_provider_token_envelope.py
-      - name: Run unit contract
+        run: >-
+          python -m compileall -q
+          syntavra_runtime/provider_token_envelope.py
+          syntavra_runtime/context_governor.py
+          syntavra_runtime/model_gateway.py
+          tools/certify_provider_token_envelope.py
+          tests/runtime/test_provider_token_envelope.py
+          tests/runtime/test_model_gateway_token_envelope.py
+      - name: Run provider envelope unit contract
         run: python tests/runtime/test_provider_token_envelope.py
+      - name: Run gateway enforcement contract
+        run: python tests/runtime/test_model_gateway_token_envelope.py
       - name: Run certification receipt
         run: python tools/certify_provider_token_envelope.py

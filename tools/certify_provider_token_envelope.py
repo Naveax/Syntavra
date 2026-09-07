@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from syntavra_runtime.context_governor import compile_provider_token_envelope
 from syntavra_runtime.provider_token_envelope import (
     NecessityLease,
     ProviderTokenEnvelopeCompiler,
@@ -9,8 +10,7 @@ from syntavra_runtime.provider_token_envelope import (
 
 
 def main() -> int:
-    compiler = ProviderTokenEnvelopeCompiler()
-    envelope = compiler.compile_from_leases(
+    envelope = compile_provider_token_envelope(
         original_input_tokens=100_000,
         original_output_budget_tokens=10_000,
         input_leases=(
@@ -30,6 +30,7 @@ def main() -> int:
     assert envelope.input_avoidable_reduction_ratio >= 0.80
     assert envelope.output_avoidable_reduction_ratio >= 0.80
 
+    compiler = ProviderTokenEnvelopeCompiler()
     overflow = compiler.compile_from_leases(
         original_input_tokens=100_000,
         original_output_budget_tokens=10_000,
