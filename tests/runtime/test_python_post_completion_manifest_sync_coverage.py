@@ -15,6 +15,16 @@ AUTHORITY_PATHS = (
     "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
     "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md",
 )
+HYPEREFFICIENCY_AUTHORITY_PATHS = (
+    "contracts/python/hyperefficiency-roadmap-v1.json",
+    "contracts/python/hyperefficiency/**",
+    "docs/UNIFIED_PLAN.md",
+    "docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md",
+    "docs/plans/hyperefficiency/**",
+    "tests/runtime/test_hyperefficiency_roadmap.py",
+    "tools/validate_hyperefficiency_roadmap.py",
+    ".github/workflows/hyperefficiency-roadmap.yml",
+)
 RELEASE_TRUST_PATHS = (
     ".github/workflows/publish-pre-release.yml",
     ".github/workflows/post-r38-release-provenance-diagnostic.yml",
@@ -42,6 +52,16 @@ class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
                 workflow.count(token),
                 2,
                 f"post-completion manifest verification must watch {relative} on pull_request and push",
+            )
+
+    def test_hyperefficiency_authority_paths_trigger_pull_request_and_push_sync(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for relative in HYPEREFFICIENCY_AUTHORITY_PATHS:
+            token = f'- "{relative}"'
+            self.assertGreaterEqual(
+                workflow.count(token),
+                2,
+                f"post-completion manifest verification must watch HyperEfficiency authority path {relative}",
             )
 
     def test_release_trust_paths_trigger_pull_request_and_push_sync(self):
