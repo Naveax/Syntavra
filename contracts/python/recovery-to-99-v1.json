@@ -2,7 +2,7 @@
   "schema_version": 1,
   "family": "syntavra-recovery-to-99",
   "status": "ACTIVE_RECOVERY_GATE",
-  "date": "2026-09-07",
+  "date": "2026-09-08",
   "roadmap_freeze": true,
   "no_new_frontier_until_recovery_gate": true,
   "no_new_capability_namespace": true,
@@ -14,7 +14,8 @@
     "provider_proof_score_may_not_exceed_5_0_without_paired_provider_observed_receipts": true,
     "readiness_score_may_not_exceed_8_0_without_provider_proof_and_all_required_ci": true,
     "component_percentages_are_non_additive": true,
-    "local_tokenizer_counts_are_not_provider_billed_proof": true
+    "local_tokenizer_counts_are_not_provider_billed_proof": true,
+    "provider_call_avoidance_requires_pre_inference_receipt_or_exact_replay_proof": true
   },
   "canonical_owners": [
     "context",
@@ -52,7 +53,8 @@
         "reacquisition_retry_recovery_fallback_and_speculation_counted",
         "cached_input_separated_from_fresh_input",
         "quality_non_inferior_to_frozen_baseline",
-        "net_provider_cost_per_success_lower_on_promoted_workloads"
+        "net_provider_cost_per_success_lower_on_promoted_workloads",
+        "exact_repeat_retry_provider_calls_avoided_before_inference"
       ]
     },
     "security": {
@@ -63,6 +65,7 @@
         "exact_recovery_coverage_100_percent_for_evicted_evidence",
         "stale_or_cross_scope_inference_reuse_false_success_zero",
         "property_and_fuzz_suites_cover_handles_deltas_cache_and_swir",
+        "retrieval_projection_and_filter_policy_validated_before_graph_access",
         "uncertainty_fails_closed_to_exact_or_natural_path"
       ]
     },
@@ -76,7 +79,10 @@
         "tool_output_externalizer_in_product_agent_path",
         "successful_verifier_logs_compact_and_failures_pin_critical_evidence",
         "provider_envelope_bound_to_current_compiled_input_every_turn",
-        "query_pushdown_tool_chain_fusion_and_verified_inference_skip_integrated"
+        "query_pushdown_tool_chain_fusion_and_verified_inference_skip_integrated",
+        "retry_economics_uses_exact_failure_plus_workspace_state_before_provider_call",
+        "same_failure_on_changed_exact_state_remains_repairable",
+        "uncertain_workspace_equivalence_never_suppresses_provider_inference"
       ]
     },
     "provider_proof": {
@@ -112,6 +118,7 @@
       "required_gates": [
         "all_relevant_required_checks_green_on_exact_head",
         "constant_context_rc1_suite_required",
+        "retry_economics_exact_state_regression_required",
         "security_and_exact_recovery_regressions_required",
         "provider_contract_and_public_surface_regressions_required",
         "token_economy_regression_smoke_required",
@@ -174,17 +181,22 @@
     "local_structural_token_regression_benchmark",
     "canonical_mcp_order_certification_repair",
     "competitive_gap_authority_test_repair",
-    "dual_engine_python_module_metadata_sync"
+    "dual_engine_python_module_metadata_sync",
+    "query_pushdown_in_coding_agent_product_path",
+    "fused_search_select_ranged_read_in_coding_agent_product_path",
+    "verified_inference_skip_in_coding_agent_product_path",
+    "retrieval_projection_filter_fail_closed_before_graph_access",
+    "exact_failure_workspace_retry_economics_pre_inference",
+    "changed_state_same_failure_repair_preservation"
   ],
   "open_blockers_after_rc1_runtime_surgery": [
     "real_paired_provider_billed_receipts_not_yet_collected",
     "frozen_real_task_ab_corpus_not_yet_completed",
-    "query_pushdown_not_yet_integrated_into_coding_agent_loop",
-    "tool_chain_fusion_not_yet_integrated_into_coding_agent_loop",
-    "verifier_gated_inference_skip_not_yet_integrated_into_coding_agent_loop",
     "macro_execution_not_yet_integrated_into_coding_agent_loop",
     "full_property_and_fuzz_matrix_not_yet_complete",
-    "all_exact_head_ci_must_be_rechecked_after_recovery_commits"
+    "all_exact_head_ci_must_be_rechecked_after_recovery_commits",
+    "b0_b9_provider_replay_and_dogfood_not_yet_completed",
+    "release_candidate_zero_p0_p1_blocker_gate_not_yet_proven"
   ],
   "claim_boundary": "this contract defines gates and records implemented recovery work; it does not claim the 9.9 targets are already achieved"
 }
