@@ -8,6 +8,7 @@ on:
       - 'syntavra_runtime/autonomous_agent.py'
       - 'syntavra_runtime/agent_context_runtime.py'
       - 'syntavra_runtime/inference_skip_cache.py'
+      - 'syntavra_runtime/retry_economics.py'
       - 'syntavra_runtime/provider_call_observation.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
@@ -22,6 +23,7 @@ on:
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
+      - 'tests/runtime/test_retry_economics.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
       - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_recovery_to_99.py'
@@ -36,6 +38,7 @@ on:
       - 'syntavra_runtime/autonomous_agent.py'
       - 'syntavra_runtime/agent_context_runtime.py'
       - 'syntavra_runtime/inference_skip_cache.py'
+      - 'syntavra_runtime/retry_economics.py'
       - 'syntavra_runtime/provider_call_observation.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
@@ -50,6 +53,7 @@ on:
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
+      - 'tests/runtime/test_retry_economics.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
       - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_recovery_to_99.py'
@@ -116,10 +120,12 @@ jobs:
             syntavra_runtime/autonomous_agent.py \
             syntavra_runtime/agent_context_runtime.py \
             syntavra_runtime/inference_skip_cache.py \
+            syntavra_runtime/retry_economics.py \
             syntavra_runtime/provider_call_observation.py \
             tests/runtime/test_token_economy_rc1_runtime.py \
             tests/runtime/test_agent_product_completion.py \
             tests/runtime/test_agent_retrieval.py \
+            tests/runtime/test_retry_economics.py \
             tests/runtime/test_recovery_to_99_security.py \
             tests/runtime/test_inference_skip_cache.py \
             benchmarks/token_economy_rc1_benchmark.py \
@@ -131,6 +137,7 @@ jobs:
           python -m unittest tests.runtime.test_token_economy_rc1_runtime -v
           python -m unittest tests.runtime.test_agent_product_completion -v
           python -m unittest tests.runtime.test_agent_retrieval -v
+          python -m unittest tests.runtime.test_retry_economics -v
           python -m unittest tests.runtime.test_p0_p4_runtime_consolidation -v
 
       - name: Prove exact zero-inference replay and invalidation
@@ -198,7 +205,7 @@ jobs:
 
       - name: Upload exact-head recovery evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: recovery-to-99-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
