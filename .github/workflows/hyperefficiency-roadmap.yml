@@ -9,6 +9,7 @@ on:
       - 'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md'
       - 'docs/UNIFIED_PLAN.md'
       - 'docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md'
+      - 'docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md'
       - 'docs/plans/hyperefficiency/**'
       - 'tests/runtime/test_hyperefficiency_roadmap.py'
       - 'tools/validate_hyperefficiency_roadmap.py'
@@ -22,6 +23,7 @@ on:
       - 'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md'
       - 'docs/UNIFIED_PLAN.md'
       - 'docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md'
+      - 'docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md'
       - 'docs/plans/hyperefficiency/**'
       - 'tests/runtime/test_hyperefficiency_roadmap.py'
       - 'tools/validate_hyperefficiency_roadmap.py'
@@ -70,10 +72,19 @@ jobs:
           assert value['schema_version'] == 1
           assert value['family'] == 'syntavra-hyperefficiency-roadmap'
           assert value['default_state'] == 'admitted_reconciliation'
-          assert value['imported_count'] == 1284
-          assert value['source_range'] == [1, 1284]
-          assert value['canonical_range'] == [281, 1564]
-          assert value['mapping_offset'] == 280
+
+          # Roadmap size is append-only and validated against exact shard hashes in
+          # the preceding step. Keep this authority check structural so future
+          # admitted shards do not require another stale hard-coded count edit.
+          source_start, source_end = value['source_range']
+          canonical_start, canonical_end = value['canonical_range']
+          offset = value['mapping_offset']
+          assert source_start == 1
+          assert value['imported_count'] == source_end - source_start + 1
+          assert canonical_start == source_start + offset
+          assert canonical_end == source_end + offset
+          assert canonical_end - canonical_start + 1 == value['imported_count']
+
           assert value['allowed_classifications'] == ['EXISTS', 'HARDEN', 'UNIFY', 'NEW', 'CERTIFY', 'EXTERNAL', 'DEFERRED']
           assert len(value['first_reconciliation_slice']) == 27
 
