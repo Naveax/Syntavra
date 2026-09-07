@@ -1,18 +1,34 @@
 {
   "schema_version": 1,
   "family": "syntavra-token-economy-frozen-workloads",
-  "status": "RC1_FROZEN_LOCAL_CORPUS_PROVIDER_REPLAY_PENDING",
-  "date": "2026-09-07",
-  "claim_boundary": "The corpus freezes task identity and acceptance semantics. Local/sequence runs are regression evidence only; provider savings require paired provider-observed receipts on the same workload identity.",
+  "status": "RC1_EXECUTABLE_FROZEN_CORPUS_PROVIDER_REPLAY_PENDING",
+  "date": "2026-09-08",
+  "claim_boundary": "The corpus freezes task identity, deterministic source fixtures and acceptance semantics. Executable/local runs are regression evidence only; provider savings require paired provider-observed receipts on the same frozen workload identity.",
+  "executable_corpus": {
+    "materializer": "benchmarks/token_economy_frozen_corpus.py",
+    "regression_test": "tests/runtime/test_token_economy_frozen_corpus.py",
+    "workload_identity": "sha256(canonical workload id/class/fixture/instruction/acceptance/variants/signalbench-family/files/verifier)",
+    "local_repository_locator_excluded_from_portable_identity": true,
+    "git_object_format": "sha1",
+    "fixed_commit_metadata": true,
+    "repository_tree_and_commit_must_match_across_materialization_roots": true,
+    "verifier_transport": "inline-immutable-task-contract",
+    "all_initial_fixtures_must_fail_verifier": true,
+    "dirty_fixture_forbidden": true,
+    "submodule_fixture_forbidden": true,
+    "provider_credentials_required_for_provider_proof": true
+  },
   "pairing": {
     "same_repository_fixture": true,
     "same_instruction": true,
     "same_verifier": true,
+    "same_frozen_workload_identity": true,
     "same_model_provider_and_reasoning_effort_for_provider_pairs": true,
     "minimum_provider_repetitions_per_claim": 3,
     "cold_and_warm_runs_reported_separately": true,
     "failed_runs_count_in_total_cost": true,
-    "recovery_and_retry_tokens_count": true
+    "recovery_and_retry_tokens_count": true,
+    "pre_inference_provider_calls_avoided_reported_separately": true
   },
   "required_metrics": [
     "verified_success",
@@ -109,5 +125,5 @@
       "variants": ["cold", "warm"]
     }
   ],
-  "promotion_rule": "No workload is provider-proven until baseline and candidate each have at least three provider-observed successful-or-failed attempt receipts with identical frozen workload identity and non-inferior verification semantics."
+  "promotion_rule": "No workload is provider-proven until baseline and candidate each have at least three provider-observed successful-or-failed attempt receipts with identical frozen workload identity, repository tree/commit, instruction, verifier, provider/model/reasoning settings and non-inferior verification semantics."
 }
