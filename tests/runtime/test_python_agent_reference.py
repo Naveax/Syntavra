@@ -15,6 +15,7 @@ class PythonAgentReferenceTests(unittest.TestCase):
         self.assertTrue(self.report["ok"], self.report)
         self.assertEqual(self.report["engine"], "python")
         self.assertEqual(self.report["routes"], ["agent run", "agent replay"])
+        self.assertEqual(self.report["context_transport"], "constant-active-evidence-v2")
 
     def test_exit_policy_is_explicit(self) -> None:
         self.assertEqual(
@@ -27,17 +28,27 @@ class PythonAgentReferenceTests(unittest.TestCase):
         )
         self.assertEqual(self.report["cases"]["replay_missing_required_arguments"]["exit"], 2)
 
-    def test_live_request_and_json_action_protocol(self) -> None:
+    def test_live_request_and_constant_context_protocol(self) -> None:
         run = self.report["cases"]["agent_run_happy"]
         self.assertEqual(run["exit"], 0)
         self.assertEqual(run["request_rounds"], 2)
         self.assertEqual(run["tool_trace_actions"], ["search", "patch"])
         self.assertEqual(run["first_message_roles"], ["system", "user"])
-        self.assertEqual(run["second_message_roles"], ["system", "user", "assistant", "user"])
+        self.assertEqual(run["second_message_roles"], ["system", "user"])
+        self.assertFalse(run["raw_history_replayed"])
+        self.assertIn("repo.search", run["second_active_evidence_tools"])
         self.assertFalse(run["tools_present"])
         self.assertFalse(run["tool_choice_present"])
         self.assertFalse(run["authorization_present"])
         self.assertEqual(self.report["transport_protocol"], "openai-compatible-chat-json-action")
+        self.assertEqual(
+            self.report["api_tool_calling"]["tool_result_transport"],
+            "constant-active-evidence-user-packet",
+        )
+
+    def test_provider_observation_is_publicly_typed(self) -> None:
+        run = self.report["cases"]["agent_run_happy"]
+        self.assertIsInstance(run["provider_observation_keys"], list)
 
     def test_event_and_durable_receipt_schema(self) -> None:
         run = self.report["cases"]["agent_run_happy"]
