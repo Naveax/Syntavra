@@ -17,6 +17,7 @@ _ALLOWED_FIELDS = (
     "query_backend",
 )
 _FILTER_FIELDS = {"path", "kind", "language", "name", "qualified_name"}
+_ALLOWED_FILTER_FIELDS = frozenset((*_FILTER_FIELDS, "path_prefix"))
 
 
 @dataclass(frozen=True)
@@ -45,8 +46,8 @@ class QueryPushdownEngine:
 
     The graph remains the canonical retrieval owner. This engine only constrains the
     model-visible projection and performs deterministic selection before provider
-    admission. Unknown requested fields/filters fail closed instead of accidentally
-    serializing arbitrary graph metadata.
+    admission. Unknown requested fields/filters fail closed before graph access so an
+    empty result set cannot accidentally bypass the policy contract.
     """
 
     def __init__(self, graph: Any, *, max_limit: int = 20, default_limit: int = 8):
@@ -65,14 +66,20 @@ class QueryPushdownEngine:
         return fields
 
     @staticmethod
-    def _matches(row: Mapping[str, Any], filters: Mapping[str, Any] | None) -> bool:
+    def _filters(filters: Mapping[str, Any] | None) -> dict[str, Any]:
         if not filters:
-            return True
-        unknown = [str(key) for key in filters if str(key) not in _FILTER_FIELDS and str(key) != "path_prefix"]
+            return {}
+        normalized = {str(key): value for key, value in filters.items()}
+        unknown = [key for key in normalized if key not in _ALLOWED_FILTER_FIELDS]
         if unknown:
             raise ValueError(f"unsupported repository filters: {unknown}")
-        for key, expected in filters.items():
-            name = str(key)
+        return normalized
+
+    @staticmethod
+    def _matches(row: Mapping[str, Any], filters: Mapping[str, Any]) -> bool:
+        if not filters:
+            return True
+        for name, expected in filters.items():
             if name == "path_prefix":
                 if not str(row.get("path") or "").startswith(str(expected)):
                     return False
@@ -98,11 +105,13 @@ class QueryPushdownEngine:
             raise ValueError("repository query cannot be empty")
         bounded_limit = max(1, min(int(limit or self.default_limit), self.max_limit))
         selected_fields = self._fields(fields)
-        # Fetch only a bounded candidate window. Filtering then shrinks it further;
-        # this is intentionally not an unbounded local scan disguised as pushdown.
+        selected_filters = self._filters(filters)
+        # Fetch only after all provider-controlled projection/filter material has
+        # passed the allow-list. This keeps fail-closed behavior independent of the
+        # number of graph rows returned.
         fetch_limit = min(self.max_limit, max(bounded_limit, bounded_limit * 2))
         raw = list(self.graph.query(normalized, limit=fetch_limit))
-        filtered = [row for row in raw if isinstance(row, Mapping) and self._matches(row, filters)]
+        filtered = [row for row in raw if isinstance(row, Mapping) and self._matches(row, selected_filters)]
         projected: list[dict[str, Any]] = []
         for row in filtered[:bounded_limit]:
             visible = {field: row[field] for field in selected_fields if field in row}
@@ -138,11 +147,12 @@ class QueryPushdownEngine:
         # Selection requires path/range even if the caller asked for a smaller public
         # projection. The intermediate rows remain local and are never emitted on a
         # successful fusion.
-        selection_fields = tuple(dict.fromkeys((*self._fields(fields), "path", "start_line", "end_line")))
-        result = self.search(query, limit=limit, fields=selection_fields, filters=filters)
+        public_fields = self._fields(fields)
+        selected_filters = self._filters(filters)
+        selection_fields = tuple(dict.fromkeys((*public_fields, "path", "start_line", "end_line")))
+        result = self.search(query, limit=limit, fields=selection_fields, filters=selected_filters)
         identities = {self._identity(row) for row in result.rows if str(row.get("path") or "")}
         if len(identities) != 1:
-            public_fields = self._fields(fields)
             candidates = tuple(
                 {field: row[field] for field in public_fields if field in row}
                 for row in result.rows
