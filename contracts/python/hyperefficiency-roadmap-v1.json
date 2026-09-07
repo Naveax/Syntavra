@@ -71,7 +71,8 @@
     "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md",
     "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md",
     "docs/UNIFIED_PLAN.md",
-    "docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md"
+    "docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md",
+    "docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md"
   ],
   "claim_boundary": "Engineering/moonshot targets are not public or provider-cost superiority claims without provider-observed receipts under frozen equivalent task/verifier conditions.",
   "admission_base_main_sha": "945bde9d7d7664bab9133f508030fbfeca133402",
