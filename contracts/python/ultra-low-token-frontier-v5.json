@@ -1,0 +1,41 @@
+{
+  "schema_version": 5,
+  "family": "syntavra-ultra-low-token-frontier",
+  "status": "research_admitted_reconciliation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/ultra-low-token-frontier-v4.json",
+  "no_new_capability_namespace": true,
+  "objective": "push verified provider work lower through zero-token memory, reacquisition-aware retention, adaptive communication media and marginal-value token allocation",
+  "targets": {
+    "verified_repeated_provider_tokens": 0,
+    "easy_warm_probe_max_tokens": 25,
+    "easy_frontier_probe_max_tokens": 150,
+    "normal_scoped_coding_probe_max_tokens": 750,
+    "hard_scoped_probe_max_tokens": 2500,
+    "quality_non_inferior": true,
+    "unexplained_overflow": 0
+  },
+  "mechanisms": [
+    {"id":"U5-P0-01","name":"Zero-Token Memory Engine","classification":"HARDEN_UNIFY","priority":"P0"},
+    {"id":"U5-P0-02","name":"Reacquisition Tax Governor","classification":"NEW_HARDEN","priority":"P0"},
+    {"id":"U5-P0-03","name":"Future-Reuse Retention Predictor","classification":"HARDEN_SHADOW_FIRST","priority":"P0"},
+    {"id":"U5-P0-04","name":"Communication Medium Router","classification":"NEW_HARDEN","priority":"P0"},
+    {"id":"U5-P0-05","name":"Global Token Budget Auction","classification":"NEW_HARDEN","priority":"P0"},
+    {"id":"U5-P1-01","name":"Entropy-Coded SWIR V2","classification":"HARDEN_EXPERIMENTAL","priority":"P1"},
+    {"id":"U5-P1-02","name":"Reversible Source Minification","classification":"EXPERIMENTAL_P2","priority":"P2"},
+    {"id":"U5-P1-03","name":"Reacquisition-Aware Compaction Scheduler","classification":"HARDEN","priority":"P1"}
+  ],
+  "waves": ["TE-U30","TE-U31","TE-U32","TE-U33","TE-U34","TE-U35","TE-U36"],
+  "hard_invariants": [
+    "RAW_EXACT_MEMORY_REMAINS_AUTHORITY",
+    "MEMORY_MAINTENANCE_PROVIDER_TOKENS_DEFAULT_TO_ZERO",
+    "REACQUISITION_COST_COUNTS_END_TO_END",
+    "MANDATORY_EVIDENCE_CANNOT_BE_AUCTIONED_OR_DROPPED",
+    "LOCAL_LATENT_OR_KV_IS_NOT_HOSTED_PROVIDER_TOKEN_SAVINGS_BY_ITSELF",
+    "TARGET_TOKENIZER_NO_EXPANSION_REQUIRED",
+    "SOURCE_MINIFICATION_MUST_BE_REVERSIBLE_AND_VERIFIER_GATED",
+    "PROVIDER_RECEIPTS_REQUIRED_FOR_SAVINGS_CLAIMS",
+    "CONTINUOUS_FLOOR_SEARCH_MAY_PROBE_LOWER_AFTER_CERTIFICATION"
+  ],
+  "claim_boundary": "v5 bands are research probes until frozen equivalent tasks, paired provider receipts and non-inferior verifier/security results certify them"
+}
