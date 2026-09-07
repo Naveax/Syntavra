@@ -23,7 +23,9 @@ SECURITY_TEST = ROOT / "tests/runtime/test_recovery_to_99_security.py"
 RUNTIME_TEST = ROOT / "tests/runtime/test_token_economy_rc1_runtime.py"
 RETRIEVAL_TEST = ROOT / "tests/runtime/test_agent_retrieval.py"
 RETRY_TEST = ROOT / "tests/runtime/test_retry_economics.py"
+FROZEN_CORPUS_TEST = ROOT / "tests/runtime/test_token_economy_frozen_corpus.py"
 BENCHMARK = ROOT / "benchmarks/token_economy_rc1_benchmark.py"
+FROZEN_CORPUS = ROOT / "benchmarks/token_economy_frozen_corpus.py"
 WORKFLOW = ROOT / ".github/workflows/recovery-to-99-rc1.yml"
 
 
@@ -60,6 +62,8 @@ def certify() -> dict[str, Any]:
     retry = RETRY.read_text(encoding="utf-8")
     context = CONTEXT.read_text(encoding="utf-8")
     observation = OBSERVATION.read_text(encoding="utf-8")
+    frozen_corpus_source = FROZEN_CORPUS.read_text(encoding="utf-8")
+    frozen_corpus_test = FROZEN_CORPUS_TEST.read_text(encoding="utf-8")
 
     _require(recovery["schema_version"] == 1, "recovery schema drift")
     _require(recovery["family"] == "syntavra-recovery-to-99", "recovery family drift")
@@ -96,6 +100,24 @@ def certify() -> dict[str, Any]:
     _require(ids[0].startswith("B0-") and ids[-1].startswith("B9-"), "B0-B9 ordering drift")
     _require(workloads["pairing"]["minimum_provider_repetitions_per_claim"] >= 3, "provider repetition floor weakened")
     _require(workloads["pairing"]["failed_runs_count_in_total_cost"] is True, "failed run cost accounting disabled")
+    _require(workloads["pairing"]["same_frozen_workload_identity"] is True, "portable workload pairing disabled")
+    _require(workloads["pairing"]["pre_inference_provider_calls_avoided_reported_separately"] is True, "provider-call avoidance accounting merged into compression")
+
+    executable = workloads.get("executable_corpus")
+    _require(isinstance(executable, dict), "executable frozen corpus contract missing")
+    for key in (
+        "local_repository_locator_excluded_from_portable_identity",
+        "fixed_commit_metadata",
+        "repository_tree_and_commit_must_match_across_materialization_roots",
+        "all_initial_fixtures_must_fail_verifier",
+        "dirty_fixture_forbidden",
+        "submodule_fixture_forbidden",
+        "provider_credentials_required_for_provider_proof",
+    ):
+        _require(executable.get(key) is True, f"executable corpus policy weakened: {key}")
+    _require(executable.get("materializer") == "benchmarks/token_economy_frozen_corpus.py", "frozen corpus materializer drift")
+    _require(executable.get("regression_test") == "tests/runtime/test_token_economy_frozen_corpus.py", "frozen corpus regression test drift")
+    _require(executable.get("verifier_transport") == "inline-immutable-task-contract", "frozen verifier transport weakened")
 
     for marker in (
         "R99-1: Constant-context runtime",
@@ -138,7 +160,30 @@ def certify() -> dict[str, Any]:
     for marker in ("provider_proof_complete", "paired_token_comparison", "provider_observed"):
         _require(marker in observation, f"provider observation marker missing: {marker}")
 
-    for path in (SECURITY_TEST, RUNTIME_TEST, RETRIEVAL_TEST, RETRY_TEST, BENCHMARK):
+    for marker in (
+        "frozen_workload_identity",
+        "portable_identity_sha256",
+        "inline-immutable-task-contract",
+        "--object-format=sha1",
+        "verify_initial_failures",
+    ):
+        _require(marker in frozen_corpus_source, f"executable corpus marker missing: {marker}")
+    for marker in (
+        "test_two_materialization_roots_have_identical_portable_identity",
+        "test_every_initial_fixture_fails_its_immutable_verifier",
+        "test_portable_identity_excludes_local_repository_locator",
+    ):
+        _require(marker in frozen_corpus_test, f"executable corpus regression missing: {marker}")
+
+    for path in (
+        SECURITY_TEST,
+        RUNTIME_TEST,
+        RETRIEVAL_TEST,
+        RETRY_TEST,
+        FROZEN_CORPUS_TEST,
+        BENCHMARK,
+        FROZEN_CORPUS,
+    ):
         _require(path.is_file(), f"required recovery artifact missing: {path.relative_to(ROOT)}")
 
     retry_test = RETRY_TEST.read_text(encoding="utf-8")
@@ -171,6 +216,7 @@ def certify() -> dict[str, Any]:
         "target_achieved": False,
         "roadmap_frozen": True,
         "workload_count": len(rows),
+        "executable_frozen_corpus": True,
         "local_structural_benchmark": benchmark,
         "provider_evidence": provider_evidence,
         "required_next_external_gate": "paired provider-observed B0-B9 replay receipts plus exact-head green CI/dogfood",
@@ -188,7 +234,9 @@ def certify() -> dict[str, Any]:
             "runtime_test": _sha(RUNTIME_TEST),
             "retrieval_test": _sha(RETRIEVAL_TEST),
             "retry_test": _sha(RETRY_TEST),
+            "frozen_corpus_test": _sha(FROZEN_CORPUS_TEST),
             "benchmark": _sha(BENCHMARK),
+            "frozen_corpus": _sha(FROZEN_CORPUS),
             "workflow": _sha(WORKFLOW) if WORKFLOW.is_file() else "",
         },
     }
