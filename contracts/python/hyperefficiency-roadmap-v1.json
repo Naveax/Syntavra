@@ -19,13 +19,33 @@
   },
   "allowed_classifications": ["EXISTS", "HARDEN", "UNIFY", "NEW", "CERTIFY", "EXTERNAL", "DEFERRED"],
   "first_reconciliation_slice": [
-    "Cost Ledger", "Frontier Dependency Ratio", "Reacquisition accounting", "Waste accounting",
-    "Execution Ledger", "Semantic State Machine", "Requirements Compiler", "Verifier Graph",
-    "Spec-Harness / verifier-of-verifier", "Mutation adequacy", "Hierarchical Experience Compiler",
-    "Strategy Memory", "Plan Memory", "Failure Ontology", "Repository Digital Twin", "Query Compiler",
-    "Program Slicing", "Semantic Trace", "Inference Compiler", "Inference Exception Architecture",
-    "Deterministic workflow compiler", "Local specialists", "Frontier-last router",
-    "Frontier Knowledge Harvesting", "Abstraction Discovery", "Macro Factory", "Repository-specific distillation"
+    "Cost Ledger",
+    "Frontier Dependency Ratio",
+    "Reacquisition accounting",
+    "Waste accounting",
+    "Execution Ledger",
+    "Semantic State Machine",
+    "Requirements Compiler",
+    "Verifier Graph",
+    "Spec-Harness / verifier-of-verifier",
+    "Mutation adequacy",
+    "Hierarchical Experience Compiler",
+    "Strategy Memory",
+    "Plan Memory",
+    "Failure Ontology",
+    "Repository Digital Twin",
+    "Query Compiler",
+    "Program Slicing",
+    "Semantic Trace",
+    "Inference Compiler",
+    "Inference Exception Architecture",
+    "Deterministic workflow compiler",
+    "Local specialists",
+    "Frontier-last router",
+    "Frontier Knowledge Harvesting",
+    "Abstraction Discovery",
+    "Macro Factory",
+    "Repository-specific distillation"
   ],
   "shards": [
     {"shard":"V3A","path":"contracts/python/hyperefficiency/roadmap-v1-v3a.json","source_range":[1,170],"canonical_range":[281,450],"count":170,"sha256":"a0bd16ca15a2de896a9e93b3200a136ac653f0896dc6064a9bb8f80399887a79"},
@@ -37,13 +57,13 @@
     {"shard":"V6A","path":"contracts/python/hyperefficiency/roadmap-v1-v6a.json","source_range":[983,1133],"canonical_range":[1263,1413],"count":151,"sha256":"d3e582eee3ea34bc7012ee7091840d6e3a7514913a83637ab63d45545b56464c"},
     {"shard":"V6B","path":"contracts/python/hyperefficiency/roadmap-v1-v6b.json","source_range":[1134,1284],"canonical_range":[1414,1564],"count":151,"sha256":"0559ac29e92d5237b81d485a09f88e6c6b922d3d0620092a55eb5e04e3285567"}
   ],
-  "source_provenance": [
-    {"name":"precursor-a","path":"docs/research/hyperefficiency/precursor-a.md.gz","encoding":"gzip","source_sha256":"bffae6e2deb5ff5be21c318d3588a958e508a889aaff25fb9aa736543194c88a","gzip_sha256":"b7e2f742408a5220b7176eb7e15de7afd34b00e21f927f47675fee2185c27e7d"},
-    {"name":"precursor-b","path":"docs/research/hyperefficiency/precursor-b.md.gz","encoding":"gzip","source_sha256":"857238f8615781f888ab8b0ced6b789d65017bb4b472d57b5ddbf2d8468cf0fb","gzip_sha256":"65fd2915f5c306ca9509331f5873dc26492810df23dbea512da131eb321ddab7"},
-    {"name":"v3","path":"docs/research/hyperefficiency/v3.md.gz","encoding":"gzip","source_sha256":"630ae7afbeaac40b9d00a6443217b648b7f5a8b29e9dc0158af4bd8a7a1fcb64","gzip_sha256":"1b703d873389aba40f7f91449cdc708582bdbcda10af7f9fd29ab954d774722e"},
-    {"name":"v4","path":"docs/research/hyperefficiency/v4.md.gz","encoding":"gzip","source_sha256":"1b9045ff55c30b814c83ad5ed7df4d70c97796abebe1282772ed6503e2d21169","gzip_sha256":"a99123bc4f09d507829e9c3b2f014e2363369fe535d351a69d7874a8085790da"},
-    {"name":"v5","path":"docs/research/hyperefficiency/v5.md.gz","encoding":"gzip","source_sha256":"a3591094ef0df94933b1619b8cbc480a72127052d7870c562cafa923e2b423f6","gzip_sha256":"0ef8d8862df79057a6f921bcfed1457b7b49609bf20c8c15b14e478ddb7716b5"},
-    {"name":"v6","path":"docs/research/hyperefficiency/v6.md.gz","encoding":"gzip","source_sha256":"b3137542e16c9fb374a489c1f6501e412c04b664080418db4fbdfb78a728e535","gzip_sha256":"4b38fdf6971df52eb8e0dfc9a7429f16750900f41eb276a1aa1e772e7bcb5555"}
+  "source_fingerprints": [
+    {"name":"precursor-a","sha256":"bffae6e2deb5ff5be21c318d3588a958e508a889aaff25fb9aa736543194c88a"},
+    {"name":"precursor-b","sha256":"857238f8615781f888ab8b0ced6b789d65017bb4b472d57b5ddbf2d8468cf0fb"},
+    {"name":"v3","sha256":"630ae7afbeaac40b9d00a6443217b648b7f5a8b29e9dc0158af4bd8a7a1fcb64"},
+    {"name":"v4","sha256":"1b9045ff55c30b814c83ad5ed7df4d70c97796abebe1282772ed6503e2d21169"},
+    {"name":"v5","sha256":"a3591094ef0df94933b1619b8cbc480a72127052d7870c562cafa923e2b423f6"},
+    {"name":"v6","sha256":"b3137542e16c9fb374a489c1f6501e412c04b664080418db4fbdfb78a728e535"}
   ],
   "authority_docs": [
     "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md",
@@ -56,6 +76,12 @@
   "verification": {
     "validator": "tools/validate_hyperefficiency_roadmap.py",
     "regression": "tests/runtime/test_hyperefficiency_roadmap.py",
-    "invariants": ["1284 imported rows","HE-0001..HE-1284 contiguous","CAP-0281..CAP-1564 contiguous","canonical = source + 280","shard SHA-256 exact"]
+    "invariants": [
+      "1284 imported rows",
+      "HE-0001..HE-1284 contiguous",
+      "CAP-0281..CAP-1564 contiguous",
+      "canonical = source + 280",
+      "shard SHA-256 exact"
+    ]
   }
 }
