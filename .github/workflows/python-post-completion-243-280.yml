@@ -62,7 +62,7 @@ on:
       - "MANIFEST.sha256"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: python-post-completion-243-280-${{ github.event.pull_request.number || github.ref }}
@@ -110,38 +110,30 @@ jobs:
           PY
       - name: Generate deterministic manifest candidate
         run: |
-          rm -rf syntavra_runtime.egg-info
-          python tools/refresh_manifest.py
-      - name: Synchronize exact manifest on PR branch
-        id: manifest_sync
-        if: github.event_name == 'pull_request'
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
           set -euo pipefail
-          if git diff --quiet -- MANIFEST.sha256; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MANIFEST.sha256
-          git commit -m "manifest: synchronize Python post-completion 243-280"
-          git push origin "HEAD:${HEAD_REF}"
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+          rm -rf syntavra_runtime.egg-info
+          cp MANIFEST.sha256 /tmp/MANIFEST.committed.sha256
+          python tools/refresh_manifest.py
       - name: Upload exact-head evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always() && steps.manifest_sync.outputs.changed != 'true'
+        if: always()
         with:
           name: python-post-completion-243-280-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             /tmp/post-completion-certification.json
             MANIFEST.sha256
       - name: Require committed manifest to be exact
-        if: steps.manifest_sync.outputs.changed != 'true'
-        run: git diff --exit-code -- MANIFEST.sha256
+        run: |
+          set -euo pipefail
+          status=0
+          cmp -s /tmp/MANIFEST.committed.sha256 MANIFEST.sha256 || status=1
+          if [ "$status" -ne 0 ]; then
+            echo "MANIFEST.sha256 is stale; commit the uploaded deterministic candidate." >&2
+            diff -u /tmp/MANIFEST.committed.sha256 MANIFEST.sha256 || true
+          fi
+          cp /tmp/MANIFEST.committed.sha256 MANIFEST.sha256
+          exit "$status"
       - name: Repository validation
-        if: steps.manifest_sync.outputs.changed != 'true'
         run: python tools/validate.py
       - name: Enforce clean exact-head repository
         if: always()
