@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - 'syntavra_runtime/agent_runtime.py'
+      - 'syntavra_runtime/autonomous_agent.py'
       - 'syntavra_runtime/agent_context_runtime.py'
+      - 'syntavra_runtime/inference_skip_cache.py'
       - 'syntavra_runtime/provider_call_observation.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
@@ -17,6 +19,7 @@ on:
       - 'benchmarks/token_economy_rc1_benchmark.py'
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
+      - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_recovery_to_99.py'
       - '.github/workflows/recovery-to-99-rc1.yml'
   push:
@@ -25,7 +28,9 @@ on:
       - 'agent/**'
     paths:
       - 'syntavra_runtime/agent_runtime.py'
+      - 'syntavra_runtime/autonomous_agent.py'
       - 'syntavra_runtime/agent_context_runtime.py'
+      - 'syntavra_runtime/inference_skip_cache.py'
       - 'syntavra_runtime/provider_call_observation.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
@@ -38,6 +43,7 @@ on:
       - 'benchmarks/token_economy_rc1_benchmark.py'
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
+      - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_recovery_to_99.py'
       - '.github/workflows/recovery-to-99-rc1.yml'
 
@@ -77,10 +83,13 @@ jobs:
           set -euo pipefail
           python -m compileall -q \
             syntavra_runtime/agent_runtime.py \
+            syntavra_runtime/autonomous_agent.py \
             syntavra_runtime/agent_context_runtime.py \
+            syntavra_runtime/inference_skip_cache.py \
             syntavra_runtime/provider_call_observation.py \
             tests/runtime/test_token_economy_rc1_runtime.py \
             tests/runtime/test_recovery_to_99_security.py \
+            tests/runtime/test_inference_skip_cache.py \
             benchmarks/token_economy_rc1_benchmark.py \
             tools/certify_recovery_to_99.py
 
@@ -90,6 +99,11 @@ jobs:
           python -m unittest tests.runtime.test_token_economy_rc1_runtime -v
           python -m unittest tests.runtime.test_agent_product_completion -v
           python -m unittest tests.runtime.test_p0_p4_runtime_consolidation -v
+
+      - name: Prove exact zero-inference replay and invalidation
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_inference_skip_cache -v
 
       - name: Run security and exact-recovery property suite
         run: |
