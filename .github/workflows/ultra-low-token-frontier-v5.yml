@@ -1,0 +1,87 @@
+name: Ultra-Low Token Frontier V5
+
+on:
+  pull_request:
+    paths:
+      - 'docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md'
+      - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V6.md'
+      - 'contracts/python/ultra-low-token-frontier-v5.json'
+      - 'contracts/python/token-economy-execution-backlog-v6.json'
+      - 'docs/SYNTAVRA_TOKEN_FLOOR_CURRENT_CHECKPOINT.md'
+      - '.github/workflows/ultra-low-token-frontier-v5.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md'
+      - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V6.md'
+      - 'contracts/python/ultra-low-token-frontier-v5.json'
+      - 'contracts/python/token-economy-execution-backlog-v6.json'
+      - 'docs/SYNTAVRA_TOKEN_FLOOR_CURRENT_CHECKPOINT.md'
+      - '.github/workflows/ultra-low-token-frontier-v5.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ultra-low-token-frontier-v5-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Validate V5 token-floor contracts
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          frontier = json.loads(Path('contracts/python/ultra-low-token-frontier-v5.json').read_text(encoding='utf-8'))
+          backlog = json.loads(Path('contracts/python/token-economy-execution-backlog-v6.json').read_text(encoding='utf-8'))
+
+          assert frontier['schema_version'] == 5
+          assert frontier['family'] == 'syntavra-ultra-low-token-frontier'
+          assert frontier['no_new_capability_namespace'] is True
+          assert len(frontier['mechanisms']) == 8
+          assert frontier['waves'] == ['TE-U30','TE-U31','TE-U32','TE-U33','TE-U34','TE-U35','TE-U36']
+          t = frontier['targets']
+          assert t['verified_repeated_provider_tokens'] == 0
+          assert t['easy_warm_probe_max_tokens'] == 25
+          assert t['easy_frontier_probe_max_tokens'] == 150
+          assert t['normal_scoped_coding_probe_max_tokens'] == 750
+          assert t['hard_scoped_probe_max_tokens'] == 2500
+          assert t['quality_non_inferior'] is True
+          assert t['unexplained_overflow'] == 0
+
+          assert backlog['schema_version'] == 6
+          assert backlog['family'] == 'syntavra-token-economy-execution-backlog'
+          assert backlog['no_new_capability_namespace'] is True
+          assert backlog['base_backlog_remains_authoritative'] is True
+          assert len(backlog['new_items']) == 8
+          assert backlog['waves'] == frontier['waves']
+          bt = backlog['research_probe_targets']
+          assert bt['verified_repeated_tokens'] == 0
+          assert bt['easy_warm_max'] == 25
+          assert bt['easy_frontier_max'] == 150
+          assert bt['normal_scoped_coding_max'] == 750
+          assert bt['hard_scoped_max'] == 2500
+
+          assert [x['id'] for x in frontier['mechanisms']] == [x['id'] for x in backlog['new_items']]
+          PY
+
+      - name: Enforce exact clean head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
