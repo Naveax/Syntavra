@@ -1,0 +1,51 @@
+{
+  "schema_version": 6,
+  "family": "syntavra-token-economy-execution-backlog",
+  "status": "active_continuation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/token-economy-execution-backlog-v5.json",
+  "ultra_low_overlay": "contracts/python/ultra-low-token-frontier-v5.json",
+  "no_new_capability_namespace": true,
+  "base_backlog_remains_authoritative": true,
+  "priority_order": [
+    "TE-P0-deterministic_foundations",
+    "U5-P0-01",
+    "U5-P0-02",
+    "U5-P0-03",
+    "U5-P0-04",
+    "U5-P0-05",
+    "U5-P1-03",
+    "U5-P1-01",
+    "U5-P1-02",
+    "TE-U36"
+  ],
+  "new_items": [
+    {"id":"U5-P0-01","name":"Zero-Token Memory Engine","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U5-P0-02","name":"Reacquisition Tax Governor","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U5-P0-03","name":"Future-Reuse Retention Predictor","state":"TODO","class":"HARDEN_SHADOW_FIRST"},
+    {"id":"U5-P0-04","name":"Communication Medium Router","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U5-P0-05","name":"Global Token Budget Auction","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U5-P1-01","name":"Entropy-Coded SWIR V2","state":"TODO","class":"HARDEN_EXPERIMENTAL"},
+    {"id":"U5-P1-02","name":"Reversible Source Minification","state":"TODO","class":"EXPERIMENTAL_P2"},
+    {"id":"U5-P1-03","name":"Reacquisition-Aware Compaction Scheduler","state":"TODO","class":"HARDEN"}
+  ],
+  "waves": ["TE-U30","TE-U31","TE-U32","TE-U33","TE-U34","TE-U35","TE-U36"],
+  "research_probe_targets": {
+    "verified_repeated_tokens": 0,
+    "easy_warm_max": 25,
+    "easy_frontier_max": 150,
+    "normal_scoped_coding_max": 750,
+    "hard_scoped_max": 2500
+  },
+  "hard_invariants": [
+    "ALL_PRIOR_OPEN_WORK_REMAINS_ACTIVE",
+    "NO_NEW_CAP_NAMESPACE",
+    "DETERMINISTIC_ELIMINATION_PRECEDES_LOSSY_OR_LEARNED_REDUCTION",
+    "RAW_MEMORY_REMAINS_AUTHORITY",
+    "REACQUISITION_COUNTS_END_TO_END",
+    "MANDATORY_EVIDENCE_CANNOT_BE_DROPPED_OR_AUCTIONED",
+    "LOCAL_ACCELERATION_IS_NOT_HOSTED_PROVIDER_TOKEN_SAVINGS_BY_ITSELF",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIMS",
+    "CONTINUOUS_FLOOR_SEARCH_MAY_PROBE_LOWER"
+  ]
+}
