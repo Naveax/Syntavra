@@ -1,0 +1,45 @@
+name: Continuation Manifest Bootstrap
+
+on:
+  pull_request:
+    paths:
+      - 'docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md'
+      - 'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md'
+      - '.github/workflows/continuation-manifest-bootstrap.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: continuation-manifest-bootstrap-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Generate final deterministic authority manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/continuation-manifest-bootstrap.yml
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+          git diff --check
+      - name: Commit final authority tree
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Sync continuation authority manifest'
+          git push origin "HEAD:${HEAD_REF}"
