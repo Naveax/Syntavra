@@ -41,7 +41,7 @@ class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
             self.assertGreaterEqual(
                 workflow.count(token),
                 2,
-                f"post-completion manifest sync must watch {relative} on pull_request and push",
+                f"post-completion manifest verification must watch {relative} on pull_request and push",
             )
 
     def test_release_trust_paths_trigger_pull_request_and_push_sync(self):
@@ -51,7 +51,7 @@ class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
             self.assertGreaterEqual(
                 workflow.count(token),
                 2,
-                f"post-completion manifest sync must watch release trust path {relative}",
+                f"post-completion manifest verification must watch release trust path {relative}",
             )
 
     def test_runtime_hardening_paths_trigger_pull_request_and_push_sync(self):
@@ -61,17 +61,22 @@ class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
             self.assertGreaterEqual(
                 workflow.count(token),
                 2,
-                f"post-completion manifest sync must watch runtime hardening path {relative}",
+                f"post-completion manifest verification must watch runtime hardening path {relative}",
             )
 
-    def test_manifest_sync_enforcement_remains_fail_closed(self):
+    def test_manifest_enforcement_is_read_only_and_fail_closed(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertGreaterEqual(workflow.count('- "MANIFEST.sha256"'), 2)
-        self.assertIn("contents: write", workflow)
+        self.assertIn("contents: read", workflow)
+        self.assertNotIn("contents: write", workflow)
         self.assertIn("python tools/refresh_manifest.py", workflow)
-        self.assertIn('git push origin "HEAD:${HEAD_REF}"', workflow)
-        self.assertIn("Require committed manifest to be exact", workflow)
-        self.assertIn("git diff --exit-code -- MANIFEST.sha256", workflow)
+        self.assertIn("MANIFEST.sha256 is stale; commit the uploaded deterministic candidate.", workflow)
+        self.assertIn("cmp -s /tmp/MANIFEST.committed.sha256 MANIFEST.sha256", workflow)
+        self.assertIn("cp /tmp/MANIFEST.committed.sha256 MANIFEST.sha256", workflow)
+        self.assertNotIn("git push", workflow)
+        self.assertNotIn("git commit", workflow)
+        self.assertNotIn("HEAD_REF", workflow)
+        self.assertNotIn("github.head_ref", workflow)
 
 
 if __name__ == "__main__":
