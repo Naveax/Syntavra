@@ -3,7 +3,6 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -13,14 +12,34 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
+from .agent_context_runtime import (
+    CompiledAgentContext,
+    ConstantContextState,
+    ContextBudgetExceeded,
+    ProviderTokenCounter,
+    compact_value,
+)
 from .autonomous_agent import AgentMode, AgentRunReceipt, AgentTask, AutonomousCodingAgent, PatchProposal
+from .evidence import EvidenceStore
 from .execution_sandbox import ExecutionReceipt, SandboxPolicy
 from .model_gateway import ModelGateway
 from .project_model import ProjectModel, VerifierSpec
+from .provider_call_observation import ProviderCallObservationLedger
+from .tool_externalization import ToolOutputExternalizer
+from .tool_externalization_types import ExternalizationPolicy
+from .util import stable_project_id
 
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 _SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _short_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:20]
 
 
 class AgentDeliveryMode(str, Enum):
@@ -92,6 +111,7 @@ class AgentProductReceipt:
     verification_complete: bool = True
     delivery_options: tuple[str, ...] = tuple(item.value for item in AgentDeliveryMode)
     limitations: tuple[str, ...] = ()
+    provider_observation: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -104,13 +124,12 @@ class AgentProductReceipt:
 
 
 class AgentContextAssembler:
-    """Build a bounded repository packet rather than a bare lexical hit list."""
+    """Build a small initial packet; source bodies are pulled explicitly by range/symbol."""
 
     INSTRUCTION_FILES = (
         "AGENTS.md",
         "CLAUDE.md",
         "GEMINI.md",
-        "README.md",
         ".github/copilot-instructions.md",
     )
     PROJECT_FILES = (
@@ -126,11 +145,20 @@ class AgentContextAssembler:
         "Makefile",
     )
 
-    def __init__(self, project: Path, graph: Any, project_model: ProjectModel, *, max_bytes: int = 120_000) -> None:
+    def __init__(
+        self,
+        project: Path,
+        graph: Any,
+        project_model: ProjectModel,
+        *,
+        max_bytes: int = 20_000,
+        per_file_bytes: int = 4096,
+    ) -> None:
         self.project = project.resolve(strict=True)
         self.graph = graph
         self.project_model = project_model
-        self.max_bytes = max(16_384, min(int(max_bytes), 500_000))
+        self.max_bytes = max(8192, min(int(max_bytes), 64_000))
+        self.per_file_bytes = max(1024, min(int(per_file_bytes), 16_384))
 
     def _read(self, root: Path, relative: str, remaining: int) -> dict[str, Any] | None:
         path = (root / relative).resolve(strict=False)
@@ -141,14 +169,29 @@ class AgentContextAssembler:
         if not path.is_file() or remaining <= 0:
             return None
         data = path.read_bytes()
-        bounded = data[:remaining]
+        limit = min(remaining, self.per_file_bytes)
+        bounded = data[:limit]
         return {
             "path": relative,
             "bytes": len(data),
+            "visible_bytes": len(bounded),
             "truncated": len(data) > len(bounded),
             "sha256": hashlib.sha256(data).hexdigest(),
             "content": bounded.decode("utf-8", errors="replace"),
         }
+
+    @staticmethod
+    def _semantic(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        fields = (
+            "node_id", "name", "qualified_name", "path", "kind", "language",
+            "start_line", "end_line", "score", "query_backend",
+        )
+        output: list[dict[str, Any]] = []
+        for raw in rows[:12]:
+            item = {key: raw[key] for key in fields if key in raw}
+            if item:
+                output.append(item)
+        return output
 
     def assemble(
         self,
@@ -160,23 +203,27 @@ class AgentContextAssembler:
         source_root = (root or self.project).resolve(strict=True)
         remaining = self.max_bytes
         files: list[dict[str, Any]] = []
+        # Do not auto-open semantic result paths. The model must request exact/ranged
+        # source after the structural result identifies what is actually needed.
         candidates = [*self.INSTRUCTION_FILES, *self.PROJECT_FILES]
-        candidates.extend(str(item.get("path") or "") for item in semantic_results[:12])
-        for relative in dict.fromkeys(item for item in candidates if item):
+        for relative in dict.fromkeys(candidates):
             row = self._read(source_root, relative, remaining)
             if row is None:
                 continue
             files.append(row)
-            remaining -= len(str(row["content"]).encode("utf-8"))
+            remaining -= int(row["visible_bytes"])
             if remaining <= 0:
                 break
         return {
             "instruction": instruction,
-            "repository": self.project_model.describe(),
-            "semantic_results": list(semantic_results)[:20],
-            "files": files,
-            "bounded": remaining <= 0,
-            "max_bytes": self.max_bytes,
+            "repository": compact_value(self.project_model.describe(), string_limit=1024, list_limit=8),
+            "semantic_results": self._semantic(semantic_results),
+            "bootstrap_files": files,
+            "bootstrap_policy": {
+                "semantic_source_bodies_auto_loaded": False,
+                "max_visible_bytes": self.max_bytes,
+                "per_file_bytes": self.per_file_bytes,
+            },
         }
 
 
@@ -327,20 +374,22 @@ class StructuredEditCompiler:
 
 
 class GatewayPatchProvider:
-    """Model-backed bounded tool loop for the verified agent executor."""
+    """Model-backed agent loop with constant provider context and exact recovery."""
 
     SYSTEM_PROMPT = """You are the patch-planning component of Syntavra.
 Return exactly one JSON object and no markdown.
 Allowed actions:
 - {"action":"search","query":"..."}
-- {"action":"inspect","paths":["relative/path.py"]}
+- {"action":"inspect","path":"relative/path.py","start_line":1,"end_line":200}
+- {"action":"inspect","paths":["relative/path.py"]}  # legacy bounded form
 - {"action":"diff"}
 - {"action":"impact","node_id":"..."}
 - {"action":"verifiers"}
 - {"action":"run_verifier","name":"..."}
 - {"action":"edit","edits":[{"path":"...","operation":"replace","old":"...","new":"...","count":1}],"rationale":"..."}
 - {"action":"patch","patch":"unified diff","rationale":"..."}
-Use search, inspect, impact or a verifier when evidence is insufficient. Never invent file contents.
+Use search, ranged inspect, impact or a verifier when evidence is insufficient. Never invent file contents.
+Tool evidence is represented by compact receipts and exact recovery handles; request a fresh/ranged read when more evidence is required.
 Patch or structured edits must stay inside the repository and must be suitable for git apply.
 """
 
@@ -354,9 +403,17 @@ Patch or structured edits must stay inside the repository and must be suitable f
         sandbox: Any | None = None,
         context_assembler: AgentContextAssembler | None = None,
         journal: AgentEventJournal | None = None,
+        externalizer: ToolOutputExternalizer | None = None,
+        observation_ledger: ProviderCallObservationLedger | None = None,
+        arm_id: str = "syntavra",
+        repetition: int = 1,
         max_tool_rounds: int = 8,
-        max_file_bytes: int = 120_000,
+        max_file_bytes: int = 32_000,
+        max_inspect_total_bytes: int = 24_000,
+        max_inspect_files: int = 4,
         max_verifier_runs: int = 3,
+        provider_token_budget: int = 6_000,
+        provider_byte_budget: int = 24_000,
     ) -> None:
         self.gateway = gateway
         self.project = project.resolve(strict=True)
@@ -365,15 +422,31 @@ Patch or structured edits must stay inside the repository and must be suitable f
         self.sandbox = sandbox
         self.context_assembler = context_assembler or AgentContextAssembler(self.project, graph, project_model)
         self.journal = journal or AgentEventJournal()
-        self.max_tool_rounds = max(1, min(int(max_tool_rounds), 16))
-        self.max_file_bytes = max(4096, min(int(max_file_bytes), 500_000))
+        self.externalizer = externalizer
+        self.observation_ledger = observation_ledger
+        self.arm_id = str(arm_id)
+        self.repetition = max(1, int(repetition))
+        self.max_tool_rounds = max(1, min(int(max_tool_rounds), 64))
+        self.max_file_bytes = max(4096, min(int(max_file_bytes), 128_000))
+        self.max_inspect_total_bytes = max(4096, min(int(max_inspect_total_bytes), 128_000))
+        self.max_inspect_files = max(1, min(int(max_inspect_files), 8))
         self.max_verifier_runs = max(0, min(int(max_verifier_runs), 8))
+        self.provider_token_budget = max(256, int(provider_token_budget))
+        self.provider_byte_budget = max(4096, int(provider_byte_budget))
+        config = getattr(gateway, "config", None)
+        envelope = getattr(config, "token_envelope", None)
+        if envelope is not None:
+            self.provider_token_budget = min(self.provider_token_budget, int(envelope.provider_input_budget_tokens))
         self.trace: list[dict[str, Any]] = []
         self.usage: dict[str, int] = {}
+        self.context_receipts: list[CompiledAgentContext] = []
         self.provider = type(gateway).__name__
-        self.model = getattr(getattr(gateway, "config", None), "model", getattr(gateway, "model", "unknown"))
-        self.edit_compiler = StructuredEditCompiler(max_file_bytes=self.max_file_bytes)
+        self.model = getattr(config, "model", getattr(gateway, "model", "unknown"))
+        self.counter = ProviderTokenCounter(str(self.model))
+        self.edit_compiler = StructuredEditCompiler(max_file_bytes=max(self.max_file_bytes, 1_000_000))
         self._verifier_runs = 0
+        self.task_id = ""
+        self._state: ConstantContextState | None = None
 
     @staticmethod
     def _action(text: str) -> dict[str, Any]:
@@ -401,21 +474,76 @@ Patch or structured edits must stay inside the repository and must be suitable f
             raise ValueError(f"model requested a non-file path: {value}")
         return candidate
 
-    def _inspect(self, paths: Sequence[str], *, root: Path) -> list[dict[str, Any]]:
+    def _read_one(
+        self,
+        value: str,
+        *,
+        root: Path,
+        start_line: int | None = None,
+        end_line: int | None = None,
+        max_bytes: int,
+    ) -> dict[str, Any]:
+        path = self._safe_path(root, value)
+        data = path.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        text = data.decode("utf-8", errors="replace")
+        lines = text.splitlines(keepends=True)
+        if start_line is not None or end_line is not None:
+            start = int(start_line or 1)
+            end = int(end_line or len(lines))
+            if start < 1 or end < start or start > max(1, len(lines)):
+                raise ValueError(f"inspect line range is invalid for {value}: {start}-{end}")
+            end = min(end, len(lines))
+            selected = "".join(lines[start - 1 : end])
+            selected_bytes = selected.encode("utf-8")[:max_bytes]
+            visible = selected_bytes.decode("utf-8", errors="ignore")
+            actual_end = start + max(0, visible.count("\n"))
+            return {
+                "path": path.relative_to(root).as_posix(),
+                "bytes": len(data),
+                "sha256": sha,
+                "start_line": start,
+                "end_line": min(end, actual_end),
+                "requested_end_line": end,
+                "truncated": len(selected.encode("utf-8")) > len(selected_bytes),
+                "content": visible,
+            }
+        bounded = data[:max_bytes]
+        visible = bounded.decode("utf-8", errors="replace")
+        return {
+            "path": path.relative_to(root).as_posix(),
+            "bytes": len(data),
+            "sha256": sha,
+            "start_line": 1,
+            "end_line": max(1, visible.count("\n") + 1),
+            "truncated": len(data) > len(bounded),
+            "content": visible,
+        }
+
+    def _inspect_action(self, action: Mapping[str, Any], *, root: Path) -> list[dict[str, Any]]:
+        single = str(action.get("path") or "").strip()
+        if single:
+            paths = [single]
+            start = int(action["start_line"]) if action.get("start_line") is not None else None
+            end = int(action["end_line"]) if action.get("end_line") is not None else None
+        else:
+            raw_paths = action.get("paths") or []
+            if not isinstance(raw_paths, list):
+                raise ValueError("inspect action requires path or paths")
+            paths = [str(item) for item in raw_paths]
+            start = end = None
+        paths = list(dict.fromkeys(paths))[: self.max_inspect_files]
+        if not paths:
+            raise ValueError("inspect action requires at least one path")
+        remaining = self.max_inspect_total_bytes
         rows: list[dict[str, Any]] = []
-        for value in list(dict.fromkeys(str(item) for item in paths))[:12]:
-            path = self._safe_path(root, value)
-            data = path.read_bytes()
-            bounded = data[: self.max_file_bytes]
-            rows.append(
-                {
-                    "path": path.relative_to(root).as_posix(),
-                    "bytes": len(data),
-                    "sha256": hashlib.sha256(data).hexdigest(),
-                    "truncated": len(data) > len(bounded),
-                    "content": bounded.decode("utf-8", errors="replace"),
-                }
-            )
+        for value in paths:
+            if remaining <= 0:
+                break
+            per_file = min(self.max_file_bytes, remaining)
+            row = self._read_one(value, root=root, start_line=start, end_line=end, max_bytes=per_file)
+            rows.append(row)
+            remaining -= len(str(row["content"]).encode("utf-8"))
         return rows
 
     def _record_usage(self, values: Mapping[str, int]) -> None:
@@ -425,7 +553,7 @@ Patch or structured edits must stay inside the repository and must be suitable f
     def _verifiers(self) -> tuple[VerifierSpec, ...]:
         return self.project_model.discover_verifiers()
 
-    def _run_verifier(self, name: str, workspace: Path, timeout_seconds: float) -> dict[str, Any]:
+    def _run_verifier(self, name: str, workspace: Path, timeout_seconds: float) -> tuple[dict[str, Any], str]:
         if self.sandbox is None:
             raise RuntimeError("run_verifier is unavailable because no sandbox is configured")
         if self._verifier_runs >= self.max_verifier_runs:
@@ -443,54 +571,160 @@ Patch or structured edits must stay inside the repository and must be suitable f
                 strict_native=False,
             ),
         )
-        return {
+        stdout = str(receipt.stdout or "")
+        stderr = str(receipt.stderr or "")
+        raw = stdout.rstrip("\n") + ("\n[stderr]\n" + stderr if stderr else "")
+        summary: dict[str, Any] = {
             "name": verifier.name,
             "argv": list(verifier.argv),
             "ok": receipt.ok,
             "exit_code": receipt.exit_code,
             "timed_out": receipt.timed_out,
-            "stdout": receipt.stdout[-24_000:],
-            "stderr": receipt.stderr[-24_000:],
         }
+        if not receipt.ok:
+            failure = (stderr or stdout)[-4096:]
+            summary["failure_excerpt"] = failure
+        return summary, raw
 
-    @staticmethod
-    def _append_tool(messages: list[dict[str, str]], action: Mapping[str, Any], payload: Mapping[str, Any]) -> None:
-        messages.extend(
-            (
-                {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
-            )
+    def _ingest(self, *, key: str, tool: str, payload: Any, round_number: int, metadata: Mapping[str, Any] | None = None, path: str = "", command: str = "") -> None:
+        if self._state is None:
+            raise RuntimeError("agent context state is not initialized")
+        raw = _canonical(payload)
+        receipt = self._state.ingest(
+            key=key,
+            tool=tool,
+            raw=raw,
+            round_number=round_number,
+            command=command,
+            path=path,
+            metadata=metadata,
         )
+        self.journal.emit(
+            "tool-evidence-ingested",
+            tool=tool,
+            key=key,
+            status=receipt.status,
+            raw_bytes=receipt.original_bytes,
+            visible_bytes=receipt.visible_bytes,
+            artifact=receipt.artifact_id,
+            exact=receipt.exact_handle,
+        )
+
+    def _compile_messages(self, base: Mapping[str, Any]) -> tuple[list[dict[str, str]], CompiledAgentContext, int, str]:
+        if self._state is None:
+            raise RuntimeError("agent context state is not initialized")
+        empty_system = self.counter.count_messages([], system=self.SYSTEM_PROMPT)
+        available = self.provider_token_budget - empty_system.tokens
+        if available < 128:
+            raise ContextBudgetExceeded(
+                f"system prompt leaves insufficient provider budget: {available} tokens"
+            )
+        compiled = self._state.compile(
+            base,
+            counter=self.counter,
+            token_budget=available,
+            byte_budget=max(1024, self.provider_byte_budget - len(self.SYSTEM_PROMPT.encode("utf-8"))),
+        )
+        messages = [{"role": "user", "content": compiled.text}]
+        total = self.counter.count_messages(messages, system=self.SYSTEM_PROMPT)
+        if total.tokens > self.provider_token_budget:
+            raise ContextBudgetExceeded(
+                f"compiled provider packet exceeds total token budget: {total.tokens}>{self.provider_token_budget}"
+            )
+        prepare = getattr(self.gateway, "prepare_input_tokens", None)
+        if callable(prepare):
+            prepare(total.tokens)
+        self.context_receipts.append(compiled)
+        return messages, compiled, total.tokens, total.method
+
+    def _call_model(self, base: Mapping[str, Any], *, round_number: int) -> Any:
+        messages, compiled, prepared_tokens, counting_method = self._compile_messages(base)
+        self.journal.emit(
+            "model-requested",
+            round=round_number,
+            prepared_input_tokens=prepared_tokens,
+            context_bytes=compiled.visible_bytes,
+            active_evidence=compiled.active_evidence,
+            causal_receipts=compiled.causal_receipts,
+            previews_dropped=compiled.previews_dropped,
+            counting_method=counting_method,
+        )
+        started = time.monotonic()
+        result = self.gateway.complete(messages, system=self.SYSTEM_PROMPT)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        self.provider = result.provider
+        self.model = result.model
+        self._record_usage(result.usage)
+        if self.observation_ledger is not None:
+            response = result.raw if result.raw else {
+                "text": result.text,
+                "finish_reason": result.finish_reason,
+                "provider": result.provider,
+                "model": result.model,
+            }
+            self.observation_ledger.record_call(
+                task_id=self.task_id,
+                arm_id=self.arm_id,
+                repetition=self.repetition,
+                round_number=round_number,
+                provider=result.provider,
+                model=result.model,
+                usage={"usage": dict(result.usage)},
+                response_id=result.response_id,
+                response=response,
+                locally_counted_input_tokens=prepared_tokens,
+                counting_method=counting_method,
+                context_hash=compiled.digest,
+                elapsed_ms=elapsed_ms,
+            )
+        return result
 
     def propose(self, task: AgentTask, context: Mapping[str, Any], previous_failure: Mapping[str, Any] | None) -> PatchProposal:
         usage_before = dict(self.usage)
         workspace = Path(str(context.get("workspace") or self.project)).resolve(strict=True)
         semantic_results = list(context.get("semantic_results") or ())[:20]
-        working: dict[str, Any] = self.context_assembler.assemble(
-            task.instruction,
-            semantic_results,
-            root=workspace,
-        )
-        working.update(
+        base: dict[str, Any] = self.context_assembler.assemble(task.instruction, semantic_results, root=workspace)
+        base.update(
             {
                 "mode": task.mode.value,
                 "attempt": context.get("attempt"),
-                "current_diff": str(context.get("current_diff") or "")[-120_000:],
                 "changed_files": list(context.get("changed_files") or ()),
-                "previous_failure": previous_failure,
+                "provider_context_mode": "constant-active-evidence",
             }
         )
-        messages: list[dict[str, str]] = [
-            {"role": "user", "content": json.dumps(working, ensure_ascii=False, sort_keys=True)}
-        ]
-        self.journal.emit("model-loop-started", attempt=context.get("attempt"), workspace=str(workspace))
+        task_identity = _canonical(
+            {
+                "project": stable_project_id(self.project),
+                "instruction": task.instruction,
+                "verifier": list(task.verifier),
+            }
+        )
+        self.task_id = "agent-" + hashlib.sha256(task_identity.encode("utf-8")).hexdigest()[:32]
+        scope = f"{self.task_id}:{context.get('attempt', 1)}"
+        self._state = ConstantContextState(externalizer=self.externalizer, scope_key=scope)
+
+        current_diff = str(context.get("current_diff") or "")
+        if current_diff:
+            self._ingest(
+                key="repo.diff:current",
+                tool="repo.diff",
+                payload={"diff": current_diff},
+                round_number=0,
+                metadata={"changed_files": list(context.get("changed_files") or ())},
+            )
+        if previous_failure:
+            self._ingest(
+                key="agent.previous_failure",
+                tool="agent.failure",
+                payload=previous_failure,
+                round_number=0,
+                metadata={"mandatory_failure_evidence": True},
+            )
+
+        self.journal.emit("model-loop-started", attempt=context.get("attempt"), workspace=str(workspace), task_id=self.task_id)
 
         for round_number in range(1, self.max_tool_rounds + 1):
-            self.journal.emit("model-requested", round=round_number)
-            result = self.gateway.complete(messages, system=self.SYSTEM_PROMPT)
-            self.provider = result.provider
-            self.model = result.model
-            self._record_usage(result.usage)
+            result = self._call_model(base, round_number=round_number)
             action = self._action(result.text)
             name = str(action.get("action")).casefold()
             trace: dict[str, Any] = {"round": round_number, "action": name}
@@ -501,23 +735,52 @@ Patch or structured edits must stay inside the repository and must be suitable f
                 rows = self.graph.query(query, limit=20)
                 trace.update(query=query, results=len(rows))
                 self.trace.append(trace)
-                self._append_tool(messages, action, {"tool": "repo.search", "query": query, "results": rows})
+                self._ingest(
+                    key="repo.search:" + _short_hash(query),
+                    tool="repo.search",
+                    payload={"query": query, "results": rows},
+                    round_number=round_number,
+                    metadata={"query": query, "result_count": len(rows)},
+                    command=query,
+                )
                 continue
+
             if name == "inspect":
-                raw_paths = action.get("paths") or []
-                if not isinstance(raw_paths, list):
-                    raise ValueError("inspect action paths must be a list")
-                rows = self._inspect([str(item) for item in raw_paths], root=workspace)
+                rows = self._inspect_action(action, root=workspace)
                 trace["paths"] = [row["path"] for row in rows]
+                trace["visible_bytes"] = sum(len(str(row["content"]).encode("utf-8")) for row in rows)
                 self.trace.append(trace)
-                self._append_tool(messages, action, {"tool": "repo.read", "files": rows})
+                for row in rows:
+                    key = f"repo.read:{row['path']}:{row['start_line']}:{row['end_line']}"
+                    self._ingest(
+                        key=key,
+                        tool="repo.read",
+                        payload=row,
+                        round_number=round_number,
+                        metadata={
+                            "path": row["path"],
+                            "start_line": row["start_line"],
+                            "end_line": row["end_line"],
+                            "file_sha256": row["sha256"],
+                            "truncated": row["truncated"],
+                        },
+                        path=str(row["path"]),
+                    )
                 continue
+
             if name == "diff":
-                diff = str(context.get("current_diff") or "")[-120_000:]
+                diff = str(context.get("current_diff") or "")
                 trace["bytes"] = len(diff.encode("utf-8"))
                 self.trace.append(trace)
-                self._append_tool(messages, action, {"tool": "repo.diff", "diff": diff})
+                self._ingest(
+                    key="repo.diff:current",
+                    tool="repo.diff",
+                    payload={"diff": diff, "changed_files": list(context.get("changed_files") or ())},
+                    round_number=round_number,
+                    metadata={"changed_files": list(context.get("changed_files") or ())},
+                )
                 continue
+
             if name == "impact":
                 node_id = str(action.get("node_id") or "")
                 if not node_id:
@@ -525,22 +788,43 @@ Patch or structured edits must stay inside the repository and must be suitable f
                 result_value = self.graph.impact(node_id, max_depth=6)
                 trace["node_id"] = node_id
                 self.trace.append(trace)
-                self._append_tool(messages, action, {"tool": "repo.impact", "result": result_value})
+                self._ingest(
+                    key="repo.impact:" + node_id,
+                    tool="repo.impact",
+                    payload=result_value,
+                    round_number=round_number,
+                    metadata={"node_id": node_id},
+                )
                 continue
+
             if name == "verifiers":
                 rows = [asdict(item) for item in self._verifiers()]
                 trace["count"] = len(rows)
                 self.trace.append(trace)
-                self._append_tool(messages, action, {"tool": "test.discover", "verifiers": rows})
-                continue
-            if name == "run_verifier":
-                verifier_result = self._run_verifier(
-                    str(action.get("name") or ""), workspace, task.timeout_seconds
+                self._ingest(
+                    key="test.discover",
+                    tool="test.discover",
+                    payload={"verifiers": rows},
+                    round_number=round_number,
+                    metadata={"count": len(rows)},
                 )
-                trace.update(name=verifier_result["name"], ok=verifier_result["ok"])
-                self.trace.append(trace)
-                self._append_tool(messages, action, {"tool": "test.run", "result": verifier_result})
                 continue
+
+            if name == "run_verifier":
+                verifier_name = str(action.get("name") or "")
+                verifier_summary, raw_log = self._run_verifier(verifier_name, workspace, task.timeout_seconds)
+                trace.update(name=verifier_summary["name"], ok=verifier_summary["ok"])
+                self.trace.append(trace)
+                self._ingest(
+                    key="test.run:" + verifier_name,
+                    tool="test.run",
+                    payload={"summary": verifier_summary, "log": raw_log},
+                    round_number=round_number,
+                    metadata={**verifier_summary, "mandatory_failure_evidence": not bool(verifier_summary["ok"])},
+                    command=" ".join(str(item) for item in verifier_summary["argv"]),
+                )
+                continue
+
             if name == "edit":
                 edits = action.get("edits") or []
                 if not isinstance(edits, list):
@@ -551,6 +835,7 @@ Patch or structured edits must stay inside the repository and must be suitable f
                 self.trace.append(trace)
                 self.journal.emit("patch-proposed", round=round_number, source="structured-edit", bytes=trace["patch_bytes"])
                 return self._proposal(patch, rationale, result, usage_before)
+
             if name == "patch":
                 patch = str(action.get("patch") or "")
                 rationale = str(action.get("rationale") or "")
@@ -558,10 +843,22 @@ Patch or structured edits must stay inside the repository and must be suitable f
                 self.trace.append(trace)
                 self.journal.emit("patch-proposed", round=round_number, source="unified-diff", bytes=trace["patch_bytes"])
                 return self._proposal(patch, rationale, result, usage_before)
+
             raise ValueError(f"unsupported model action: {name}")
         raise RuntimeError("model exhausted the bounded tool loop without producing a patch")
 
     def _proposal(self, patch: str, rationale: str, result: Any, usage_before: Mapping[str, int]) -> PatchProposal:
+        context_stats = {
+            "turns": len(self.context_receipts),
+            "max_visible_bytes": max((item.visible_bytes for item in self.context_receipts), default=0),
+            "max_compiled_tokens": max((item.tokens for item in self.context_receipts), default=0),
+            "raw_history_replayed": False,
+        }
+        observation = (
+            self.observation_ledger.summary(task_id=self.task_id, arm_id=self.arm_id)
+            if self.observation_ledger is not None and self.task_id
+            else {}
+        )
         return PatchProposal(
             patch=patch,
             rationale=rationale,
@@ -574,7 +871,13 @@ Patch or structured edits must stay inside the repository and must be suitable f
                     - usage_before.get("output_tokens", 0)
                 ),
             ),
-            metadata={"provider": result.provider, "model": result.model, "tool_trace": list(self.trace)},
+            metadata={
+                "provider": result.provider,
+                "model": result.model,
+                "tool_trace": list(self.trace),
+                "context": context_stats,
+                "provider_observation": observation,
+            },
         )
 
 
@@ -715,6 +1018,15 @@ class AgentRuntime:
         self.sandbox = sandbox
         self.project_model = ProjectModel(self.project)
         self.delivery = AgentDeliveryManager(self.project)
+        token_state = self.state_root / "agent-token-economy"
+        token_state.mkdir(parents=True, exist_ok=True)
+        self.evidence = EvidenceStore(token_state / "evidence", project_id=stable_project_id(self.project))
+        self.externalizer = ToolOutputExternalizer(
+            token_state / "tool-externalization.sqlite3",
+            evidence=self.evidence,
+            policy=ExternalizationPolicy.for_profile("compact"),
+        )
+        self.provider_observations = ProviderCallObservationLedger(token_state / "provider-observations.sqlite3")
 
     def run(
         self,
@@ -760,6 +1072,8 @@ class AgentRuntime:
             sandbox=self.sandbox,
             context_assembler=context_assembler,
             journal=journal,
+            externalizer=self.externalizer,
+            observation_ledger=self.provider_observations,
         )
         agent = AutonomousCodingAgent(
             self.project,
@@ -840,6 +1154,22 @@ class AgentRuntime:
             limitations.append("post verifiers were discovered but no sandbox was injected")
         if delivery_mode == AgentDeliveryMode.PR:
             limitations.append("PR delivery requires authenticated git push and gh CLI; live host certification is receipt-gated")
+
+        if provider.task_id:
+            self.provider_observations.record_outcome(
+                task_id=provider.task_id,
+                arm_id=provider.arm_id,
+                repetition=provider.repetition,
+                verifier_ok=bool(run.ok and post_ok),
+                delivery_ok=bool(delivery.ok),
+                verification_complete=bool(verification_complete),
+            )
+            provider_observation = self.provider_observations.summary(task_id=provider.task_id, arm_id=provider.arm_id)
+        else:
+            provider_observation = {}
+        if provider_observation and not provider_observation.get("provider_proof_complete"):
+            limitations.append("provider call telemetry exists but complete provider-observed usage proof is not yet available")
+
         return AgentProductReceipt(
             run=run,
             provider=provider.provider,
@@ -852,6 +1182,7 @@ class AgentRuntime:
             events=journal.events,
             verification_complete=verification_complete,
             limitations=tuple(limitations),
+            provider_observation=provider_observation,
         )
 
 
