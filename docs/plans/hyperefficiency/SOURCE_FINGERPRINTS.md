@@ -1,6 +1,6 @@
 # HyperEfficiency Source Fingerprints
 
-The canonical post-280 roadmap was derived from six user-supplied design inputs. Raw source prose is intentionally not duplicated into the repository; canonical capability identity, title, generation and source section are retained in the eight machine-readable roadmap shards.
+The canonical post-280 roadmap is derived from seven admitted user-supplied design inputs. Raw source prose is intentionally not duplicated into the repository; canonical capability identity, title, generation and source section are retained in the machine-readable roadmap shards.
 
 | Source | SHA-256 |
 | --- | --- |
@@ -10,5 +10,6 @@ The canonical post-280 roadmap was derived from six user-supplied design inputs.
 | V4 | `1b9045ff55c30b814c83ad5ed7df4d70c97796abebe1282772ed6503e2d21169` |
 | V5 | `a3591094ef0df94933b1619b8cbc480a72127052d7870c562cafa923e2b423f6` |
 | V6 | `b3137542e16c9fb374a489c1f6501e412c04b664080418db4fbdfb78a728e535` |
+| Token Elimination v10 | `f991a2a0501e6ee09e571d504c42b8e26614c4c77e4e262726eef845566aa143` |
 
-These fingerprints are provenance identifiers only. Execution authority is `contracts/python/hyperefficiency-roadmap-v1.json`, its eight hash-bound shards, and `docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md`.
+These fingerprints are provenance identifiers only. Execution authority is `contracts/python/hyperefficiency-roadmap-v1.json`, its hash-bound shards, and the admitted roadmap/continuation documents.
