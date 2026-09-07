@@ -1,0 +1,53 @@
+name: Temporary Manifest Finalize Bootstrap
+
+on:
+  push:
+    branches:
+      - agent/fail-closed-manifest-verification-20260907
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manifest-finalize-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Materialize final read-only manifest tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/manifest-finalize-bootstrap.yml
+          rm -rf syntavra_runtime.egg-info
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python - <<'PY'
+          import subprocess
+          changed = set(
+              subprocess.check_output(
+                  ['git', 'diff', '--name-only'],
+                  text=True,
+              ).splitlines()
+          )
+          expected = {
+              '.github/workflows/manifest-finalize-bootstrap.yml',
+              'MANIFEST.sha256',
+          }
+          assert changed == expected, (changed, expected)
+          PY
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A .github/workflows/manifest-finalize-bootstrap.yml MANIFEST.sha256
+          git commit -m "manifest: materialize read-only verification head"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
