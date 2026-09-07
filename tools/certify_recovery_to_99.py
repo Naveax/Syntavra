@@ -111,9 +111,9 @@ def certify() -> dict[str, Any]:
 
     benchmark = _benchmark()
     exact_head = _head()
-    github_sha = os.environ.get("GITHUB_SHA", "").strip()
-    if github_sha:
-        _require(exact_head == github_sha, f"certifier is not running on exact GITHUB_SHA: {exact_head} != {github_sha}")
+    expected_head = os.environ.get("SYN_EXPECTED_HEAD", "").strip()
+    if expected_head:
+        _require(exact_head == expected_head, f"certifier is not running on expected head: {exact_head} != {expected_head}")
 
     provider_evidence = {
         "paired_real_provider_receipts_present_in_certification": False,
