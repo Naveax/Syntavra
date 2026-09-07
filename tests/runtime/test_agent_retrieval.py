@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from syntavra_runtime.agent_retrieval import QueryPushdownEngine
+from syntavra_runtime.agent_runtime import GatewayPatchProvider
+from syntavra_runtime.autonomous_agent import AgentMode, AgentTask
+from syntavra_runtime.model_gateway import SequenceModelGateway
+from syntavra_runtime.project_model import ProjectModel
 
 
 class Graph:
@@ -14,8 +20,24 @@ class Graph:
         self.limits.append(limit)
         return [dict(row, query_seen=query) for row in self.rows[:limit]]
 
+    def impact(self, node_id: str, *, max_depth: int = 6):
+        return {"root": node_id, "impacted": [], "max_depth": max_depth}
+
 
 class AgentRetrievalTests(unittest.TestCase):
+    @staticmethod
+    def _project(root: Path) -> Path:
+        project = root / "project"
+        project.mkdir()
+        (project / "pyproject.toml").write_text(
+            "[build-system]\nrequires=['setuptools']\nbuild-backend='setuptools.build_meta'\n"
+            "[tool.pytest.ini_options]\ntestpaths=['tests']\n",
+            encoding="utf-8",
+        )
+        (project / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+        (project / "tests").mkdir()
+        return project
+
     def test_projection_drops_large_irrelevant_metadata(self) -> None:
         graph = Graph([
             {
@@ -110,6 +132,151 @@ class AgentRetrievalTests(unittest.TestCase):
         self.assertTrue(fused.intermediate_rows_visible)
         self.assertEqual(len(fused.candidates), 2)
         self.assertEqual(calls, [])
+
+    def test_gateway_search_never_replays_raw_graph_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self._project(Path(temporary))
+            graph = Graph([
+                {
+                    "node_id": "n1",
+                    "name": "VALUE",
+                    "path": "module.py",
+                    "kind": "symbol",
+                    "language": "python",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "metadata_json": "SECRET_INTERNAL_METADATA" * 1000,
+                    "evidence_ref": "SECRET_INTERNAL_REF",
+                }
+            ])
+            gateway = SequenceModelGateway(
+                [
+                    {"action": "search", "query": "VALUE", "fields": ["name", "path", "start_line", "end_line"]},
+                    {"action": "inspect", "path": "module.py", "start_line": 1, "end_line": 1},
+                    {
+                        "action": "edit",
+                        "rationale": "update value",
+                        "edits": [
+                            {"path": "module.py", "operation": "replace", "old": "VALUE = 1", "new": "VALUE = 2", "count": 1}
+                        ],
+                    },
+                ]
+            )
+            model = ProjectModel(project)
+            provider = GatewayPatchProvider(gateway, project=project, graph=graph, project_model=model)
+            proposal = provider.propose(
+                AgentTask("change VALUE", model.primary_verifier().argv, mode=AgentMode.SAFE_AUTONOMOUS),
+                {
+                    "workspace": str(project),
+                    "attempt": 1,
+                    "semantic_results": graph.query("VALUE"),
+                    "current_diff": "",
+                    "changed_files": [],
+                },
+                None,
+            )
+            self.assertIn("+VALUE = 2", proposal.patch)
+            self.assertTrue(provider.trace[0]["query_pushdown"])
+            self.assertEqual(provider.trace[0]["projected_fields"], ["name", "path", "start_line", "end_line"])
+            visible = "\n".join(item.text for item in provider.context_receipts)
+            self.assertNotIn("SECRET_INTERNAL_METADATA", visible)
+            self.assertNotIn("SECRET_INTERNAL_REF", visible)
+            self.assertNotIn("metadata_json", visible)
+
+    def test_gateway_unique_search_inspect_removes_one_provider_round(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self._project(Path(temporary))
+            graph = Graph([
+                {
+                    "node_id": "n1",
+                    "name": "VALUE",
+                    "path": "module.py",
+                    "kind": "symbol",
+                    "language": "python",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "metadata_json": "SECRET_FUSED_INTERMEDIATE" * 1000,
+                }
+            ])
+            gateway = SequenceModelGateway(
+                [
+                    {
+                        "action": "search_inspect",
+                        "query": "VALUE",
+                        "fields": ["name", "path", "start_line", "end_line"],
+                        "context_lines": 1,
+                    },
+                    {
+                        "action": "edit",
+                        "rationale": "update value",
+                        "edits": [
+                            {"path": "module.py", "operation": "replace", "old": "VALUE = 1", "new": "VALUE = 2", "count": 1}
+                        ],
+                    },
+                ]
+            )
+            model = ProjectModel(project)
+            provider = GatewayPatchProvider(gateway, project=project, graph=graph, project_model=model)
+            proposal = provider.propose(
+                AgentTask("change VALUE", model.primary_verifier().argv, mode=AgentMode.SAFE_AUTONOMOUS),
+                {
+                    "workspace": str(project),
+                    "attempt": 1,
+                    "semantic_results": graph.query("VALUE"),
+                    "current_diff": "",
+                    "changed_files": [],
+                },
+                None,
+            )
+            self.assertIn("+VALUE = 2", proposal.patch)
+            self.assertEqual([row["action"] for row in provider.trace], ["search_inspect", "edit"])
+            self.assertEqual(len(provider.context_receipts), 2)
+            self.assertEqual(provider.trace[0]["status"], "FUSED_EXACT")
+            self.assertTrue(provider.trace[0]["fused"])
+            self.assertFalse(provider.trace[0]["intermediate_rows_visible"])
+            visible = "\n".join(item.text for item in provider.context_receipts)
+            self.assertNotIn("SECRET_FUSED_INTERMEDIATE", visible)
+            self.assertIn("VALUE = 1", visible)
+
+    def test_gateway_ambiguous_search_inspect_requires_explicit_followup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self._project(Path(temporary))
+            (project / "other.py").write_text("VALUE = 3\n", encoding="utf-8")
+            graph = Graph([
+                {"node_id": "n1", "name": "VALUE", "path": "module.py", "start_line": 1, "end_line": 1},
+                {"node_id": "n2", "name": "VALUE", "path": "other.py", "start_line": 1, "end_line": 1},
+            ])
+            gateway = SequenceModelGateway(
+                [
+                    {"action": "search_inspect", "query": "VALUE", "fields": ["name", "path"]},
+                    {"action": "inspect", "path": "module.py", "start_line": 1, "end_line": 1},
+                    {
+                        "action": "edit",
+                        "rationale": "update explicit target",
+                        "edits": [
+                            {"path": "module.py", "operation": "replace", "old": "VALUE = 1", "new": "VALUE = 2", "count": 1}
+                        ],
+                    },
+                ]
+            )
+            model = ProjectModel(project)
+            provider = GatewayPatchProvider(gateway, project=project, graph=graph, project_model=model)
+            proposal = provider.propose(
+                AgentTask("change VALUE", model.primary_verifier().argv, mode=AgentMode.SAFE_AUTONOMOUS),
+                {
+                    "workspace": str(project),
+                    "attempt": 1,
+                    "semantic_results": [],
+                    "current_diff": "",
+                    "changed_files": [],
+                },
+                None,
+            )
+            self.assertIn("+VALUE = 2", proposal.patch)
+            self.assertEqual([row["action"] for row in provider.trace], ["search_inspect", "inspect", "edit"])
+            self.assertEqual(provider.trace[0]["status"], "AMBIGUOUS")
+            self.assertFalse(provider.trace[0]["fused"])
+            self.assertTrue(provider.trace[0]["intermediate_rows_visible"])
 
 
 if __name__ == "__main__":
