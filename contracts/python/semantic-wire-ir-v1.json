@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "family": "syntavra-semantic-wire-ir",
+  "protocol_version": 1,
+  "status": "experimental_foundation",
+  "authority": "existing-hyperefficiency-roadmap",
+  "no_new_capability_namespace": true,
+  "objective": "minimize verified provider-visible input and output per successful task",
+  "targets": {
+    "eligible_easy_task_provider_total_tokens": {"min": 1000, "max": 3000},
+    "normal_agent_provider_total_tokens": {"min": 3000, "max": 8000},
+    "avoidable_input_reduction_floor": 0.85,
+    "avoidable_input_reduction_stretch": 0.95,
+    "avoidable_output_reduction_floor": 0.85,
+    "avoidable_output_reduction_stretch": 0.95,
+    "unexplained_envelope_overflow": 0
+  },
+  "hard_invariants": [
+    "TOKENIZER_MEASURED_NO_EXPANSION",
+    "EXACT_COMPACT_REQUIRES_RECOVERY_REF",
+    "AMBIGUITY_FALLS_BACK_TO_NATURAL",
+    "PROTOCOL_MISMATCH_FALLS_BACK_TO_NATURAL",
+    "STALE_HANDLE_REJECTED",
+    "OUTPUT_SAVINGS_MUST_HAPPEN_BEFORE_GENERATION",
+    "LOCAL_RENDERER_MAY_NOT_INVENT_FACTS",
+    "PAIRED_PROVIDER_RECEIPTS_REQUIRED_FOR_PUBLIC_SAVINGS_CLAIM",
+    "QUALITY_NON_INFERIORITY_REQUIRED"
+  ],
+  "compression_tiers": [
+    "SW-0_PASS_THROUGH",
+    "SW-1_STRUCTURAL_PROJECTION",
+    "SW-2_STABLE_HANDLES",
+    "SW-3_SEMANTIC_MACROS",
+    "SW-4_TASK_FAMILY_DSL",
+    "SW-5_COMPACT_ANSWER_IR_LOCAL_RENDERER",
+    "SW-6_LOCAL_MODEL_NATIVE_VOCABULARY"
+  ],
+  "execution_order": [
+    "exclude",
+    "scope",
+    "deduplicate",
+    "retrieve_select",
+    "externalize",
+    "field_project",
+    "semantic_wire_compile",
+    "optional_fidelity_gated_compress",
+    "provider_token_envelope",
+    "infer",
+    "compact_answer_ir",
+    "local_render",
+    "verify",
+    "receipt",
+    "learn"
+  ],
+  "reuse_existing_owners": [
+    "ContextGovernor",
+    "ProviderTokenEnvelope",
+    "ToolOutputExternalizer",
+    "OutputGovernor",
+    "EvidenceStore",
+    "UsageReceiptLedger",
+    "Tree-sitter structural graph",
+    "language service semantic layer",
+    "ripgrep command compactor",
+    "AdaptiveContextPolicy"
+  ],
+  "implementation_waves": [
+    "SWIR-0_MEASUREMENT_OWNERSHIP",
+    "SWIR-1_SAFE_STRUCTURAL_WINS",
+    "SWIR-2_STABLE_HANDLE_PLANE",
+    "SWIR-3_SEMANTIC_MACRO_REGISTRY",
+    "SWIR-4_CODING_AGENT_WIRE_DSL",
+    "SWIR-5_OUTPUT_BYTECODE_LOCAL_RENDERER",
+    "SWIR-6_CONSTANT_CONTEXT_AGENT_LOOP",
+    "SWIR-7_ADAPTIVE_OPTIMIZER",
+    "SWIR-8_LOCAL_MODEL_NATIVE_TOKENS"
+  ],
+  "benchmark_task_families": [
+    "easy_direct",
+    "short_code_explanation",
+    "single_symbol_bug_fix",
+    "targeted_test_failure",
+    "repeated_tool_loop",
+    "schema_heavy_mcp",
+    "long_session_continuation",
+    "exact_source_transformation",
+    "requested_long_form_output",
+    "ambiguity_stale_handle_adversarial"
+  ],
+  "claim_boundary": "targets are engineering promotion gates, not current measured provider savings"
+}

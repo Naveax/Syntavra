@@ -1,0 +1,67 @@
+name: Semantic Wire IR
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/semantic_wire_ir.py'
+      - 'contracts/python/semantic-wire-ir-v1.json'
+      - 'docs/plans/SYNTAVRA_SEMANTIC_WIRE_IR_V1.md'
+      - 'tests/runtime/test_semantic_wire_ir.py'
+      - 'tools/certify_semantic_wire_ir.py'
+      - '.github/workflows/semantic-wire-ir.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'syntavra_runtime/semantic_wire_ir.py'
+      - 'contracts/python/semantic-wire-ir-v1.json'
+      - 'docs/plans/SYNTAVRA_SEMANTIC_WIRE_IR_V1.md'
+      - 'tests/runtime/test_semantic_wire_ir.py'
+      - 'tools/certify_semantic_wire_ir.py'
+      - '.github/workflows/semantic-wire-ir.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semantic-wire-ir-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile Semantic Wire IR surface
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            syntavra_runtime/semantic_wire_ir.py \
+            tools/certify_semantic_wire_ir.py \
+            tests/runtime/test_semantic_wire_ir.py
+
+      - name: Run Semantic Wire IR unit contract
+        run: python -m unittest tests.runtime.test_semantic_wire_ir -v
+
+      - name: Run Semantic Wire IR certification
+        run: python tools/certify_semantic_wire_ir.py
+
+      - name: Enforce clean exact head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
