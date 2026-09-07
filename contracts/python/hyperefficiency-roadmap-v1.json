@@ -4,9 +4,9 @@
   "admitted_date": "2026-09-07",
   "product_identity": "Verified Experience-Compiling Inference Operating System",
   "default_state": "admitted_reconciliation",
-  "imported_count": 1284,
-  "source_range": [1, 1284],
-  "canonical_range": [281, 1564],
+  "imported_count": 1368,
+  "source_range": [1, 1368],
+  "canonical_range": [281, 1648],
   "mapping_offset": 280,
   "preserved_authority": {
     "python_complete_v1": true,
@@ -55,7 +55,8 @@
     {"shard":"V5A","path":"contracts/python/hyperefficiency/roadmap-v1-v5a.json","source_range":[655,818],"canonical_range":[935,1098],"count":164,"sha256":"1eece4e09ff707de2596129d78895e26cf5635da2b0aa33e4cb0acc6201355e7"},
     {"shard":"V5B","path":"contracts/python/hyperefficiency/roadmap-v1-v5b.json","source_range":[819,982],"canonical_range":[1099,1262],"count":164,"sha256":"d2efa9196ea671851184e1e06af1e57531d86688045cebabd53efc9a553ee0eb"},
     {"shard":"V6A","path":"contracts/python/hyperefficiency/roadmap-v1-v6a.json","source_range":[983,1133],"canonical_range":[1263,1413],"count":151,"sha256":"d3e582eee3ea34bc7012ee7091840d6e3a7514913a83637ab63d45545b56464c"},
-    {"shard":"V6B","path":"contracts/python/hyperefficiency/roadmap-v1-v6b.json","source_range":[1134,1284],"canonical_range":[1414,1564],"count":151,"sha256":"0559ac29e92d5237b81d485a09f88e6c6b922d3d0620092a55eb5e04e3285567"}
+    {"shard":"V6B","path":"contracts/python/hyperefficiency/roadmap-v1-v6b.json","source_range":[1134,1284],"canonical_range":[1414,1564],"count":151,"sha256":"0559ac29e92d5237b81d485a09f88e6c6b922d3d0620092a55eb5e04e3285567"},
+    {"shard":"TOKEN-ELIMINATION-V10","path":"contracts/python/hyperefficiency/roadmap-v1-token-elimination-v10.json","source_range":[1285,1368],"canonical_range":[1565,1648],"count":84,"sha256":"76474d9543442e5490ea7a9630645f30fea6378d1a9d6b76aee9028f760b748f"}
   ],
   "source_fingerprints": [
     {"name":"precursor-a","sha256":"bffae6e2deb5ff5be21c318d3588a958e508a889aaff25fb9aa736543194c88a"},
@@ -63,7 +64,8 @@
     {"name":"v3","sha256":"630ae7afbeaac40b9d00a6443217b648b7f5a8b29e9dc0158af4bd8a7a1fcb64"},
     {"name":"v4","sha256":"1b9045ff55c30b814c83ad5ed7df4d70c97796abebe1282772ed6503e2d21169"},
     {"name":"v5","sha256":"a3591094ef0df94933b1619b8cbc480a72127052d7870c562cafa923e2b423f6"},
-    {"name":"v6","sha256":"b3137542e16c9fb374a489c1f6501e412c04b664080418db4fbdfb78a728e535"}
+    {"name":"v6","sha256":"b3137542e16c9fb374a489c1f6501e412c04b664080418db4fbdfb78a728e535"},
+    {"name":"token-elimination-v10","sha256":"f991a2a0501e6ee09e571d504c42b8e26614c4c77e4e262726eef845566aa143"}
   ],
   "authority_docs": [
     "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md",
@@ -77,9 +79,9 @@
     "validator": "tools/validate_hyperefficiency_roadmap.py",
     "regression": "tests/runtime/test_hyperefficiency_roadmap.py",
     "invariants": [
-      "1284 imported rows",
-      "HE-0001..HE-1284 contiguous",
-      "CAP-0281..CAP-1564 contiguous",
+      "1368 imported rows",
+      "HE-0001..HE-1368 contiguous",
+      "CAP-0281..CAP-1648 contiguous",
       "canonical = source + 280",
       "shard SHA-256 exact"
     ]
