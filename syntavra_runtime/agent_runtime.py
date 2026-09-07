@@ -19,6 +19,7 @@ from .agent_context_runtime import (
     ProviderTokenCounter,
     compact_value,
 )
+from .agent_retrieval import QueryPushdownEngine
 from .autonomous_agent import AgentMode, AgentRunReceipt, AgentTask, AutonomousCodingAgent, PatchProposal
 from .evidence import EvidenceStore
 from .execution_sandbox import ExecutionReceipt, SandboxPolicy
@@ -379,7 +380,8 @@ class GatewayPatchProvider:
     SYSTEM_PROMPT = """You are the patch-planning component of Syntavra.
 Return exactly one JSON object and no markdown.
 Allowed actions:
-- {"action":"search","query":"..."}
+- {"action":"search","query":"...","limit":8,"fields":["name","path"],"filters":{"kind":"function"}}
+- {"action":"search_inspect","query":"symbol or concept","fields":["name","path","start_line","end_line"],"context_lines":8}
 - {"action":"inspect","path":"relative/path.py","start_line":1,"end_line":200}
 - {"action":"inspect","paths":["relative/path.py"]}  # legacy bounded form
 - {"action":"diff"}
@@ -388,7 +390,9 @@ Allowed actions:
 - {"action":"run_verifier","name":"..."}
 - {"action":"edit","edits":[{"path":"...","operation":"replace","old":"...","new":"...","count":1}],"rationale":"..."}
 - {"action":"patch","patch":"unified diff","rationale":"..."}
+Prefer search_inspect when one structural match is likely: local fusion can return exact ranged source without replaying the intermediate candidate list.
 Use search, ranged inspect, impact or a verifier when evidence is insufficient. Never invent file contents.
+Repository search is fail-closed: only approved projected fields/filters can become provider-visible evidence.
 Tool evidence is represented by compact receipts and exact recovery handles; request a fresh/ranged read when more evidence is required.
 Patch or structured edits must stay inside the repository and must be suitable for git apply.
 """
@@ -418,6 +422,7 @@ Patch or structured edits must stay inside the repository and must be suitable f
         self.gateway = gateway
         self.project = project.resolve(strict=True)
         self.graph = graph
+        self.retrieval = QueryPushdownEngine(graph, max_limit=20, default_limit=8)
         self.project_model = project_model
         self.sandbox = sandbox
         self.context_assembler = context_assembler or AgentContextAssembler(self.project, graph, project_model)
@@ -462,6 +467,19 @@ Patch or structured edits must stay inside the repository and must be suitable f
         if not isinstance(value, dict) or not value.get("action"):
             raise ValueError("model action must be a JSON object with an action")
         return value
+
+    def _retrieval_options(self, action: Mapping[str, Any]) -> tuple[int, list[str] | None, Mapping[str, Any] | None]:
+        raw_fields = action.get("fields")
+        if raw_fields is not None and not isinstance(raw_fields, list):
+            raise ValueError("repository retrieval fields must be a JSON array")
+        fields = [str(item) for item in raw_fields] if raw_fields is not None else None
+        raw_filters = action.get("filters")
+        if raw_filters is not None and not isinstance(raw_filters, Mapping):
+            raise ValueError("repository retrieval filters must be a JSON object")
+        filters = dict(raw_filters) if raw_filters is not None else None
+        raw_limit = action.get("limit")
+        limit = self.retrieval.default_limit if raw_limit is None else int(raw_limit)
+        return limit, fields, filters
 
     @staticmethod
     def _safe_path(root: Path, value: str) -> Path:
@@ -732,17 +750,101 @@ Patch or structured edits must stay inside the repository and must be suitable f
 
             if name == "search":
                 query = str(action.get("query") or task.instruction)
-                rows = self.graph.query(query, limit=20)
-                trace.update(query=query, results=len(rows))
+                limit, fields, filters = self._retrieval_options(action)
+                retrieval = self.retrieval.search(query, limit=limit, fields=fields, filters=filters)
+                rows = list(retrieval.rows)
+                trace.update(
+                    query=retrieval.query,
+                    results=len(rows),
+                    raw_candidates=retrieval.raw_count,
+                    filtered_candidates=retrieval.filtered_count,
+                    projected_fields=list(retrieval.fields),
+                    query_pushdown=True,
+                )
                 self.trace.append(trace)
                 self._ingest(
-                    key="repo.search:" + _short_hash(query),
+                    key="repo.search:" + _short_hash(retrieval.query),
                     tool="repo.search",
-                    payload={"query": query, "results": rows},
+                    payload={"query": retrieval.query, "results": rows},
                     round_number=round_number,
-                    metadata={"query": query, "result_count": len(rows)},
-                    command=query,
+                    metadata={
+                        "query": retrieval.query,
+                        "result_count": len(rows),
+                        "raw_candidate_count": retrieval.raw_count,
+                        "filtered_candidate_count": retrieval.filtered_count,
+                        "projected_fields": list(retrieval.fields),
+                        "query_pushdown": True,
+                    },
+                    command=retrieval.query,
                 )
+                continue
+
+            if name == "search_inspect":
+                query = str(action.get("query") or task.instruction)
+                limit, fields, filters = self._retrieval_options(action)
+                requested_max_bytes = int(action.get("max_bytes") or 12_000)
+                max_bytes = max(
+                    1024,
+                    min(requested_max_bytes, self.max_file_bytes, self.max_inspect_total_bytes, 32_000),
+                )
+                fused = self.retrieval.search_inspect(
+                    query,
+                    reader=lambda path, **kwargs: self._read_one(path, root=workspace, **kwargs),
+                    limit=limit,
+                    fields=fields,
+                    filters=filters,
+                    context_lines=int(action.get("context_lines") or 8),
+                    max_bytes=max_bytes,
+                )
+                trace.update(
+                    query=fused.query,
+                    status=fused.status,
+                    raw_candidates=fused.raw_count,
+                    fused=fused.status == "FUSED_EXACT",
+                    intermediate_rows_visible=fused.intermediate_rows_visible,
+                    selected_identity=fused.selected_identity,
+                )
+                self.trace.append(trace)
+                if fused.source is not None:
+                    row = fused.source
+                    key = f"repo.read:{row['path']}:{row['start_line']}:{row['end_line']}"
+                    self._ingest(
+                        key=key,
+                        tool="repo.search_inspect",
+                        payload={"query": fused.query, "status": fused.status, "source": row},
+                        round_number=round_number,
+                        metadata={
+                            "query": fused.query,
+                            "status": fused.status,
+                            "path": row["path"],
+                            "start_line": row["start_line"],
+                            "end_line": row["end_line"],
+                            "file_sha256": row["sha256"],
+                            "truncated": row["truncated"],
+                            "raw_candidate_count": fused.raw_count,
+                            "fused": True,
+                            "intermediate_rows_visible": False,
+                        },
+                        path=str(row["path"]),
+                        command=fused.query,
+                    )
+                else:
+                    candidates = list(fused.candidates)
+                    self._ingest(
+                        key="repo.search_inspect:" + _short_hash(fused.query),
+                        tool="repo.search_inspect",
+                        payload={"query": fused.query, "status": fused.status, "candidates": candidates},
+                        round_number=round_number,
+                        metadata={
+                            "query": fused.query,
+                            "status": fused.status,
+                            "result_count": len(candidates),
+                            "raw_candidate_count": fused.raw_count,
+                            "fused": False,
+                            "intermediate_rows_visible": True,
+                        },
+                        command=fused.query,
+                    )
                 continue
 
             if name == "inspect":
@@ -1062,7 +1164,8 @@ class AgentRuntime:
         if not verifiers:
             raise RuntimeError("agent cannot run safely because no project verifier was discovered")
         primary = verifiers[0]
-        semantic_results = self.graph.query(instruction, limit=20)
+        bootstrap_retrieval = QueryPushdownEngine(self.graph, max_limit=20, default_limit=12)
+        semantic_results = list(bootstrap_retrieval.search(instruction, limit=12).rows)
         context_assembler = AgentContextAssembler(self.project, self.graph, self.project_model)
         provider = GatewayPatchProvider(
             gateway,
