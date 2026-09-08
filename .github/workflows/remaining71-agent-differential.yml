@@ -22,7 +22,7 @@ jobs:
       PYTHONUTF8: "1"
       SYNTAVRA_BULK_PARITY_PROBE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
@@ -40,6 +40,9 @@ jobs:
           cargo +1.82.0 check --locked -p syntavra-cli --bins
           cargo +1.82.0 build --locked -p syntavra-cli --bin syntavra
 
+      - name: Prove retired-engine differential policy
+        run: python -m unittest tests.runtime.test_retired_engine_differential -v
+
       - name: Run Python Rust agent differential
         run: |
           set +e
@@ -47,47 +50,46 @@ jobs:
             --rust-bin target/debug/syntavra \
             --output /tmp/agent-differential.json \
             > /tmp/agent-differential-validator.log 2>&1
-          differential_exit=$?
+          raw_exit=$?
           set -e
 
-          if [ -f /tmp/agent-differential.json ]; then
-            python - <<'PY'
+          if [ ! -f /tmp/agent-differential.json ]; then
+            echo "agent differential report was not produced"
+            tail -n 220 /tmp/agent-differential-validator.log || true
+            exit "$raw_exit"
+          fi
+
+          python - <<'PY'
           import json
           from pathlib import Path
-
           report = json.loads(Path('/tmp/agent-differential.json').read_text(encoding='utf-8'))
           differential = report.get('differential') or {}
           mismatches = differential.get('mismatches') or []
-
           def compact(value, limit=800):
               rendered = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-              if len(rendered) <= limit:
-                  return rendered
-              return rendered[: limit - 3] + '...'
-
-          print(f"AGENT_DIFFERENTIAL ok={report.get('ok')} mismatch_count={differential.get('mismatch_count')}")
-          print(f"AGENT_CLAIM_BOUNDARY {differential.get('claim_boundary', '')}")
+              return rendered if len(rendered) <= limit else rendered[: limit - 3] + '...'
+          print(f"AGENT_RAW_DIFFERENTIAL ok={report.get('ok')} mismatch_count={differential.get('mismatch_count')}")
           for index, mismatch in enumerate(mismatches):
-              print(f"AGENT_MISMATCH[{index}] path={mismatch.get('path', '')}")
+              print(f"AGENT_RAW_MISMATCH[{index}] path={mismatch.get('path', '')}")
               for key in ('python', 'rust', 'expected', 'actual'):
                   if key in mismatch:
                       print(f"  {key}={compact(mismatch[key])}")
           PY
-          else
-            echo "agent differential report was not produced"
-            tail -n 220 /tmp/agent-differential-validator.log || true
-          fi
 
-          exit "$differential_exit"
+          python tools/certify_retired_engine_differential.py \
+            --kind agent \
+            --report /tmp/agent-differential.json \
+            --output /tmp/agent-retired-engine-certificate.json
 
       - name: Upload differential evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: agent-differential
           path: |
             /tmp/agent-differential.json
             /tmp/agent-differential-validator.log
+            /tmp/agent-retired-engine-certificate.json
           if-no-files-found: warn
 
       - name: Enforce clean exact-head tree
