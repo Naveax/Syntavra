@@ -24,8 +24,10 @@ RUNTIME_TEST = ROOT / "tests/runtime/test_token_economy_rc1_runtime.py"
 RETRIEVAL_TEST = ROOT / "tests/runtime/test_agent_retrieval.py"
 RETRY_TEST = ROOT / "tests/runtime/test_retry_economics.py"
 FROZEN_CORPUS_TEST = ROOT / "tests/runtime/test_token_economy_frozen_corpus.py"
+PROVIDER_REPLAY_TEST = ROOT / "tests/runtime/test_token_economy_provider_replay.py"
 BENCHMARK = ROOT / "benchmarks/token_economy_rc1_benchmark.py"
 FROZEN_CORPUS = ROOT / "benchmarks/token_economy_frozen_corpus.py"
+PROVIDER_REPLAY = ROOT / "benchmarks/token_economy_provider_replay.py"
 WORKFLOW = ROOT / ".github/workflows/recovery-to-99-rc1.yml"
 
 
@@ -64,6 +66,8 @@ def certify() -> dict[str, Any]:
     observation = OBSERVATION.read_text(encoding="utf-8")
     frozen_corpus_source = FROZEN_CORPUS.read_text(encoding="utf-8")
     frozen_corpus_test = FROZEN_CORPUS_TEST.read_text(encoding="utf-8")
+    provider_replay_source = PROVIDER_REPLAY.read_text(encoding="utf-8")
+    provider_replay_test = PROVIDER_REPLAY_TEST.read_text(encoding="utf-8")
 
     _require(recovery["schema_version"] == 1, "recovery schema drift")
     _require(recovery["family"] == "syntavra-recovery-to-99", "recovery family drift")
@@ -73,6 +77,7 @@ def certify() -> dict[str, Any]:
     _require(float(recovery["scoring_policy"]["target_minimum"]) >= 9.9, "target minimum weakened")
     _require(recovery["scoring_policy"]["local_tokenizer_counts_are_not_provider_billed_proof"] is True, "provider proof boundary weakened")
     _require(recovery["scoring_policy"]["provider_call_avoidance_requires_pre_inference_receipt_or_exact_replay_proof"] is True, "provider-call avoidance proof weakened")
+    _require(recovery["scoring_policy"]["provider_replay_plan_is_not_provider_proof"] is True, "provider replay plan was allowed to masquerade as E5 proof")
     _require(len(recovery["canonical_owners"]) == 15, "canonical owner count drift")
     _require(len(set(recovery["canonical_owners"])) == 15, "duplicate canonical owner")
 
@@ -92,6 +97,30 @@ def certify() -> dict[str, Any]:
         "uncertain_workspace_equivalence_never_suppresses_provider_inference",
     ):
         _require(required in runtime_gates, f"retry economics runtime gate missing: {required}")
+
+    provider_gates = set(recovery["areas"]["provider_proof"]["required_gates"])
+    for required in (
+        "paired_provider_observed_baseline_and_candidate_receipts",
+        "same_model_provider_task_repo_verifier_and_effort_within_pair",
+        "minimum_three_repetitions_per_claimed_workload",
+        "frozen_replay_pair_identity_has_zero_issues",
+        "local_estimates_and_replay_plans_never_upgrade_claim_level",
+    ):
+        _require(required in provider_gates, f"provider proof gate missing: {required}")
+
+    benchmark_gates = set(recovery["areas"]["benchmark"]["required_gates"])
+    for required in (
+        "executable_portable_b0_b9_corpus",
+        "workload_variant_schedule_matches_contract_exactly",
+        "provider_replay_plan_uses_same_frozen_task_identity_for_both_arms",
+    ):
+        _require(required in benchmark_gates, f"benchmark replay gate missing: {required}")
+
+    ci_gates = set(recovery["areas"]["ci"]["required_gates"])
+    _require(
+        "executable_frozen_corpus_and_provider_replay_plan_regression_required" in ci_gates,
+        "provider replay plan regression not required by CI authority",
+    )
 
     rows = workloads["workloads"]
     ids = [row["id"] for row in rows]
@@ -175,14 +204,34 @@ def certify() -> dict[str, Any]:
     ):
         _require(marker in frozen_corpus_test, f"executable corpus regression missing: {marker}")
 
+    for marker in (
+        "build_schedule",
+        "minimum three repetitions",
+        "provider-receipt-missing",
+        "pair-identity-mismatch",
+        "provider-mismatch",
+        "REPLAY_PLAN_ONLY_NOT_PROVIDER_PROOF",
+        "provider_proof_complete",
+    ):
+        _require(marker in provider_replay_source, f"provider replay marker missing: {marker}")
+    for marker in (
+        "test_schedule_respects_frozen_workload_variants_exactly",
+        "test_repetition_floor_is_fail_closed",
+        "test_explicit_credential_values_are_forbidden",
+        "test_plan_is_offline_and_receipt_claim_stays_closed",
+    ):
+        _require(marker in provider_replay_test, f"provider replay regression missing: {marker}")
+
     for path in (
         SECURITY_TEST,
         RUNTIME_TEST,
         RETRIEVAL_TEST,
         RETRY_TEST,
         FROZEN_CORPUS_TEST,
+        PROVIDER_REPLAY_TEST,
         BENCHMARK,
         FROZEN_CORPUS,
+        PROVIDER_REPLAY,
     ):
         _require(path.is_file(), f"required recovery artifact missing: {path.relative_to(ROOT)}")
 
@@ -202,7 +251,8 @@ def certify() -> dict[str, Any]:
 
     provider_evidence = {
         "paired_real_provider_receipts_present_in_certification": False,
-        "reason": "Provider credentials/network receipts are external evidence and are intentionally not fabricated by the offline RC1 certifier.",
+        "replay_planner_present": True,
+        "reason": "Provider credentials/network receipts are external evidence and are intentionally not fabricated by the offline RC1 certifier; a deterministic replay plan is only E2/E4 infrastructure, not E5 proof.",
         "score_cap_without_evidence": float(recovery["scoring_policy"]["provider_proof_score_may_not_exceed_5_0_without_paired_provider_observed_receipts"] and 5.0),
     }
 
@@ -217,6 +267,7 @@ def certify() -> dict[str, Any]:
         "roadmap_frozen": True,
         "workload_count": len(rows),
         "executable_frozen_corpus": True,
+        "provider_replay_planner": True,
         "local_structural_benchmark": benchmark,
         "provider_evidence": provider_evidence,
         "required_next_external_gate": "paired provider-observed B0-B9 replay receipts plus exact-head green CI/dogfood",
@@ -235,8 +286,10 @@ def certify() -> dict[str, Any]:
             "retrieval_test": _sha(RETRIEVAL_TEST),
             "retry_test": _sha(RETRY_TEST),
             "frozen_corpus_test": _sha(FROZEN_CORPUS_TEST),
+            "provider_replay_test": _sha(PROVIDER_REPLAY_TEST),
             "benchmark": _sha(BENCHMARK),
             "frozen_corpus": _sha(FROZEN_CORPUS),
+            "provider_replay": _sha(PROVIDER_REPLAY),
             "workflow": _sha(WORKFLOW) if WORKFLOW.is_file() else "",
         },
     }
