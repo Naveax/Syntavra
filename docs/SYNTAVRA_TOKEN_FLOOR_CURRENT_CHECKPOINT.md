@@ -63,7 +63,7 @@ Implemented boundary:
 
 ### TE-P0-02 Active Context Supersession Graph
 
-Implementation candidate is now present on the active branch and must pass exact-head CI before admission.
+Exact-head deterministic-foundation CI admitted on the active branch.
 
 Canonical implementation note:
 
@@ -72,10 +72,6 @@ Canonical implementation note:
 Dedicated regression coverage:
 
 - `tests/runtime/test_active_context_supersession_graph.py`
-
-Dedicated exact-head workflow:
-
-- `.github/workflows/token-economy-deterministic-foundations.yml`
 
 Implemented boundary:
 
@@ -90,9 +86,84 @@ Implemented boundary:
 - capacity pressure never evicts the newest canonical state merely because older pinned evidence exists;
 - compile-time provider budgets remain fail-closed.
 
+### TE-P0-03 Useless / No-Change Result Elision
+
+Structural implementation is admitted on the active branch.
+
+Canonical implementation note:
+
+- `docs/TE_P0_03_NO_CHANGE_RESULT_ELISION.md`
+
+Runtime owner:
+
+- `syntavra_runtime/agent_context_runtime.py`
+
+Regression coverage includes:
+
+- `tests/runtime/test_pre_model_ingestion_fold_gate.py`
+- `tests/runtime/test_token_economy_rc1_runtime.py`
+
+Implemented boundary:
+
+- zero-preview `UNCHANGED` receipts require stable logical-view identity;
+- content SHA-256 and semantic metadata must both match;
+- caller-key drift does not defeat proven logical-view equivalence;
+- metadata/invalidation drift refuses elision;
+- prior evidence must still be active or exactly recoverable;
+- incomplete search/query shape fails closed rather than inventing cross-generation equivalence.
+
+### TE-P0-04 Causal History Skeleton / Constant-Context Tool Loop
+
+Implementation candidate is present and requires exact-head admission with the dedicated long-session regression.
+
+Canonical implementation note:
+
+- `docs/TE_P0_04_CAUSAL_HISTORY_SKELETON.md`
+
+Dedicated regression:
+
+- `tests/runtime/test_causal_history_skeleton.py`
+
+Reconciliation classification:
+
+`EXISTS + HARDEN + CERTIFY`
+
+Candidate boundary:
+
+- active evidence is separate from bounded causal receipts;
+- recoverable stale bodies become handle-only lineage;
+- causal receipts do not replay raw tool bodies;
+- unrecoverable or mandatory evidence remains pinned;
+- long-session compiled context is tested against a 5x round-count increase while active streams and causal receipt caps stay fixed;
+- exact handles remain required before body eviction.
+
+Still open before the wider TE-P0-04 family is globally complete:
+
+- reconcile current-diff hunk/symbol representation with existing diff owners;
+- reconcile successful verifier-log collapse with existing verifier/externalization owners;
+- prove no host/provider adapter bypasses the constant-context contract;
+- obtain paired provider-observed evidence before making savings claims.
+
+Dedicated exact-head workflow for TE-P0-01..04:
+
+- `.github/workflows/token-economy-deterministic-foundations.yml`
+
 Provider-savings claims remain closed until paired provider-observed evidence passes the existing proof gates.
 
-Next deterministic target after TE-P0-02 exact-head admission: no-change elision hardening, followed by the remaining constant-context/query-pushdown/inference-skip deterministic prerequisites already ordered by the execution backlog.
+## CI reconciliation note
+
+A stale recovery regression previously expected unrecoverable evidence to be evicted merely to satisfy `max_active`. That contradicted the admitted exact-recovery invariant and has been corrected to exercise handle-backed evidence instead.
+
+The RC1 structural benchmark has likewise been moved onto an exact `EvidenceStore` + `ToolOutputExternalizer` fixture so constant-context eviction is measured only when exact recovery exists. These fixes do not weaken fail-closed behavior and do not create provider-savings claims.
+
+## Existing prerequisite owners to reconcile, not duplicate
+
+Before writing parallel implementations, inspect the current owners:
+
+- TE-P0-08 Query Pushdown: `syntavra_runtime/agent_retrieval.py` already provides bounded projection/filter/row limiting and fused search-inspect behavior. Remaining backlog operators and policy coverage must be reconciled against that owner.
+- TE-P0-10 Verifier-Gated Inference Skip: `syntavra_runtime/inference_skip_cache.py` already has exact replay/invalidation machinery and recovery CI coverage. Remaining backlog requirements must be reconciled before declaring the whole item complete.
+
+Within the TE-1 wave, TE-P0-09 Delta Tool Response Protocol is the next reconciliation target after TE-P0-04 admission. Existing baseline/delta/externalization behavior must be classified before adding new machinery.
 
 ## Current V5 continuation: TE-U30..U36
 
@@ -106,7 +177,7 @@ Next deterministic target after TE-P0-02 exact-head admission: no-change elision
 8. `U5-P1-02` Reversible Source Minification, experimental only.
 9. `TE-U36` compound provider-receipt/floor certification and next downward probe.
 
-These do not outrank unfinished deterministic foundations and earlier P0 work: active-context supersession, no-change elision hardening, constant-context history, query pushdown, verifier-gated inference skip, macro execution, tool-chain fusion, AST-native edit, adaptive retrieval, early-stop/retry governance, strategic silence/selective escalation, data-layer reduction and verified token-floor search.
+These do not outrank unfinished deterministic foundations and earlier P0 work: constant-context history, delta response protocol, query-pushdown completion, verifier-gated inference-skip reconciliation, macro execution, tool-chain fusion, AST-native edit, adaptive retrieval, early-stop/retry governance, strategic silence/selective escalation, data-layer reduction and verified token-floor search.
 
 ## V5 optimization rule
 
@@ -133,4 +204,8 @@ After V5 certification, floor search may probe below `25`, `150`, `750` and `2,5
 
 ## Next session
 
-First require exact-head admission of `TE-P0-02 Active Context Supersession Graph`. If it is green, continue with no-change elision hardening while preserving exact raw artifacts, conservative logical-view identity and mandatory evidence pinning. After the deterministic P0/P1 prerequisites are admitted, begin V5 with Zero-Token Memory Engine and Reacquisition Tax Governor.
+1. Require exact-head admission of `TE-P0-04 Causal History Skeleton`.
+2. Reconcile `TE-P0-09 Delta Tool Response Protocol` against existing baseline/externalization owners before implementing anything new.
+3. Reconcile the already-present Query Pushdown and Inference Skip owners against the remaining P0-08/P0-10 checklist.
+4. Continue deterministic prerequisites in execution-backlog order.
+5. Only after those prerequisites are admitted, begin the V5 Zero-Token Memory Engine and Reacquisition Tax Governor lane.

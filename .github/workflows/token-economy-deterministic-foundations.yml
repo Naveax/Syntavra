@@ -6,8 +6,11 @@ on:
       - 'syntavra_runtime/agent_context_runtime.py'
       - 'tests/runtime/test_pre_model_ingestion_fold_gate.py'
       - 'tests/runtime/test_active_context_supersession_graph.py'
+      - 'tests/runtime/test_causal_history_skeleton.py'
       - 'docs/TE_P0_01_PRE_MODEL_INGESTION_FOLD_GATE.md'
       - 'docs/TE_P0_02_ACTIVE_CONTEXT_SUPERSESSION_GRAPH.md'
+      - 'docs/TE_P0_03_NO_CHANGE_RESULT_ELISION.md'
+      - 'docs/TE_P0_04_CAUSAL_HISTORY_SKELETON.md'
       - 'docs/SYNTAVRA_TOKEN_FLOOR_CURRENT_CHECKPOINT.md'
       - '.github/workflows/token-economy-deterministic-foundations.yml'
   push:
@@ -18,8 +21,11 @@ on:
       - 'syntavra_runtime/agent_context_runtime.py'
       - 'tests/runtime/test_pre_model_ingestion_fold_gate.py'
       - 'tests/runtime/test_active_context_supersession_graph.py'
+      - 'tests/runtime/test_causal_history_skeleton.py'
       - 'docs/TE_P0_01_PRE_MODEL_INGESTION_FOLD_GATE.md'
       - 'docs/TE_P0_02_ACTIVE_CONTEXT_SUPERSESSION_GRAPH.md'
+      - 'docs/TE_P0_03_NO_CHANGE_RESULT_ELISION.md'
+      - 'docs/TE_P0_04_CAUSAL_HISTORY_SKELETON.md'
       - 'docs/SYNTAVRA_TOKEN_FLOOR_CURRENT_CHECKPOINT.md'
       - '.github/workflows/token-economy-deterministic-foundations.yml'
 
@@ -62,13 +68,15 @@ jobs:
           python -m compileall -q \
             syntavra_runtime/agent_context_runtime.py \
             tests/runtime/test_pre_model_ingestion_fold_gate.py \
-            tests/runtime/test_active_context_supersession_graph.py
+            tests/runtime/test_active_context_supersession_graph.py \
+            tests/runtime/test_causal_history_skeleton.py
 
-      - name: Prove pre-model fold and active-context supersession
+      - name: Prove deterministic context foundations
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_pre_model_ingestion_fold_gate -v
           python -m unittest tests.runtime.test_active_context_supersession_graph -v
+          python -m unittest tests.runtime.test_causal_history_skeleton -v
           python -m unittest tests.runtime.test_token_economy_rc1_runtime -v
 
       - name: Record exact-head structural receipt
@@ -83,13 +91,15 @@ jobs:
           actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           expected = os.environ['SYN_EXPECTED_HEAD']
           receipt = {
-              'schema_version': 1,
-              'claim': 'TOKEN_ECONOMY_DETERMINISTIC_FOUNDATIONS_V1',
+              'schema_version': 2,
+              'claim': 'TOKEN_ECONOMY_DETERMINISTIC_FOUNDATIONS_V2',
               'exact_head': actual,
               'expected_head': expected,
               'head_match': actual == expected,
               'te_p0_01': 'PRE_MODEL_INGESTION_FOLD_GATE_TESTED',
               'te_p0_02': 'ACTIVE_CONTEXT_SUPERSESSION_GRAPH_TESTED',
+              'te_p0_03': 'NO_CHANGE_RESULT_ELISION_HARDENED',
+              'te_p0_04': 'CAUSAL_HISTORY_SKELETON_TESTED',
               'provider_proof': False,
               'claim_boundary': 'STRUCTURAL_RUNTIME_EVIDENCE_ONLY_NOT_PROVIDER_BILLED_PROOF',
           }
