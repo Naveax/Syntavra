@@ -1,6 +1,6 @@
 # Syntavra Current Token-Floor Checkpoint
 
-Updated: **2026-09-07**  
+Updated: **2026-09-08**  
 Status: ACTIVE VOLATILE CONTINUATION OVERLAY  
 No new CAP namespace.
 
@@ -32,6 +32,39 @@ hard scoped coding:             750-2,500 before necessity-backed overflow
 
 A workload may have a higher safe floor. Quality/verifier/security/exact-recovery always outrank the target number.
 
+## Deterministic foundation progress
+
+### TE-P0-01 Pre-Model Ingestion Fold Gate
+
+Implementation candidate is now present on the active branch.
+
+Canonical implementation note:
+
+- `docs/TE_P0_01_PRE_MODEL_INGESTION_FOLD_GATE.md`
+
+Runtime owner hardened:
+
+- `syntavra_runtime/agent_context_runtime.py`
+
+Dedicated regression coverage:
+
+- `tests/runtime/test_pre_model_ingestion_fold_gate.py`
+
+Implemented boundary:
+
+- exact raw persistence before provider admission when the exact externalizer is active;
+- first-visibility fold attribution;
+- larger bounded mandatory-failure evidence lease;
+- mandatory failure/security/verifier evidence cannot be silently preview-dropped to fit a provider budget;
+- scope-bound exact recall with a hard byte cap;
+- untrusted-data guard on recalled raw evidence;
+- deterministic repeated-recall accounting and capped warm leases;
+- unchanged-result zero-preview attribution.
+
+Provider-savings claims remain closed until paired provider-observed evidence passes the existing proof gates.
+
+Next deterministic target after exact-head CI admission: `TE-P0-02 Active Context Supersession Graph`.
+
 ## Current V5 continuation: TE-U30..U36
 
 1. `U5-P0-01` Zero-Token Memory Engine.
@@ -44,7 +77,7 @@ A workload may have a higher safe floor. Quality/verifier/security/exact-recover
 8. `U5-P1-02` Reversible Source Minification, experimental only.
 9. `TE-U36` compound provider-receipt/floor certification and next downward probe.
 
-These do not outrank unfinished deterministic foundations and earlier P0 work: pre-model folding, constant-context history, query pushdown, verifier-gated inference skip, macro execution, tool-chain fusion, AST-native edit, adaptive retrieval, early-stop/retry governance, strategic silence/selective escalation, data-layer reduction and verified token-floor search.
+These do not outrank unfinished deterministic foundations and earlier P0 work: active-context supersession, no-change elision hardening, constant-context history, query pushdown, verifier-gated inference skip, macro execution, tool-chain fusion, AST-native edit, adaptive retrieval, early-stop/retry governance, strategic silence/selective escalation, data-layer reduction and verified token-floor search.
 
 ## V5 optimization rule
 
@@ -71,4 +104,4 @@ After V5 certification, floor search may probe below `25`, `150`, `750` and `2,5
 
 ## Next session
 
-Continue deterministic prerequisites first. When V5 becomes implementation-active, begin with Zero-Token Memory Engine and Reacquisition Tax Governor because they can remove hidden provider calls and prevent false prompt-only savings before learned/tokenizer-level refinements are promoted.
+Do not start V5 before deterministic prerequisites are closed. Continue with `TE-P0-02 Active Context Supersession Graph`; preserve raw exact artifacts and mandatory evidence pinning introduced by TE-P0-01. After the deterministic P0/P1 prerequisites are admitted, begin V5 with Zero-Token Memory Engine and Reacquisition Tax Governor.
