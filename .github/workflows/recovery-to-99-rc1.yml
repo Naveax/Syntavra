@@ -11,6 +11,7 @@ on:
       - 'syntavra_runtime/retry_economics.py'
       - 'syntavra_runtime/provider_call_observation.py'
       - 'syntavra_runtime/provider_e5.py'
+      - 'syntavra_runtime/execution_sandbox.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
       - 'syntavra_runtime/tool_externalization_types.py'
@@ -31,6 +32,8 @@ on:
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
+      - 'tests/runtime/test_recovery_to_99_property_matrix.py'
+      - 'tests/runtime/test_sandbox_capability_probe.py'
       - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_provider_e5.py'
       - 'tools/certify_recovery_to_99.py'
@@ -48,6 +51,7 @@ on:
       - 'syntavra_runtime/retry_economics.py'
       - 'syntavra_runtime/provider_call_observation.py'
       - 'syntavra_runtime/provider_e5.py'
+      - 'syntavra_runtime/execution_sandbox.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
       - 'syntavra_runtime/tool_externalization_types.py'
@@ -68,6 +72,8 @@ on:
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
+      - 'tests/runtime/test_recovery_to_99_property_matrix.py'
+      - 'tests/runtime/test_sandbox_capability_probe.py'
       - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_provider_e5.py'
       - 'tools/certify_recovery_to_99.py'
@@ -140,6 +146,7 @@ jobs:
             syntavra_runtime/retry_economics.py \
             syntavra_runtime/provider_call_observation.py \
             syntavra_runtime/provider_e5.py \
+            syntavra_runtime/execution_sandbox.py \
             tests/runtime/test_token_economy_rc1_runtime.py \
             tests/runtime/test_token_economy_frozen_corpus.py \
             tests/runtime/test_token_economy_provider_replay.py \
@@ -148,6 +155,8 @@ jobs:
             tests/runtime/test_agent_retrieval.py \
             tests/runtime/test_retry_economics.py \
             tests/runtime/test_recovery_to_99_security.py \
+            tests/runtime/test_recovery_to_99_property_matrix.py \
+            tests/runtime/test_sandbox_capability_probe.py \
             tests/runtime/test_inference_skip_cache.py \
             benchmarks/token_economy_rc1_benchmark.py \
             benchmarks/token_economy_frozen_corpus.py \
@@ -193,10 +202,12 @@ jobs:
           set -euo pipefail
           python -m unittest tests.runtime.test_inference_skip_cache -v
 
-      - name: Run security and exact-recovery property suite
+      - name: Run security, sandbox capability, and exact-recovery property closure
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_recovery_to_99_security -v
+          python -m unittest tests.runtime.test_recovery_to_99_property_matrix -v
+          python -m unittest tests.runtime.test_sandbox_capability_probe -v
           python -m unittest tests.runtime.test_tool_externalization_v2 -v
           python -m unittest tests.runtime.test_semantic_wire_ir -v
 
