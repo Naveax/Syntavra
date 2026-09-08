@@ -144,7 +144,7 @@ jobs:
           python -m unittest tests.runtime.test_agent_product_completion -v
           python -m unittest tests.runtime.test_agent_retrieval -v
           python -m unittest tests.runtime.test_retry_economics -v
-          python -m unittest tests.runtime.test_p0_p4_runtime_consolidation -v
+          python -m pytest tests/runtime/test_p0_p4_runtime_consolidation.py -q
 
       - name: Prove executable portable B0-B9 corpus
         run: |
