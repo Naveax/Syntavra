@@ -17,6 +17,48 @@ class GatewayError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ContextEditingConfig:
+    """Explicit, benchmark-gated provider-native context editing policy."""
+
+    enabled: bool = False
+    benchmark_admitted: bool = False
+    clear_tool_uses: bool = True
+    clear_thinking: bool = False
+    trigger_input_tokens: int = 100_000
+    keep_tool_uses: int = 3
+    clear_at_least_tokens: int = 0
+    keep_thinking_turns: int = 0
+    exclude_tools: tuple[str, ...] = ()
+    clear_tool_inputs: bool = False
+
+    def __post_init__(self) -> None:
+        if int(self.trigger_input_tokens) < 1:
+            raise ValueError("context editing trigger_input_tokens must be positive")
+        if int(self.keep_tool_uses) < 1:
+            raise ValueError("context editing keep_tool_uses must be positive")
+        if int(self.clear_at_least_tokens) < 0:
+            raise ValueError("context editing clear_at_least_tokens must be non-negative")
+        if int(self.keep_thinking_turns) < 0:
+            raise ValueError("context editing keep_thinking_turns must be non-negative")
+        tools = tuple(sorted({str(value).strip() for value in self.exclude_tools if str(value).strip()}))
+        object.__setattr__(self, "trigger_input_tokens", int(self.trigger_input_tokens))
+        object.__setattr__(self, "keep_tool_uses", int(self.keep_tool_uses))
+        object.__setattr__(self, "clear_at_least_tokens", int(self.clear_at_least_tokens))
+        object.__setattr__(self, "keep_thinking_turns", int(self.keep_thinking_turns))
+        object.__setattr__(self, "exclude_tools", tools)
+
+
+@dataclass(frozen=True)
+class ProviderContextEditingCapability:
+    provider: str
+    native_mode: str
+    supported: bool
+    directly_admissible: bool
+    reports_cleared_input_tokens: bool
+    reason: str
+
+
+@dataclass(frozen=True)
 class GatewayConfig:
     provider: str
     model: str
@@ -29,6 +71,7 @@ class GatewayConfig:
     extra_headers: Mapping[str, str] = field(default_factory=dict)
     token_envelope: ProviderTokenEnvelope | None = None
     prepared_input_tokens: int = 0
+    context_editing: ContextEditingConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -40,12 +83,84 @@ class ModelResult:
     response_id: str = ""
     finish_reason: str = ""
     raw: Mapping[str, Any] = field(default_factory=dict)
+    diagnostics: Mapping[str, Any] = field(default_factory=dict)
 
 
 class ModelGateway(Protocol):
     def complete(self, messages: Sequence[Mapping[str, str]], *, system: str = "") -> ModelResult: ...
 
     def prepare_input_tokens(self, tokens: int) -> None: ...
+
+
+def provider_context_editing_capability(config: GatewayConfig) -> ProviderContextEditingCapability:
+    provider = config.provider.strip().casefold()
+    if provider in {"anthropic", "claude"}:
+        return ProviderContextEditingCapability(
+            provider=provider,
+            native_mode="anthropic-selective-context-editing",
+            supported=True,
+            directly_admissible=True,
+            reports_cleared_input_tokens=True,
+            reason="native selective tool/thinking clearing is request-local and receipted",
+        )
+    if provider == "openai":
+        endpoint = (config.endpoint or "https://api.openai.com/v1").rstrip("/")
+        mode = config.api_mode.casefold()
+        if mode == "auto":
+            mode = "responses" if endpoint == "https://api.openai.com/v1" else "chat"
+        if mode == "responses":
+            return ProviderContextEditingCapability(
+                provider=provider,
+                native_mode="openai-responses-compaction",
+                supported=True,
+                directly_admissible=False,
+                reports_cleared_input_tokens=False,
+                reason="native compaction requires explicit continuation-state integration before automatic use",
+            )
+    return ProviderContextEditingCapability(
+        provider=provider or "unknown",
+        native_mode="portable-syntavra-fallback",
+        supported=False,
+        directly_admissible=False,
+        reports_cleared_input_tokens=False,
+        reason="no provider-native context editing contract is admitted for this transport",
+    )
+
+
+def _context_editing_diagnostics(value: Mapping[str, Any]) -> dict[str, Any]:
+    context_management = value.get("context_management")
+    if not isinstance(context_management, Mapping):
+        return {}
+    applied = context_management.get("applied_edits")
+    if not isinstance(applied, list):
+        return {}
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for item in applied:
+        if not isinstance(item, Mapping):
+            continue
+        cleared = item.get("cleared_input_tokens", 0)
+        if isinstance(cleared, bool) or not isinstance(cleared, int) or cleared < 0:
+            cleared = 0
+        total += cleared
+        row: dict[str, Any] = {
+            "type": str(item.get("type") or "unknown"),
+            "cleared_input_tokens": cleared,
+        }
+        for key in ("cleared_tool_uses", "cleared_thinking_turns"):
+            amount = item.get(key)
+            if isinstance(amount, int) and not isinstance(amount, bool) and amount >= 0:
+                row[key] = amount
+        rows.append(row)
+    if not rows:
+        return {}
+    return {
+        "context_editing": {
+            "provider_native": True,
+            "cleared_input_tokens": total,
+            "applied_edits": tuple(rows),
+        }
+    }
 
 
 class _HTTPGateway:
@@ -236,26 +351,71 @@ class OpenAICompatibleGateway(_HTTPGateway):
 
 
 class AnthropicGateway(_HTTPGateway):
+    def _native_context_management(self) -> Mapping[str, Any] | None:
+        policy = self.config.context_editing
+        if policy is None or not policy.enabled or not policy.benchmark_admitted:
+            return None
+        capability = provider_context_editing_capability(self.config)
+        if not capability.directly_admissible:
+            return None
+        edits: list[dict[str, Any]] = []
+        if policy.clear_thinking:
+            thinking: dict[str, Any] = {"type": "clear_thinking_20251015"}
+            if policy.keep_thinking_turns:
+                thinking["keep"] = {
+                    "type": "thinking_turns",
+                    "value": policy.keep_thinking_turns,
+                }
+            edits.append(thinking)
+        if policy.clear_tool_uses:
+            tool_edit: dict[str, Any] = {
+                "type": "clear_tool_uses_20250919",
+                "trigger": {"type": "input_tokens", "value": policy.trigger_input_tokens},
+                "keep": {"type": "tool_uses", "value": policy.keep_tool_uses},
+            }
+            if policy.clear_at_least_tokens:
+                tool_edit["clear_at_least"] = {
+                    "type": "input_tokens",
+                    "value": policy.clear_at_least_tokens,
+                }
+            if policy.exclude_tools:
+                tool_edit["exclude_tools"] = list(policy.exclude_tools)
+            if policy.clear_tool_inputs:
+                tool_edit["clear_tool_inputs"] = True
+            edits.append(tool_edit)
+        return {"edits": edits} if edits else None
+
     def complete(self, messages: Sequence[Mapping[str, str]], *, system: str = "") -> ModelResult:
         self._enforce_token_envelope()
         endpoint = (self.config.endpoint or "https://api.anthropic.com/v1").rstrip("/")
         key = self._api_key()
-        raw = self._post(
-            endpoint + "/messages",
-            {
-                "model": self.config.model,
-                "system": system,
-                "messages": [{"role": str(item["role"]), "content": str(item["content"])} for item in messages if str(item["role"]) in {"user", "assistant"}],
-                "max_tokens": self._effective_output_limit(),
-                "temperature": self.config.temperature,
-            },
-            {"x-api-key": key, "anthropic-version": "2023-06-01"},
-        )
+        payload: dict[str, Any] = {
+            "model": self.config.model,
+            "system": system,
+            "messages": [{"role": str(item["role"]), "content": str(item["content"])} for item in messages if str(item["role"]) in {"user", "assistant"}],
+            "max_tokens": self._effective_output_limit(),
+            "temperature": self.config.temperature,
+        }
+        headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
+        native_context = self._native_context_management()
+        if native_context is not None:
+            payload["context_management"] = native_context
+            headers["anthropic-beta"] = "context-management-2025-06-27"
+        raw = self._post(endpoint + "/messages", payload, headers)
         content = raw.get("content") if isinstance(raw.get("content"), list) else []
         text = "\n".join(str(item.get("text")) for item in content if isinstance(item, Mapping) and item.get("type") == "text" and item.get("text"))
         if not text:
             raise GatewayError("Anthropic Messages API returned no text output")
-        return ModelResult(text, self.config.provider, self.config.model, self._usage(raw), str(raw.get("id") or ""), str(raw.get("stop_reason") or ""), raw)
+        return ModelResult(
+            text,
+            self.config.provider,
+            self.config.model,
+            self._usage(raw),
+            str(raw.get("id") or ""),
+            str(raw.get("stop_reason") or ""),
+            raw,
+            _context_editing_diagnostics(raw),
+        )
 
 
 class GeminiGateway(_HTTPGateway):
@@ -344,12 +504,15 @@ def create_gateway(config: GatewayConfig) -> ModelGateway:
 
 __all__ = [
     "AnthropicGateway",
+    "ContextEditingConfig",
     "GatewayConfig",
     "GatewayError",
     "GeminiGateway",
     "ModelGateway",
     "ModelResult",
     "OpenAICompatibleGateway",
+    "ProviderContextEditingCapability",
     "SequenceModelGateway",
     "create_gateway",
+    "provider_context_editing_capability",
 ]

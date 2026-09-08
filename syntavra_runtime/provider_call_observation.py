@@ -20,6 +20,25 @@ def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _cleared_input_tokens(response: Mapping[str, Any] | str) -> int:
+    if not isinstance(response, Mapping):
+        return 0
+    context_management = response.get("context_management")
+    if not isinstance(context_management, Mapping):
+        return 0
+    edits = context_management.get("applied_edits")
+    if not isinstance(edits, list):
+        return 0
+    total = 0
+    for item in edits:
+        if not isinstance(item, Mapping):
+            continue
+        value = item.get("cleared_input_tokens")
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            total += value
+    return total
+
+
 @dataclass(frozen=True)
 class ProviderCallObservation:
     sequence: int
@@ -41,9 +60,11 @@ class ProviderCallObservation:
     response_id_hash: str
     elapsed_ms: int
     created_at: float
+    cleared_input_tokens: int = 0
 
     @property
     def provider_total_tokens(self) -> int:
+        # Cleared tokens are a provider context-editing diagnostic, not billed work.
         return self.fresh_input_tokens + self.cached_input_tokens + self.output_tokens + self.reasoning_tokens
 
 
@@ -55,7 +76,7 @@ class ProviderCallObservationLedger:
     to paired provider-billed certification without fabricating cost evidence.
     """
 
-    schema_version = 1
+    schema_version = 2
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
@@ -95,6 +116,7 @@ class ProviderCallObservationLedger:
                     cached_input_tokens INTEGER NOT NULL,
                     output_tokens INTEGER NOT NULL,
                     reasoning_tokens INTEGER NOT NULL,
+                    cleared_input_tokens INTEGER NOT NULL DEFAULT 0,
                     locally_counted_input_tokens INTEGER NOT NULL,
                     counting_method TEXT NOT NULL,
                     context_hash TEXT NOT NULL,
@@ -120,6 +142,15 @@ class ProviderCallObservationLedger:
                 );
                 """
             )
+            columns = {
+                str(row[1])
+                for row in db.execute("PRAGMA table_info(provider_call_observations)").fetchall()
+            }
+            if "cleared_input_tokens" not in columns:
+                db.execute(
+                    "ALTER TABLE provider_call_observations "
+                    "ADD COLUMN cleared_input_tokens INTEGER NOT NULL DEFAULT 0"
+                )
 
     def record_call(
         self,
@@ -151,6 +182,7 @@ class ProviderCallObservationLedger:
             provider_observed = bool(response_id) and normalized.total_tokens > 0
         except ValueError:
             provider_observed = False
+        cleared = _cleared_input_tokens(response)
         raw_usage_json = json.dumps(usage, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
         response_hash = _sha256(_canonical(response))
         response_id_hash = _sha256(response_id.encode("utf-8")) if response_id else ""
@@ -161,23 +193,40 @@ class ProviderCallObservationLedger:
                 """
                 INSERT OR REPLACE INTO provider_call_observations(
                     task_id,arm_id,repetition,round_number,provider,model,provider_observed,
-                    fresh_input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,
+                    fresh_input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,cleared_input_tokens,
                     locally_counted_input_tokens,counting_method,context_hash,response_hash,
                     response_id_hash,elapsed_ms,raw_usage_json,created_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     task_id, arm_id, int(repetition), int(round_number), str(provider), str(model), int(provider_observed),
-                    fresh, cached, output, reasoning, max(0, int(locally_counted_input_tokens)), str(counting_method),
+                    fresh, cached, output, reasoning, cleared, max(0, int(locally_counted_input_tokens)), str(counting_method),
                     str(context_hash), response_hash, response_id_hash, max(0, int(elapsed_ms)), raw_usage_json, created_at,
                 ),
             )
             sequence = int(cursor.lastrowid)
             db.commit()
         return ProviderCallObservation(
-            sequence, task_id, arm_id, int(repetition), int(round_number), str(provider), str(model), provider_observed,
-            fresh, cached, output, reasoning, max(0, int(locally_counted_input_tokens)), str(counting_method),
-            str(context_hash), response_hash, response_id_hash, max(0, int(elapsed_ms)), created_at,
+            sequence=sequence,
+            task_id=task_id,
+            arm_id=arm_id,
+            repetition=int(repetition),
+            round_number=int(round_number),
+            provider=str(provider),
+            model=str(model),
+            provider_observed=provider_observed,
+            fresh_input_tokens=fresh,
+            cached_input_tokens=cached,
+            output_tokens=output,
+            reasoning_tokens=reasoning,
+            locally_counted_input_tokens=max(0, int(locally_counted_input_tokens)),
+            counting_method=str(counting_method),
+            context_hash=str(context_hash),
+            response_hash=response_hash,
+            response_id_hash=response_id_hash,
+            elapsed_ms=max(0, int(elapsed_ms)),
+            created_at=created_at,
+            cleared_input_tokens=cleared,
         )
 
     def record_outcome(
@@ -214,12 +263,26 @@ class ProviderCallObservationLedger:
             rows = db.execute(query, params).fetchall()
         return [
             ProviderCallObservation(
-                int(row["sequence"]), str(row["task_id"]), str(row["arm_id"]), int(row["repetition"]),
-                int(row["round_number"]), str(row["provider"]), str(row["model"]), bool(row["provider_observed"]),
-                int(row["fresh_input_tokens"]), int(row["cached_input_tokens"]), int(row["output_tokens"]),
-                int(row["reasoning_tokens"]), int(row["locally_counted_input_tokens"]), str(row["counting_method"]),
-                str(row["context_hash"]), str(row["response_hash"]), str(row["response_id_hash"]),
-                int(row["elapsed_ms"]), float(row["created_at"]),
+                sequence=int(row["sequence"]),
+                task_id=str(row["task_id"]),
+                arm_id=str(row["arm_id"]),
+                repetition=int(row["repetition"]),
+                round_number=int(row["round_number"]),
+                provider=str(row["provider"]),
+                model=str(row["model"]),
+                provider_observed=bool(row["provider_observed"]),
+                fresh_input_tokens=int(row["fresh_input_tokens"]),
+                cached_input_tokens=int(row["cached_input_tokens"]),
+                output_tokens=int(row["output_tokens"]),
+                reasoning_tokens=int(row["reasoning_tokens"]),
+                locally_counted_input_tokens=int(row["locally_counted_input_tokens"]),
+                counting_method=str(row["counting_method"]),
+                context_hash=str(row["context_hash"]),
+                response_hash=str(row["response_hash"]),
+                response_id_hash=str(row["response_id_hash"]),
+                elapsed_ms=int(row["elapsed_ms"]),
+                created_at=float(row["created_at"]),
+                cleared_input_tokens=int(row["cleared_input_tokens"]),
             )
             for row in rows
         ]
@@ -238,6 +301,7 @@ class ProviderCallObservationLedger:
             "cached_input_tokens": sum(row.cached_input_tokens for row in rows),
             "output_tokens": sum(row.output_tokens for row in rows),
             "reasoning_tokens": sum(row.reasoning_tokens for row in rows),
+            "cleared_input_tokens": sum(row.cleared_input_tokens for row in rows),
             "locally_counted_input_tokens": sum(row.locally_counted_input_tokens for row in rows),
             "elapsed_ms": sum(row.elapsed_ms for row in rows),
             "counting_methods": sorted({row.counting_method for row in rows}),
