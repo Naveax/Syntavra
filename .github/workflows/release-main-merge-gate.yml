@@ -17,10 +17,11 @@ jobs:
   release-main-merge-gate:
     name: release-main-merge-gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
+      SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Checkout exact pull request head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -29,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        uses: actions/setup-python@a26af69be951213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
@@ -78,6 +79,15 @@ jobs:
           python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v
           python -m unittest tests.runtime.test_release_integrity -v
           python -m unittest tests.runtime.test_provider_e5 -v
+
+          # Recovery-critical behavior is re-proven inside the release gate rather
+          # than assumed from a separate workflow result.
+          python -m unittest tests.runtime.test_token_economy_rc1_runtime -v
+          python -m unittest tests.runtime.test_inference_skip_cache -v
+          python -m unittest tests.runtime.test_recovery_to_99_security -v
+          python -m unittest tests.runtime.test_recovery_to_99_property_matrix -v
+          python -m unittest tests.runtime.test_sandbox_capability_probe -v
+
           python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
           python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
           python tools/certify_python_authority.py --out /tmp/python-authority.json
@@ -101,11 +111,12 @@ jobs:
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
           python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
           python tools/certify_deterministic_policy_snapshot_v1.py --out /tmp/deterministic-policy-snapshot.json
+          python tools/certify_recovery_to_99.py --output /tmp/recovery-to-99-release.json
           python tools/check_rust_feature_freeze.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --out /tmp/rust-feature-freeze-diff.json
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
 
           # Canonical release integrity is the exact clean Git head/tree plus a
-          # deterministic generated SHA-256 manifest receipt.  The checked-in
+          # deterministic generated SHA-256 manifest receipt. The checked-in
           # MANIFEST remains a legacy snapshot and is never trusted as the
           # authority for the candidate currently under test.
           python tools/certify_release_integrity.py \
@@ -125,7 +136,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf syntavra_runtime.egg-info
+          rm -rf syntavra_runtime.egg-info .pytest_cache
           rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
           if [ -f /tmp/release-legacy-manifest.sha256 ]; then cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256; fi
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
@@ -141,4 +152,5 @@ jobs:
             /tmp/release-integrity.json
             /tmp/release-generated-manifest.sha256
             /tmp/release-validation.json
+            /tmp/recovery-to-99-release.json
           if-no-files-found: warn
