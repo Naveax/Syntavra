@@ -1,0 +1,123 @@
+name: Query Pushdown Reduction
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/agent_retrieval.py'
+      - 'tests/runtime/test_query_pushdown_reduction.py'
+      - 'benchmarks/query_pushdown_reduction_benchmark.py'
+      - 'docs/TE_P0_08_QUERY_PUSHDOWN_REDUCTION.md'
+      - '.github/workflows/query-pushdown-reduction.yml'
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - 'syntavra_runtime/agent_retrieval.py'
+      - 'tests/runtime/test_query_pushdown_reduction.py'
+      - 'benchmarks/query_pushdown_reduction_benchmark.py'
+      - 'docs/TE_P0_08_QUERY_PUSHDOWN_REDUCTION.md'
+      - '.github/workflows/query-pushdown-reduction.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: query-pushdown-reduction-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  PYTHONUTF8: '1'
+  SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  query-pushdown-reduction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Compile query pushdown reduction surfaces
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            syntavra_runtime/agent_retrieval.py \
+            tests/runtime/test_query_pushdown_reduction.py \
+            benchmarks/query_pushdown_reduction_benchmark.py
+
+      - name: Prove query pushdown reduction regressions
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_agent_retrieval -v
+          python -m unittest tests.runtime.test_query_pushdown_reduction -v
+
+      - name: Prove local structural reduction
+        run: |
+          set -euo pipefail
+          python benchmarks/query_pushdown_reduction_benchmark.py | tee /tmp/query-pushdown-reduction-benchmark.json
+
+      - name: Record exact-head query pushdown receipt
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          expected = os.environ['SYN_EXPECTED_HEAD']
+          receipt = {
+              'schema_version': 1,
+              'claim': 'TE_P0_08_QUERY_PUSHDOWN_REDUCTION_ENGINE',
+              'exact_head': actual,
+              'expected_head': expected,
+              'head_match': actual == expected,
+              'exact_before_lossy': True,
+              'candidate_window_completeness_explicit': True,
+              'gateway_integration_complete': False,
+              'provider_proof': False,
+              'claim_boundary': 'ENGINE_LAYER_LOCAL_STRUCTURAL_ONLY',
+          }
+          Path('/tmp/query-pushdown-reduction.json').write_text(
+              json.dumps(receipt, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          assert receipt['head_match'], receipt
+          PY
+
+      - name: Enforce clean exact head
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
+          test "$(git rev-parse HEAD)" = "$SYN_EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload query pushdown evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: query-pushdown-reduction-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/query-pushdown-reduction.json
+            /tmp/query-pushdown-reduction-benchmark.json
+          if-no-files-found: error
