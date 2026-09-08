@@ -5,7 +5,11 @@ import json
 import unittest
 from pathlib import Path
 
-from syntavra_runtime.provider_e5 import certify_external_superiority, certify_provider_e5
+from syntavra_runtime.provider_e5 import (
+    certify_external_superiority,
+    certify_multi_scope_superiority,
+    certify_provider_e5,
+)
 from syntavra_runtime.util import canonical_json
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +25,12 @@ class ProviderE5Tests(unittest.TestCase):
     @staticmethod
     def _hash(label: str) -> str:
         return hashlib.sha256(label.encode()).hexdigest()
+
+    @staticmethod
+    def _rehash(replay: dict[str, object]) -> None:
+        replay["result_sha256"] = hashlib.sha256(
+            canonical_json({key: value for key, value in replay.items() if key != "result_sha256"})
+        ).hexdigest()
 
     def _replay(self, *, superiority: bool = False, ratio: float = 2.0) -> dict[str, object]:
         repetitions = 3
@@ -100,10 +110,11 @@ class ProviderE5Tests(unittest.TestCase):
             "repetitions": repetitions,
             "pair_issues": [],
             "pair_identity_ok": True,
+            "portable_corpus_identity": self._hash("portable-corpus"),
             "comparison": comparison,
             "results": rows,
         }
-        replay["result_sha256"] = hashlib.sha256(canonical_json(replay)).hexdigest()
+        self._rehash(replay)
         return replay
 
     def test_e5_validity_does_not_depend_on_winning(self) -> None:
@@ -113,16 +124,34 @@ class ProviderE5Tests(unittest.TestCase):
         self.assertTrue(e5["provider_evidence_complete"])
         self.assertEqual(e5["evidence_level"], "E5_PAIRED_PROVIDER_RECEIPTS")
         self.assertGreaterEqual(e5["score"], 9.0)
+        self.assertEqual(len(e5["scope_id"]), 64)
+        self.assertEqual(e5["scope"]["baseline_version"], "baseline-v1")
+        self.assertEqual(e5["scope"]["candidate_version"], "candidate-v1")
         self.assertFalse(superiority["superiority_proven"])
         self.assertEqual(superiority["claim"], "E5_VALID_SUPERIORITY_NOT_PROVEN")
 
-    def test_superiority_requires_e5_and_hardened_comparator(self) -> None:
+    def test_superiority_requires_e5_hardened_comparator_and_workload_non_regression(self) -> None:
         replay = self._replay(superiority=True, ratio=2.0)
         e5 = certify_provider_e5(replay, self.contract)
         report = certify_external_superiority(e5, replay)
         self.assertTrue(report["superiority_proven"])
+        self.assertTrue(report["workload_non_regression"])
         self.assertFalse(report["five_x_proven"])
         self.assertGreaterEqual(report["score"], 9.0)
+
+    def test_workload_regression_blocks_superiority_even_when_aggregate_flag_is_true(self) -> None:
+        replay = self._replay(superiority=True, ratio=2.0)
+        candidate = replay["candidate_arm"]
+        for row in replay["results"]:  # type: ignore[index]
+            if row["task_id"] == "B9-adversarial-optimizer" and row["arm_id"] == candidate:
+                row["success"] = False
+                row["verifier_success"] = False
+        self._rehash(replay)
+        e5 = certify_provider_e5(replay, self.contract)
+        report = certify_external_superiority(e5, replay)
+        self.assertTrue(e5["provider_evidence_complete"])
+        self.assertFalse(report["workload_non_regression"])
+        self.assertFalse(report["superiority_proven"])
 
     def test_five_x_claim_requires_failure_inclusive_and_ci_floor(self) -> None:
         replay = self._replay(superiority=True, ratio=6.0)
@@ -134,9 +163,7 @@ class ProviderE5Tests(unittest.TestCase):
     def test_corrupt_or_missing_receipt_fails_e5_closed(self) -> None:
         replay = self._replay(superiority=True)
         replay["results"][0]["usage_receipt_hash"] = "bad"  # type: ignore[index]
-        replay["result_sha256"] = hashlib.sha256(
-            canonical_json({key: value for key, value in replay.items() if key != "result_sha256"})
-        ).hexdigest()
+        self._rehash(replay)
         e5 = certify_provider_e5(replay, self.contract)
         report = certify_external_superiority(e5, replay)
         self.assertFalse(e5["provider_evidence_complete"])
@@ -146,12 +173,46 @@ class ProviderE5Tests(unittest.TestCase):
     def test_pair_identity_drift_invalidates_e5(self) -> None:
         replay = self._replay()
         replay["results"][1]["model"] = "different-model"  # type: ignore[index]
-        replay["result_sha256"] = hashlib.sha256(
-            canonical_json({key: value for key, value in replay.items() if key != "result_sha256"})
-        ).hexdigest()
+        self._rehash(replay)
         e5 = certify_provider_e5(replay, self.contract)
         self.assertFalse(e5["provider_evidence_complete"])
         self.assertTrue(any(reason.startswith("pair-identity-mismatch") for reason in e5["failures"]))
+
+    def test_arm_version_drift_invalidates_e5(self) -> None:
+        replay = self._replay()
+        replay["results"][0]["arm_version"] = "baseline-v2"  # type: ignore[index]
+        self._rehash(replay)
+        e5 = certify_provider_e5(replay, self.contract)
+        self.assertFalse(e5["provider_evidence_complete"])
+        self.assertTrue(any(reason.startswith("arm-version-global-drift") for reason in e5["failures"]))
+
+    def _scope_report(self, provider: str, model: str) -> dict[str, object]:
+        replay = self._replay(superiority=True, ratio=2.0)
+        for row in replay["results"]:  # type: ignore[index]
+            row["provider"] = provider
+            row["model"] = model
+        self._rehash(replay)
+        e5 = certify_provider_e5(replay, self.contract)
+        self.assertTrue(e5["provider_evidence_complete"], e5)
+        report = certify_external_superiority(e5, replay)
+        self.assertTrue(report["superiority_proven"], report)
+        return report
+
+    def test_multi_scope_superiority_requires_two_independent_provider_model_scopes(self) -> None:
+        first = self._scope_report("provider-a", "model-a")
+        second = self._scope_report("provider-b", "model-b")
+        report = certify_multi_scope_superiority([first, second])
+        self.assertTrue(report["multi_scope_superiority_proven"], report)
+        self.assertEqual(report["claim"], "MULTI_SCOPE_EXTERNAL_SUPERIORITY_PROVEN")
+        self.assertEqual(report["score"], 10.0)
+        self.assertEqual(report["independent_provider_model_scope_count"], 2)
+
+    def test_multi_scope_superiority_rejects_same_provider_model_twice(self) -> None:
+        first = self._scope_report("provider-a", "model-a")
+        second = self._scope_report("provider-a", "model-a")
+        report = certify_multi_scope_superiority([first, second])
+        self.assertFalse(report["multi_scope_superiority_proven"])
+        self.assertIn("insufficient-independent-provider-model-scopes", report["failures"])
 
 
 if __name__ == "__main__":
