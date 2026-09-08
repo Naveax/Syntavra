@@ -105,8 +105,10 @@ class ExecutionReceipt:
 class NativeSandboxBroker:
     """Cross-platform process broker with honest backend capability reporting.
 
-    The broker prefers native isolation when available. `strict_native=True` makes
-    missing enforcement a hard error instead of silently claiming a sandbox.
+    The broker prefers native isolation only after the selected backend proves that
+    the required host primitive is actually usable. Binary presence alone is not
+    capability evidence. `strict_native=True` makes missing enforcement a hard
+    error instead of silently claiming a sandbox.
     """
 
     def __init__(self, state_root: Path | None = None):
@@ -115,10 +117,46 @@ class NativeSandboxBroker:
             self.state_root.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
+    def _probe_native(argv: Sequence[str]) -> tuple[bool, str]:
+        """Probe a native isolation primitive without trusting PATH presence.
+
+        Linux CI/container hosts commonly ship ``unshare`` or ``bwrap`` while the
+        kernel/runtime denies the corresponding namespace operation. Such a host
+        must be treated as portable-only unless the exact primitive can execute.
+        """
+        try:
+            completed = subprocess.run(
+                [*argv, "true"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=2.0,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return False, f"native capability probe failed: {type(error).__name__}: {error}"
+        if completed.returncode == 0:
+            return True, "native capability probe passed"
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        return False, f"native capability probe rejected with exit {completed.returncode}: {detail[-512:]}"
+
+    @staticmethod
+    def _portable_linux(detail: str) -> SandboxBackend:
+        return SandboxBackend(
+            name="portable-process-boundary",
+            platform="linux",
+            available=False,
+            enforced=("cwd-boundary", "environment-filter", "timeout", "process-group"),
+            unsupported=("mount-namespace", "network-namespace", "seccomp", "cgroup"),
+            detail=detail,
+        )
+
+    @staticmethod
     def _linux_backend(policy: SandboxPolicy) -> SandboxBackend:
-        if shutil.which("bwrap"):
+        bwrap = shutil.which("bwrap")
+        if bwrap:
             prefix = [
-                "bwrap",
+                bwrap,
                 "--die-with-parent",
                 "--new-session",
                 "--unshare-user",
@@ -134,35 +172,37 @@ class NativeSandboxBroker:
                 prefix.extend(("--bind", str(path), str(path)))
             if not policy.network_hosts:
                 prefix.append("--unshare-net")
-            return SandboxBackend(
-                name="bubblewrap",
-                platform="linux",
-                available=True,
-                enforced=("mount-namespace", "pid-namespace", "user-namespace", "process-tree", "filesystem-boundary") + (("network-namespace",) if not policy.network_hosts else ()),
-                unsupported=("domain-level-egress",) if policy.network_hosts else (),
-                command_prefix=tuple(prefix),
-            )
-        if shutil.which("unshare"):
-            prefix = ["unshare", "--fork", "--pid", "--mount-proc"]
+            probe_ok, probe_detail = NativeSandboxBroker._probe_native(prefix)
+            if probe_ok:
+                return SandboxBackend(
+                    name="bubblewrap",
+                    platform="linux",
+                    available=True,
+                    enforced=("mount-namespace", "pid-namespace", "user-namespace", "process-tree", "filesystem-boundary") + (("network-namespace",) if not policy.network_hosts else ()),
+                    unsupported=("domain-level-egress",) if policy.network_hosts else (),
+                    command_prefix=tuple(prefix),
+                    detail=probe_detail,
+                )
+
+        unshare = shutil.which("unshare")
+        if unshare:
+            prefix = [unshare, "--fork", "--pid", "--mount-proc"]
             if not policy.network_hosts:
                 prefix.append("--net")
-            return SandboxBackend(
-                name="unshare",
-                platform="linux",
-                available=True,
-                enforced=("pid-namespace", "process-tree") + (("network-namespace",) if not policy.network_hosts else ()),
-                unsupported=("filesystem-boundary", "seccomp", "cgroup", "domain-level-egress"),
-                command_prefix=tuple(prefix),
-                detail="partial native backend; filesystem containment relies on workspace validation",
-            )
-        return SandboxBackend(
-            name="portable-process-boundary",
-            platform="linux",
-            available=False,
-            enforced=("cwd-boundary", "environment-filter", "timeout", "process-group"),
-            unsupported=("mount-namespace", "network-namespace", "seccomp", "cgroup"),
-            detail="install bubblewrap for full native isolation",
-        )
+            probe_ok, probe_detail = NativeSandboxBroker._probe_native(prefix)
+            if probe_ok:
+                return SandboxBackend(
+                    name="unshare",
+                    platform="linux",
+                    available=True,
+                    enforced=("pid-namespace", "process-tree") + (("network-namespace",) if not policy.network_hosts else ()),
+                    unsupported=("filesystem-boundary", "seccomp", "cgroup", "domain-level-egress"),
+                    command_prefix=tuple(prefix),
+                    detail="partial native backend; filesystem containment relies on workspace validation; " + probe_detail,
+                )
+            return NativeSandboxBroker._portable_linux(probe_detail)
+
+        return NativeSandboxBroker._portable_linux("install bubblewrap for full native isolation")
 
     @staticmethod
     def _macos_backend(policy: SandboxPolicy) -> SandboxBackend:
@@ -287,7 +327,6 @@ class NativeSandboxBroker:
         env = self._environment(normalized, environment)
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         started_at = _now()
-        started = time.monotonic()
         result = run_bounded_process(
             argv,
             cwd=str(selected_cwd),
