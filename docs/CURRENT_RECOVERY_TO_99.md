@@ -22,7 +22,7 @@ Evidence levels:
 
 No area receives `9.9` with an open required gate. Provider proof cannot exceed `5.0` without E5 evidence. Readiness cannot exceed `8.0` without E5 plus required exact-head CI.
 
-Provider-call avoidance is counted only when the call is prevented **before inference** by an exact local proof, verified replay, or equivalent provider-observed receipt. Rejecting a repeated answer after generation is not a token saving.
+Provider-call avoidance is counted only when the call is prevented **before inference** by an exact local proof, verified replay, or equivalent provider-observed receipt. Rejecting a repeated answer after generation is not a token saving. An executable corpus or provider-replay plan is E2/E4 infrastructure, not E5 provider proof.
 
 ## 2. Canonical owner model
 
@@ -73,7 +73,7 @@ Current integrated behavior:
 6. intermediate graph rows stay local on a successful fused read;
 7. no-change/supersession receipts prevent raw observation recurrence.
 
-Still open in this wave: dependency-invalidated negative-knowledge caching and broader counterfactual tool suppression.
+Still open in this wave: dependency-invalidated negative-knowledge caching and broader counterfactual tool suppression. These are lower-floor hardening opportunities; they are not allowed to replace correctness or evidence gates.
 
 Exit: routine retrieval no longer spends one provider turn per deterministic transformation and unknown retrieval policy never bypasses validation because the result set happened to be empty.
 
@@ -87,7 +87,7 @@ Exit: eligible exact repeats can legitimately record `provider_calls=0` without 
 
 ### R99-4: Repair-loop economics
 
-The repair loop now treats retry suppression as an **information-equivalence proof**, not as a textual-failure heuristic.
+The repair loop treats retry suppression as an **information-equivalence proof**, not as a textual-failure heuristic.
 
 Required behavior:
 
@@ -129,7 +129,9 @@ Exit: zero known false verified cache hits and zero silent mandatory evidence lo
 
 Authority corpus: `contracts/python/token-economy-frozen-workloads-v1.json`.
 
-Every B0-B9 workload reports component, end-to-end and long-session measurements separately. Cold and warm variants remain separate. The principal KPI is:
+The B0-B9 corpus is now executable and portable through `benchmarks/token_economy_frozen_corpus.py`. Fixture bytes, inline verifier, fixed Git metadata, repository commit/tree and portable workload identity are deterministic. Local repository path is a transport locator and is excluded from the portable workload identity. Two independent materialization roots must produce identical workload identity, tree and commit. Every initial fixture must fail its verifier, preventing an already-solved benchmark from earning success by existing peacefully.
+
+Every B0-B9 workload reports component, end-to-end and long-session measurements separately. Cold and warm variants remain separate and are selected exactly from the workload contract. The principal KPI is:
 
 `Verified Provider Cost / Successful Task`
 
@@ -143,17 +145,25 @@ Exit: frozen baseline/candidate runner can reproduce task identity and verifier 
 
 ### R99-7: Provider proof
 
-For every claimed workload family:
+The deterministic provider replay orchestrator is `benchmarks/token_economy_provider_replay.py`. It reuses the existing SignalBench receipt/comparison authority rather than creating another proof store.
 
-- same frozen task/repository/verifier;
-- same provider, model and reasoning/effort settings within a pair;
-- at least three repetitions per arm;
-- provider request/response identity when exposed;
-- fresh input, cached input, reasoning and output usage when exposed;
-- failed attempts included in cost;
-- retries prevented by inference-skip/retry-economics recorded separately from prompt compression;
-- baseline and candidate receipts retained and linked to the claim;
-- no arithmetic addition of overlapping component savings.
+Replay policy:
+
+- exactly two arms, baseline and candidate;
+- same model, reasoning/effort and context window before execution;
+- workload-specific cold/warm variants come from the frozen B0-B9 contract instead of a Cartesian cache-mode expansion;
+- at least three repetitions per arm/workload variant;
+- explicit credential-like values are forbidden in the arms document; credential material must be inherited at execution time;
+- same frozen task, repository commit/tree, prompt, verifier, permissions, model/effort/context and hardware identity within each comparison pair;
+- provider-observed receipt required for both sides of a proof pair;
+- provider identity must match within each pair;
+- fresh input, cached input, reasoning and output usage are recorded when exposed;
+- failed attempts remain in total cost;
+- retries prevented by inference-skip/retry-economics are recorded separately from prompt compression;
+- baseline and candidate receipts remain linked to the claim;
+- overlapping component percentages are never arithmetically added.
+
+Plan mode is deliberately offline and reports `REPLAY_PLAN_ONLY_NOT_PROVIDER_PROOF`. Execute mode remains fail-closed unless pair-identity issues are zero and the existing comparison authority permits the claim. The planner being present does **not** move provider proof above E4.
 
 Provider proof is intentionally impossible to fabricate offline. Missing provider receipts keep the gate open.
 
@@ -161,11 +171,12 @@ Exit: public savings claims resolve to paired receipt IDs.
 
 ### R99-8: Release proof
 
-One exact-head recovery workflow must gate the critical surfaces:
+One exact-head recovery workflow must gate the critical active surfaces:
 
 - constant-context/runtime tests;
 - retrieval fail-closed tests;
 - exact-state retry-economics tests;
+- executable frozen-corpus and provider-replay planning regressions;
 - security/property tests;
 - local token-economy regression benchmark;
 - provider envelope and observation contracts;
@@ -177,6 +188,8 @@ One exact-head recovery workflow must gate the critical surfaces:
 
 After that, dogfood runs must show no unexplained envelope overflow, rollback must be proven, and no P0/P1 correctness blocker may remain.
 
+Rust is currently explicitly retired/frozen: `rust_resume_allowed=false`, `rust_retired=true`, production promotion remains `174/245`, and Remaining-71 parity work requires separate explicit reactivation authority. Remaining-71 differential mismatches are preserved as drift evidence while Rust is retired; they do not authorize hidden Rust feature development and do not by themselves redefine an active Python/product correctness gate. If Rust is reactivated, the corresponding parity checks become blocking again under the reactivation authority.
+
 Exit: only then is `readiness >= 9.9` a defensible statement.
 
 ## 4. Area-specific 9.9 definition
@@ -187,13 +200,13 @@ Exit: only then is `readiness >= 9.9` a defensible statement.
 | Token economics | >=95% provider-visible mass attributable, all retry/recovery/reacquisition counted, non-inferior quality, lower net verified provider cost on promoted workloads, pre-inference avoidance separated from post-generation rejection |
 | Security | exact recovery for all evicted evidence, property/fuzz coverage, stale/cross-scope reuse fails closed, retrieval policy validates before data access, mandatory evidence never silently lost |
 | Runtime | constant context, bounded retrieval, externalization, envelope binding, query pushdown, fusion, verified inference skip and exact-state retry economics in the product path |
-| Provider proof | paired provider-observed receipts, identical pair conditions, >=3 repetitions, receipt-linked claims |
-| Benchmark | frozen B0-B9, cold/warm separation, adversarial safety, end-to-end and long-horizon accounting, verified-cost Pareto reporting |
-| CI | all relevant required checks green on exact head, recovery gate required, exact-head artifacts, no duplicate manual dispatch |
+| Provider proof | paired provider-observed receipts, identical pair conditions, >=3 repetitions, zero pair-identity issues, receipt-linked claims; replay planning alone earns no E5 credit |
+| Benchmark | executable portable B0-B9, exact per-workload cold/warm schedule, adversarial safety, end-to-end and long-horizon accounting, verified-cost Pareto reporting |
+| CI | all relevant active required checks green on exact head, recovery gate required, exact-head artifacts, no duplicate manual dispatch; retired-engine evidence remains visible without silently reactivating that engine |
 | Roadmap | this authority is current, frontier versions frozen, historical plans are lineage only, active work has owner/status/code/test/proof/blocker |
 | Roadmap/code | recovery remains code-first; no implemented/provider-proven status without code/receipt references |
 | Product potential | narrow MVP wins real coding tasks end-to-end without relying on research-only features |
-| Readiness | all above gates plus dogfood, rollback, release and zero known P0/P1 correctness blocker |
+| Readiness | all above active gates plus dogfood, rollback, release and zero known P0/P1 correctness blocker |
 
 ## 5. Current hard blockers
 
@@ -203,15 +216,18 @@ Closed since the first recovery authority revision:
 - deterministic search/select/ranged-read fusion is integrated;
 - verified inference skip is integrated and re-verifies replayed artifacts;
 - retrieval projection/filter validation is fail-closed before graph access;
-- exact failure/workspace retry economics is integrated before provider inference.
+- exact failure/workspace retry economics is integrated before provider inference;
+- B0-B9 is an executable portable frozen corpus rather than a prose-only workload list;
+- a deterministic contract-driven provider replay planner exists and is CI-tested offline.
 
 Still open and therefore score-capping:
 
 - paired real provider-observed A/B receipts have not yet been collected for the frozen corpus;
-- B0-B9 frozen real-task provider replay/dogfood has not yet closed;
+- B0-B9 real-provider replay execution/dogfood has not yet closed;
 - the full cache/delta/SWIR/handle/invalidation property and fuzz matrix is not yet closed;
-- macro/verified workflow execution is not yet fully integrated into the coding-agent loop;
-- latest exact-head aggregate CI and release chain must be green after recovery commits;
+- latest exact-head active aggregate CI and release chain must be green after recovery commits;
 - a release candidate with zero known P0/P1 correctness blockers is not yet proven.
+
+Parameterized verified macro compilation remains useful post-9.9 token-floor hardening, but it is not a required 9.9 release gate. Treating every research idea as a release blocker would turn the roadmap into a landfill with checkboxes.
 
 These blockers are deliberately visible. Hiding them would improve the scorecard and degrade the product, a trade humans somehow keep rediscovering.
