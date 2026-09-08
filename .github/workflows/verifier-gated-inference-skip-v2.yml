@@ -1,0 +1,124 @@
+name: Verifier-Gated Inference Skip V2
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/inference_skip_cache.py'
+      - 'syntavra_runtime/autonomous_agent.py'
+      - 'tests/runtime/test_inference_skip_cache.py'
+      - 'tests/runtime/test_inference_skip_cache_v2.py'
+      - 'tests/runtime/test_recovery_to_99_property_matrix.py'
+      - 'docs/TE_P0_10_VERIFIER_GATED_INFERENCE_SKIP_V2.md'
+      - '.github/workflows/verifier-gated-inference-skip-v2.yml'
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - 'syntavra_runtime/inference_skip_cache.py'
+      - 'syntavra_runtime/autonomous_agent.py'
+      - 'tests/runtime/test_inference_skip_cache.py'
+      - 'tests/runtime/test_inference_skip_cache_v2.py'
+      - 'tests/runtime/test_recovery_to_99_property_matrix.py'
+      - 'docs/TE_P0_10_VERIFIER_GATED_INFERENCE_SKIP_V2.md'
+      - '.github/workflows/verifier-gated-inference-skip-v2.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verifier-gated-inference-skip-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  PYTHONUTF8: '1'
+  SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  inference-skip-v2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Compile inference-skip V2 surfaces
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            syntavra_runtime/inference_skip_cache.py \
+            syntavra_runtime/autonomous_agent.py \
+            tests/runtime/test_inference_skip_cache.py \
+            tests/runtime/test_inference_skip_cache_v2.py \
+            tests/runtime/test_recovery_to_99_property_matrix.py
+
+      - name: Prove exact zero-inference replay and V2 identity
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_inference_skip_cache -v
+          python -m unittest tests.runtime.test_inference_skip_cache_v2 -v
+          python -m unittest tests.runtime.test_recovery_to_99_property_matrix -v
+
+      - name: Record exact-head inference-skip receipt
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          expected = os.environ['SYN_EXPECTED_HEAD']
+          receipt = {
+              'schema_version': 2,
+              'claim': 'TE_P0_10_VERIFIER_GATED_INFERENCE_SKIP_V2',
+              'exact_head': actual,
+              'expected_head': expected,
+              'head_match': actual == expected,
+              'exact_identity_classes': 11,
+              'prevented_semantic_hit_ledger': True,
+              'provider_bypass_on_exact_verified_hit': True,
+              'post_replay_verifier_required': True,
+              'provider_proof': False,
+              'claim_boundary': 'DETERMINISTIC_REPLAY_MECHANICS_NOT_PROVIDER_BILLED_PROOF',
+          }
+          Path('/tmp/inference-skip-v2.json').write_text(
+              json.dumps(receipt, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          assert receipt['head_match'], receipt
+          PY
+
+      - name: Enforce clean exact head
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
+          test "$(git rev-parse HEAD)" = "$SYN_EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload inference-skip V2 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verifier-gated-inference-skip-v2-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/inference-skip-v2.json
+          if-no-files-found: error
