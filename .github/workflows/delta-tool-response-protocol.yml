@@ -1,0 +1,128 @@
+name: Delta Tool Response Protocol
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/tool_externalization.py'
+      - 'tests/runtime/test_tool_externalization_v2.py'
+      - 'tests/runtime/test_delta_tool_response_protocol.py'
+      - 'benchmarks/tool_externalization_benchmark.py'
+      - 'benchmarks/delta_tool_response_benchmark.py'
+      - 'docs/TE_P0_09_DELTA_TOOL_RESPONSE_PROTOCOL.md'
+      - '.github/workflows/delta-tool-response-protocol.yml'
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - 'syntavra_runtime/tool_externalization.py'
+      - 'tests/runtime/test_tool_externalization_v2.py'
+      - 'tests/runtime/test_delta_tool_response_protocol.py'
+      - 'benchmarks/tool_externalization_benchmark.py'
+      - 'benchmarks/delta_tool_response_benchmark.py'
+      - 'docs/TE_P0_09_DELTA_TOOL_RESPONSE_PROTOCOL.md'
+      - '.github/workflows/delta-tool-response-protocol.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delta-tool-response-protocol-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  PYTHONUTF8: '1'
+  SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  delta-tool-response:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Compile delta protocol surfaces
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            syntavra_runtime/tool_externalization.py \
+            tests/runtime/test_tool_externalization_v2.py \
+            tests/runtime/test_delta_tool_response_protocol.py \
+            benchmarks/tool_externalization_benchmark.py \
+            benchmarks/delta_tool_response_benchmark.py
+
+      - name: Prove externalization and delta protocol regressions
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_tool_externalization_v2 -v
+          python -m unittest tests.runtime.test_delta_tool_response_protocol -v
+
+      - name: Prove cumulative polling reduction locally
+        run: |
+          set -euo pipefail
+          python benchmarks/delta_tool_response_benchmark.py | tee /tmp/delta-tool-response-benchmark.json
+
+      - name: Record exact-head delta protocol receipt
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          expected = os.environ['SYN_EXPECTED_HEAD']
+          receipt = {
+              'schema_version': 1,
+              'claim': 'TE_P0_09_DELTA_TOOL_RESPONSE_PROTOCOL',
+              'exact_head': actual,
+              'expected_head': expected,
+              'head_match': actual == expected,
+              'baseline_invalidation': 'FAIL_CLOSED_EXACT_HANDLE_VERIFIED',
+              'polling_benchmark': 'LOCAL_STRUCTURAL_ONLY',
+              'provider_proof': False,
+              'claim_boundary': 'NOT_PROVIDER_BILLED_PROOF',
+          }
+          Path('/tmp/delta-tool-response-protocol.json').write_text(
+              json.dumps(receipt, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          assert receipt['head_match'], receipt
+          PY
+
+      - name: Enforce clean exact head
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
+          test "$(git rev-parse HEAD)" = "$SYN_EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload delta protocol evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: delta-tool-response-protocol-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/delta-tool-response-protocol.json
+            /tmp/delta-tool-response-benchmark.json
+          if-no-files-found: error
