@@ -6,12 +6,15 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
-from tools.refresh_manifest import GENERATED_FILES, canonical_manifest_bytes, is_generated_path
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.refresh_manifest import GENERATED_FILES, canonical_manifest_bytes, is_generated_path
 
 
 def _git(root: Path, *args: str) -> str:
