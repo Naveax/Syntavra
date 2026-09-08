@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: release-main-merge-gate-${{ github.event.pull_request.number || github.ref }}
@@ -79,6 +80,7 @@ jobs:
           python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v
           python -m unittest tests.runtime.test_release_integrity -v
           python -m unittest tests.runtime.test_provider_e5 -v
+          python -m unittest tests.runtime.test_release_readiness -v
 
           # Recovery-critical behavior is re-proven inside the release gate rather
           # than assumed from a separate workflow result.
@@ -132,6 +134,18 @@ jobs:
           cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256
           trap - EXIT
 
+      - name: Certify zero known P0/P1 release blockers
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python tools/certify_release_readiness.py \
+            --github-repository "$GITHUB_REPOSITORY" \
+            --exact-head "$SYN_EXPECTED_HEAD" \
+            --require-blocker-free \
+            --output /tmp/release-known-blockers.json
+
       - name: Enforce exact clean pull request head
         shell: bash
         run: |
@@ -153,4 +167,5 @@ jobs:
             /tmp/release-generated-manifest.sha256
             /tmp/release-validation.json
             /tmp/recovery-to-99-release.json
+            /tmp/release-known-blockers.json
           if-no-files-found: warn

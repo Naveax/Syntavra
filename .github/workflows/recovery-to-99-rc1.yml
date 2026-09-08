@@ -20,6 +20,7 @@ on:
       - 'contracts/engine/dual-engine-public-surface-v2.json'
       - 'contracts/python/recovery-to-99-v1.json'
       - 'contracts/python/token-economy-frozen-workloads-v1.json'
+      - 'contracts/python/release-readiness-v1.json'
       - 'docs/CURRENT_RECOVERY_TO_99.md'
       - 'benchmarks/token_economy_rc1_benchmark.py'
       - 'benchmarks/token_economy_frozen_corpus.py'
@@ -28,6 +29,7 @@ on:
       - 'tests/runtime/test_token_economy_frozen_corpus.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
       - 'tests/runtime/test_provider_e5.py'
+      - 'tests/runtime/test_release_readiness.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
@@ -36,6 +38,7 @@ on:
       - 'tests/runtime/test_sandbox_capability_probe.py'
       - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_provider_e5.py'
+      - 'tools/certify_release_readiness.py'
       - 'tools/certify_recovery_to_99.py'
       - '.github/workflows/recovery-to-99-rc1.yml'
   push:
@@ -60,6 +63,7 @@ on:
       - 'contracts/engine/dual-engine-public-surface-v2.json'
       - 'contracts/python/recovery-to-99-v1.json'
       - 'contracts/python/token-economy-frozen-workloads-v1.json'
+      - 'contracts/python/release-readiness-v1.json'
       - 'docs/CURRENT_RECOVERY_TO_99.md'
       - 'benchmarks/token_economy_rc1_benchmark.py'
       - 'benchmarks/token_economy_frozen_corpus.py'
@@ -68,6 +72,7 @@ on:
       - 'tests/runtime/test_token_economy_frozen_corpus.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
       - 'tests/runtime/test_provider_e5.py'
+      - 'tests/runtime/test_release_readiness.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
@@ -76,6 +81,7 @@ on:
       - 'tests/runtime/test_sandbox_capability_probe.py'
       - 'tests/runtime/test_inference_skip_cache.py'
       - 'tools/certify_provider_e5.py'
+      - 'tools/certify_release_readiness.py'
       - 'tools/certify_recovery_to_99.py'
       - '.github/workflows/recovery-to-99-rc1.yml'
 
@@ -151,6 +157,7 @@ jobs:
             tests/runtime/test_token_economy_frozen_corpus.py \
             tests/runtime/test_token_economy_provider_replay.py \
             tests/runtime/test_provider_e5.py \
+            tests/runtime/test_release_readiness.py \
             tests/runtime/test_agent_product_completion.py \
             tests/runtime/test_agent_retrieval.py \
             tests/runtime/test_retry_economics.py \
@@ -162,6 +169,7 @@ jobs:
             benchmarks/token_economy_frozen_corpus.py \
             benchmarks/token_economy_provider_replay.py \
             tools/certify_provider_e5.py \
+            tools/certify_release_readiness.py \
             tools/certify_recovery_to_99.py
 
       - name: Run constant-context product regression
@@ -173,12 +181,13 @@ jobs:
           python -m unittest tests.runtime.test_retry_economics -v
           python -m pytest tests/runtime/test_p0_p4_runtime_consolidation.py -q
 
-      - name: Prove executable portable B0-B9 corpus and E5 proof semantics
+      - name: Prove executable portable B0-B9 corpus and E5/readiness proof semantics
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_token_economy_frozen_corpus -v
           python -m unittest tests.runtime.test_token_economy_provider_replay -v
           python -m unittest tests.runtime.test_provider_e5 -v
+          python -m unittest tests.runtime.test_release_readiness -v
           corpus_root="$(mktemp -d)"
           python benchmarks/token_economy_frozen_corpus.py \
             "$corpus_root/corpus" \

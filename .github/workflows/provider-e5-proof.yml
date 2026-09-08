@@ -8,10 +8,13 @@ on:
       - 'benchmarks/token_economy_provider_replay.py'
       - 'benchmarks/token_economy_frozen_corpus.py'
       - 'contracts/python/token-economy-frozen-workloads-v1.json'
+      - 'contracts/python/release-readiness-v1.json'
       - 'tests/runtime/test_provider_e5.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
+      - 'tests/runtime/test_release_readiness.py'
       - 'tools/certify_provider_e5.py'
       - 'tools/certify_provider_multi_scope.py'
+      - 'tools/certify_release_readiness.py'
       - '.github/workflows/provider-e5-proof.yml'
   push:
     branches: [main]
@@ -20,10 +23,13 @@ on:
       - 'benchmarks/token_economy_provider_replay.py'
       - 'benchmarks/token_economy_frozen_corpus.py'
       - 'contracts/python/token-economy-frozen-workloads-v1.json'
+      - 'contracts/python/release-readiness-v1.json'
       - 'tests/runtime/test_provider_e5.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
+      - 'tests/runtime/test_release_readiness.py'
       - 'tools/certify_provider_e5.py'
       - 'tools/certify_provider_multi_scope.py'
+      - 'tools/certify_release_readiness.py'
       - '.github/workflows/provider-e5-proof.yml'
   workflow_dispatch:
     inputs:
@@ -48,6 +54,11 @@ on:
         type: boolean
       require_multi_scope:
         description: 'Fail unless primary + secondary raw replays prove independent multi-scope superiority'
+        required: true
+        default: false
+        type: boolean
+      require_dogfood:
+        description: 'Fail unless primary B0-B9 candidate runs prove the live readiness receipt/overflow/rollback dogfood gate'
         required: true
         default: false
         type: boolean
@@ -78,15 +89,17 @@ jobs:
           python-version: '3.12'
       - name: Install runtime
         run: python -m pip install -e .
-      - name: Prove E5, workload non-regression, and multi-scope claim semantics
+      - name: Prove E5, workload non-regression, multi-scope, and readiness claim semantics
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_provider_e5 -v
           python -m unittest tests.runtime.test_token_economy_provider_replay -v
+          python -m unittest tests.runtime.test_release_readiness -v
           python -m compileall -q \
             syntavra_runtime/provider_e5.py \
             tools/certify_provider_e5.py \
             tools/certify_provider_multi_scope.py \
+            tools/certify_release_readiness.py \
             benchmarks/token_economy_provider_replay.py
       - name: Enforce clean exact head
         if: always()
@@ -168,6 +181,17 @@ jobs:
             "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
             --require-e5 \
             --output "${RUNNER_TEMP}/provider-e5-certificate-primary.json"
+      - name: Certify primary live B0-B9 dogfood readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${{ inputs.require_dogfood }}" = "true" ]; then extra+=(--require-dogfood); fi
+          python tools/certify_release_readiness.py \
+            --replay "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
+            --exact-head "${{ github.sha }}" \
+            --output "${RUNNER_TEMP}/provider-e5-dogfood-primary.json" \
+            "${extra[@]}"
       - name: Certify optional secondary E5 provider evidence
         if: inputs.secondary_arms_path != ''
         run: |
@@ -214,4 +238,5 @@ jobs:
             ${{ runner.temp }}/provider-e5-certificate-secondary.json
             ${{ runner.temp }}/provider-e5-superiority-primary.json
             ${{ runner.temp }}/provider-e5-multi-scope.json
+            ${{ runner.temp }}/provider-e5-dogfood-primary.json
           if-no-files-found: warn

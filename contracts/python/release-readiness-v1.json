@@ -1,0 +1,69 @@
+{
+  "claim_boundary": "Readiness 10.0 requires live provider-observed B0-B9 dogfood plus a complete zero-known-P0/P1 GitHub issue snapshot; absence of a known blocker is not proof that undiscovered defects do not exist.",
+  "dogfood": {
+    "all_candidate_runs_must_succeed": true,
+    "all_candidate_verifiers_must_succeed": true,
+    "b5_failure_repair_minimum_verified_failure_receipts": 1,
+    "b5_failure_repair_minimum_verified_rollback_receipts": 1,
+    "candidate_workload_coverage": "exact B0-B9",
+    "evidence_level": "E5_PAIRED_PROVIDER_RECEIPTS",
+    "explained_overflow_requires_reason_hash_per_event": true,
+    "readiness_receipt_bindings": [
+      "run_id",
+      "task_id",
+      "arm_id",
+      "repetition",
+      "cache_mode",
+      "provider_response_hash",
+      "usage_receipt_hash"
+    ],
+    "readiness_receipt_required_per_candidate_run": true,
+    "readiness_receipt_self_hash": "sha256(canonical_json(receipt_without_receipt_sha256))",
+    "security_regressions_must_equal": 0,
+    "unexplained_provider_overflow_must_equal": 0,
+    "verifier_skips_must_equal": 0
+  },
+  "family": "syntavra-release-readiness-v1",
+  "known_blockers": {
+    "blocking_labels": [
+      "blocker:p0",
+      "blocker:p1",
+      "p0",
+      "p1",
+      "priority/p0",
+      "priority/p1",
+      "priority:p0",
+      "priority:p1",
+      "severity/p0",
+      "severity/p1",
+      "severity:p0",
+      "severity:p1"
+    ],
+    "blocking_title_prefixes": [
+      "[P0]",
+      "[P1]",
+      "P0:",
+      "P1:",
+      "P0-",
+      "P1-"
+    ],
+    "known_p0_p1_blocker_count_must_equal": 0,
+    "pull_requests_excluded": true,
+    "source": "complete open GitHub issue snapshot"
+  },
+  "promotion_dependencies": [
+    "exact-head Recovery green",
+    "exact-head Release Main green",
+    "exact-head Completion/Phase Exit green",
+    "Dual Engine and Deterministic Policy green",
+    "real B0-B9 E5 provider evidence",
+    "two independent provider/model superiority scopes",
+    "MULTI_SCOPE_EXTERNAL_SUPERIORITY_PROVEN",
+    "LIVE_DOGFOOD_READINESS_PROVEN",
+    "ZERO_KNOWN_P0_P1_BLOCKERS_PROVEN",
+    "final exact-head release integrity certificate"
+  ],
+  "schema_version": 1,
+  "status": "ACTIVE_10_PROMOTION_GATE",
+  "target": 10.0
+}
