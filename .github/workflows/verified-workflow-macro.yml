@@ -1,0 +1,117 @@
+name: Verified Workflow Macro Core
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/verified_workflow.py'
+      - 'tests/runtime/test_verified_workflow_macro.py'
+      - 'contracts/python/verified-workflow-macro-v1.json'
+      - 'docs/TE_P0_11_VERIFIED_WORKFLOW_MACRO.md'
+      - '.github/workflows/verified-workflow-macro.yml'
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - 'syntavra_runtime/verified_workflow.py'
+      - 'tests/runtime/test_verified_workflow_macro.py'
+      - 'contracts/python/verified-workflow-macro-v1.json'
+      - 'docs/TE_P0_11_VERIFIED_WORKFLOW_MACRO.md'
+      - '.github/workflows/verified-workflow-macro.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verified-workflow-macro-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  PYTHONUTF8: '1'
+  SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  verified-workflow-macro-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Compile verified workflow surfaces
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            syntavra_runtime/verified_workflow.py \
+            tests/runtime/test_verified_workflow_macro.py
+
+      - name: Prove promotion reuse invalidation and re-verification gates
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_verified_workflow_macro -v
+
+      - name: Record exact-head core receipt
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          expected = os.environ['SYN_EXPECTED_HEAD']
+          receipt = {
+              'schema_version': 1,
+              'claim': 'TE_P0_11_VERIFIED_WORKFLOW_MACRO_CORE',
+              'exact_head': actual,
+              'expected_head': expected,
+              'head_match': actual == expected,
+              'minimum_independent_verified_experiences': 2,
+              'mutating_actions_forbidden': True,
+              'parallel_database_added': False,
+              'compatibility_fail_closed': True,
+              'ambiguity_fail_closed': True,
+              'fresh_reverification_required': True,
+              'provider_calls_avoided_receipted': True,
+              'gateway_replay_complete': False,
+              'provider_billed_savings_proven': False,
+          }
+          Path('/tmp/verified-workflow-macro-core.json').write_text(
+              json.dumps(receipt, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          assert receipt['head_match'], receipt
+          PY
+
+      - name: Enforce clean exact head
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
+          test "$(git rev-parse HEAD)" = "$SYN_EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload verified workflow evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-workflow-macro-core-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/verified-workflow-macro-core.json
+          if-no-files-found: error
