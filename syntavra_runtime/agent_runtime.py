@@ -27,7 +27,7 @@ from .model_gateway import ModelGateway
 from .project_model import ProjectModel, VerifierSpec
 from .provider_call_observation import ProviderCallObservationLedger
 from .tool_externalization import ToolOutputExternalizer
-from .tool_externalization_types import ExternalizationPolicy
+from .tool_externalization_types import ExternalizationPolicy, ToolPayload
 from .util import stable_project_id
 
 
@@ -381,6 +381,7 @@ class GatewayPatchProvider:
 Return exactly one JSON object and no markdown.
 Allowed actions:
 - {"action":"search","query":"...","limit":8,"fields":["name","path"],"filters":{"kind":"function"}}
+- {"action":"search_reduce","query":"...","operator":"count|sum|min|max|group|sort|top_k|sample","field":"score","group_by":"kind","limit":8,"fields":["kind","score"],"filters":{"kind":"function"},"descending":true,"sample_seed":"optional"}
 - {"action":"search_inspect","query":"symbol or concept","fields":["name","path","start_line","end_line"],"context_lines":8}
 - {"action":"inspect","path":"relative/path.py","start_line":1,"end_line":200}
 - {"action":"inspect","paths":["relative/path.py"]}  # legacy bounded form
@@ -390,9 +391,12 @@ Allowed actions:
 - {"action":"run_verifier","name":"..."}
 - {"action":"edit","edits":[{"path":"...","operation":"replace","old":"...","new":"...","count":1}],"rationale":"..."}
 - {"action":"patch","patch":"unified diff","rationale":"..."}
+Prefer search_reduce when an aggregate, rank, top-k or deterministic sample answers the evidence need without exposing raw candidates.
+A search_reduce result with source_window_complete=false is bounded candidate-window evidence, never global repository truth.
 Prefer search_inspect when one structural match is likely: local fusion can return exact ranged source without replaying the intermediate candidate list.
 Use search, ranged inspect, impact or a verifier when evidence is insufficient. Never invent file contents.
 Repository search is fail-closed: only approved projected fields/filters can become provider-visible evidence.
+Lossy repository reduction is fail-closed without exact local capture; raw source windows remain local and only compact results plus recovery handles become provider-visible.
 Tool evidence is represented by compact receipts and exact recovery handles; request a fresh/ranged read when more evidence is required.
 Patch or structured edits must stay inside the repository and must be suitable for git apply.
 """
@@ -722,6 +726,17 @@ Patch or structured edits must stay inside the repository and must be suitable f
         self._state = ConstantContextState(externalizer=self.externalizer, scope_key=scope)
 
         current_diff = str(context.get("current_diff") or "")
+        reduction_invalidation_fingerprint = hashlib.sha256(
+            _canonical(
+                {
+                    "project": stable_project_id(self.project),
+                    "task_id": self.task_id,
+                    "attempt": int(context.get("attempt") or 1),
+                    "current_diff_sha256": hashlib.sha256(current_diff.encode("utf-8")).hexdigest(),
+                    "changed_files": list(context.get("changed_files") or ()),
+                }
+            ).encode("utf-8")
+        ).hexdigest()
         if current_diff:
             self._ingest(
                 key="repo.diff:current",
@@ -776,6 +791,111 @@ Patch or structured edits must stay inside the repository and must be suitable f
                         "query_pushdown": True,
                     },
                     command=retrieval.query,
+                )
+                continue
+
+            if name == "search_reduce":
+                if self.externalizer is None:
+                    raise RuntimeError("search_reduce requires an exact externalizer")
+                query = str(action.get("query") or task.instruction)
+                operator = str(action.get("operator") or "").casefold()
+                limit, fields, filters = self._retrieval_options(action)
+                raw_descending = action.get("descending")
+                if raw_descending is not None and not isinstance(raw_descending, bool):
+                    raise ValueError("repository reduction descending must be a JSON boolean")
+                field = str(action.get("field") or "")
+                group_by = str(action.get("group_by") or "")
+                sample_seed = str(action.get("sample_seed") or "")[:128]
+
+                def capture(raw: bytes, metadata: Mapping[str, Any]) -> Mapping[str, str]:
+                    artifact = self.externalizer.externalize(
+                        ToolPayload(
+                            command=f"search_reduce {operator} {query}",
+                            stdout=raw,
+                            tool_name="repo.search_reduce.source",
+                            scope_key=scope,
+                            metadata={
+                                **dict(metadata),
+                                "invalidation_fingerprint": reduction_invalidation_fingerprint,
+                                "lossy_reduction_source": True,
+                                "provider_visible": False,
+                            },
+                        )
+                    )
+                    try:
+                        exact_ok = bool(self.externalizer.evidence.verify(artifact.exact_handle))
+                    except Exception:
+                        exact_ok = False
+                    if not exact_ok:
+                        raise RuntimeError("search_reduce exact capture verification failed")
+                    return {"artifact_id": artifact.artifact_id, "exact_handle": artifact.exact_handle}
+
+                reduction = self.retrieval.reduce(
+                    query,
+                    operator=operator,
+                    capture=capture,
+                    limit=limit,
+                    fields=fields,
+                    filters=filters,
+                    field=field,
+                    group_by=group_by,
+                    descending=raw_descending,
+                    sample_seed=sample_seed,
+                )
+                trace.update(
+                    query=reduction.query,
+                    operator=reduction.operator,
+                    raw_candidates=reduction.raw_count,
+                    filtered_candidates=reduction.filtered_count,
+                    source_window_complete=reduction.source_window_complete,
+                    source_window_limit=reduction.source_window_limit,
+                    projected_fields=list(reduction.fields),
+                    source_artifact=reduction.exact_artifact_id,
+                    source_exact=reduction.exact_handle,
+                    exact_before_lossy=True,
+                    query_pushdown=True,
+                )
+                self.trace.append(trace)
+                reduction_key = _short_hash(
+                    _canonical(
+                        {
+                            "query": reduction.query,
+                            "operator": reduction.operator,
+                            "field": reduction.field,
+                            "group_by": reduction.group_by,
+                            "filters": filters or {},
+                        }
+                    )
+                )
+                self._ingest(
+                    key="repo.search_reduce:" + reduction_key,
+                    tool="repo.search_reduce",
+                    payload={
+                        "query": reduction.query,
+                        "operator": reduction.operator,
+                        "value": reduction.value,
+                        "raw_candidate_count": reduction.raw_count,
+                        "filtered_candidate_count": reduction.filtered_count,
+                        "source_window_complete": reduction.source_window_complete,
+                        "source_window_limit": reduction.source_window_limit,
+                        "source_artifact": reduction.exact_artifact_id,
+                        "source_exact": reduction.exact_handle,
+                    },
+                    round_number=round_number,
+                    metadata={
+                        "query": reduction.query,
+                        "operator": reduction.operator,
+                        "raw_candidate_count": reduction.raw_count,
+                        "filtered_candidate_count": reduction.filtered_count,
+                        "source_window_complete": reduction.source_window_complete,
+                        "source_window_limit": reduction.source_window_limit,
+                        "projected_fields": list(reduction.fields),
+                        "source_artifact": reduction.exact_artifact_id,
+                        "source_exact": reduction.exact_handle,
+                        "exact_before_lossy": True,
+                        "query_pushdown": True,
+                    },
+                    command=reduction.query,
                 )
                 continue
 
