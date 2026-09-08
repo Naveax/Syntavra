@@ -15,7 +15,8 @@
     "readiness_score_may_not_exceed_8_0_without_provider_proof_and_all_required_ci": true,
     "component_percentages_are_non_additive": true,
     "local_tokenizer_counts_are_not_provider_billed_proof": true,
-    "provider_call_avoidance_requires_pre_inference_receipt_or_exact_replay_proof": true
+    "provider_call_avoidance_requires_pre_inference_receipt_or_exact_replay_proof": true,
+    "provider_replay_plan_is_not_provider_proof": true
   },
   "canonical_owners": [
     "context",
@@ -93,8 +94,9 @@
         "minimum_three_repetitions_per_claimed_workload",
         "provider_request_or_response_identity_present",
         "fresh_cached_reasoning_and_output_tokens_recorded_when_provider_exposes_them",
+        "frozen_replay_pair_identity_has_zero_issues",
         "public_savings_claims_resolve_to_receipt_ids",
-        "local_estimates_never_upgrade_claim_level"
+        "local_estimates_and_replay_plans_never_upgrade_claim_level"
       ]
     },
     "benchmark": {
@@ -109,6 +111,9 @@
         "frozen_long_horizon_workload",
         "cold_and_warm_variants",
         "adversarial_optimizer_safety_workload",
+        "executable_portable_b0_b9_corpus",
+        "workload_variant_schedule_matches_contract_exactly",
+        "provider_replay_plan_uses_same_frozen_task_identity_for_both_arms",
         "component_end_to_end_and_long_session_results_separated",
         "pareto_report_uses_verified_success_and_total_provider_cost"
       ]
@@ -119,6 +124,7 @@
         "all_relevant_required_checks_green_on_exact_head",
         "constant_context_rc1_suite_required",
         "retry_economics_exact_state_regression_required",
+        "executable_frozen_corpus_and_provider_replay_plan_regression_required",
         "security_and_exact_recovery_regressions_required",
         "provider_contract_and_public_surface_regressions_required",
         "token_economy_regression_smoke_required",
@@ -187,16 +193,21 @@
     "verified_inference_skip_in_coding_agent_product_path",
     "retrieval_projection_filter_fail_closed_before_graph_access",
     "exact_failure_workspace_retry_economics_pre_inference",
-    "changed_state_same_failure_repair_preservation"
+    "changed_state_same_failure_repair_preservation",
+    "executable_portable_b0_b9_frozen_corpus",
+    "contract_driven_provider_replay_planner",
+    "provider_replay_pair_identity_fail_closed_validation",
+    "explicit_credential_values_forbidden_in_replay_arm_files"
   ],
   "open_blockers_after_rc1_runtime_surgery": [
     "real_paired_provider_billed_receipts_not_yet_collected",
-    "frozen_real_task_ab_corpus_not_yet_completed",
-    "macro_execution_not_yet_integrated_into_coding_agent_loop",
     "full_property_and_fuzz_matrix_not_yet_complete",
     "all_exact_head_ci_must_be_rechecked_after_recovery_commits",
-    "b0_b9_provider_replay_and_dogfood_not_yet_completed",
+    "b0_b9_provider_replay_execution_and_dogfood_not_yet_completed",
     "release_candidate_zero_p0_p1_blocker_gate_not_yet_proven"
   ],
-  "claim_boundary": "this contract defines gates and records implemented recovery work; it does not claim the 9.9 targets are already achieved"
+  "non_blocking_post_99_hardening": [
+    "parameterized_verified_macro_compiler_with_callable_implementation_fingerprints"
+  ],
+  "claim_boundary": "this contract defines gates and records implemented recovery work; replay planning is not provider proof and the 9.9 targets remain unachieved until the external receipt and release gates close"
 }
