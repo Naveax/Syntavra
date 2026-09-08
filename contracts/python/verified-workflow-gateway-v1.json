@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "family": "verified-workflow-gateway",
+  "phase": "token-economy-te-p0-11-gateway",
+  "claim": "TE_P0_11_VERIFIED_WORKFLOW_GATEWAY_REPLAY",
+  "strict": true,
+  "runtime": "syntavra_runtime/verified_workflow_extension.py",
+  "core_runtime": "syntavra_runtime/verified_workflow.py",
+  "bootstrap": "syntavra_runtime/mcp_enforcement_extension.py:install",
+  "reuse_policy": {
+    "minimum_independent_verified_experiences": 2,
+    "exact_parameterization_only": true,
+    "initial_parameter_names": [
+      "instruction"
+    ],
+    "first_attempt_only": true,
+    "clean_workspace_required": true,
+    "previous_failure_forbids_replay": true,
+    "mutating_actions_forbidden": [
+      "edit",
+      "patch"
+    ],
+    "ambiguous_active_macros_fall_back_to_provider": true
+  },
+  "compatibility_policy": {
+    "inherits_te_p0_10_identity": true,
+    "repository_fingerprint_required": true,
+    "toolchain_hash_required": true,
+    "environment_hash_required": true,
+    "policy_hash_required": true,
+    "security_hash_required": true,
+    "tool_schema_hash_required": true,
+    "verifier_contract_hash_required": true,
+    "workflow_runtime_hash_mixed_into_policy_identity": true,
+    "runtime_sources": [
+      "verified_workflow.py",
+      "verified_workflow_extension.py",
+      "agent_runtime.py",
+      "autonomous_agent.py",
+      "agent_retrieval.py"
+    ]
+  },
+  "execution_policy": {
+    "replayed_actions_use_existing_gateway_dispatch": true,
+    "replayed_actions_use_existing_exact_evidence_ingestion": true,
+    "local_replay_makes_no_provider_call": true,
+    "provider_calls_avoided_recorded": true,
+    "fresh_primary_verifier_required": true,
+    "post_verifiers_preserved": true,
+    "delivery_failure_does_not_invalidate_verified_macro": true
+  },
+  "quarantine_policy": {
+    "session_memory_hash_chain_is_authority": true,
+    "replay_action_failure_quarantines": true,
+    "fresh_verifier_failure_quarantines": true,
+    "exception_text_not_persisted": true,
+    "later_independent_verified_promotion_can_reactivate": true
+  },
+  "claim_boundary": "This contract certifies local replay integration and provider-call avoidance accounting for eligible verified workflow planning actions. It does not claim provider-billed token savings until paired provider-observed receipts prove them."
+}

@@ -97,7 +97,13 @@ def _install_jsonrpc_transport_hardening(server_cls: Any) -> None:
 
 
 def install() -> None:
+    from .verified_workflow_extension import install as install_verified_workflow
     from .mcp_server import MCPServer
+
+    # Agent macro replay is a package bootstrap concern; this final extension hook
+    # is guaranteed to execute for the normal runtime even when native MCP policy
+    # enforcement returns early below.
+    install_verified_workflow()
 
     # The native MCP application pipeline already owns authorization and schema
     # enforcement, but the stdio JSON-RPC boundary still needs request-shape
