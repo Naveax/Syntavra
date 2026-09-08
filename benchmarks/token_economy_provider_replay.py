@@ -15,6 +15,7 @@ from syntavra_runtime.util import atomic_write_json, canonical_json, sha256_byte
 ROOT = Path(__file__).resolve().parents[1]
 WORKLOAD_CONTRACT = ROOT / "contracts/python/token-economy-frozen-workloads-v1.json"
 _SECRET_MARKERS = ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "AUTH")
+_REPETITION_POLICY = "minimum three repetitions"
 
 
 def _load_arms(path: Path) -> list[ArmSpec]:
