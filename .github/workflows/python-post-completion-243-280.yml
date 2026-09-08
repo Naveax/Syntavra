@@ -14,9 +14,11 @@ on:
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
       - "tests/runtime/test_python_post_completion_manifest_sync_coverage.py"
+      - "tests/runtime/test_release_integrity.py"
       - "tests/runtime/test_hyperefficiency_roadmap.py"
       - "tests/runtime/test_host_installation_v4.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "tools/certify_release_integrity.py"
       - "tools/validate_hyperefficiency_roadmap.py"
       - "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
       - "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md"
@@ -52,9 +54,11 @@ on:
       - "tests/runtime/test_python_post_completion_capabilities_v2.py"
       - "tests/runtime/test_python_post_completion_evidence_integration.py"
       - "tests/runtime/test_python_post_completion_manifest_sync_coverage.py"
+      - "tests/runtime/test_release_integrity.py"
       - "tests/runtime/test_hyperefficiency_roadmap.py"
       - "tests/runtime/test_host_installation_v4.py"
       - "tools/certify_python_post_completion_capabilities_v2.py"
+      - "tools/certify_release_integrity.py"
       - "tools/validate_hyperefficiency_roadmap.py"
       - "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md"
       - "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md"
@@ -108,6 +112,7 @@ jobs:
           python -m unittest tests.runtime.test_python_post_completion_capabilities_v2 -v
           python -m unittest tests.runtime.test_python_post_completion_evidence_integration -v
           python -m unittest tests.runtime.test_python_post_completion_manifest_sync_coverage -v
+          python -m unittest tests.runtime.test_release_integrity -v
       - name: Capability certification report
         run: |
           python tools/certify_python_post_completion_capabilities_v2.py --output /tmp/post-completion-certification.json
@@ -124,12 +129,25 @@ jobs:
           assert report["rust_resume_allowed"] is False, report
           assert report["rust_retired"] is True, report
           PY
-      - name: Generate deterministic manifest candidate
+      - name: Certify exact-head release integrity and generated manifest
+        shell: bash
         run: |
           set -euo pipefail
-          rm -rf syntavra_runtime.egg-info
+          python tools/certify_release_integrity.py \
+            --expected-head "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --output /tmp/post-completion-release-integrity.json \
+            --manifest-output /tmp/post-completion-generated-manifest.sha256
+      - name: Repository validation against deterministic exact-head manifest
+        shell: bash
+        run: |
+          set -euo pipefail
           cp MANIFEST.sha256 /tmp/MANIFEST.committed.sha256
+          trap 'cp /tmp/MANIFEST.committed.sha256 MANIFEST.sha256' EXIT
           python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
+          python tools/validate.py
+          cp /tmp/MANIFEST.committed.sha256 MANIFEST.sha256
+          trap - EXIT
       - name: Upload exact-head evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -137,22 +155,13 @@ jobs:
           name: python-post-completion-243-280-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             /tmp/post-completion-certification.json
-            MANIFEST.sha256
-      - name: Require committed manifest to be exact
-        run: |
-          set -euo pipefail
-          status=0
-          cmp -s /tmp/MANIFEST.committed.sha256 MANIFEST.sha256 || status=1
-          if [ "$status" -ne 0 ]; then
-            echo "MANIFEST.sha256 is stale; commit the uploaded deterministic candidate." >&2
-            diff -u /tmp/MANIFEST.committed.sha256 MANIFEST.sha256 || true
-          fi
-          cp /tmp/MANIFEST.committed.sha256 MANIFEST.sha256
-          exit "$status"
-      - name: Repository validation
-        run: python tools/validate.py
+            /tmp/post-completion-release-integrity.json
+            /tmp/post-completion-generated-manifest.sha256
       - name: Enforce clean exact-head repository
         if: always()
         run: |
           rm -rf syntavra_runtime.egg-info
+          if [ -f /tmp/MANIFEST.committed.sha256 ]; then cp /tmp/MANIFEST.committed.sha256 MANIFEST.sha256; fi
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"

@@ -76,6 +76,8 @@ jobs:
           python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
           python -m unittest tests.runtime.test_context_decision_trace_v1 -v
           python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v
+          python -m unittest tests.runtime.test_release_integrity -v
+          python -m unittest tests.runtime.test_provider_e5 -v
           python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
           python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
           python tools/certify_python_authority.py --out /tmp/python-authority.json
@@ -101,7 +103,23 @@ jobs:
           python tools/certify_deterministic_policy_snapshot_v1.py --out /tmp/deterministic-policy-snapshot.json
           python tools/check_rust_feature_freeze.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --out /tmp/rust-feature-freeze-diff.json
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
+
+          # Canonical release integrity is the exact clean Git head/tree plus a
+          # deterministic generated SHA-256 manifest receipt.  The checked-in
+          # MANIFEST remains a legacy snapshot and is never trusted as the
+          # authority for the candidate currently under test.
+          python tools/certify_release_integrity.py \
+            --expected-head "${{ github.event.pull_request.head.sha }}" \
+            --output /tmp/release-integrity.json \
+            --manifest-output /tmp/release-generated-manifest.sha256
+
+          cp MANIFEST.sha256 /tmp/release-legacy-manifest.sha256
+          trap 'cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256' EXIT
+          python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
+          python tools/validate.py
+          cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256
+          trap - EXIT
 
       - name: Enforce exact clean pull request head
         shell: bash
@@ -109,6 +127,18 @@ jobs:
           set -euo pipefail
           rm -rf syntavra_runtime.egg-info
           rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          if [ -f /tmp/release-legacy-manifest.sha256 ]; then cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256; fi
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Upload release integrity evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: release-main-integrity-${{ github.event.pull_request.head.sha }}
+          path: |
+            /tmp/release-integrity.json
+            /tmp/release-generated-manifest.sha256
+            /tmp/release-validation.json
+          if-no-files-found: warn

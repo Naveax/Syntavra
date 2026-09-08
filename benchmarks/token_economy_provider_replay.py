@@ -203,11 +203,28 @@ def execute(corpus_root: Path, run_root: Path, arms_path: Path, repetitions: int
     baseline, candidate = (arm.arm_id for arm in arms)
     issues = _pair_issues(results, baseline, candidate)
     comparison = SignalBenchRunner.compare(results, baseline_arm=baseline, candidate_arm=candidate)
+    receipt_complete = all(
+        row.provider_observed
+        and bool(row.usage_receipt_hash)
+        and bool(row.provider_receipt_hash)
+        and row.quota_cost is not None
+        and float(row.quota_cost) > 0
+        for row in results
+    )
+    comparator_integrity = bool(
+        comparison.get("comparison_authority") == "HardenedSignalBench.compare"
+        and not comparison.get("identity_mismatches")
+        and not comparison.get("receipt_errors")
+        and not comparison.get("invalid")
+        and int(comparison.get("provider_observed_pairs") or 0) == len(schedule) // 2
+    )
+    provider_evidence_complete = bool(not issues and receipt_complete and comparator_integrity)
+    superiority_proven = bool(provider_evidence_complete and comparison.get("claimable_superiority"))
     value = {
         "schema_version": 1,
         "family": "syntavra-token-economy-provider-replay",
         "mode": "execute",
-        "claim_boundary": "PROVIDER_REPLAY_EVIDENCE_REQUIRES_ZERO_PAIR_ISSUES_AND_COMPARISON_GATE",
+        "claim_boundary": "E5_PROVIDER_EVIDENCE_AND_SUPERIORITY_ARE_SEPARATE_GATES",
         "portable_corpus_identity": manifest["portable_identity_sha256"],
         "repetitions": repetitions,
         "seed": seed,
@@ -217,8 +234,10 @@ def execute(corpus_root: Path, run_root: Path, arms_path: Path, repetitions: int
         "pair_identity_ok": not issues,
         "comparison": comparison,
         "results": [asdict(row) for row in results],
+        "provider_evidence_complete": provider_evidence_complete,
+        "provider_proof_complete": provider_evidence_complete,
+        "superiority_proven": superiority_proven,
     }
-    value["provider_proof_complete"] = bool(not issues and comparison.get("claimable_superiority"))
     value["result_sha256"] = sha256_bytes(canonical_json(value))
     atomic_write_json(run_root / "provider-replay.json", value, mode=0o600)
     return value
@@ -243,7 +262,7 @@ def main() -> int:
     if args.output:
         atomic_write_json(args.output, value, mode=0o600)
     print(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
-    if args.execute and not value["provider_proof_complete"]:
+    if args.execute and not value["provider_evidence_complete"]:
         return 4
     return 0
 

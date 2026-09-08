@@ -10,6 +10,7 @@ on:
       - 'syntavra_runtime/inference_skip_cache.py'
       - 'syntavra_runtime/retry_economics.py'
       - 'syntavra_runtime/provider_call_observation.py'
+      - 'syntavra_runtime/provider_e5.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
       - 'syntavra_runtime/tool_externalization_types.py'
@@ -25,11 +26,13 @@ on:
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_token_economy_frozen_corpus.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
+      - 'tests/runtime/test_provider_e5.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
       - 'tests/runtime/test_inference_skip_cache.py'
+      - 'tools/certify_provider_e5.py'
       - 'tools/certify_recovery_to_99.py'
       - '.github/workflows/recovery-to-99-rc1.yml'
   push:
@@ -44,6 +47,7 @@ on:
       - 'syntavra_runtime/inference_skip_cache.py'
       - 'syntavra_runtime/retry_economics.py'
       - 'syntavra_runtime/provider_call_observation.py'
+      - 'syntavra_runtime/provider_e5.py'
       - 'syntavra_runtime/evidence.py'
       - 'syntavra_runtime/tool_externalization.py'
       - 'syntavra_runtime/tool_externalization_types.py'
@@ -59,11 +63,13 @@ on:
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_token_economy_frozen_corpus.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
+      - 'tests/runtime/test_provider_e5.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
       - 'tests/runtime/test_recovery_to_99_security.py'
       - 'tests/runtime/test_inference_skip_cache.py'
+      - 'tools/certify_provider_e5.py'
       - 'tools/certify_recovery_to_99.py'
       - '.github/workflows/recovery-to-99-rc1.yml'
 
@@ -116,8 +122,11 @@ jobs:
           assert actual == expected, value
           PY
 
-      - name: Install runtime
-        run: python -m pip install -e .
+      - name: Install runtime and recovery test dependency
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m pip install 'pytest>=8,<9'
 
       - name: Compile recovery surfaces
         run: |
@@ -130,9 +139,11 @@ jobs:
             syntavra_runtime/inference_skip_cache.py \
             syntavra_runtime/retry_economics.py \
             syntavra_runtime/provider_call_observation.py \
+            syntavra_runtime/provider_e5.py \
             tests/runtime/test_token_economy_rc1_runtime.py \
             tests/runtime/test_token_economy_frozen_corpus.py \
             tests/runtime/test_token_economy_provider_replay.py \
+            tests/runtime/test_provider_e5.py \
             tests/runtime/test_agent_product_completion.py \
             tests/runtime/test_agent_retrieval.py \
             tests/runtime/test_retry_economics.py \
@@ -141,6 +152,7 @@ jobs:
             benchmarks/token_economy_rc1_benchmark.py \
             benchmarks/token_economy_frozen_corpus.py \
             benchmarks/token_economy_provider_replay.py \
+            tools/certify_provider_e5.py \
             tools/certify_recovery_to_99.py
 
       - name: Run constant-context product regression
@@ -152,11 +164,12 @@ jobs:
           python -m unittest tests.runtime.test_retry_economics -v
           python -m pytest tests/runtime/test_p0_p4_runtime_consolidation.py -q
 
-      - name: Prove executable portable B0-B9 corpus and replay plan
+      - name: Prove executable portable B0-B9 corpus and E5 proof semantics
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_token_economy_frozen_corpus -v
           python -m unittest tests.runtime.test_token_economy_provider_replay -v
+          python -m unittest tests.runtime.test_provider_e5 -v
           corpus_root="$(mktemp -d)"
           python benchmarks/token_economy_frozen_corpus.py \
             "$corpus_root/corpus" \
@@ -232,6 +245,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
           test "$(git rev-parse HEAD)" = "$SYN_EXPECTED_HEAD"
           git diff --check
           status="$(git status --porcelain --untracked-files=all)"
