@@ -176,7 +176,109 @@ class PreModelIngestionFoldGateTests(unittest.TestCase):
         visibility = second.metadata["provider_visibility"]
         self.assertEqual(visibility["visible_bytes"], 0)
         self.assertEqual(visibility["avoided_bytes"], len(b"unchanged"))
+        self.assertTrue(second.metadata["no_change_elision"]["canonical_body_active"])
+        self.assertFalse(second.metadata["no_change_elision"]["body_reemitted"])
         self.assertTrue(any(row.get("status") == "UNCHANGED" for row in state.causal))
+
+    def test_no_change_elision_survives_caller_key_drift_for_same_logical_view(self) -> None:
+        state = ConstantContextState(preview_limit_bytes=512)
+        first = state.ingest(
+            key="read:caller-a",
+            tool="repo.read",
+            raw="same exact body",
+            round_number=1,
+            path="src/cache.py",
+            metadata={"start_line": 4, "end_line": 12},
+        )
+        second = state.ingest(
+            key="read:caller-b",
+            tool="repo.read",
+            raw="same exact body",
+            round_number=2,
+            path="src/cache.py",
+            metadata={"start_line": 4, "end_line": 12},
+        )
+
+        self.assertEqual(second.status, "UNCHANGED")
+        self.assertEqual(second.visible_bytes, 0)
+        self.assertEqual(len(state.active), 1)
+        self.assertEqual(state.active[0].content_hash, first.content_hash)
+        self.assertTrue(second.metadata["no_change_elision"]["canonical_body_active"])
+
+    def test_no_change_elision_refuses_semantic_metadata_drift_even_when_bytes_match(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="syntavra-te-p0-no-change-drift-") as directory:
+            root = Path(directory)
+            state = ConstantContextState(
+                externalizer=self._externalizer(root, "no-change-drift"),
+                scope_key="task:no-change-drift",
+                preview_limit_bytes=512,
+            )
+            raw = "same body after workspace generation changes"
+            first = state.ingest(
+                key="read:a",
+                tool="repo.read",
+                raw=raw,
+                round_number=1,
+                path="src/runtime.py",
+                metadata={"start_line": 1, "end_line": 20, "invalidation_fingerprint": "tree-a"},
+            )
+            second = state.ingest(
+                key="read:b",
+                tool="repo.read",
+                raw=raw,
+                round_number=2,
+                path="src/runtime.py",
+                metadata={"start_line": 1, "end_line": 20, "invalidation_fingerprint": "tree-b"},
+            )
+
+            self.assertNotEqual(second.status, "UNCHANGED")
+            superseded = [row for row in state.causal if row.get("status") == "SUPERSEDED_TO_HANDLE"]
+            self.assertEqual(len(superseded), 1)
+            self.assertEqual(superseded[0]["sha256"], first.content_hash)
+            self.assertEqual(superseded[0]["superseded_by_sha256"], second.content_hash)
+            self.assertTrue(superseded[0]["invalidation_changed"])
+
+    def test_query_pushdown_without_explicit_filters_has_complete_no_filter_identity(self) -> None:
+        state = ConstantContextState(preview_limit_bytes=512)
+        metadata = {
+            "query": "VALUE",
+            "result_count": 1,
+            "raw_candidate_count": 1,
+            "filtered_candidate_count": 1,
+            "projected_fields": ["node_id", "name", "path", "start_line", "end_line"],
+            "query_pushdown": True,
+        }
+        first = state.ingest(
+            key="search:caller-a",
+            tool="repo.search",
+            raw='{"query":"VALUE","results":[{"name":"VALUE","path":"module.py"}]}',
+            round_number=1,
+            metadata=metadata,
+            command="VALUE",
+        )
+        second = state.ingest(
+            key="search:caller-b",
+            tool="repo.search",
+            raw='{"query":"VALUE","results":[{"name":"VALUE","path":"module.py"}]}',
+            round_number=2,
+            metadata=metadata,
+            command="VALUE",
+        )
+
+        self.assertEqual(second.status, "UNCHANGED")
+        self.assertEqual(second.visible_bytes, 0)
+        self.assertEqual(len(state.active), 1)
+        self.assertEqual(state.active[0].content_hash, first.content_hash)
+
+    def test_compiled_policy_advertises_hardened_no_change_elision(self) -> None:
+        state = ConstantContextState(preview_limit_bytes=256)
+        compiled = state.compile(
+            {"instruction": "inspect current state"},
+            counter=ProviderTokenCounter("sequence"),
+            token_budget=2000,
+            byte_budget=8000,
+        )
+        self.assertIn('"no_change_elision_hardened":true', compiled.text)
 
 
 if __name__ == "__main__":
