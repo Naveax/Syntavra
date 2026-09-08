@@ -14,6 +14,17 @@ if str(ROOT) not in sys.path:
 
 CONTRACT_RELATIVE = Path("contracts/python/rust-feature-freeze-guard-v1.json")
 
+_DUAL_ENGINE_SURFACE = "contracts/engine/dual-engine-public-surface-v2.json"
+_PYTHON_SURFACE_METADATA_KEYS = frozenset(
+    {"module_count", "public_command_count", "command_paths_sha256", "digest_encoding"}
+)
+_RETIRED_EVIDENCE_WORKFLOW_PATHS = frozenset(
+    {
+        ".github/workflows/remaining71-agent-differential.yml",
+        ".github/workflows/remaining71-headless-differential.yml",
+    }
+)
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
@@ -27,15 +38,19 @@ def _require(value: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def _changed_paths(repo: Path, base: str, head: str) -> list[dict[str, str]]:
-    proc = subprocess.run(
-        ["git", "diff", "--name-status", "--find-renames", f"{base}...{head}"],
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
         cwd=repo,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
     )
+
+
+def _changed_paths(repo: Path, base: str, head: str) -> list[dict[str, str]]:
+    proc = _git(repo, "diff", "--name-status", "--find-renames", f"{base}...{head}")
     if proc.returncode != 0:
         raise AssertionError(f"unable to diff {base}...{head}: {proc.stderr.strip()}")
     rows: list[dict[str, str]] = []
@@ -64,33 +79,23 @@ def _classify(path: str, contract: dict[str, Any]) -> str | None:
     return None
 
 
-_DUAL_ENGINE_SURFACE = "contracts/engine/dual-engine-public-surface-v2.json"
-_PYTHON_SURFACE_METADATA_KEYS = frozenset(
-    {
-        "module_count",
-        "public_command_count",
-        "command_paths_sha256",
-        "digest_encoding",
-    }
-)
-
-
 def _read_revision_json(repo: Path, revision: str, path: str) -> dict[str, Any]:
-    proc = subprocess.run(
-        ["git", "show", f"{revision}:{path}"],
-        cwd=repo,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    proc = _git(repo, "show", f"{revision}:{path}")
     if proc.returncode != 0:
-        raise AssertionError(
-            f"unable to read {path} at {revision}: {proc.stderr.strip()}"
-        )
+        raise AssertionError(f"unable to read {path} at {revision}: {proc.stderr.strip()}")
     value = json.loads(proc.stdout)
     if not isinstance(value, dict):
         raise AssertionError(f"expected JSON object at {revision}:{path}")
+    return value
+
+
+def _revision_blob_sha(repo: Path, revision: str, path: str) -> str:
+    proc = _git(repo, "rev-parse", f"{revision}:{path}")
+    if proc.returncode != 0:
+        return ""
+    value = proc.stdout.strip().casefold()
+    if len(value) != 40 or any(ch not in "0123456789abcdef" for ch in value):
+        return ""
     return value
 
 
@@ -107,20 +112,16 @@ def _is_python_surface_metadata_sync(
         or row.get("role") != "path"
     ):
         return False
-
     before = _read_revision_json(repo, base, _DUAL_ENGINE_SURFACE)
     after = _read_revision_json(repo, head, _DUAL_ENGINE_SURFACE)
-
     before_other = {key: value for key, value in before.items() if key != "python_surface"}
     after_other = {key: value for key, value in after.items() if key != "python_surface"}
     if before_other != after_other:
         return False
-
     before_python = before.get("python_surface")
     after_python = after.get("python_surface")
     if not isinstance(before_python, dict) or not isinstance(after_python, dict):
         return False
-
     sentinel = object()
     changed_keys = {
         key
@@ -130,13 +131,53 @@ def _is_python_surface_metadata_sync(
     return bool(changed_keys) and changed_keys <= _PYTHON_SURFACE_METADATA_KEYS
 
 
+def _retired_evidence_policy(contract: dict[str, Any]) -> dict[str, str]:
+    evidence = contract.get("retired_engine_evidence_workflows") or {}
+    _require(
+        evidence.get("policy") == "exact-head-git-blob-only",
+        "retired-engine evidence workflow policy drift",
+    )
+    allowed = evidence.get("allowed_head_blob_sha") or {}
+    _require(isinstance(allowed, dict), "retired-engine evidence workflow allowlist must be an object")
+    _require(
+        set(allowed) == _RETIRED_EVIDENCE_WORKFLOW_PATHS,
+        "retired-engine evidence workflow path allowlist drift",
+    )
+    normalized: dict[str, str] = {}
+    for path, raw_sha in allowed.items():
+        sha = str(raw_sha or "").casefold()
+        _require(
+            len(sha) == 40 and all(ch in "0123456789abcdef" for ch in sha),
+            f"invalid retired-engine evidence workflow blob SHA for {path}",
+        )
+        normalized[path] = sha
+    return normalized
+
+
+def _is_exact_retired_evidence_workflow(
+    repo: Path,
+    *,
+    head: str,
+    row: dict[str, str],
+    allowed: dict[str, str],
+) -> bool:
+    path = row.get("path", "")
+    if (
+        path not in _RETIRED_EVIDENCE_WORKFLOW_PATHS
+        or row.get("status") != "M"
+        or row.get("role") != "path"
+    ):
+        return False
+    expected = allowed.get(path, "")
+    return bool(expected) and _revision_blob_sha(repo, head, path) == expected
+
+
 def verify_baseline(repo: Path, contract: dict[str, Any]) -> dict[str, Any]:
     authority = contract.get("authority") or {}
     expected = contract.get("expected") or {}
     python_authority = _read_json(repo / authority["python_authority"])
     registry = _read_json(repo / authority["capability_registry"])
     migration = _read_json(repo / authority["migration_baseline"])
-
     _require(python_authority.get("claim") == "PYTHON_FEATURE_DEVELOPMENT_AUTHORITY", "Python authority claim drift")
     freeze = python_authority.get("rust_freeze") or {}
     authority_expected = python_authority.get("expected") or {}
@@ -147,11 +188,9 @@ def verify_baseline(repo: Path, contract: dict[str, Any]) -> dict[str, Any]:
     _require(int(authority_expected.get("rust_implemented_native_routes", -1)) == int(expected["rust_implementation_coverage"]), "Rust implementation coverage drift")
     _require(int(authority_expected.get("rust_promoted_native_routes", -1)) == int(expected["rust_production_promoted"]), "Rust promoted baseline drift")
     _require(int(authority_expected.get("remaining_routes", -1)) == int(expected["remaining_parity_promotion"]), "Rust remaining baseline drift")
-
     python_complete = registry.get("python_complete") or {}
     _require(bool(python_complete.get("ready")) is bool(expected["python_complete"]), "Python COMPLETE readiness drift")
     _require(bool(python_complete.get("rust_resume_allowed")) is bool(expected["rust_resume_allowed"]), "Rust resume readiness drift")
-
     migration_baseline = migration.get("rust_baseline") or {}
     _require(int(migration_baseline.get("expected_promoted_native", -1)) == int(expected["rust_production_promoted"]), "migration promoted baseline drift")
     _require(int(migration_baseline.get("expected_remaining", -1)) == int(expected["remaining_parity_promotion"]), "migration remaining baseline drift")
@@ -161,7 +200,6 @@ def verify_baseline(repo: Path, contract: dict[str, Any]) -> dict[str, Any]:
     migration_policy = migration.get("policy") or {}
     _require(migration_policy.get("no_native_counter_change_in_this_gate") is True, "migration baseline allows native counter change")
     _require(migration_policy.get("selector_ownership_is_not_behavioral_parity") is True, "migration selector/parity boundary drift")
-
     return {
         "python_complete": bool(python_complete.get("ready")),
         "rust_resume_allowed": bool(python_complete.get("rust_resume_allowed")),
@@ -185,17 +223,17 @@ def check(
     _require(contract.get("claim") == "RUST_FEATURE_FREEZE_ENFORCED", "freeze guard claim drift")
     _require(contract.get("strict") is True, "freeze guard must remain strict")
     baseline = verify_baseline(repo, contract)
-
+    retired_evidence_allowed = _retired_evidence_policy(contract)
     maintenance = contract.get("maintenance") or {}
     allowed_exceptions = list(maintenance.get("allowed_exception_types") or [])
     if maintenance_exception is not None:
         _require(maintenance_exception in allowed_exceptions, f"unknown maintenance exception: {maintenance_exception}")
         _require(bool((maintenance_reason or "").strip()), "maintenance exception requires explicit reason")
-
     changes = _changed_paths(repo, base, head)
     protected_changes: list[dict[str, str]] = []
     allowed_resumed_changes: list[dict[str, str]] = []
     allowed_python_surface_metadata_changes: list[dict[str, str]] = []
+    allowed_retired_evidence_workflow_changes: list[dict[str, str]] = []
     denied_changes: list[dict[str, str]] = []
     for row in changes:
         path_class = _classify(row["path"], contract)
@@ -206,11 +244,15 @@ def check(
         if baseline["rust_resume_allowed"] and path_class in {"native", "remaining71"}:
             allowed_resumed_changes.append({**enriched, "allowance": "python-complete-rust-resume"})
             continue
+        if path_class == "remaining71" and _is_exact_retired_evidence_workflow(
+            repo, head=head, row=row, allowed=retired_evidence_allowed
+        ):
+            allowed_retired_evidence_workflow_changes.append(
+                {**enriched, "allowance": "exact-retired-engine-evidence-workflow"}
+            )
+            continue
         if path_class == "promotion-authority" and _is_python_surface_metadata_sync(
-            repo,
-            base=base,
-            head=head,
-            row=row,
+            repo, base=base, head=head, row=row
         ):
             allowed_python_surface_metadata_changes.append(
                 {**enriched, "allowance": "python-surface-metadata-sync"}
@@ -221,7 +263,6 @@ def check(
             continue
         if path_class != "native":
             denied_changes.append(enriched)
-
     ok = not denied_changes
     return {
         "ok": ok,
@@ -235,17 +276,17 @@ def check(
         "changed_path_count": len(changes),
         "protected_change_count": len(protected_changes),
         "allowed_resumed_change_count": len(allowed_resumed_changes),
-        "allowed_python_surface_metadata_change_count": len(
-            allowed_python_surface_metadata_changes
-        ),
+        "allowed_python_surface_metadata_change_count": len(allowed_python_surface_metadata_changes),
+        "allowed_retired_evidence_workflow_change_count": len(allowed_retired_evidence_workflow_changes),
         "denied_change_count": len(denied_changes),
         "protected_changes": protected_changes,
         "allowed_resumed_changes": allowed_resumed_changes,
         "allowed_python_surface_metadata_changes": allowed_python_surface_metadata_changes,
+        "allowed_retired_evidence_workflow_changes": allowed_retired_evidence_workflow_changes,
         "denied_changes": denied_changes,
         "policy": (
-            "Before Python COMPLETE, ordinary CI denies native, Remaining-71 parity-program, and promotion-authority changes. "
-            "Python COMPLETE does not auto-resume Rust; native feature work and Remaining-71 parity work remain frozen while Rust is retired. "
+            "Before explicit Rust reactivation, ordinary CI denies native, Remaining-71 parity-program, and promotion-authority changes. "
+            "Python COMPLETE does not auto-resume Rust. The only Remaining-71 exception is an exact Git-blob-pinned evidence-wrapper workflow that preserves raw differential evidence while applying retired-engine certification. "
             "Canonical Python public-surface metadata synchronization remains the only content-scoped promotion-authority exception; explicit maintenance exceptions never grant production promotion."
         ),
     }
@@ -269,7 +310,12 @@ def main() -> int:
             maintenance_reason=args.maintenance_reason,
         )
     except Exception as exc:
-        report = {"ok": False, "schema_version": 1, "claim": "RUST_FEATURE_FREEZE_GUARD_ERROR", "error": f"{type(exc).__name__}: {exc}"}
+        report = {
+            "ok": False,
+            "schema_version": 1,
+            "claim": "RUST_FEATURE_FREEZE_GUARD_ERROR",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
     payload = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.out:
         output = Path(args.out)
