@@ -21,8 +21,10 @@ on:
       - 'docs/CURRENT_RECOVERY_TO_99.md'
       - 'benchmarks/token_economy_rc1_benchmark.py'
       - 'benchmarks/token_economy_frozen_corpus.py'
+      - 'benchmarks/token_economy_provider_replay.py'
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_token_economy_frozen_corpus.py'
+      - 'tests/runtime/test_token_economy_provider_replay.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
@@ -53,8 +55,10 @@ on:
       - 'docs/CURRENT_RECOVERY_TO_99.md'
       - 'benchmarks/token_economy_rc1_benchmark.py'
       - 'benchmarks/token_economy_frozen_corpus.py'
+      - 'benchmarks/token_economy_provider_replay.py'
       - 'tests/runtime/test_token_economy_rc1_runtime.py'
       - 'tests/runtime/test_token_economy_frozen_corpus.py'
+      - 'tests/runtime/test_token_economy_provider_replay.py'
       - 'tests/runtime/test_agent_product_completion.py'
       - 'tests/runtime/test_agent_retrieval.py'
       - 'tests/runtime/test_retry_economics.py'
@@ -128,6 +132,7 @@ jobs:
             syntavra_runtime/provider_call_observation.py \
             tests/runtime/test_token_economy_rc1_runtime.py \
             tests/runtime/test_token_economy_frozen_corpus.py \
+            tests/runtime/test_token_economy_provider_replay.py \
             tests/runtime/test_agent_product_completion.py \
             tests/runtime/test_agent_retrieval.py \
             tests/runtime/test_retry_economics.py \
@@ -135,6 +140,7 @@ jobs:
             tests/runtime/test_inference_skip_cache.py \
             benchmarks/token_economy_rc1_benchmark.py \
             benchmarks/token_economy_frozen_corpus.py \
+            benchmarks/token_economy_provider_replay.py \
             tools/certify_recovery_to_99.py
 
       - name: Run constant-context product regression
@@ -146,10 +152,11 @@ jobs:
           python -m unittest tests.runtime.test_retry_economics -v
           python -m pytest tests/runtime/test_p0_p4_runtime_consolidation.py -q
 
-      - name: Prove executable portable B0-B9 corpus
+      - name: Prove executable portable B0-B9 corpus and replay plan
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_token_economy_frozen_corpus -v
+          python -m unittest tests.runtime.test_token_economy_provider_replay -v
           corpus_root="$(mktemp -d)"
           python benchmarks/token_economy_frozen_corpus.py \
             "$corpus_root/corpus" \
