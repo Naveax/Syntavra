@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from syntavra_runtime.agent_runtime import AgentContextAssembler, GatewayPatchProvider
+from syntavra_runtime.agent_runtime import GatewayPatchProvider
 from syntavra_runtime.autonomous_agent import AgentMode, AgentTask
 from syntavra_runtime.evidence import EvidenceStore
 from syntavra_runtime.tool_externalization import ToolOutputExternalizer
@@ -117,7 +118,7 @@ class QueryPushdownGatewayTests(unittest.TestCase):
             gateway = Gateway(
                 [
                     '{"action":"search_reduce","query":"function","operator":"count","fields":["kind"],"filters":{"kind":"function"}}',
-                    '{"action":"patch","patch":' + __import__("json").dumps(PATCH) + ',"rationale":"done"}',
+                    '{"action":"patch","patch":' + json.dumps(PATCH) + ',"rationale":"done"}',
                 ]
             )
             provider = GatewayPatchProvider(
@@ -145,11 +146,22 @@ class QueryPushdownGatewayTests(unittest.TestCase):
             self.assertTrue(evidence.verify(reduction_trace["source_exact"]))
             exact_raw = evidence.get(reduction_trace["source_exact"]).decode("utf-8")
             self.assertIn(SECRET, exact_raw)
+
             second_packet = "\n".join(
                 str(message.get("content") or "") for message in gateway.calls[1]["messages"]
             )
             self.assertNotIn(SECRET, second_packet)
-            self.assertIn('"count":2', second_packet.replace(" ", ""))
+            compiled = json.loads(second_packet)
+            reduction_items = [
+                item
+                for item in compiled.get("active_evidence", [])
+                if str(item.get("key") or "").startswith("repo.search_reduce:")
+            ]
+            self.assertEqual(len(reduction_items), 1, compiled)
+            reduction_evidence = json.loads(str(reduction_items[0]["evidence"]))
+            self.assertEqual(reduction_evidence["value"]["count"], 2)
+            self.assertEqual(reduction_evidence["source_exact"], reduction_trace["source_exact"])
+            self.assertTrue(evidence.verify(str(reduction_items[0]["exact"])))
             self.assertIn(reduction_trace["source_exact"], second_packet)
 
     def test_search_reduce_fails_closed_without_exact_externalizer(self) -> None:

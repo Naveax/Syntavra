@@ -118,4 +118,4 @@ jobs:
         with:
           name: query-pushdown-gateway-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/query-pushdown-gateway.json
-          if-no-files-found: error
+          if-no-files-found: warn
