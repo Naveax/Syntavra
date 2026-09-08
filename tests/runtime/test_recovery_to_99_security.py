@@ -130,24 +130,37 @@ class RecoveryTo99SecurityTests(unittest.TestCase):
                 ledger.paired_token_comparison(task_id="pair", baseline_arm="baseline", candidate_arm="candidate")
 
     def test_active_context_count_is_hard_bounded_under_churn(self) -> None:
-        state = ConstantContextState(max_active=3, max_causal=5, preview_limit_bytes=256)
-        for index in range(100):
-            state.ingest(
-                key=f"read:{index}",
-                tool="repo.read",
-                raw=(f"value={index}\n" * 30),
-                round_number=index + 1,
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, engine = self._externalizer(root, "bounded-churn")
+            state = ConstantContextState(
+                externalizer=engine,
+                scope_key="bounded-churn",
+                max_active=3,
+                max_causal=5,
+                preview_limit_bytes=256,
             )
-        self.assertLessEqual(len(state.active), 3)
-        self.assertLessEqual(len(state.causal), 5)
-        compiled = state.compile(
-            {"instruction": "preserve exact requirement"},
-            counter=ProviderTokenCounter("sequence"),
-            token_budget=6000,
-            byte_budget=24000,
-        )
-        self.assertLessEqual(compiled.tokens, 6000)
-        self.assertLessEqual(compiled.visible_bytes, 24000)
+            for index in range(100):
+                state.ingest(
+                    key=f"read:{index}",
+                    tool="repo.read",
+                    raw=(f"value={index}\n" * 30),
+                    round_number=index + 1,
+                    path=f"src/module_{index}.py",
+                    metadata={"start_line": 1, "end_line": 30},
+                )
+            self.assertLessEqual(len(state.active), 3)
+            self.assertLessEqual(len(state.causal), 5)
+            self.assertTrue(all(receipt.exact_handle for receipt in state.active))
+            self.assertTrue(any(row.get("status") == "EVICTED_TO_HANDLE" for row in state.causal))
+            compiled = state.compile(
+                {"instruction": "preserve exact requirement"},
+                counter=ProviderTokenCounter("sequence"),
+                token_budget=6000,
+                byte_budget=24000,
+            )
+            self.assertLessEqual(compiled.tokens, 6000)
+            self.assertLessEqual(compiled.visible_bytes, 24000)
 
 
 if __name__ == "__main__":
