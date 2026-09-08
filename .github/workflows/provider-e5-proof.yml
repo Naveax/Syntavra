@@ -11,6 +11,7 @@ on:
       - 'tests/runtime/test_provider_e5.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
       - 'tools/certify_provider_e5.py'
+      - 'tools/certify_provider_multi_scope.py'
       - '.github/workflows/provider-e5-proof.yml'
   push:
     branches: [main]
@@ -22,12 +23,18 @@ on:
       - 'tests/runtime/test_provider_e5.py'
       - 'tests/runtime/test_token_economy_provider_replay.py'
       - 'tools/certify_provider_e5.py'
+      - 'tools/certify_provider_multi_scope.py'
       - '.github/workflows/provider-e5-proof.yml'
   workflow_dispatch:
     inputs:
       arms_path:
-        description: 'Repository path to an exact two-arm provider-observed SignalBench configuration'
+        description: 'Primary repository path to an exact two-arm provider-observed SignalBench configuration'
         required: true
+        type: string
+      secondary_arms_path:
+        description: 'Optional independent provider/model two-arm configuration for 10/10 multi-scope superiority proof'
+        required: false
+        default: ''
         type: string
       repetitions:
         description: 'Repetitions per frozen workload variant (minimum 3)'
@@ -35,7 +42,12 @@ on:
         default: '3'
         type: string
       require_superiority:
-        description: 'Fail unless the hardened comparator proves scoped paired superiority'
+        description: 'Fail unless the primary hardened comparator proves scoped paired superiority'
+        required: true
+        default: false
+        type: boolean
+      require_multi_scope:
+        description: 'Fail unless primary + secondary raw replays prove independent multi-scope superiority'
         required: true
         default: false
         type: boolean
@@ -66,12 +78,16 @@ jobs:
           python-version: '3.12'
       - name: Install runtime
         run: python -m pip install -e .
-      - name: Prove E5 and superiority claim separation
+      - name: Prove E5, workload non-regression, and multi-scope claim semantics
         run: |
           set -euo pipefail
           python -m unittest tests.runtime.test_provider_e5 -v
           python -m unittest tests.runtime.test_token_economy_provider_replay -v
-          python -m compileall -q syntavra_runtime/provider_e5.py tools/certify_provider_e5.py benchmarks/token_economy_provider_replay.py
+          python -m compileall -q \
+            syntavra_runtime/provider_e5.py \
+            tools/certify_provider_e5.py \
+            tools/certify_provider_multi_scope.py \
+            benchmarks/token_economy_provider_replay.py
       - name: Enforce clean exact head
         if: always()
         run: |
@@ -84,7 +100,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: contract-gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - name: Checkout dispatched exact head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -97,7 +113,7 @@ jobs:
           python-version: '3.12'
       - name: Install runtime
         run: python -m pip install -e .
-      - name: Execute frozen B0-B9 paired provider replay
+      - name: Execute primary frozen B0-B9 paired provider replay
         shell: bash
         env:
           E5_ARMS_PATH: ${{ inputs.arms_path }}
@@ -114,36 +130,88 @@ jobs:
           test "$E5_REPETITIONS" -ge 3
           test -f "$E5_ARMS_PATH"
           python benchmarks/token_economy_provider_replay.py \
-            --corpus-root "${RUNNER_TEMP}/provider-e5-corpus" \
-            --run-root "${RUNNER_TEMP}/provider-e5-runs" \
+            --corpus-root "${RUNNER_TEMP}/provider-e5-corpus-primary" \
+            --run-root "${RUNNER_TEMP}/provider-e5-runs-primary" \
             --arms "$E5_ARMS_PATH" \
             --repetitions "$E5_REPETITIONS" \
             --seed 20260908 \
             --execute \
-            --output "${RUNNER_TEMP}/provider-e5-replay.json"
-      - name: Certify E5 provider evidence
+            --output "${RUNNER_TEMP}/provider-e5-replay-primary.json"
+      - name: Execute optional independent secondary provider/model scope
+        if: inputs.secondary_arms_path != ''
+        shell: bash
+        env:
+          E5_SECONDARY_ARMS_PATH: ${{ inputs.secondary_arms_path }}
+          E5_REPETITIONS: ${{ inputs.repetitions }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -f "$E5_SECONDARY_ARMS_PATH"
+          python benchmarks/token_economy_provider_replay.py \
+            --corpus-root "${RUNNER_TEMP}/provider-e5-corpus-secondary" \
+            --run-root "${RUNNER_TEMP}/provider-e5-runs-secondary" \
+            --arms "$E5_SECONDARY_ARMS_PATH" \
+            --repetitions "$E5_REPETITIONS" \
+            --seed 20260909 \
+            --execute \
+            --output "${RUNNER_TEMP}/provider-e5-replay-secondary.json"
+      - name: Certify primary E5 provider evidence
         run: |
           set -euo pipefail
           python tools/certify_provider_e5.py \
-            "${RUNNER_TEMP}/provider-e5-replay.json" \
+            "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
             --require-e5 \
-            --output "${RUNNER_TEMP}/provider-e5-certificate.json"
-      - name: Enforce optional scoped superiority gate
+            --output "${RUNNER_TEMP}/provider-e5-certificate-primary.json"
+      - name: Certify optional secondary E5 provider evidence
+        if: inputs.secondary_arms_path != ''
+        run: |
+          set -euo pipefail
+          python tools/certify_provider_e5.py \
+            "${RUNNER_TEMP}/provider-e5-replay-secondary.json" \
+            --require-e5 \
+            --output "${RUNNER_TEMP}/provider-e5-certificate-secondary.json"
+      - name: Enforce optional primary scoped superiority gate
         if: inputs.require_superiority
         run: |
           set -euo pipefail
           python tools/certify_provider_e5.py \
-            "${RUNNER_TEMP}/provider-e5-replay.json" \
+            "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
             --require-e5 \
             --require-superiority \
-            --output "${RUNNER_TEMP}/provider-e5-superiority-certificate.json"
+            --output "${RUNNER_TEMP}/provider-e5-superiority-primary.json"
+      - name: Certify multi-scope 10/10 superiority gate
+        if: inputs.secondary_arms_path != ''
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${{ inputs.require_multi_scope }}" = "true" ]; then extra+=(--require-multi-scope); fi
+          python tools/certify_provider_multi_scope.py \
+            "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
+            "${RUNNER_TEMP}/provider-e5-replay-secondary.json" \
+            --minimum-scopes 2 \
+            --output "${RUNNER_TEMP}/provider-e5-multi-scope.json" \
+            "${extra[@]}"
+      - name: Reject impossible required multi-scope request without a second scope
+        if: inputs.require_multi_scope && inputs.secondary_arms_path == ''
+        run: |
+          echo 'require_multi_scope=true requires secondary_arms_path' >&2
+          exit 7
       - name: Upload E5 evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: provider-e5-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/provider-e5-replay.json
-            ${{ runner.temp }}/provider-e5-certificate.json
-            ${{ runner.temp }}/provider-e5-superiority-certificate.json
+            ${{ runner.temp }}/provider-e5-replay-primary.json
+            ${{ runner.temp }}/provider-e5-replay-secondary.json
+            ${{ runner.temp }}/provider-e5-certificate-primary.json
+            ${{ runner.temp }}/provider-e5-certificate-secondary.json
+            ${{ runner.temp }}/provider-e5-superiority-primary.json
+            ${{ runner.temp }}/provider-e5-multi-scope.json
           if-no-files-found: warn
