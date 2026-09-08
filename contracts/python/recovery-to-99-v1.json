@@ -6,13 +6,14 @@
   "roadmap_freeze": true,
   "no_new_frontier_until_recovery_gate": true,
   "no_new_capability_namespace": true,
-  "objective": "earn 9.9+ evidence-backed quality across architecture, token economics, security, runtime, provider proof, benchmark, CI, roadmap, roadmap/code ratio, product potential and readiness without converting estimates into claims",
+  "objective": "earn evidence-backed 10.0 quality across architecture, token economics, security, runtime, provider proof, benchmark, CI, roadmap, roadmap/code ratio, product potential and readiness without converting estimates or plans into claims",
   "scoring_policy": {
-    "target_minimum": 9.9,
+    "target_minimum": 10.0,
     "self_reported_target_is_not_evidence": true,
     "score_may_not_exceed_9_8_when_any_required_gate_is_open": true,
     "provider_proof_score_may_not_exceed_5_0_without_paired_provider_observed_receipts": true,
     "readiness_score_may_not_exceed_8_0_without_provider_proof_and_all_required_ci": true,
+    "external_superiority_score_may_not_reach_10_0_without_two_independent_provider_model_scopes": true,
     "component_percentages_are_non_additive": true,
     "local_tokenizer_counts_are_not_provider_billed_proof": true,
     "provider_call_avoidance_requires_pre_inference_receipt_or_exact_replay_proof": true,
@@ -37,7 +38,7 @@
   ],
   "areas": {
     "architecture": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "all_active_features_have_one_canonical_owner",
         "duplicate_persistent_store_count_zero",
@@ -47,7 +48,7 @@
       ]
     },
     "token_economics": {
-      "target": 9.9,
+      "target": 10.0,
       "primary_kpi": "verified_provider_cost_per_successful_task",
       "required_gates": [
         "provider_visible_mass_attribution_at_least_95_percent",
@@ -59,19 +60,21 @@
       ]
     },
     "security": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "mandatory_user_instruction_never_silently_truncated",
         "security_failure_and_verifier_evidence_never_silently_suppressed",
         "exact_recovery_coverage_100_percent_for_evicted_evidence",
         "stale_or_cross_scope_inference_reuse_false_success_zero",
-        "property_and_fuzz_suites_cover_handles_deltas_cache_and_swir",
+        "seeded_property_matrix_required_by_recovery_and_release_gates",
+        "native_sandbox_capability_probed_not_inferred_from_binary_presence",
+        "strict_native_probe_failure_is_fail_closed",
         "retrieval_projection_and_filter_policy_validated_before_graph_access",
         "uncertainty_fails_closed_to_exact_or_natural_path"
       ]
     },
     "runtime": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "agent_loop_recompiles_constant_context_each_round",
         "historical_raw_tool_result_replay_zero",
@@ -83,11 +86,12 @@
         "query_pushdown_tool_chain_fusion_and_verified_inference_skip_integrated",
         "retry_economics_uses_exact_failure_plus_workspace_state_before_provider_call",
         "same_failure_on_changed_exact_state_remains_repairable",
-        "uncertain_workspace_equivalence_never_suppresses_provider_inference"
+        "uncertain_workspace_equivalence_never_suppresses_provider_inference",
+        "sandbox_backend_admission_requires_runtime_capability_probe"
       ]
     },
     "provider_proof": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "paired_provider_observed_baseline_and_candidate_receipts",
         "same_model_provider_task_repo_verifier_and_effort_within_pair",
@@ -95,12 +99,13 @@
         "provider_request_or_response_identity_present",
         "fresh_cached_reasoning_and_output_tokens_recorded_when_provider_exposes_them",
         "frozen_replay_pair_identity_has_zero_issues",
+        "arm_versions_stable_and_bound_into_e5_scope",
         "public_savings_claims_resolve_to_receipt_ids",
         "local_estimates_and_replay_plans_never_upgrade_claim_level"
       ]
     },
     "benchmark": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "frozen_deterministic_repeat_workload",
         "frozen_tiny_edit_workload",
@@ -115,25 +120,29 @@
         "workload_variant_schedule_matches_contract_exactly",
         "provider_replay_plan_uses_same_frozen_task_identity_for_both_arms",
         "component_end_to_end_and_long_session_results_separated",
+        "workload_level_non_regression_required_for_superiority",
+        "multi_scope_superiority_requires_two_independent_provider_model_scopes",
         "pareto_report_uses_verified_success_and_total_provider_cost"
       ]
     },
     "ci": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "all_relevant_required_checks_green_on_exact_head",
         "constant_context_rc1_suite_required",
         "retry_economics_exact_state_regression_required",
         "executable_frozen_corpus_and_provider_replay_plan_regression_required",
-        "security_and_exact_recovery_regressions_required",
+        "security_sandbox_and_exact_recovery_property_regressions_required",
         "provider_contract_and_public_surface_regressions_required",
+        "provider_e5_claim_semantics_required",
         "token_economy_regression_smoke_required",
+        "release_gate_reproves_recovery_critical_security_and_runtime_tests",
         "no_duplicate_workflow_dispatch_for_same_sha_workflow_input",
         "regression_artifacts_bound_to_exact_head"
       ]
     },
     "roadmap": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "recovery_authority_is_current_execution_entrypoint",
         "new_frontier_versions_frozen_until_recovery_gate",
@@ -143,7 +152,7 @@
       ]
     },
     "roadmap_code_ratio": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "code_first_recovery_mode_active",
         "new_research_frontier_count_zero_during_recovery",
@@ -153,7 +162,7 @@
       ]
     },
     "product_potential": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "narrow_mvp_solves_real_coding_tasks_end_to_end",
         "mvp_reduces_verified_provider_cost_on_multiple_workload_families",
@@ -163,11 +172,12 @@
       ]
     },
     "readiness": {
-      "target": 9.9,
+      "target": 10.0,
       "required_gates": [
         "architecture_runtime_security_and_measurement_gates_closed",
         "provider_proof_and_benchmark_gates_closed",
         "all_relevant_required_ci_green",
+        "release_gate_reproves_recovery_and_exact_head_integrity",
         "dogfood_runs_have_no_unexplained_provider_overflow",
         "rollback_and_failure_receipts_verified",
         "release_candidate_has_no_known_p0_or_p1_correctness_blocker"
@@ -197,17 +207,24 @@
     "executable_portable_b0_b9_frozen_corpus",
     "contract_driven_provider_replay_planner",
     "provider_replay_pair_identity_fail_closed_validation",
-    "explicit_credential_values_forbidden_in_replay_arm_files"
+    "explicit_credential_values_forbidden_in_replay_arm_files",
+    "provider_e5_scope_and_arm_version_binding",
+    "workload_level_superiority_non_regression",
+    "multi_scope_external_superiority_10_gate",
+    "native_sandbox_runtime_capability_probe",
+    "seeded_recovery_property_matrix_in_promotion_gate",
+    "exact_head_release_integrity_generated_manifest_receipt",
+    "release_gate_reproves_recovery_security_runtime_and_e5_semantics"
   ],
   "open_blockers_after_rc1_runtime_surgery": [
     "real_paired_provider_billed_receipts_not_yet_collected",
-    "full_property_and_fuzz_matrix_not_yet_complete",
+    "two_independent_provider_model_superiority_scopes_not_yet_collected",
     "all_exact_head_ci_must_be_rechecked_after_recovery_commits",
-    "b0_b9_provider_replay_execution_and_dogfood_not_yet_completed",
+    "b0_b9_live_provider_replay_execution_and_dogfood_not_yet_completed",
     "release_candidate_zero_p0_p1_blocker_gate_not_yet_proven"
   ],
   "non_blocking_post_99_hardening": [
     "parameterized_verified_macro_compiler_with_callable_implementation_fingerprints"
   ],
-  "claim_boundary": "this contract defines gates and records implemented recovery work; replay planning is not provider proof and the 9.9 targets remain unachieved until the external receipt and release gates close"
+  "claim_boundary": "this contract defines the evidence-backed 10.0 promotion gates and records implemented recovery work; local estimates, replay planning and self-scoring do not satisfy provider or superiority proof, and the 10.0 targets remain unachieved until external receipts, exact-head CI, dogfood and release gates close"
 }
