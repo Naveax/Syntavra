@@ -47,7 +47,7 @@
   "contract_freeze": {
     "mode": "registry-derived-certified-python-contracts-completion-projection-v1",
     "expected_contract_count": 20,
-    "expected_sha256": "1e36d28b7958b64b21916b83b0a8cfdd5d9f963fcf9351fc8ab54e496b806dbe",
+    "expected_sha256": "6d91bad89df7ff7af79830070f6d56cc3c521b8542e7e12cf07a99e8b9e27b0a",
     "self_contract_excluded": true,
     "external_evidence_excluded": true,
     "registry_projection": "completion-relevant-fields-and-required-capabilities-v1",

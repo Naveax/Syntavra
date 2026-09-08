@@ -37,6 +37,8 @@ on:
       - 'tests/runtime/test_recovery_to_99_property_matrix.py'
       - 'tests/runtime/test_sandbox_capability_probe.py'
       - 'tests/runtime/test_inference_skip_cache.py'
+      - 'tests/runtime/test_pre_model_ingestion_fold_gate.py'
+      - 'tests/runtime/test_active_context_supersession_graph.py'
       - 'tools/certify_provider_e5.py'
       - 'tools/certify_release_readiness.py'
       - 'tools/certify_recovery_to_99.py'
@@ -80,6 +82,8 @@ on:
       - 'tests/runtime/test_recovery_to_99_property_matrix.py'
       - 'tests/runtime/test_sandbox_capability_probe.py'
       - 'tests/runtime/test_inference_skip_cache.py'
+      - 'tests/runtime/test_pre_model_ingestion_fold_gate.py'
+      - 'tests/runtime/test_active_context_supersession_graph.py'
       - 'tools/certify_provider_e5.py'
       - 'tools/certify_release_readiness.py'
       - 'tools/certify_recovery_to_99.py'
@@ -165,6 +169,8 @@ jobs:
             tests/runtime/test_recovery_to_99_property_matrix.py \
             tests/runtime/test_sandbox_capability_probe.py \
             tests/runtime/test_inference_skip_cache.py \
+            tests/runtime/test_pre_model_ingestion_fold_gate.py \
+            tests/runtime/test_active_context_supersession_graph.py \
             benchmarks/token_economy_rc1_benchmark.py \
             benchmarks/token_economy_frozen_corpus.py \
             benchmarks/token_economy_provider_replay.py \
@@ -179,6 +185,8 @@ jobs:
           python -m unittest tests.runtime.test_agent_product_completion -v
           python -m unittest tests.runtime.test_agent_retrieval -v
           python -m unittest tests.runtime.test_retry_economics -v
+          python -m unittest tests.runtime.test_pre_model_ingestion_fold_gate -v
+          python -m unittest tests.runtime.test_active_context_supersession_graph -v
           python -m pytest tests/runtime/test_p0_p4_runtime_consolidation.py -q
 
       - name: Prove executable portable B0-B9 corpus and E5/readiness proof semantics

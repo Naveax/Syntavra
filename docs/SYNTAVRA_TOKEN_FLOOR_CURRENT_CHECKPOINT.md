@@ -36,7 +36,7 @@ A workload may have a higher safe floor. Quality/verifier/security/exact-recover
 
 ### TE-P0-01 Pre-Model Ingestion Fold Gate
 
-Implementation candidate is now present on the active branch.
+Exact-head CI admitted on the active branch.
 
 Canonical implementation note:
 
@@ -61,9 +61,38 @@ Implemented boundary:
 - deterministic repeated-recall accounting and capped warm leases;
 - unchanged-result zero-preview attribution.
 
+### TE-P0-02 Active Context Supersession Graph
+
+Implementation candidate is now present on the active branch and must pass exact-head CI before admission.
+
+Canonical implementation note:
+
+- `docs/TE_P0_02_ACTIVE_CONTEXT_SUPERSESSION_GRAPH.md`
+
+Dedicated regression coverage:
+
+- `tests/runtime/test_active_context_supersession_graph.py`
+
+Dedicated exact-head workflow:
+
+- `.github/workflows/token-economy-deterministic-foundations.yml`
+
+Implemented boundary:
+
+- logical evidence streams are derived conservatively from actual view identity rather than caller keys;
+- complete read/search/diff/impact/verifier views can supersede prior versions;
+- incomplete search/query-shape metadata disables cross-generation supersession;
+- recoverable stale bodies collapse to `SUPERSEDED_TO_HANDLE` receipts;
+- mandatory failure/security/verifier evidence remains pinned;
+- unrecoverable evidence remains pinned;
+- invalidation fingerprints are attributed without being abused as equivalence;
+- stale exact-recall bodies are removed when their canonical stream advances;
+- capacity pressure never evicts the newest canonical state merely because older pinned evidence exists;
+- compile-time provider budgets remain fail-closed.
+
 Provider-savings claims remain closed until paired provider-observed evidence passes the existing proof gates.
 
-Next deterministic target after exact-head CI admission: `TE-P0-02 Active Context Supersession Graph`.
+Next deterministic target after TE-P0-02 exact-head admission: no-change elision hardening, followed by the remaining constant-context/query-pushdown/inference-skip deterministic prerequisites already ordered by the execution backlog.
 
 ## Current V5 continuation: TE-U30..U36
 
@@ -104,4 +133,4 @@ After V5 certification, floor search may probe below `25`, `150`, `750` and `2,5
 
 ## Next session
 
-Do not start V5 before deterministic prerequisites are closed. Continue with `TE-P0-02 Active Context Supersession Graph`; preserve raw exact artifacts and mandatory evidence pinning introduced by TE-P0-01. After the deterministic P0/P1 prerequisites are admitted, begin V5 with Zero-Token Memory Engine and Reacquisition Tax Governor.
+First require exact-head admission of `TE-P0-02 Active Context Supersession Graph`. If it is green, continue with no-change elision hardening while preserving exact raw artifacts, conservative logical-view identity and mandatory evidence pinning. After the deterministic P0/P1 prerequisites are admitted, begin V5 with Zero-Token Memory Engine and Reacquisition Tax Governor.
