@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "family": "token-economy-p0-07-cache-eviction-governor",
+  "claim": "TE_P0_07_CACHE_BREAK_EVEN_EVICTION_GOVERNOR_V1",
+  "strict": true,
+  "runtime": "syntavra_runtime/prompt_cache_optimizer.py",
+  "state": {
+    "plans": "cache/plans.json",
+    "governance": "cache/governance.json",
+    "governance_is_separate_from_plan_parity_surface": true,
+    "receipt_limit": 256
+  },
+  "decision_inputs": [
+    "reuse_probability",
+    "ttl_seconds",
+    "rebuild_cost_tokens",
+    "max_entries"
+  ],
+  "value_order": "reuse_probability * rebuild_cost_tokens * remaining_ttl_seconds",
+  "invariants": {
+    "expired_entries_reclaimed": true,
+    "capacity_is_bounded": true,
+    "lowest_value_evicted_first": true,
+    "tie_break_is_cache_key_lexicographic": true,
+    "machine_readable_receipts": true,
+    "receipts_are_bounded": true,
+    "invalid_reuse_probability_fails_closed": true,
+    "plans_json_public_shape_preserved": true
+  },
+  "prerequisite": {
+    "te_p0_06_owner": "syntavra_runtime/cache_provider_budget.py:CacheProviderBudgetEngine",
+    "te_p0_06_regression": "tests/runtime/test_cache_provider_budget_v1.py",
+    "te_p0_06_certifier": "tools/certify_cache_provider_budget_v1.py"
+  },
+  "claim_boundary": "This contract certifies deterministic local prompt-cache admission/eviction ordering and bounded governance receipts. It does not claim provider-billed savings, live provider cache retention, or external superiority."
+}
