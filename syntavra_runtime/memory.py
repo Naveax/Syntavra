@@ -262,8 +262,9 @@ class PersistentMemory:
             if memory_ids:
                 placeholders = ",".join("?" for _ in memory_ids)
                 reactivated = db.execute(
-                    f"UPDATE memories SET superseded_by=NULL WHERE superseded_by IN ({placeholders})",
-                    memory_ids,
+                    f"UPDATE memories SET superseded_by=NULL "
+                    f"WHERE superseded_by IN ({placeholders}) AND memory_id NOT IN ({placeholders})",
+                    [*memory_ids, *memory_ids],
                 ).rowcount
                 db.execute(
                     f"DELETE FROM memory_relations WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",

@@ -87,6 +87,20 @@ class ZeroTokenMemoryEngineTests(unittest.TestCase):
             self.assertEqual(result["results"][0]["memory_id"], old.memory_id)
             self.assertIsNone(result["results"][0]["superseded_by"])
 
+    def test_same_batch_expiry_does_not_report_deleted_predecessor_as_reactivated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            engine = self._engine(Path(temp))
+            now = time.time()
+            old = engine.memory.add("decision", "expired predecessor", expires_at=now - 2)
+            new = engine.memory.add("decision", "expired replacement", expires_at=now - 1)
+            engine.memory.supersede(old.memory_id, new.memory_id)
+
+            maintenance = engine.maintain(now=now)
+            self.assertEqual(maintenance["memory_deleted"], 2)
+            self.assertEqual(maintenance["reactivated_superseded"], 0)
+            self.assertEqual(engine.search("expired predecessor")["results"], [])
+            self.assertEqual(engine.search("expired replacement")["results"], [])
+
     def test_rebuild_index_is_local_and_provider_free(self):
         with tempfile.TemporaryDirectory() as temp:
             engine = self._engine(Path(temp))
