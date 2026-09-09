@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -12,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -36,6 +37,14 @@ _FORWARD_HEADERS = {
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 _HEADER_NAME_RE = re.compile(r"^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$")
 _MAX_HEADER_VALUE_BYTES = 8192
+_NATIVE_TOOL_SEARCH_MODES = frozenset(
+    {"off", "auto", "anthropic-bm25", "anthropic-regex", "openai-hosted"}
+)
+_ANTHROPIC_TOOL_SEARCH_MODEL_RE = re.compile(
+    r"claude-(?:opus|sonnet|haiku)-(?:4-[5-9]|[5-9](?:[.-]|$))"
+    r"|claude-(?:fable|mythos)-[5-9](?:[.-]|$)",
+    re.IGNORECASE,
+)
 
 
 def _validated_header_name(value: str) -> str:
@@ -68,6 +77,25 @@ def _new_request_id() -> str:
     return "sc-" + uuid.uuid4().hex
 
 
+def _openai_tool_search_model_supported(model: str) -> bool:
+    value = str(model).strip().casefold()
+    if not value or value == "chat-latest":
+        return False
+    if value == "gpt-5.6" or value.startswith("gpt-5.6-sol"):
+        return True
+    if value.startswith("gpt-6-astra"):
+        return True
+    if value == "gpt-5.5" or value.startswith("gpt-5.5-"):
+        return "-pro" not in value
+    if value == "gpt-5.4" or value.startswith("gpt-5.4-"):
+        return "-nano" not in value and "-mini" not in value
+    return False
+
+
+def _anthropic_tool_search_model_supported(model: str) -> bool:
+    return bool(_ANTHROPIC_TOOL_SEARCH_MODEL_RE.search(str(model).strip()))
+
+
 @dataclass(frozen=True)
 class ProxyConfig:
     provider: str
@@ -95,6 +123,8 @@ class ProxyConfig:
     drain_timeout_seconds: float = 30.0
     block_secret_outputs: bool = True
     block_prompt_injection_outputs: bool = True
+    native_tool_search: str = "off"
+    native_tool_search_benchmark_admitted: bool = False
 
     def validate(self) -> None:
         if self.listen_port < 0 or self.listen_port > 65535:
@@ -107,6 +137,8 @@ class ProxyConfig:
             raise ValueError("max_concurrent_requests must be positive")
         if self.cache_policy not in {"off", "auto", "read", "read-write"}:
             raise ValueError("invalid cache_policy")
+        if self.native_tool_search not in _NATIVE_TOOL_SEARCH_MODES:
+            raise ValueError("invalid native_tool_search mode")
         if self.stream_mode not in {"commit-before-forward"}:
             raise ValueError("only fail-closed commit-before-forward streaming is supported")
         parsed = urllib.parse.urlsplit(self.upstream_base)
@@ -212,6 +244,125 @@ class ProviderProxyRuntime:
         if canonical == "gemini":
             return "x-goog-api-key", ""
         return "Authorization", "Bearer "
+
+    @staticmethod
+    def tool_search_capability(provider: str, model: str) -> dict[str, Any]:
+        normalized = str(provider).strip().casefold()
+        canonical = ProviderGateway.capabilities(provider)["provider"]
+        if normalized in {"anthropic", "claude"} and canonical == "anthropic":
+            supported = _anthropic_tool_search_model_supported(model)
+            return {
+                "provider": canonical,
+                "model": str(model),
+                "supported": supported,
+                "native_mode": "anthropic-bm25" if supported else "portable",
+                "reason": "anthropic-model-supported" if supported else "anthropic-model-unsupported",
+            }
+        if normalized in {"openai", "responses"} and canonical == "openai":
+            supported = _openai_tool_search_model_supported(model)
+            return {
+                "provider": canonical,
+                "model": str(model),
+                "supported": supported,
+                "native_mode": "openai-hosted" if supported else "portable",
+                "reason": "openai-model-supported" if supported else "openai-model-unsupported",
+            }
+        return {
+            "provider": canonical,
+            "model": str(model),
+            "supported": False,
+            "native_mode": "portable",
+            "reason": "provider-native-tool-search-not-admitted",
+        }
+
+    def _native_tool_search_payload(self, payload: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+        prepared = copy.deepcopy(dict(payload))
+        mode = self.config.native_tool_search
+        if mode == "off":
+            return prepared, []
+        if not self.config.native_tool_search_benchmark_admitted:
+            return prepared, ["native-tool-search-not-benchmark-admitted"]
+
+        model = str(prepared.get("model") or "")
+        capability = self.tool_search_capability(self.config.provider, model)
+        if not capability["supported"]:
+            return prepared, ["native-tool-search-model-unsupported", "portable-tool-discovery-preserved"]
+        tools = prepared.get("tools")
+        if not isinstance(tools, list) or not tools:
+            return prepared, ["native-tool-search-no-tools", "portable-tool-discovery-preserved"]
+
+        canonical = str(capability["provider"])
+        if canonical == "anthropic":
+            if mode == "openai-hosted":
+                return prepared, ["native-tool-search-mode-provider-mismatch", "portable-tool-discovery-preserved"]
+            strategy = "anthropic-bm25" if mode == "auto" else mode
+            if strategy not in {"anthropic-bm25", "anthropic-regex"}:
+                return prepared, ["native-tool-search-mode-provider-mismatch", "portable-tool-discovery-preserved"]
+            search_type = (
+                "tool_search_tool_bm25_20251119"
+                if strategy == "anthropic-bm25"
+                else "tool_search_tool_regex_20251119"
+            )
+            if any(isinstance(tool, Mapping) and str(tool.get("type") or "").startswith("tool_search_tool_") for tool in tools):
+                return prepared, ["native-tool-search-already-present"]
+            rewritten: list[Any] = []
+            deferred = 0
+            conflict_preserved = False
+            for item in tools:
+                if not isinstance(item, Mapping):
+                    rewritten.append(copy.deepcopy(item))
+                    continue
+                tool = copy.deepcopy(dict(item))
+                is_client_tool = bool(tool.get("name")) and isinstance(tool.get("input_schema"), Mapping) and not tool.get("type")
+                if not is_client_tool:
+                    rewritten.append(tool)
+                    continue
+                if tool.get("cache_control") is not None:
+                    if tool.get("defer_loading") is True:
+                        raise ValueError("Anthropic deferred tool cannot retain cache_control")
+                    conflict_preserved = True
+                    rewritten.append(tool)
+                    continue
+                if "defer_loading" in tool and tool.get("defer_loading") is False:
+                    rewritten.append(tool)
+                    continue
+                tool["defer_loading"] = True
+                deferred += 1
+                rewritten.append(tool)
+            if deferred == 0:
+                return prepared, ["native-tool-search-no-eligible-tools", "portable-tool-discovery-preserved"]
+            search_name = "tool_search_tool_bm25" if strategy == "anthropic-bm25" else "tool_search_tool_regex"
+            prepared["tools"] = [{"type": search_type, "name": search_name}, *rewritten]
+            reasons = [f"native-tool-search-{strategy}", f"native-tool-search-deferred:{deferred}"]
+            if conflict_preserved:
+                reasons.append("native-tool-search-cache-control-conflict-preserved-upfront")
+            return prepared, reasons
+
+        if canonical == "openai":
+            if mode not in {"auto", "openai-hosted"}:
+                return prepared, ["native-tool-search-mode-provider-mismatch", "portable-tool-discovery-preserved"]
+            if "input" not in prepared or "messages" in prepared:
+                return prepared, ["native-tool-search-openai-responses-required", "portable-tool-discovery-preserved"]
+            if any(isinstance(tool, Mapping) and str(tool.get("type") or "") == "tool_search" for tool in tools):
+                return prepared, ["native-tool-search-already-present"]
+            rewritten = []
+            deferred = 0
+            for item in tools:
+                if not isinstance(item, Mapping):
+                    rewritten.append(copy.deepcopy(item))
+                    continue
+                tool = copy.deepcopy(dict(item))
+                is_function = str(tool.get("type") or "") == "function" and bool(tool.get("name"))
+                if is_function and not ("defer_loading" in tool and tool.get("defer_loading") is False):
+                    tool["defer_loading"] = True
+                    deferred += 1
+                rewritten.append(tool)
+            if deferred == 0:
+                return prepared, ["native-tool-search-no-eligible-tools", "portable-tool-discovery-preserved"]
+            prepared["tools"] = [*rewritten, {"type": "tool_search"}]
+            return prepared, ["native-tool-search-openai-hosted", f"native-tool-search-deferred:{deferred}"]
+
+        return prepared, ["native-tool-search-provider-unsupported", "portable-tool-discovery-preserved"]
 
     def _credential(self) -> tuple[str, str] | None:
         if not self.config.credential_env:
@@ -332,13 +483,20 @@ class ProviderProxyRuntime:
         )
 
     def _prepare(self, payload: Mapping[str, Any]) -> ProviderPlan:
-        return self.gateway.prepare(
+        prepared_payload, native_reasons = self._native_tool_search_payload(payload)
+        plan = self.gateway.prepare(
             self.config.provider,
-            payload,
-            model=str(payload.get("model") or ""),
+            prepared_payload,
+            model=str(prepared_payload.get("model") or ""),
             cache_policy=self.config.cache_policy,
             replay_ttl_seconds=self.config.replay_ttl_seconds,
             prompt_cache_ttl_seconds=self.config.prompt_cache_ttl_seconds,
+        )
+        if not native_reasons:
+            return plan
+        return replace(
+            plan,
+            reasons=tuple(dict.fromkeys([*plan.reasons, *native_reasons])),
         )
 
     def _enter(self) -> bool:
@@ -365,6 +523,10 @@ class ProviderProxyRuntime:
             "upstream_origin_hash": sha256_bytes(self.config.upstream_base.encode("utf-8")),
             "cache_policy": self.config.cache_policy,
             "stream_mode": self.config.stream_mode,
+            "native_tool_search": {
+                "mode": self.config.native_tool_search,
+                "benchmark_admitted": self.config.native_tool_search_benchmark_admitted,
+            },
             "active_requests": active,
             "gateway": self.gateway.stats(),
             "insights": self.insights.metrics(),
@@ -480,9 +642,6 @@ class ProviderProxyRuntime:
                 if not isinstance(payload, Mapping):
                     self._json(HTTPStatus.BAD_REQUEST, {"error": "provider-request-must-be-object"})
                     return
-                # Validate the request target before cache/replay lookup. Otherwise
-                # a previously cached payload could return a replay hit for an
-                # absolute-form target and bypass the fixed-origin boundary.
                 try:
                     upstream_url = runtime._upstream_url(self.path)
                 except ValueError:
