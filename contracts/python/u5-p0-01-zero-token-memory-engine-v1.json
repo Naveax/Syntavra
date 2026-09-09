@@ -1,0 +1,52 @@
+{
+  "schema_version": "syntavra.u5_p0_01.zero_token_memory_engine.v1",
+  "family": "syntavra-zero-token-memory-engine",
+  "mechanism_id": "U5-P0-01",
+  "wave": "TE-U30",
+  "status": "implementation_candidate_exact_head_admission_required",
+  "classification": "HARDEN_UNIFY",
+  "owners": [
+    "syntavra_runtime.memory.PersistentMemory",
+    "syntavra_runtime.evidence.EvidenceStore"
+  ],
+  "sources": [
+    "contracts/python/ultra-low-token-frontier-v5.json",
+    "docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md"
+  ],
+  "token_policy": {
+    "default_provider_calls": 0,
+    "default_provider_input_tokens": 0,
+    "default_provider_output_tokens": 0,
+    "default_provider_tokens": 0,
+    "learned_or_paid_maintenance_default": false
+  },
+  "authority": {
+    "raw_exact_memory": "PersistentMemory",
+    "exact_evidence": "EvidenceStore",
+    "summaries_are_authority": false,
+    "raw_distinct_values_remain_distinct": true
+  },
+  "required_operations": [
+    "ingest",
+    "dedup",
+    "search",
+    "link",
+    "ttl_maintenance",
+    "reindex"
+  ],
+  "maintenance_order": [
+    "preflight_evidence_metadata",
+    "purge_expired_authoritative_memory",
+    "release_evidence_references_for_deleted_records",
+    "reference_aware_evidence_gc",
+    "optional_local_reindex"
+  ],
+  "invariants": [
+    "RAW_EXACT_MEMORY_REMAINS_AUTHORITY",
+    "MEMORY_MAINTENANCE_PROVIDER_TOKENS_DEFAULT_TO_ZERO",
+    "EVIDENCE_GC_REMAINS_REFERENCE_AWARE",
+    "PROVIDER_WORK_IS_NOT_HIDDEN_IN_MAINTENANCE",
+    "EXPIRED_SUPERSESSION_TARGET_REACTIVATES_PREDECESSOR"
+  ],
+  "claim_boundary": "Implementation candidate until the dedicated exact-head workflow passes. This contract does not itself prove hosted-provider savings or external superiority."
+}
