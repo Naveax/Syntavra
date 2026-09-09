@@ -32,6 +32,7 @@ class CachePlan:
     refresh_after: float
     reordered: bool
     segments: tuple[CacheSegment, ...]
+    cache_profile: str = "default"
 
 
 _PROVIDER_TTLS = {
@@ -67,15 +68,29 @@ class PromptCacheOptimizer:
             return [PromptCacheOptimizer._clean(item) for item in value]
         return value
 
-    def plan(self, messages: Sequence[Mapping[str, Any]], *, provider: str, model: str, ttl_seconds: int | None = None, reorder: bool = True, now: float | None = None) -> CachePlan:
+    def plan(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        provider: str,
+        model: str,
+        ttl_seconds: int | None = None,
+        reorder: bool = True,
+        now: float | None = None,
+        cache_profile: str = "default",
+    ) -> CachePlan:
         now = time.time() if now is None else float(now)
         provider_name = provider.strip().casefold() or "unknown"
+        profile = str(cache_profile).strip() or "default"
         ttl = int(ttl_seconds or _PROVIDER_TTLS.get(provider_name, 600))
         stable_rows = [dict(row) for row in messages if self._stable_message(row)]
         volatile_rows = [dict(row) for row in messages if not self._stable_message(row)]
         ordered = [*stable_rows, *volatile_rows] if reorder else [dict(row) for row in messages]
         stable_prefix = [self._clean(row) for row in ordered[:len(stable_rows)]]
-        stable_hash = sha256_bytes(canonical_json(stable_prefix))
+        stable_material: Any = stable_prefix
+        if profile != "default":
+            stable_material = {"cache_profile": profile, "stable_prefix": stable_prefix}
+        stable_hash = sha256_bytes(canonical_json(stable_material))
         segments: list[CacheSegment] = []
         for row in ordered:
             clean = self._clean(row)
@@ -83,11 +98,19 @@ class PromptCacheOptimizer:
             stable = self._stable_message(row)
             segments.append(CacheSegment(str(row.get("role") or "unknown"), stable, len(raw), max(1, len(raw) // 4), sha256_bytes(raw), "stable-prefix" if stable else "volatile-tail"))
         plan = CachePlan(
-            provider_name, model, stable_hash, len(stable_rows), len(volatile_rows),
-            sum(item.tokens_estimate for item in segments if item.stable),
-            sum(item.tokens_estimate for item in segments if not item.stable),
-            ttl, now + ttl, now + ttl * 0.75,
-            reorder and ordered != list(messages), tuple(segments),
+            provider=provider_name,
+            model=model,
+            stable_prefix_hash=stable_hash,
+            stable_messages=len(stable_rows),
+            volatile_messages=len(volatile_rows),
+            cacheable_tokens=sum(item.tokens_estimate for item in segments if item.stable),
+            volatile_tokens=sum(item.tokens_estimate for item in segments if not item.stable),
+            ttl_seconds=ttl,
+            expires_at=now + ttl,
+            refresh_after=now + ttl * 0.75,
+            reordered=reorder and ordered != list(messages),
+            segments=tuple(segments),
+            cache_profile=profile,
         )
         self._save(plan)
         return plan
@@ -95,7 +118,7 @@ class PromptCacheOptimizer:
     def _save(self, plan: CachePlan) -> None:
         current = read_json(self.path, {}) or {}
         plans = dict(current.get("plans") or {})
-        plans[f"{plan.provider}:{plan.model}:{plan.stable_prefix_hash}"] = asdict(plan)
+        plans[f"{plan.provider}:{plan.model}:{plan.cache_profile}:{plan.stable_prefix_hash}"] = asdict(plan)
         atomic_write_json(self.path, {"plans": plans, "updated_at": time.time()})
 
     def health(self, *, now: float | None = None) -> dict[str, Any]:

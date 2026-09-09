@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "claim": "OPENAI_PROMPT_CACHE_MODERNIZATION_V1",
+  "status": "IMPLEMENTATION_CANDIDATE_EXACT_HEAD_ADMISSION_REQUIRED",
+  "authority": {
+    "python_product": true,
+    "rust_resume_allowed": false,
+    "rust_changes_required": false
+  },
+  "profiles": {
+    "openai-responses-gpt56-v1": {
+      "provider_aliases": ["openai", "responses"],
+      "minimum_model_version": "5.6",
+      "requires_responses_request_shape": true,
+      "lifetime_control": "prompt_cache_options.ttl",
+      "supported_ttl": "30m",
+      "automatic_prompt_cache_retention": false
+    },
+    "legacy": {
+      "families": ["openai-chat-legacy-v1", "openai-responses-legacy-v1", "openai-azure-legacy-v1"],
+      "lifetime_control": "prompt_cache_retention",
+      "modern_options_inherited_implicitly": false
+    }
+  },
+  "invariants": [
+    "modern_and_legacy_profiles_have_distinct_stable_prefix_fingerprints",
+    "modern_and_legacy_profiles_have_distinct_cache_keys_when_canonical_provider_model_and_request_match",
+    "mixed_prompt_cache_control_families_fail_closed",
+    "cache_write_tokens_are_persisted_as_provider_diagnostics",
+    "cache_write_tokens_are_not_added_twice_to_provider_total_tokens",
+    "non_openai_provider_cache_identity_is_not_profile_rewritten"
+  ],
+  "claim_boundary": {
+    "provider_billed_savings_proven": false,
+    "paired_provider_receipts_required": true,
+    "local_structural_tests_are_not_billing_proof": true
+  }
+}

@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .openai_prompt_cache import cache_write_tokens as _cache_write_tokens
 from .usage_receipt_ledger import normalize_provider_usage
 
 
@@ -61,10 +62,11 @@ class ProviderCallObservation:
     elapsed_ms: int
     created_at: float
     cleared_input_tokens: int = 0
+    cache_write_tokens: int = 0
 
     @property
     def provider_total_tokens(self) -> int:
-        # Cleared tokens are a provider context-editing diagnostic, not billed work.
+        # Cleared tokens are diagnostics; cache-write tokens are already a subset of input tokens.
         return self.fresh_input_tokens + self.cached_input_tokens + self.output_tokens + self.reasoning_tokens
 
 
@@ -117,6 +119,7 @@ class ProviderCallObservationLedger:
                     output_tokens INTEGER NOT NULL,
                     reasoning_tokens INTEGER NOT NULL,
                     cleared_input_tokens INTEGER NOT NULL DEFAULT 0,
+                    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
                     locally_counted_input_tokens INTEGER NOT NULL,
                     counting_method TEXT NOT NULL,
                     context_hash TEXT NOT NULL,
@@ -151,6 +154,11 @@ class ProviderCallObservationLedger:
                     "ALTER TABLE provider_call_observations "
                     "ADD COLUMN cleared_input_tokens INTEGER NOT NULL DEFAULT 0"
                 )
+            if "cache_write_tokens" not in columns:
+                db.execute(
+                    "ALTER TABLE provider_call_observations "
+                    "ADD COLUMN cache_write_tokens INTEGER NOT NULL DEFAULT 0"
+                )
 
     def record_call(
         self,
@@ -183,6 +191,7 @@ class ProviderCallObservationLedger:
         except ValueError:
             provider_observed = False
         cleared = _cleared_input_tokens(response)
+        cache_written = _cache_write_tokens(usage)
         raw_usage_json = json.dumps(usage, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
         response_hash = _sha256(_canonical(response))
         response_id_hash = _sha256(response_id.encode("utf-8")) if response_id else ""
@@ -193,14 +202,15 @@ class ProviderCallObservationLedger:
                 """
                 INSERT OR REPLACE INTO provider_call_observations(
                     task_id,arm_id,repetition,round_number,provider,model,provider_observed,
-                    fresh_input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,cleared_input_tokens,
+                    fresh_input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,cleared_input_tokens,cache_write_tokens,
                     locally_counted_input_tokens,counting_method,context_hash,response_hash,
                     response_id_hash,elapsed_ms,raw_usage_json,created_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     task_id, arm_id, int(repetition), int(round_number), str(provider), str(model), int(provider_observed),
-                    fresh, cached, output, reasoning, cleared, max(0, int(locally_counted_input_tokens)), str(counting_method),
+                    fresh, cached, output, reasoning, cleared, cache_written,
+                    max(0, int(locally_counted_input_tokens)), str(counting_method),
                     str(context_hash), response_hash, response_id_hash, max(0, int(elapsed_ms)), raw_usage_json, created_at,
                 ),
             )
@@ -227,6 +237,7 @@ class ProviderCallObservationLedger:
             elapsed_ms=max(0, int(elapsed_ms)),
             created_at=created_at,
             cleared_input_tokens=cleared,
+            cache_write_tokens=cache_written,
         )
 
     def record_outcome(
@@ -283,6 +294,7 @@ class ProviderCallObservationLedger:
                 elapsed_ms=int(row["elapsed_ms"]),
                 created_at=float(row["created_at"]),
                 cleared_input_tokens=int(row["cleared_input_tokens"]),
+                cache_write_tokens=int(row["cache_write_tokens"]),
             )
             for row in rows
         ]
@@ -302,6 +314,7 @@ class ProviderCallObservationLedger:
             "output_tokens": sum(row.output_tokens for row in rows),
             "reasoning_tokens": sum(row.reasoning_tokens for row in rows),
             "cleared_input_tokens": sum(row.cleared_input_tokens for row in rows),
+            "cache_write_tokens": sum(row.cache_write_tokens for row in rows),
             "locally_counted_input_tokens": sum(row.locally_counted_input_tokens for row in rows),
             "elapsed_ms": sum(row.elapsed_ms for row in rows),
             "counting_methods": sorted({row.counting_method for row in rows}),
