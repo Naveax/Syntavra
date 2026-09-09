@@ -17,10 +17,6 @@ from unittest.mock import patch
 from tools import certify_python_provider_proxy_reference as reference
 
 FIXTURE_RELATIVE = Path("contracts/python/provider-proxy-reference-v1.json")
-RUST_RETIRED_PYTHON_PROXY_CONFIG_FIELDS = (
-    "native_tool_search",
-    "native_tool_search_benchmark_admitted",
-)
 COVERED_ROUTES = [
     "provider capabilities",
     "provider capture",
@@ -117,46 +113,6 @@ def normalize_public_error_code(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _phase1_fixture(fixture: dict[str, Any], *, engine: str) -> dict[str, Any]:
-    """Keep retired Rust parity frozen while Python-only post-freeze fields evolve."""
-
-    if engine == "python":
-        return fixture
-    if engine != "rust":
-        raise ValueError(engine)
-    cloned = json.loads(json.dumps(fixture))
-    proxy_config = cloned.get("proxy_config")
-    if not isinstance(proxy_config, dict):
-        raise AssertionError("provider-proxy fixture is missing proxy_config")
-    fields = proxy_config.get("fields")
-    defaults = proxy_config.get("defaults")
-    if not isinstance(fields, list) or not isinstance(defaults, dict):
-        raise AssertionError("provider-proxy fixture proxy_config shape drift")
-    for field in RUST_RETIRED_PYTHON_PROXY_CONFIG_FIELDS:
-        if field not in fields or field not in defaults:
-            raise AssertionError(
-                f"retired Rust differential exclusion is stale or unproven: {field}"
-            )
-        fields.remove(field)
-        defaults.pop(field)
-    return cloned
-
-
-def _frozen_reference_projection(value: dict[str, Any]) -> dict[str, Any]:
-    """Project current Python output onto the immutable Phase-1 Rust comparison surface."""
-
-    cloned = json.loads(json.dumps(value))
-    provider_gateway = cloned.get("provider_gateway")
-    if not isinstance(provider_gateway, dict):
-        raise AssertionError("provider gateway projection missing")
-    config = provider_gateway.get("proxy_config")
-    if not isinstance(config, dict):
-        raise AssertionError("provider proxy config projection missing")
-    for field in RUST_RETIRED_PYTHON_PROXY_CONFIG_FIELDS:
-        config.pop(field, None)
-    return cloned
-
-
 def reference_projection(
     engine: str,
     *,
@@ -192,15 +148,10 @@ def reference_projection(
                 )
             )
 
-    projection_fixture = _phase1_fixture(fixture, engine=engine)
     with patch.object(reference, "_run", runner):
-        gateway = reference._provider_gateway_contract(
-            repo, project, state, projection_fixture
-        )
-        helpers = reference._helper_contract(repo, project, state, projection_fixture)
-    return _frozen_reference_projection(
-        {"provider_gateway": gateway, "helpers": helpers}
-    )
+        gateway = reference._provider_gateway_contract(repo, project, state, fixture)
+        helpers = reference._helper_contract(repo, project, state, fixture)
+    return {"provider_gateway": gateway, "helpers": helpers}
 
 
 def normalize_paths(value: Any, *, project: Path, state: Path, home: Path) -> Any:
@@ -351,18 +302,13 @@ def compare(
             "engine-specific proxy-service ExecStart launcher prefix",
             "descriptor hash recomputed from normalized descriptor",
             "frozen dynamic timestamp/receipt-hash fields already excluded by the Phase-1 authority",
-            (
-                "retired Rust Phase-1 projection excludes only Python post-freeze proxy fields: "
-                + ",".join(RUST_RETIRED_PYTHON_PROXY_CONFIG_FIELDS)
-            ),
         ],
         "claim_boundary": (
             "frozen Phase-1 provider/proxy CLI and durable-state behavior plus dry-run "
             "proxy-service lifecycle; engine-specific service launcher identity is normalized "
-            "while descriptor arguments and normalized hash integrity remain exact; Python-only "
-            "post-freeze proxy fields are explicitly excluded because the Rust product lane is "
-            "retired; live localhost transport remains certified by the separate provider-proxy "
-            "transport differential; no live provider or billing claim"
+            "while descriptor arguments and normalized hash integrity remain exact; live localhost "
+            "transport remains certified by the separate provider-proxy transport differential; "
+            "no live provider or billing claim"
         ),
     }
 
