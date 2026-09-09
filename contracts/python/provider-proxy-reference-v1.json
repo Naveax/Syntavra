@@ -58,6 +58,8 @@
       "max_buffered_response_bytes",
       "max_concurrent_requests",
       "max_request_bytes",
+      "native_tool_search",
+      "native_tool_search_benchmark_admitted",
       "prompt_cache_ttl_seconds",
       "provider",
       "replay_ttl_seconds",
@@ -91,7 +93,9 @@
       "max_concurrent_requests": 64,
       "drain_timeout_seconds": 30.0,
       "block_secret_outputs": true,
-      "block_prompt_injection_outputs": true
+      "block_prompt_injection_outputs": true,
+      "native_tool_search": "off",
+      "native_tool_search_benchmark_admitted": false
     }
   },
   "transport": {
