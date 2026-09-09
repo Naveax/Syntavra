@@ -320,6 +320,7 @@ fn build_plan(messages: &[Value], inputs: &Inputs, now: f64) -> Result<Value, St
     Ok(json!({
         "provider": provider,
         "model": inputs.model,
+        "cache_profile": "default",
         "stable_prefix_hash": stable_hash,
         "stable_messages": stable_count,
         "volatile_messages": volatile_count,
@@ -466,6 +467,7 @@ mod tests {
         )
         .expect("plan");
         assert_eq!(plan["provider"], "anthropic");
+        assert_eq!(plan["cache_profile"], "default");
         assert_eq!(plan["ttl_seconds"], 300);
         assert_eq!(plan["stable_messages"], 1);
         assert_eq!(plan["volatile_messages"], 1);
