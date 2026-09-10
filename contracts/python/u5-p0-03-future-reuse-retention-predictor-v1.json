@@ -1,0 +1,71 @@
+{
+  "schema_version": "syntavra.u5_p0_03.future_reuse_retention_predictor.v1",
+  "family": "syntavra-future-reuse-retention-predictor",
+  "mechanism_id": "U5-P0-03",
+  "wave": "TE-U31",
+  "status": "implementation_candidate_exact_head_admission_required",
+  "classification": "HARDEN_SHADOW_FIRST",
+  "owners": [
+    "syntavra_runtime.context_value_predictor.ContextValuePredictor",
+    "syntavra_runtime.reacquisition_tax.ReacquisitionTaxGovernor",
+    "syntavra_runtime.adaptive_context_policy.AdaptiveContextPolicy"
+  ],
+  "sources": [
+    "contracts/python/ultra-low-token-frontier-v5.json",
+    "docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md",
+    "docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V6.md"
+  ],
+  "retention_formula": "future_use_probability * expected_reacquisition_cost_units - carry_cost_units",
+  "label_policy": {
+    "source": "U5-P0-02 frozen drop/reacquisition accounting receipts",
+    "positive": "prior prune has later attributed reacquisition within a complete frozen horizon",
+    "negative": "prior prune has no later attributed reacquisition and the frozen horizon is explicitly complete",
+    "incomplete_horizon": "unlabeled_and_excluded",
+    "raw_context_payloads_required": false
+  },
+  "estimator": {
+    "kind": "deterministic_empirical_beta_smoothed",
+    "default_alpha": 1.0,
+    "default_beta": 1.0,
+    "default_global_probability_fallback": 0.5,
+    "reacquisition_cost": "mean positive observed cost with caller fallback when no positive observation exists",
+    "provider_calls": 0,
+    "provider_tokens": 0
+  },
+  "state_boundary": {
+    "feature_key_is_reference_only": true,
+    "predictor_creates_semantic_state_authority": false,
+    "predictor_creates_raw_context_authority": false
+  },
+  "hard_pins": [
+    "mandatory",
+    "exact_required",
+    "mandatory_failure_evidence",
+    "mandatory_security_evidence",
+    "mandatory_verifier_evidence"
+  ],
+  "promotion_policy": {
+    "shadow_mode_default": true,
+    "promotion_enabled_default": false,
+    "zero_mandatory_evidence_misses": true,
+    "task_success_non_inferior": true,
+    "reacquisition_cost_non_inferior": true,
+    "provider_cost_per_success_non_inferior_when_observed": true,
+    "rollback_on_gate_failure": true
+  },
+  "claim_policy": {
+    "local_prediction_is_provider_savings_proof": false,
+    "provider_savings_claim": false,
+    "paired_provider_observed_equivalent_frozen_tasks_still_required": true
+  },
+  "invariants": [
+    "INCOMPLETE_HORIZON_NEVER_BECOMES_NEGATIVE_LABEL",
+    "MANDATORY_EVIDENCE_IS_OUTSIDE_LEARNED_RETENTION",
+    "SHADOW_MODE_IS_DEFAULT",
+    "PROMOTION_IS_EXPLICIT_AND_GATE_BOUND",
+    "REACQUISITION_RECEIPTS_ARE_REUSED_NOT_DUPLICATED",
+    "NO_PROVIDER_WORK_IS_HIDDEN_IN_PREDICTION",
+    "PREDICTOR_OWNS_NO_RAW_CONTEXT_OR_SEMANTIC_STATE_STORE"
+  ],
+  "claim_boundary": "Exact-head admission certifies deterministic frozen-trace labeling, shadow recommendations, hard pins, promotion gates and zero-provider prediction work. It does not certify hosted-provider savings or authorize promotion without equivalent frozen-task evidence."
+}
