@@ -1,0 +1,61 @@
+{
+  "schema_version": "syntavra.u5_p0_02.reacquisition_tax_governor.v1",
+  "family": "syntavra-reacquisition-tax-governor",
+  "mechanism_id": "U5-P0-02",
+  "wave": "TE-U31",
+  "status": "implementation_candidate_exact_head_admission_required",
+  "classification": "NEW_HARDEN",
+  "owners": [
+    "syntavra_runtime.context_governor.ReacquisitionTaxGovernor",
+    "syntavra_runtime.adaptive_context_policy.AdaptiveContextPolicy",
+    "syntavra_runtime.context_decision_trace.ContextDecisionTrace"
+  ],
+  "sources": [
+    "contracts/python/ultra-low-token-frontier-v5.json",
+    "docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md",
+    "docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V6.md"
+  ],
+  "decision_rule": {
+    "retain_when": "expected_reacquisition_cost_units > expected_carry_cost_units",
+    "equal_cost": "prune_allowed",
+    "missing_estimate_default": "retain_fail_closed",
+    "security_or_invalidation": "forced_drop_allowed",
+    "mandatory_context": "retain"
+  },
+  "accounting": {
+    "carry_tokens": true,
+    "retrieval_tokens": true,
+    "tool_tokens": true,
+    "provider_tokens": true,
+    "latency_ms": true,
+    "cost_microusd": true,
+    "counterfactual_retention_baseline": true,
+    "later_event_to_drop_attribution": true,
+    "deterministic_receipts": true
+  },
+  "tokenizer_policy": {
+    "method_labeled": true,
+    "exact_target_tokenizer_flagged": true,
+    "hidden_exchange_rates_for_latency_or_money": false
+  },
+  "provider_claim_policy": {
+    "unpaired_provider_work_is_counted": true,
+    "unpaired_provider_work_is_provider_verified": false,
+    "baseline_and_reacquisition_receipt_pairs_required_for_provider_verified_accounting": true,
+    "governor_alone_makes_provider_savings_claim": false
+  },
+  "rollback": {
+    "enabled_false": "safe_retain_for_economic_pruning",
+    "security_and_invalidation_forced_drop_preserved": true
+  },
+  "invariants": [
+    "REACQUISITION_COST_COUNTED_END_TO_END",
+    "EXPENSIVE_REACQUISITION_BLOCKS_PRUNING",
+    "MANDATORY_CONTEXT_REMAINS_PINNED",
+    "SECURITY_INVALIDATION_CAN_FORCE_DROP",
+    "MISSING_ESTIMATE_FAILS_CLOSED_BY_DEFAULT",
+    "PROVIDER_SAVINGS_REQUIRE_PAIRED_PROVIDER_OBSERVED_EVIDENCE",
+    "GOVERNOR_DOES_NOT_CREATE_PARALLEL_CONTEXT_AUTHORITY"
+  ],
+  "claim_boundary": "Exact-head workflow can certify deterministic retention, attribution, accounting, rollback and receipt integrity. It does not by itself certify hosted-provider savings; equivalent frozen baseline and optimized provider-observed receipts remain required."
+}

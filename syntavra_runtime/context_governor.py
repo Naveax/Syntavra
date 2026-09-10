@@ -194,3 +194,14 @@ def compile_provider_token_envelope(
         input_leases=input_leases,
         output_leases=output_leases,
     )
+
+
+# U5-P0-02 remains exposed through the canonical context-governor surface while
+# its accounting engine stays isolated from context packing/persistence owners.
+from .reacquisition_tax import (  # noqa: E402
+    ContextCostEstimate,
+    ReacquisitionEvent,
+    ReacquisitionTaxDecision,
+    ReacquisitionTaxGovernor,
+    ReacquisitionTaxPolicy,
+)
