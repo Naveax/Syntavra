@@ -1,0 +1,92 @@
+{
+  "schema_version": "syntavra.u5_p0_05.global_token_budget_auction.v1",
+  "family": "syntavra-global-token-budget-auction",
+  "mechanism_id": "U5-P0-05",
+  "wave": "TE-U33",
+  "status": "implementation_candidate_exact_head_admission_required",
+  "classification": "NEW_HARDEN",
+  "owners": [
+    "syntavra_runtime.context_governor.TokenBudgetAllocator",
+    "syntavra_runtime.provider_token_envelope.ProviderTokenEnvelope",
+    "syntavra_runtime.context_governor.pack_context",
+    "syntavra_runtime.output_governor.OutputGovernor",
+    "syntavra_runtime.observability_attribution.ObservabilityAttribution"
+  ],
+  "sources": [
+    "contracts/python/ultra-low-token-frontier-v5.json",
+    "docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md",
+    "docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V6.md"
+  ],
+  "lanes": {
+    "input": [
+      "retrieval",
+      "instructions_context",
+      "schema_tool_output"
+    ],
+    "output": [
+      "reasoning",
+      "output"
+    ]
+  },
+  "allocation_policy": {
+    "provider_envelope_remains_hard_budget_and_admission_authority": true,
+    "fixed_lane_baseline_exactly_partitions_envelope": true,
+    "hard_minima_seed_allocation_before_auction": true,
+    "mandatory_envelope_tokens_may_not_be_auctioned_away": true,
+    "marginal_verified_gain_per_token_drives_auction": true,
+    "deterministic_tie_break": [
+      "density_desc",
+      "lane",
+      "ordinal",
+      "bid_id"
+    ],
+    "shadow_or_offline_only": true,
+    "live_reallocation_allowed": false,
+    "workload_model_provider_specific": true,
+    "tokenizer_identity_required": true,
+    "frozen_task_and_verifier_refs_required": true
+  },
+  "authority_boundaries": {
+    "allocator_owns_provider_admission": false,
+    "allocator_owns_context_selection": false,
+    "allocator_owns_reasoning_policy": false,
+    "allocator_owns_output_rendering": false,
+    "allocator_owns_allocation_decision_receipt": true,
+    "no_parallel_persistent_store": true
+  },
+  "accounting": {
+    "overhead_kinds": [
+      "retry",
+      "recall",
+      "repair",
+      "fallback"
+    ],
+    "all_overhead_provider_visible_tokens_count_end_to_end": true,
+    "paired_provider_usage_and_token_receipts_required_for_provider_verified_overhead": true,
+    "paired_baseline_and_optimized_execution_receipts_required_for_provider_verification": true,
+    "provider_savings_claim": false,
+    "compound_provider_savings_certification_deferred_to_te_u36": true
+  },
+  "rollback": {
+    "shadow_effective_allocation_is_fixed_baseline": true,
+    "offline_recommendation_never_changes_live_provider_behavior": true,
+    "rollback_allocation_is_fixed_baseline": true
+  },
+  "public_surface": {
+    "new_runtime_module": false,
+    "python_module_count": 234,
+    "public_command_count": 245
+  },
+  "invariants": [
+    "PROVIDER_TOKEN_ENVELOPE_REMAINS_HARD_BUDGET_AND_ADMISSION_AUTHORITY",
+    "HARD_USER_SECURITY_EXACT_AND_VERIFIER_MINIMA_CANNOT_BE_AUCTIONED_AWAY",
+    "FIXED_BASELINE_EXACTLY_PARTITIONS_THE_SAME_PROVIDER_ENVELOPE",
+    "ALLOCATOR_IS_DECISION_ONLY_AND_DOES_NOT_DUPLICATE_LANE_EXECUTION_OWNERS",
+    "LIVE_REALLOCATION_IS_FORBIDDEN_BEFORE_SEPARATE_PROMOTION",
+    "RETRY_RECALL_REPAIR_AND_FALLBACK_PROVIDER_WORK_COUNTS_END_TO_END",
+    "UNPAIRED_PROVIDER_COUNTERS_NEVER_BECOME_PROVIDER_VERIFIED_SAVINGS",
+    "TARGET_TOKENIZER_AND_FROZEN_TASK_VERIFIER_IDENTITIES_ARE_EXPLICIT",
+    "PROVIDER_SAVINGS_CLAIM_REMAINS_FALSE"
+  ],
+  "claim_boundary": "Exact-head admission certifies deterministic shadow/offline global token allocation, hard-minimum preservation, fixed-baseline comparison, authority boundaries, overhead accounting and tamper-evident receipts. It does not certify hosted-provider savings; provider_savings_claim remains false until equivalent frozen-task provider-observed baseline/optimized evidence passes the compound TE-U36 proof gate."
+}
