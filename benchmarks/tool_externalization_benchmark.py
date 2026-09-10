@@ -50,9 +50,10 @@ def run(profile: str):
             raw_total += result.original_bytes; visible_total += result.visible_bytes
             rows.append({"name":name,"family":result.family,"mode":result.mode,"raw_bytes":result.original_bytes,"visible_bytes":result.visible_bytes,"reduction_ratio":result.reduction_ratio,"segments":result.segment_count,"quality":result.quality_gate_passed,"roundtrip":verification["ok"],"search_found":True if not query else bool(hits),"search_pack_bytes":0 if pack is None else pack.visible_bytes,"merkle_proof":proof["verified"],"critical_bytes":critical.bytes_returned,"injection_risk":result.injection_risk})
         base="\n".join(f"2026-07-20 INFO request={i}" for i in range(12000))+"\n"
-        first=engine.externalize(ToolPayload(command="service logs",stdout=base,path="append.log",scope_key="delta"))
-        duplicate=engine.externalize(ToolPayload(command="service logs",stdout=base,path="append.log",scope_key="delta"))
-        updated=engine.externalize(ToolPayload(command="service logs",stdout=base+"2026-07-20 FATAL delta needle src/delta.py:9\n",path="append.log",scope_key="delta"))
+        delta_metadata={"invalidation_fingerprint":"tool-externalization-benchmark-delta-v1"}
+        first=engine.externalize(ToolPayload(command="service logs",stdout=base,path="append.log",scope_key="delta",metadata=delta_metadata))
+        duplicate=engine.externalize(ToolPayload(command="service logs",stdout=base,path="append.log",scope_key="delta",metadata=delta_metadata))
+        updated=engine.externalize(ToolPayload(command="service logs",stdout=base+"2026-07-20 FATAL delta needle src/delta.py:9\n",path="append.log",scope_key="delta",metadata=delta_metadata))
         seconds=time.perf_counter()-start
         return {"profile":profile,"aggregate":{"raw_bytes":raw_total,"visible_bytes":visible_total,"reduction_ratio":1-visible_total/max(1,raw_total),"seconds":seconds,"peak_python_bytes":None,"all_quality":all(row["quality"] for row in rows),"all_roundtrips":all(row["roundtrip"] for row in rows),"all_searches":all(row["search_found"] for row in rows),"all_merkle_proofs":all(row["merkle_proof"] for row in rows),"dedup_mode":duplicate.mode,"dedup_visible_bytes":duplicate.visible_bytes,"delta_mode":updated.mode,"delta_baseline":updated.baseline_artifact_id==first.artifact_id,"delta_needle_visible":"delta.py:9" in updated.preview,"delta_lineage_depth":len(engine.lineage(updated.artifact_id))},"rows":rows,"stats":engine.stats()}
 

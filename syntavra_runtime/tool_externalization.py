@@ -25,6 +25,7 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
     """Exact-first local tool-output virtualization with search, reveal and lineage."""
 
     schema_version = 2
+    delta_protocol_version = 1
 
     def __init__(self, path: Path, *, evidence: EvidenceLike, policy: ExternalizationPolicy | None = None):
         self.state = StateDB(path)
@@ -94,6 +95,66 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
             row = db.execute("SELECT * FROM ext_artifacts WHERE scope_key=? AND stream_key=? ORDER BY created_at DESC LIMIT 1", (scope, stream)).fetchone()
         return dict(row) if row else None
 
+    @staticmethod
+    def _normalize_invalidation_fingerprint(value: Any) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        if re.fullmatch(r"[0-9a-fA-F]{64}", text):
+            return text.casefold()
+        return _sha256(text.encode("utf-8"))
+
+    @staticmethod
+    def _row_metadata(row: Mapping[str, Any]) -> dict[str, Any]:
+        current = row.get("metadata")
+        if isinstance(current, Mapping):
+            return dict(current)
+        raw = row.get("metadata_json")
+        if not raw:
+            return {}
+        try:
+            decoded = json.loads(str(raw))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return dict(decoded) if isinstance(decoded, Mapping) else {}
+
+    def _validated_delta_baseline(
+        self,
+        baseline: Mapping[str, Any] | None,
+        *,
+        family: str,
+        invalidation_fingerprint: str,
+    ) -> tuple[dict[str, Any] | None, str]:
+        if not self.policy.delta_enabled:
+            return None, "DELTA_DISABLED"
+        if baseline is None:
+            return None, "NO_BASELINE"
+        if not invalidation_fingerprint:
+            return None, "CURRENT_INVALIDATION_MISSING"
+        if str(baseline.get("policy_hash") or "") != self.policy.digest:
+            return None, "POLICY_MISMATCH"
+        if str(baseline.get("family") or "") != family:
+            return None, "FAMILY_MISMATCH"
+        if not bool(baseline.get("quality_gate_passed")):
+            return None, "BASELINE_QUALITY_UNPROVED"
+        baseline_metadata = self._row_metadata(baseline)
+        previous_fingerprint = self._normalize_invalidation_fingerprint(
+            baseline_metadata.get("delta_invalidation_fingerprint")
+            or baseline_metadata.get("invalidation_fingerprint")
+        )
+        if not previous_fingerprint:
+            return None, "BASELINE_INVALIDATION_MISSING"
+        if previous_fingerprint != invalidation_fingerprint:
+            return None, "INVALIDATION_MISMATCH"
+        exact_handle = str(baseline.get("exact_handle") or "")
+        try:
+            exact_available = bool(exact_handle) and bool(self.evidence.verify(exact_handle))
+        except Exception:
+            exact_available = False
+        if not exact_available:
+            return None, "BASELINE_EXACT_UNAVAILABLE"
+        return dict(baseline), "VALID"
+
     def _artifact_from_row(self, row: Mapping[str, Any], *, repeated: bool = False, seen_count: int = 1, preview_override: str | None = None, mode_override: str | None = None) -> ExternalizedArtifact:
         preview = preview_override if preview_override is not None else str(row["preview"])
         original = int(row["original_bytes"])
@@ -112,7 +173,19 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
         family = self.classify(payload)
         command = self._normalize_command(payload.command)
         stream_key = _sha256(_canonical({"tool": payload.tool_name, "command": command, "path": payload.path}))
-        identity_key = _sha256(_canonical({"stream": stream_key, "content": content_hash, "policy": self.policy.digest}))
+        invalidation_fingerprint = self._normalize_invalidation_fingerprint(
+            payload.metadata.get("invalidation_fingerprint")
+        )
+        identity_key = _sha256(
+            _canonical(
+                {
+                    "stream": stream_key,
+                    "content": content_hash,
+                    "policy": self.policy.digest,
+                    "invalidation": invalidation_fingerprint,
+                }
+            )
+        )
         artifact_id = "ext-" + _sha256(_canonical({"scope": payload.scope_key, "identity": identity_key}))[:32]
 
         if self.policy.deduplicate:
@@ -131,7 +204,12 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
         injection_risk = bool(security and security.injection_risk)
         summary = self._redact(self._summary(family, raw, facets, segments))
 
-        baseline = self._latest(payload.scope_key, stream_key) if self.policy.delta_enabled else None
+        baseline_candidate = self._latest(payload.scope_key, stream_key) if self.policy.delta_enabled else None
+        baseline, baseline_status = self._validated_delta_baseline(
+            baseline_candidate,
+            family=family,
+            invalidation_fingerprint=invalidation_fingerprint,
+        )
         baseline_id: str | None = None
         changed_indexes: list[int] = list(range(len(segments)))
         unchanged_ratio = 0.0
@@ -155,7 +233,10 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
         if baseline_id and unchanged_ratio >= 0.50 and len(raw) > self.policy.passthrough_threshold_bytes:
             mode = "delta-externalized"
             changed_preview = [self._excerpt(segments[index].index_text.strip()) for index in changed_indexes[:24]]
-            delta_text = f"\nDelta baseline={baseline_id} unchanged_segments={unchanged_ratio:.1%} changed_segments={len(changed_indexes)}"
+            delta_text = (
+                f"\nDelta baseline={baseline_id} invalidation={invalidation_fingerprint} "
+                f"unchanged_segments={unchanged_ratio:.1%} changed_segments={len(changed_indexes)}"
+            )
             if changed_preview:
                 delta_text += "\nChanged evidence:\n" + "\n".join(changed_preview)
 
@@ -182,6 +263,7 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
             segment_rows.append((artifact_id, segment.index, segment.start_byte, segment.end_byte, segment.start_line, segment.end_line, segment.content_hash, handle, segment.kind, segment.salience, int(segment.critical), segment.index_text))
             search_rows.append((artifact_id, payload.scope_key, segment.index, segment.kind, segment.index_text))
 
+        baseline_content_hash = str(baseline.get("content_hash") or "") if baseline is not None else ""
         metadata = {
             "schema_version": self.schema_version,
             "tool_name": payload.tool_name,
@@ -197,6 +279,16 @@ class ToolOutputExternalizer(ExternalizationAnalysisMixin):
                 "encoded_payloads_checked": security.encoded_payloads_checked if security else 0,
             },
             **payload.metadata,
+            "delta_invalidation_fingerprint": invalidation_fingerprint,
+            "delta_protocol": {
+                "version": self.delta_protocol_version,
+                "baseline_status": baseline_status,
+                "baseline_artifact_id": baseline_id or "",
+                "baseline_content_hash": baseline_content_hash,
+                "invalidation_fingerprint": invalidation_fingerprint,
+                "exact_baseline_verified": bool(baseline),
+                "delta_emitted": mode == "delta-externalized",
+            },
         }
         now = time.time()
         with self._db() as db:

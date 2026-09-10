@@ -98,11 +98,18 @@ def normalize_profile(profile: str | None, *, allow_auto: bool = False) -> str:
     return normalized
 
 
+def _canonical_name_key(value: str) -> tuple[str, str]:
+    text = str(value)
+    return text.casefold(), text
+
+
 def profile_tools(profile: str, available_tools: Iterable[str]) -> tuple[str, ...]:
     normalized = normalize_profile(profile)
     available = tuple(dict.fromkeys(str(item) for item in available_tools))
     if normalized == "audit":
-        return available
+        # Registration/discovery timing is not ranking semantics. A canonical audit
+        # order keeps tool prefixes and profile hashes stable across async MCP runs.
+        return tuple(sorted(available, key=_canonical_name_key))
     allowlist = MCP_PROFILES[normalized].exposed_tools
     available_set = set(available)
     return tuple(name for name in allowlist if name in available_set)
@@ -150,6 +157,9 @@ class ToolSchemaCompiler:
     Tool names stay stable. Descriptions are tightened and selected long argument
     names receive readable aliases. ``decode_arguments`` accepts both aliases and
     original names so direct clients remain compatible.
+
+    The emitted catalog is canonicalized by tool identity before cost/hash/serialization
+    so asynchronous discovery order cannot cause avoidable provider prompt-cache misses.
     """
 
     def __init__(self) -> None:
@@ -192,6 +202,12 @@ class ToolSchemaCompiler:
         return value.rstrip(".")
 
     @staticmethod
+    def _tool_order_key(row: Mapping[str, Any]) -> tuple[str, str, str, str]:
+        name = str(row.get("name") or "")
+        display = str(row.get("displayName") or row.get("title") or "")
+        return name.casefold(), name, display.casefold(), display
+
+    @staticmethod
     def _compile_schema(tool_name: str, schema: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
         result = dict(schema)
         properties = schema.get("properties")
@@ -209,7 +225,10 @@ class ToolSchemaCompiler:
             result["properties"] = compiled_properties
         required = schema.get("required")
         if isinstance(required, Sequence) and not isinstance(required, (str, bytes, bytearray)):
-            result["required"] = [_COMMON_ARGUMENT_ALIASES.get(str(name), str(name)) for name in required]
+            mapped_required = [_COMMON_ARGUMENT_ALIASES.get(str(name), str(name)) for name in required]
+            # JSON Schema required-set order has no semantics, but byte order does
+            # affect provider prompt caches. Canonicalize only this unordered field.
+            result["required"] = sorted(dict.fromkeys(mapped_required), key=_canonical_name_key)
         # MCP already implies an object-shaped input schema; empty properties and
         # duplicated titles/defaults only add discovery cost.
         result.pop("title", None)
@@ -219,7 +238,10 @@ class ToolSchemaCompiler:
         return result, aliases
 
     def compile_catalog(self, catalog: Sequence[Mapping[str, Any]]) -> tuple[list[dict[str, Any]], SchemaCompilation]:
-        raw_catalog = [dict(row) for row in catalog]
+        # Canonicalize before raw-cost/hash accounting as well as compilation. The
+        # same effective catalog must have one identity independent of async tool
+        # registration order, otherwise a stable semantic set still churns cache.
+        raw_catalog = [dict(row) for row in sorted(catalog, key=self._tool_order_key)]
         compiled: list[dict[str, Any]] = []
         aliases_by_tool: dict[str, dict[str, str]] = {}
         for row in raw_catalog:

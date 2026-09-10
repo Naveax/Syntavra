@@ -1,0 +1,125 @@
+name: HyperEfficiency Roadmap Authority
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/python/hyperefficiency-roadmap-v1.json'
+      - 'contracts/python/hyperefficiency/**'
+      - 'contracts/python/token-economy-execution-backlog-v2.json'
+      - 'contracts/python/ultra-low-token-frontier-v1.json'
+      - 'docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md'
+      - 'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md'
+      - 'docs/UNIFIED_PLAN.md'
+      - 'docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md'
+      - 'docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md'
+      - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V2.md'
+      - 'docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V1.md'
+      - 'docs/plans/hyperefficiency/**'
+      - 'tests/runtime/test_hyperefficiency_roadmap.py'
+      - 'tools/validate_hyperefficiency_roadmap.py'
+      - '.github/workflows/hyperefficiency-roadmap.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/python/hyperefficiency-roadmap-v1.json'
+      - 'contracts/python/hyperefficiency/**'
+      - 'contracts/python/token-economy-execution-backlog-v2.json'
+      - 'contracts/python/ultra-low-token-frontier-v1.json'
+      - 'docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md'
+      - 'docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md'
+      - 'docs/UNIFIED_PLAN.md'
+      - 'docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md'
+      - 'docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md'
+      - 'docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V2.md'
+      - 'docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V1.md'
+      - 'docs/plans/hyperefficiency/**'
+      - 'tests/runtime/test_hyperefficiency_roadmap.py'
+      - 'tools/validate_hyperefficiency_roadmap.py'
+      - '.github/workflows/hyperefficiency-roadmap.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hyperefficiency-roadmap-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify HyperEfficiency roadmap shards and mapping
+        run: |
+          set -euo pipefail
+          python tools/validate_hyperefficiency_roadmap.py
+          python -m unittest tests.runtime.test_hyperefficiency_roadmap -v
+
+      - name: Enforce preserved Python and Rust authority boundary
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('contracts/python/hyperefficiency-roadmap-v1.json').read_text(encoding='utf-8'))
+          assert value['schema_version'] == 1
+          assert value['family'] == 'syntavra-hyperefficiency-roadmap'
+          assert value['default_state'] == 'admitted_reconciliation'
+
+          source_start, source_end = value['source_range']
+          canonical_start, canonical_end = value['canonical_range']
+          offset = value['mapping_offset']
+          assert source_start == 1
+          assert value['imported_count'] == source_end - source_start + 1
+          assert canonical_start == source_start + offset
+          assert canonical_end == source_end + offset
+          assert canonical_end - canonical_start + 1 == value['imported_count']
+
+          assert value['allowed_classifications'] == ['EXISTS', 'HARDEN', 'UNIFY', 'NEW', 'CERTIFY', 'EXTERNAL', 'DEFERRED']
+          assert len(value['first_reconciliation_slice']) == 27
+
+          authority = value['preserved_authority']
+          assert authority['python_complete_v1'] is True
+          assert authority['python_closed_ranges'] == ['236-270', '276-280']
+          assert authority['rust_transition_deferred'] == '271-275'
+          assert authority['rust_resume_allowed'] is False
+          assert authority['rust_retired'] is True
+          assert authority['rust_production_promotion'] == '174/245'
+          assert authority['rust_remaining'] == 71
+
+          backlog = json.loads(Path('contracts/python/token-economy-execution-backlog-v2.json').read_text(encoding='utf-8'))
+          frontier = json.loads(Path('contracts/python/ultra-low-token-frontier-v1.json').read_text(encoding='utf-8'))
+          assert backlog['schema_version'] == 2
+          assert backlog['no_new_capability_namespace'] is True
+          assert backlog['base_backlog_remains_authoritative'] is True
+          assert frontier['schema_version'] == 1
+          assert frontier['no_new_capability_namespace'] is True
+          assert frontier['targets']['verified_repeated_provider_tokens'] == 0
+          assert frontier['targets']['easy_warm_stretch_max_tokens'] == 500
+          assert frontier['targets']['easy_frontier_stretch_max_tokens'] == 2000
+          assert frontier['targets']['normal_scoped_coding_stretch_max_tokens'] == 5000
+          assert frontier['targets']['hard_scoped_stretch_max_tokens'] == 8000
+          PY
+
+      - name: Enforce exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"

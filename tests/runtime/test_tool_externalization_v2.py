@@ -36,14 +36,16 @@ class ToolOutputExternalizerTests(unittest.TestCase):
 
     def test_duplicate_and_delta_append(self):
         initial = "\n".join(f"INFO request={i}" for i in range(4000)) + "\n"
-        first = self.engine.externalize(ToolPayload(command="service logs", stdout=initial, path="service.log", scope_key="s"))
-        duplicate = self.engine.externalize(ToolPayload(command="service logs", stdout=initial, path="service.log", scope_key="s"))
+        metadata = {"invalidation_fingerprint": "stable-log-stream-v1"}
+        first = self.engine.externalize(ToolPayload(command="service logs", stdout=initial, path="service.log", scope_key="s", metadata=metadata))
+        duplicate = self.engine.externalize(ToolPayload(command="service logs", stdout=initial, path="service.log", scope_key="s", metadata=metadata))
         self.assertTrue(duplicate.repeated); self.assertEqual(duplicate.mode, "dedup-reference")
         updated = initial + "FATAL auth failure at security.py:91\n"
-        delta = self.engine.externalize(ToolPayload(command="service logs", stdout=updated, path="service.log", scope_key="s"))
+        delta = self.engine.externalize(ToolPayload(command="service logs", stdout=updated, path="service.log", scope_key="s", metadata=metadata))
         self.assertEqual(delta.mode, "delta-externalized")
         self.assertEqual(delta.baseline_artifact_id, first.artifact_id)
         self.assertIn("security.py:91", delta.preview)
+        self.assertTrue(delta.metadata["delta_protocol"]["exact_baseline_verified"])
         self.assertTrue(self.engine.verify(delta.artifact_id)["ok"])
 
     def test_injection_is_marked_untrusted_and_secret_redacted(self):
@@ -134,9 +136,10 @@ class ToolOutputExternalizerTests(unittest.TestCase):
 
     def test_delta_lineage(self):
         base = "\n".join(f"INFO item={i}" for i in range(2000)) + "\n"
-        one = self.engine.externalize(ToolPayload(command="service logs", stdout=base, path="lineage.log", scope_key="l"))
-        two = self.engine.externalize(ToolPayload(command="service logs", stdout=base + "WARN second\n", path="lineage.log", scope_key="l"))
-        three = self.engine.externalize(ToolPayload(command="service logs", stdout=base + "WARN second\nERROR third at x.py:3\n", path="lineage.log", scope_key="l"))
+        metadata = {"invalidation_fingerprint": "stable-lineage-v1"}
+        one = self.engine.externalize(ToolPayload(command="service logs", stdout=base, path="lineage.log", scope_key="l", metadata=metadata))
+        two = self.engine.externalize(ToolPayload(command="service logs", stdout=base + "WARN second\n", path="lineage.log", scope_key="l", metadata=metadata))
+        three = self.engine.externalize(ToolPayload(command="service logs", stdout=base + "WARN second\nERROR third at x.py:3\n", path="lineage.log", scope_key="l", metadata=metadata))
         lineage = self.engine.lineage(three.artifact_id)
         self.assertEqual([row["artifact_id"] for row in lineage[:3]], [three.artifact_id, two.artifact_id, one.artifact_id])
 

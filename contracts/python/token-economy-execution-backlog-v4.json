@@ -1,0 +1,62 @@
+{
+  "schema_version": 4,
+  "family": "syntavra-token-economy-execution-backlog",
+  "status": "active_continuation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/token-economy-execution-backlog-v3.json",
+  "ultra_low_overlay": "contracts/python/ultra-low-token-frontier-v3.json",
+  "no_new_capability_namespace": true,
+  "base_backlog_remains_authoritative": true,
+  "priority_order": [
+    "TE-P0-deterministic_ingestion_and_constant_context",
+    "U2-P0-01",
+    "U2-P0-02",
+    "U2-P0-03",
+    "U2-P0-04",
+    "U2-P0-06",
+    "U2-P0-05",
+    "U3-P0-03",
+    "U3-P0-02",
+    "U3-P0-01",
+    "U3-P0-04",
+    "U3-P1-01",
+    "U3-P1-02",
+    "U3-P1-03",
+    "U2-P1",
+    "TE-U21"
+  ],
+  "new_items": [
+    {"id":"U3-P0-01","name":"Verified Token Floor Search / Budget Annealing","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U3-P0-02","name":"Local Draft Verifier Frontier Residual Correction","state":"TODO","class":"UNIFY_HARDEN"},
+    {"id":"U3-P0-03","name":"Verifier-Guided Failure Projection","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U3-P0-04","name":"Incremental State Handoff Content-Addressed Delta","state":"TODO","class":"HARDEN_PROVIDER_GATED"},
+    {"id":"U3-P1-01","name":"Task-Family Local Distillation Specialist Escalation","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U3-P1-02","name":"Proof-Carrying Zero-Inference Result","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U3-P1-03","name":"Pareto Workflow Selector","state":"TODO","class":"HARDEN"}
+  ],
+  "waves": ["TE-U15","TE-U16","TE-U17","TE-U18","TE-U19","TE-U20","TE-U21"],
+  "research_floor_targets": {
+    "verified_repeated_tokens": 0,
+    "easy_warm_max": 100,
+    "easy_frontier_max": 500,
+    "normal_scoped_coding_max": 2000,
+    "hard_scoped_max": 5000
+  },
+  "continuous_lowering": true,
+  "stop_lowering_when": [
+    "verified_solve_rate_regresses",
+    "security_or_constraint_compliance_regresses",
+    "exact_recovery_regresses",
+    "provider_cost_per_success_increases",
+    "retry_recall_fallback_burden_increases"
+  ],
+  "hard_invariants": [
+    "V1_V2_V3_OPEN_WORK_REMAINS_ACTIVE",
+    "NO_NEW_CAP_NAMESPACE",
+    "DETERMINISTIC_ELIMINATION_PRECEDES_LEARNED_OR_LOSSY_REDUCTION",
+    "QUALITY_VERIFIER_SECURITY_NON_INFERIOR",
+    "TOKEN_FLOOR_SEARCH_IS_PER_WORKLOAD_FAMILY",
+    "ALL_RETRY_RECOVERY_FALLBACK_TOKENS_COUNT",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIMS"
+  ]
+}

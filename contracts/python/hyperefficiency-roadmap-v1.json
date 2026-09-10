@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "family": "syntavra-hyperefficiency-roadmap",
+  "admitted_date": "2026-09-07",
+  "product_identity": "Verified Experience-Compiling Inference Operating System",
+  "default_state": "admitted_reconciliation",
+  "imported_count": 1368,
+  "source_range": [1, 1368],
+  "canonical_range": [281, 1648],
+  "mapping_offset": 280,
+  "preserved_authority": {
+    "python_complete_v1": true,
+    "python_closed_ranges": ["236-270", "276-280"],
+    "rust_transition_deferred": "271-275",
+    "rust_resume_allowed": false,
+    "rust_retired": true,
+    "rust_production_promotion": "174/245",
+    "rust_remaining": 71
+  },
+  "allowed_classifications": ["EXISTS", "HARDEN", "UNIFY", "NEW", "CERTIFY", "EXTERNAL", "DEFERRED"],
+  "first_reconciliation_slice": [
+    "Cost Ledger",
+    "Frontier Dependency Ratio",
+    "Reacquisition accounting",
+    "Waste accounting",
+    "Execution Ledger",
+    "Semantic State Machine",
+    "Requirements Compiler",
+    "Verifier Graph",
+    "Spec-Harness / verifier-of-verifier",
+    "Mutation adequacy",
+    "Hierarchical Experience Compiler",
+    "Strategy Memory",
+    "Plan Memory",
+    "Failure Ontology",
+    "Repository Digital Twin",
+    "Query Compiler",
+    "Program Slicing",
+    "Semantic Trace",
+    "Inference Compiler",
+    "Inference Exception Architecture",
+    "Deterministic workflow compiler",
+    "Local specialists",
+    "Frontier-last router",
+    "Frontier Knowledge Harvesting",
+    "Abstraction Discovery",
+    "Macro Factory",
+    "Repository-specific distillation"
+  ],
+  "shards": [
+    {"shard":"V3A","path":"contracts/python/hyperefficiency/roadmap-v1-v3a.json","source_range":[1,170],"canonical_range":[281,450],"count":170,"sha256":"1d17c496042a557b5850285c55690626dcfd43502ace36a7b8af9d77e49e29f2"},
+    {"shard":"V3B","path":"contracts/python/hyperefficiency/roadmap-v1-v3b.json","source_range":[171,339],"canonical_range":[451,619],"count":169,"sha256":"326b2d50ec3f0d8135407d8cea62c96542d65a3736a84cc76f1f507887a6d5f3"},
+    {"shard":"V4A","path":"contracts/python/hyperefficiency/roadmap-v1-v4a.json","source_range":[340,497],"canonical_range":[620,777],"count":158,"sha256":"11a6af019a239994785430edcf6f9ff8923bd280febe5470d3809d41fedd4b3d"},
+    {"shard":"V4B","path":"contracts/python/hyperefficiency/roadmap-v1-v4b.json","source_range":[498,654],"canonical_range":[778,934],"count":157,"sha256":"eef7c39536d3b7db017eb9a10938224feb2e4e7ed93b516b7438ca7c0e263107"},
+    {"shard":"V5A","path":"contracts/python/hyperefficiency/roadmap-v1-v5a.json","source_range":[655,818],"canonical_range":[935,1098],"count":164,"sha256":"1eece4e09ff707de2596129d78895e26cf5635da2b0aa33e4cb0acc6201355e7"},
+    {"shard":"V5B","path":"contracts/python/hyperefficiency/roadmap-v1-v5b.json","source_range":[819,982],"canonical_range":[1099,1262],"count":164,"sha256":"d2efa9196ea671851184e1e06af1e57531d86688045cebabd53efc9a553ee0eb"},
+    {"shard":"V6A","path":"contracts/python/hyperefficiency/roadmap-v1-v6a.json","source_range":[983,1133],"canonical_range":[1263,1413],"count":151,"sha256":"d3e582eee3ea34bc7012ee7091840d6e3a7514913a83637ab63d45545b56464c"},
+    {"shard":"V6B","path":"contracts/python/hyperefficiency/roadmap-v1-v6b.json","source_range":[1134,1284],"canonical_range":[1414,1564],"count":151,"sha256":"0559ac29e92d5237b81d485a09f88e6c6b922d3d0620092a55eb5e04e3285567"},
+    {"shard":"TOKEN-ELIMINATION-V10","path":"contracts/python/hyperefficiency/roadmap-v1-token-elimination-v10.json","source_range":[1285,1368],"canonical_range":[1565,1648],"count":84,"sha256":"76474d9543442e5490ea7a9630645f30fea6378d1a9d6b76aee9028f760b748f"}
+  ],
+  "source_fingerprints": [
+    {"name":"precursor-a","sha256":"bffae6e2deb5ff5be21c318d3588a958e508a889aaff25fb9aa736543194c88a"},
+    {"name":"precursor-b","sha256":"857238f8615781f888ab8b0ced6b789d65017bb4b472d57b5ddbf2d8468cf0fb"},
+    {"name":"v3","sha256":"630ae7afbeaac40b9d00a6443217b648b7f5a8b29e9dc0158af4bd8a7a1fcb64"},
+    {"name":"v4","sha256":"1b9045ff55c30b814c83ad5ed7df4d70c97796abebe1282772ed6503e2d21169"},
+    {"name":"v5","sha256":"a3591094ef0df94933b1619b8cbc480a72127052d7870c562cafa923e2b423f6"},
+    {"name":"v6","sha256":"b3137542e16c9fb374a489c1f6501e412c04b664080418db4fbdfb78a728e535"},
+    {"name":"token-elimination-v10","sha256":"f991a2a0501e6ee09e571d504c42b8e26614c4c77e4e262726eef845566aa143"}
+  ],
+  "authority_docs": [
+    "docs/SYNTAVRA_PYTHON_FIRST_LIVE_CHECKPOINT.md",
+    "docs/SYNTAVRA_PYTHON_FIRST_CONTINUATION_CHECKLIST.md",
+    "docs/UNIFIED_PLAN.md",
+    "docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md",
+    "docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md"
+  ],
+  "claim_boundary": "Engineering/moonshot targets are not public or provider-cost superiority claims without provider-observed receipts under frozen equivalent task/verifier conditions.",
+  "admission_base_main_sha": "945bde9d7d7664bab9133f508030fbfeca133402",
+  "verification": {
+    "validator": "tools/validate_hyperefficiency_roadmap.py",
+    "regression": "tests/runtime/test_hyperefficiency_roadmap.py",
+    "invariants": [
+      "1368 imported rows",
+      "HE-0001..HE-1368 contiguous",
+      "CAP-0281..CAP-1648 contiguous",
+      "canonical = source + 280",
+      "shard SHA-256 exact"
+    ]
+  }
+}

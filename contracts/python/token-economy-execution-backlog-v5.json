@@ -1,0 +1,54 @@
+{
+  "schema_version": 5,
+  "family": "syntavra-token-economy-execution-backlog",
+  "status": "active_continuation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/token-economy-execution-backlog-v4.json",
+  "ultra_low_overlay": "contracts/python/ultra-low-token-frontier-v4.json",
+  "no_new_capability_namespace": true,
+  "base_backlog_remains_authoritative": true,
+  "priority_order": [
+    "TE-P0_deterministic_prerequisites",
+    "TE-U0_U21_prerequisites",
+    "U4-P0-01",
+    "U4-P0-02",
+    "U4-P0-03",
+    "U4-P0-05",
+    "U4-P0-04",
+    "U4-P1-04",
+    "U4-P1-01",
+    "U4-P1-02",
+    "U4-P1-03",
+    "TE-U29"
+  ],
+  "new_items": [
+    {"id":"U4-P0-01","name":"Strategic Silence Communication Value Governor","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U4-P0-02","name":"Selective Multi-Agent Escalation","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U4-P0-03","name":"Agent Communication Graph Pruner","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U4-P0-04","name":"Debate Internalized Specialist Distillation","state":"TODO","class":"UNIFY_HARDEN"},
+    {"id":"U4-P0-05","name":"Agent Data Optimization Layer","state":"TODO","class":"HARDEN_UNIFY"},
+    {"id":"U4-P1-01","name":"Latent Agent Bus","state":"TODO","class":"EXPERIMENTAL_LOCAL_ONLY"},
+    {"id":"U4-P1-02","name":"Prefix Affinity KV TTL Scheduler","state":"TODO","class":"HARDEN_LOCAL_ONLY"},
+    {"id":"U4-P1-03","name":"Constraint Space Compression for SWIR","state":"TODO","class":"EXPERIMENTAL_LOCAL_ONLY"},
+    {"id":"U4-P1-04","name":"Speculation Budget Governor","state":"TODO","class":"HARDEN"}
+  ],
+  "waves": ["TE-U22","TE-U23","TE-U24","TE-U25","TE-U26","TE-U27","TE-U28","TE-U29"],
+  "research_probe_targets": {
+    "verified_repeated_tokens": 0,
+    "easy_warm_max": 50,
+    "easy_frontier_max": 250,
+    "normal_scoped_coding_max": 1000,
+    "hard_scoped_max": 3000,
+    "continuous_floor_search": true
+  },
+  "hard_invariants": [
+    "ALL_PRIOR_BACKLOG_WORK_REMAINS_ACTIVE",
+    "NO_NEW_CAP_NAMESPACE",
+    "QUALITY_VERIFIER_SECURITY_NON_INFERIOR",
+    "MULTI_AGENT_COMMUNICATION_MUST_JUSTIFY_PROVIDER_COST",
+    "LOCAL_RUNTIME_OPTIMIZATIONS_DO_NOT_IMPLY_PROVIDER_TOKEN_SAVINGS",
+    "SPECULATIVE_WORK_COUNTS_END_TO_END",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIMS",
+    "TOKEN_FLOOR_SEARCH_CONTINUES_AFTER_CERTIFICATION"
+  ]
+}

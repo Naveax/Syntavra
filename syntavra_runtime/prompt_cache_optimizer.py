@@ -32,6 +32,7 @@ class CachePlan:
     refresh_after: float
     reordered: bool
     segments: tuple[CacheSegment, ...]
+    cache_profile: str = "default"
 
 
 _PROVIDER_TTLS = {
@@ -46,9 +47,14 @@ _VOLATILE_KEYS = {"timestamp", "request_id", "trace_id", "nonce", "usage", "cost
 
 
 class PromptCacheOptimizer:
-    def __init__(self, state_root: Path):
+    GOVERNANCE_SCHEMA_VERSION = 1
+    GOVERNANCE_RECEIPT_LIMIT = 256
+
+    def __init__(self, state_root: Path, *, max_entries: int = 128):
         self.state_root = Path(state_root)
         self.path = self.state_root / "cache" / "plans.json"
+        self.governance_path = self.state_root / "cache" / "governance.json"
+        self.max_entries = max(1, int(max_entries))
 
     @staticmethod
     def _stable_message(message: Mapping[str, Any]) -> bool:
@@ -67,15 +73,49 @@ class PromptCacheOptimizer:
             return [PromptCacheOptimizer._clean(item) for item in value]
         return value
 
-    def plan(self, messages: Sequence[Mapping[str, Any]], *, provider: str, model: str, ttl_seconds: int | None = None, reorder: bool = True, now: float | None = None) -> CachePlan:
+    @staticmethod
+    def _cache_key(plan: CachePlan) -> str:
+        return f"{plan.provider}:{plan.model}:{plan.cache_profile}:{plan.stable_prefix_hash}"
+
+    @staticmethod
+    def _validate_reuse_probability(value: float) -> float:
+        probability = float(value)
+        if not 0.0 <= probability <= 1.0:
+            raise ValueError("reuse_probability must be between 0 and 1")
+        return probability
+
+    @staticmethod
+    def _entry_value(row: Mapping[str, Any], meta: Mapping[str, Any], now: float) -> float:
+        reuse_probability = max(0.0, min(1.0, float(meta.get("reuse_probability", 1.0))))
+        rebuild_cost_tokens = max(0, int(meta.get("rebuild_cost_tokens", max(1, int(row.get("cacheable_tokens", 0))))))
+        remaining_ttl = max(0.0, float(row.get("expires_at", 0.0)) - now)
+        return reuse_probability * rebuild_cost_tokens * remaining_ttl
+
+    def plan(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        provider: str,
+        model: str,
+        ttl_seconds: int | None = None,
+        reorder: bool = True,
+        now: float | None = None,
+        cache_profile: str = "default",
+        reuse_probability: float = 1.0,
+        rebuild_cost_tokens: int | None = None,
+    ) -> CachePlan:
         now = time.time() if now is None else float(now)
         provider_name = provider.strip().casefold() or "unknown"
+        profile = str(cache_profile).strip() or "default"
         ttl = int(ttl_seconds or _PROVIDER_TTLS.get(provider_name, 600))
         stable_rows = [dict(row) for row in messages if self._stable_message(row)]
         volatile_rows = [dict(row) for row in messages if not self._stable_message(row)]
         ordered = [*stable_rows, *volatile_rows] if reorder else [dict(row) for row in messages]
         stable_prefix = [self._clean(row) for row in ordered[:len(stable_rows)]]
-        stable_hash = sha256_bytes(canonical_json(stable_prefix))
+        stable_material: Any = stable_prefix
+        if profile != "default":
+            stable_material = {"cache_profile": profile, "stable_prefix": stable_prefix}
+        stable_hash = sha256_bytes(canonical_json(stable_material))
         segments: list[CacheSegment] = []
         for row in ordered:
             clean = self._clean(row)
@@ -83,20 +123,171 @@ class PromptCacheOptimizer:
             stable = self._stable_message(row)
             segments.append(CacheSegment(str(row.get("role") or "unknown"), stable, len(raw), max(1, len(raw) // 4), sha256_bytes(raw), "stable-prefix" if stable else "volatile-tail"))
         plan = CachePlan(
-            provider_name, model, stable_hash, len(stable_rows), len(volatile_rows),
-            sum(item.tokens_estimate for item in segments if item.stable),
-            sum(item.tokens_estimate for item in segments if not item.stable),
-            ttl, now + ttl, now + ttl * 0.75,
-            reorder and ordered != list(messages), tuple(segments),
+            provider=provider_name,
+            model=model,
+            stable_prefix_hash=stable_hash,
+            stable_messages=len(stable_rows),
+            volatile_messages=len(volatile_rows),
+            cacheable_tokens=sum(item.tokens_estimate for item in segments if item.stable),
+            volatile_tokens=sum(item.tokens_estimate for item in segments if not item.stable),
+            ttl_seconds=ttl,
+            expires_at=now + ttl,
+            refresh_after=now + ttl * 0.75,
+            reordered=reorder and ordered != list(messages),
+            segments=tuple(segments),
+            cache_profile=profile,
         )
-        self._save(plan)
+        probability = self._validate_reuse_probability(reuse_probability)
+        rebuild = max(0, int(plan.cacheable_tokens if rebuild_cost_tokens is None else rebuild_cost_tokens))
+        self._save(plan, now=now, reuse_probability=probability, rebuild_cost_tokens=rebuild)
         return plan
 
-    def _save(self, plan: CachePlan) -> None:
+    def _save(self, plan: CachePlan, *, now: float, reuse_probability: float, rebuild_cost_tokens: int) -> None:
         current = read_json(self.path, {}) or {}
         plans = dict(current.get("plans") or {})
-        plans[f"{plan.provider}:{plan.model}:{plan.stable_prefix_hash}"] = asdict(plan)
+        governance = read_json(self.governance_path, {}) or {}
+        entries = dict(governance.get("entries") or {})
+        receipts = list(governance.get("receipts") or [])
+
+        expired_keys = sorted(
+            key for key, row in plans.items()
+            if float((row or {}).get("expires_at", 0.0)) <= now
+        )
+        for key in expired_keys:
+            plans.pop(key, None)
+            entries.pop(key, None)
+
+        key = self._cache_key(plan)
+        plans[key] = asdict(plan)
+        entries[key] = {
+            "reuse_probability": reuse_probability,
+            "rebuild_cost_tokens": rebuild_cost_tokens,
+            "admitted_at": now,
+        }
+
+        evicted_keys: list[str] = []
+        while len(plans) > self.max_entries:
+            victim = min(
+                plans,
+                key=lambda candidate: (
+                    self._entry_value(plans[candidate], entries.get(candidate, {}), now),
+                    candidate,
+                ),
+            )
+            plans.pop(victim, None)
+            entries.pop(victim, None)
+            evicted_keys.append(victim)
+
+        admitted = key in plans
+        candidate_value = reuse_probability * rebuild_cost_tokens * max(0.0, float(plan.expires_at) - now)
+        if not admitted:
+            reason = "capacity-lowest-value"
+        elif evicted_keys:
+            reason = "admitted-evicted-lower-value"
+        elif expired_keys:
+            reason = "admitted-after-expiry-reclamation"
+        else:
+            reason = "admitted-within-capacity"
+
+        receipt = {
+            "schema_version": self.GOVERNANCE_SCHEMA_VERSION,
+            "decision": "admit" if admitted else "reject",
+            "reason": reason,
+            "cache_key": key,
+            "reuse_probability": reuse_probability,
+            "ttl_seconds": int(plan.ttl_seconds),
+            "rebuild_cost_tokens": rebuild_cost_tokens,
+            "value_score": candidate_value,
+            "max_entries": self.max_entries,
+            "expired_keys": expired_keys,
+            "evicted_keys": evicted_keys,
+            "retained_entries": len(plans),
+        }
+        receipts.append(receipt)
+        receipts = receipts[-self.GOVERNANCE_RECEIPT_LIMIT:]
+
         atomic_write_json(self.path, {"plans": plans, "updated_at": time.time()})
+        atomic_write_json(
+            self.governance_path,
+            {
+                "schema_version": self.GOVERNANCE_SCHEMA_VERSION,
+                "entries": entries,
+                "receipts": receipts,
+                "updated_at": time.time(),
+            },
+        )
+
+    def maintain(self, *, now: float | None = None) -> dict[str, Any]:
+        now = time.time() if now is None else float(now)
+        current = read_json(self.path, {}) or {}
+        plans = dict(current.get("plans") or {})
+        governance = read_json(self.governance_path, {}) or {}
+        entries = dict(governance.get("entries") or {})
+        receipts = list(governance.get("receipts") or [])
+
+        expired_keys = sorted(
+            key for key, row in plans.items()
+            if float((row or {}).get("expires_at", 0.0)) <= now
+        )
+        for key in expired_keys:
+            plans.pop(key, None)
+            entries.pop(key, None)
+
+        evicted_keys: list[str] = []
+        while len(plans) > self.max_entries:
+            victim = min(
+                plans,
+                key=lambda candidate: (
+                    self._entry_value(plans[candidate], entries.get(candidate, {}), now),
+                    candidate,
+                ),
+            )
+            plans.pop(victim, None)
+            entries.pop(victim, None)
+            evicted_keys.append(victim)
+
+        changed = bool(expired_keys or evicted_keys)
+        if changed:
+            receipt = {
+                "schema_version": self.GOVERNANCE_SCHEMA_VERSION,
+                "decision": "maintain",
+                "reason": "expired-or-capacity-reclamation",
+                "cache_key": None,
+                "reuse_probability": None,
+                "ttl_seconds": None,
+                "rebuild_cost_tokens": None,
+                "value_score": None,
+                "max_entries": self.max_entries,
+                "expired_keys": expired_keys,
+                "evicted_keys": evicted_keys,
+                "retained_entries": len(plans),
+            }
+            receipts.append(receipt)
+            receipts = receipts[-self.GOVERNANCE_RECEIPT_LIMIT:]
+            atomic_write_json(self.path, {"plans": plans, "updated_at": time.time()})
+            atomic_write_json(
+                self.governance_path,
+                {
+                    "schema_version": self.GOVERNANCE_SCHEMA_VERSION,
+                    "entries": entries,
+                    "receipts": receipts,
+                    "updated_at": time.time(),
+                },
+            )
+        return {
+            "changed": changed,
+            "expired_keys": expired_keys,
+            "evicted_keys": evicted_keys,
+            "retained_entries": len(plans),
+        }
+
+    def governance_receipts(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        current = read_json(self.governance_path, {}) or {}
+        rows = list(current.get("receipts") or [])
+        count = max(0, int(limit))
+        if count == 0:
+            return []
+        return [dict(row) for row in rows[-count:]]
 
     def health(self, *, now: float | None = None) -> dict[str, Any]:
         now = time.time() if now is None else float(now)

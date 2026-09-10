@@ -13,6 +13,14 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from .execution_sandbox import ExecutionReceipt, NativeSandboxBroker, SandboxPolicy
+from .inference_skip_cache import (
+    InferenceSkipCache,
+    InferenceSkipIdentity,
+    RepositoryFingerprint,
+    build_identity,
+    repository_state_fingerprint,
+)
+from .retry_economics import RetryEconomicsGovernor, workspace_state_fingerprint
 
 
 def _now() -> str:
@@ -130,6 +138,8 @@ class AutonomousCodingAgent:
 
     The model/provider is injected through `PatchProvider`. The runtime owns graph
     retrieval, patch application, test execution, anti-loop decisions and receipts.
+    Exact-state inference reuse is admitted only for a single complete verifier plan;
+    cached patches are still applied and verified before a run may succeed.
     """
 
     def __init__(
@@ -140,6 +150,7 @@ class AutonomousCodingAgent:
         graph: Any | None = None,
         memory: Any | None = None,
         sandbox: NativeSandboxBroker | None = None,
+        inference_skip_cache: InferenceSkipCache | None = None,
     ):
         self.project = project.resolve(strict=True)
         self.state_root = state_root.resolve(strict=False)
@@ -147,6 +158,7 @@ class AutonomousCodingAgent:
         self.graph = graph
         self.memory = memory
         self.sandbox = sandbox or NativeSandboxBroker(self.state_root)
+        self.inference_skip_cache = inference_skip_cache or InferenceSkipCache(self.state_root / "inference-skip.sqlite3")
 
     def _workspace(self) -> tuple[Path, bool]:
         root = self.state_root / "agent-workspaces"
@@ -246,6 +258,49 @@ class AutonomousCodingAgent:
             # result through the run receipt even when optional memory is unavailable.
             return
 
+    @staticmethod
+    def _single_complete_verifier(task: AgentTask) -> bool:
+        discovered = task.metadata.get("verifier_discovery")
+        if not isinstance(discovered, Sequence) or isinstance(discovered, (str, bytes)):
+            return False
+        return len(discovered) == 1
+
+    def _inference_identity(
+        self,
+        task: AgentTask,
+        repository_fingerprint: RepositoryFingerprint,
+    ) -> InferenceSkipIdentity | None:
+        if not self._single_complete_verifier(task) or not repository_fingerprint.cacheable:
+            return None
+        policy_material = {
+            "security_policy_fingerprint": task.metadata.get("security_policy_fingerprint", ""),
+            "provider_policy_fingerprint": task.metadata.get("provider_policy_fingerprint", ""),
+            "verifier_discovery": task.metadata.get("verifier_discovery"),
+        }
+        policy_fingerprint = _digest(json.dumps(policy_material, ensure_ascii=False, sort_keys=True, default=str))
+        try:
+            return build_identity(
+                project=self.project,
+                repository_fingerprint=repository_fingerprint,
+                instruction=task.instruction,
+                verifier=task.verifier,
+                mode=task.mode.value,
+                policy_fingerprint=policy_fingerprint,
+            )
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _verification_hash(task: AgentTask, receipt: ExecutionReceipt) -> str:
+        payload = {
+            "verifier": list(task.verifier),
+            "exit_code": receipt.exit_code,
+            "timed_out": receipt.timed_out,
+            "stdout_sha256": _digest(receipt.stdout),
+            "stderr_sha256": _digest(receipt.stderr),
+        }
+        return _digest(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
     def execute(
         self,
         task: AgentTask,
@@ -260,8 +315,17 @@ class AutonomousCodingAgent:
             raise ValueError("max_attempts must be between 1 and 20")
         started_at = _now()
         started = time.monotonic()
+        source_fingerprint = repository_state_fingerprint(self.project)
+        inference_identity = self._inference_identity(task, source_fingerprint)
         workspace, git_worktree = self._workspace()
         context = self._context(task)
+        context["inference_skip"] = {
+            "eligible": inference_identity is not None,
+            "repository_fingerprint_method": source_fingerprint.method,
+            "repository_cacheable": source_fingerprint.cacheable,
+            "repository_cache_reason": source_fingerprint.reason,
+            "hit": False,
+        }
         run_id = "sha256:" + _digest(json.dumps({"task": task.instruction, "workspace": str(workspace), "started": started_at}, sort_keys=True))
         self._record_memory(session_id, "agent-run-started", {"run_id": run_id, "task": task.instruction, "mode": task.mode.value})
 
@@ -305,7 +369,7 @@ class AutonomousCodingAgent:
             )
 
         seen_patches: set[str] = set()
-        seen_failures: set[str] = set()
+        retry_governor = RetryEconomicsGovernor()
         attempts: list[AgentAttempt] = []
         previous_failure: dict[str, Any] | None = None
         total_tokens = 0
@@ -323,7 +387,39 @@ class AutonomousCodingAgent:
                 "changed_files": current_changed_files,
                 "previous_failure": previous_failure,
             }
-            proposal = provider.propose(task, context, previous_failure)
+
+            workspace_fingerprint = workspace_state_fingerprint(workspace)
+            retry_decision = retry_governor.assess(previous_failure, workspace_fingerprint)
+            if not retry_decision.allow_provider:
+                stop_reason = retry_decision.reason
+                break
+
+            cached_key = ""
+            cache_hit = None
+            if number == 1 and previous_failure is None and not current_diff and inference_identity is not None:
+                cache_hit = self.inference_skip_cache.lookup(inference_identity)
+            if cache_hit is not None:
+                cached_key = cache_hit.identity.key
+                context["inference_skip"] = {
+                    **dict(context.get("inference_skip") or {}),
+                    "hit": True,
+                    "cache_key": cached_key,
+                    "verification_hash": cache_hit.verification_hash,
+                    "provider_calls_avoided": 1,
+                }
+                proposal = PatchProposal(
+                    patch=cache_hit.patch,
+                    rationale=f"verified exact inference-skip replay: {cache_hit.rationale}",
+                    estimated_tokens=0,
+                    estimated_cost=0.0,
+                    metadata={
+                        "inference_skipped": True,
+                        "inference_skip_cache_key": cached_key,
+                        "verification_hash": cache_hit.verification_hash,
+                    },
+                )
+            else:
+                proposal = provider.propose(task, context, previous_failure)
             patch_hash = _digest(proposal.patch)
             if not proposal.patch.strip():
                 stop_reason = "empty patch proposal"
@@ -343,15 +439,13 @@ class AutonomousCodingAgent:
 
             apply_receipt = self._apply(workspace, proposal.patch, task.timeout_seconds)
             if not apply_receipt.ok:
+                if cached_key:
+                    self.inference_skip_cache.invalidate(cached_key, "cached-patch-apply-failed")
                 previous_failure = self._failure(None, apply_receipt.stderr or apply_receipt.stdout)
                 fingerprint = str(previous_failure["fingerprint"])
                 attempts.append(
                     AgentAttempt(number, patch_hash, False, apply_receipt, fingerprint, proposal.rationale, proposal.estimated_tokens, proposal.estimated_cost, AgentState.DIAGNOSING)
                 )
-                if fingerprint in seen_failures:
-                    stop_reason = "anti-loop: repeated patch application failure"
-                    break
-                seen_failures.add(fingerprint)
                 continue
 
             verifier = self.sandbox.run(
@@ -362,21 +456,33 @@ class AutonomousCodingAgent:
                 attempts.append(
                     AgentAttempt(number, patch_hash, True, verifier, "", proposal.rationale, proposal.estimated_tokens, proposal.estimated_cost, AgentState.COMPLETED)
                 )
+                if inference_identity is not None and not cached_key:
+                    self.inference_skip_cache.record_verified(
+                        inference_identity,
+                        patch=proposal.patch,
+                        rationale=proposal.rationale,
+                        verification_hash=self._verification_hash(task, verifier),
+                        verification_complete=True,
+                    )
+                    context["inference_skip"] = {
+                        **dict(context.get("inference_skip") or {}),
+                        "recorded_verified": True,
+                        "cache_key": inference_identity.key,
+                    }
                 final_state = AgentState.COMPLETED
-                stop_reason = "verifier passed"
+                stop_reason = "verifier passed after exact inference-skip" if cached_key else "verifier passed"
                 break
+            if cached_key:
+                self.inference_skip_cache.invalidate(cached_key, "cached-patch-verifier-failed")
             previous_failure = self._failure(verifier)
             fingerprint = str(previous_failure["fingerprint"])
             attempts.append(
                 AgentAttempt(number, patch_hash, True, verifier, fingerprint, proposal.rationale, proposal.estimated_tokens, proposal.estimated_cost, AgentState.REPAIRING)
             )
-            if fingerprint in seen_failures:
-                stop_reason = "anti-loop: repeated verifier failure"
-                break
-            seen_failures.add(fingerprint)
             context = {**context, "previous_failure": previous_failure}
 
         final_diff, changed_files = self._diff(workspace)
+        context = {**context, "retry_economics": retry_governor.summary()}
         rollback_complete = True
         if final_state != AgentState.COMPLETED or not task.retain_workspace:
             rollback_complete = self._cleanup(workspace, git_worktree)

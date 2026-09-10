@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: release-main-merge-gate-${{ github.event.pull_request.number || github.ref }}
@@ -17,10 +18,11 @@ jobs:
   release-main-merge-gate:
     name: release-main-merge-gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: '1'
+      SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Checkout exact pull request head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -76,6 +78,18 @@ jobs:
           python -m unittest tests.runtime.test_runtime_contract_version_graph_v1 -v
           python -m unittest tests.runtime.test_context_decision_trace_v1 -v
           python -m unittest tests.runtime.test_deterministic_policy_snapshot_v1 -v
+          python -m unittest tests.runtime.test_release_integrity -v
+          python -m unittest tests.runtime.test_provider_e5 -v
+          python -m unittest tests.runtime.test_release_readiness -v
+
+          # Recovery-critical behavior is re-proven inside the release gate rather
+          # than assumed from a separate workflow result.
+          python -m unittest tests.runtime.test_token_economy_rc1_runtime -v
+          python -m unittest tests.runtime.test_inference_skip_cache -v
+          python -m unittest tests.runtime.test_recovery_to_99_security -v
+          python -m unittest tests.runtime.test_recovery_to_99_property_matrix -v
+          python -m unittest tests.runtime.test_sandbox_capability_probe -v
+
           python tools/certify_python_publication_registry_reference.py --output /tmp/publication-registry.json
           python tools/certify_python_fixture_golden_catalog.py --output /tmp/fixture-golden.json
           python tools/certify_python_authority.py --out /tmp/python-authority.json
@@ -99,16 +113,59 @@ jobs:
           python tools/certify_runtime_contract_version_graph_v1.py --out /tmp/runtime-contract-version-graph.json
           python tools/certify_context_decision_trace_v1.py --out /tmp/context-decision-trace.json
           python tools/certify_deterministic_policy_snapshot_v1.py --out /tmp/deterministic-policy-snapshot.json
+          python tools/certify_recovery_to_99.py --output /tmp/recovery-to-99-release.json
           python tools/check_rust_feature_freeze.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --out /tmp/rust-feature-freeze-diff.json
           python tools/validate_release.py --smoke --output /tmp/release-validation.json
+
+          # Canonical release integrity is the exact clean Git head/tree plus a
+          # deterministic generated SHA-256 manifest receipt. The checked-in
+          # MANIFEST remains a legacy snapshot and is never trusted as the
+          # authority for the candidate currently under test.
+          python tools/certify_release_integrity.py \
+            --expected-head "${{ github.event.pull_request.head.sha }}" \
+            --output /tmp/release-integrity.json \
+            --manifest-output /tmp/release-generated-manifest.sha256
+
+          cp MANIFEST.sha256 /tmp/release-legacy-manifest.sha256
+          trap 'cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256' EXIT
+          python tools/refresh_manifest.py
           python tools/refresh_manifest.py --check
+          python tools/validate.py
+          cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256
+          trap - EXIT
+
+      - name: Certify zero known P0/P1 release blockers
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python tools/certify_release_readiness.py \
+            --github-repository "$GITHUB_REPOSITORY" \
+            --exact-head "$SYN_EXPECTED_HEAD" \
+            --require-blocker-free \
+            --output /tmp/release-known-blockers.json
 
       - name: Enforce exact clean pull request head
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf syntavra_runtime.egg-info
+          rm -rf syntavra_runtime.egg-info .pytest_cache
           rm -f fusion-release-smoke.json platform-registry.json native-dry-run.json
+          if [ -f /tmp/release-legacy-manifest.sha256 ]; then cp /tmp/release-legacy-manifest.sha256 MANIFEST.sha256; fi
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Upload release integrity evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: release-main-integrity-${{ github.event.pull_request.head.sha }}
+          path: |
+            /tmp/release-integrity.json
+            /tmp/release-generated-manifest.sha256
+            /tmp/release-validation.json
+            /tmp/recovery-to-99-release.json
+            /tmp/release-known-blockers.json
+          if-no-files-found: warn

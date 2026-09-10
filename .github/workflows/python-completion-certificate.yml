@@ -94,11 +94,26 @@ jobs:
           path: ${{ runner.temp }}/python-completion-platform
           merge-multiple: true
 
-      - name: Run completion regression and aggregate repository validation
+      - name: Run completion regression and exact-head release validation
+        shell: bash
         run: |
+          set -euo pipefail
           python -m unittest tests.runtime.test_python_completion_certificate_v1 -v
+          python -m unittest tests.runtime.test_release_integrity -v
+          python tools/certify_release_integrity.py \
+            --expected-head "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --output "${{ runner.temp }}/python-completion-release-integrity.json" \
+            --manifest-output "${{ runner.temp }}/python-completion-generated-manifest.sha256"
+
+          cp MANIFEST.sha256 "${{ runner.temp }}/python-completion-legacy-manifest.sha256"
+          trap 'cp "${RUNNER_TEMP}/python-completion-legacy-manifest.sha256" MANIFEST.sha256' EXIT
+          python tools/refresh_manifest.py
+          python tools/refresh_manifest.py --check
           python tools/validate.py
-          python tools/validate_release.py --smoke --output ${{ runner.temp }}/python-completion-release-validation.json
+          cp "${{ runner.temp }}/python-completion-legacy-manifest.sha256" MANIFEST.sha256
+          trap - EXIT
+
+          python tools/validate_release.py --smoke --output "${{ runner.temp }}/python-completion-release-validation.json"
 
       - name: Generate machine-readable completion certificate
         run: |
@@ -138,5 +153,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: python-completion-certificate-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/python-completion-certificate.json
+          path: |
+            ${{ runner.temp }}/python-completion-certificate.json
+            ${{ runner.temp }}/python-completion-release-integrity.json
+            ${{ runner.temp }}/python-completion-generated-manifest.sha256
+            ${{ runner.temp }}/python-completion-release-validation.json
           if-no-files-found: error

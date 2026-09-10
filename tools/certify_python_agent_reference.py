@@ -35,6 +35,7 @@ EXPECTED_PRODUCT_KEYS = {
     "ok",
     "post_verifiers",
     "provider",
+    "provider_observation",
     "run",
     "tool_trace",
     "usage",
@@ -78,10 +79,7 @@ def _git(*args: str, cwd: Path) -> None:
 def prepare_project(project: Path) -> None:
     project.mkdir(parents=True)
     (project / "sample.py").write_text("VALUE = 1\n", encoding="utf-8")
-    (project / "Makefile").write_text(
-        "test:\n\tgrep -q 'VALUE = 2' sample.py\n",
-        encoding="utf-8",
-    )
+    (project / "Makefile").write_text("test:\n\tgrep -q 'VALUE = 2' sample.py\n", encoding="utf-8")
     (project / "README.md").write_text(
         "# Python agent reference fixture\n\nChange VALUE from 1 to 2.\n",
         encoding="utf-8",
@@ -121,7 +119,6 @@ def run_python(
             "PYTHONUTF8": "1",
         }
     )
-    # The Python reference must not depend on Rust parity/probe activation.
     env.pop("SYNTAVRA_BULK_PARITY_PROBE", None)
     completed = subprocess.run(
         command,
@@ -202,10 +199,7 @@ class MockEndpoint:
                     encoded = owner.raw_body
                 else:
                     index = len(owner.requests) - 1
-                    if index >= len(owner.contents):
-                        content = owner.contents[-1] if owner.contents else ""
-                    else:
-                        content = owner.contents[index]
+                    content = owner.contents[min(index, len(owner.contents) - 1)] if owner.contents else ""
                     response = {
                         "id": f"mock-{index + 1}",
                         "choices": [
@@ -326,19 +320,58 @@ def _assert_argparse_failure(label: str, result: dict[str, Any]) -> dict[str, An
         raise AssertionError(f"{label}: argparse failure unexpectedly wrote stdout: {result['stdout']!r}")
     if "usage:" not in result["stderr"].casefold():
         raise AssertionError(f"{label}: argparse failure did not emit usage: {result['stderr']!r}")
-    return {
-        "exit": 2,
-        "stdout_format": "empty",
-        "stderr_format": "argparse-usage-error",
-    }
+    return {"exit": 2, "stdout_format": "empty", "stderr_format": "argparse-usage-error"}
 
 
 def _artifact_rows(state_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for path in sorted(state_root.rglob("agent-receipts/*.json")):
-        value = json.loads(path.read_text(encoding="utf-8"))
-        rows.append({"path_suffix": f"agent-receipts/{path.name}", "value": value})
+        rows.append(
+            {
+                "path_suffix": f"agent-receipts/{path.name}",
+                "value": json.loads(path.read_text(encoding="utf-8")),
+            }
+        )
     return rows
+
+
+def _request_roles(body: dict[str, Any]) -> list[str]:
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        raise AssertionError(f"request messages are not a list: {body}")
+    return [str(item.get("role")) for item in messages if isinstance(item, dict)]
+
+
+def _user_packet(body: dict[str, Any]) -> dict[str, Any]:
+    messages = body.get("messages")
+    if not isinstance(messages, list) or len(messages) != 2:
+        raise AssertionError(f"constant-context request must contain exactly system+user: {body}")
+    user = messages[1]
+    if not isinstance(user, dict) or user.get("role") != "user":
+        raise AssertionError(f"constant-context request has no canonical user packet: {body}")
+    try:
+        packet = json.loads(str(user.get("content") or ""))
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"compiled agent context is not canonical JSON: {user}") from exc
+    if not isinstance(packet, dict):
+        raise AssertionError(f"compiled agent context is not an object: {packet}")
+    return packet
+
+
+def _assert_constant_context(packet: dict[str, Any], *, expect_search_evidence: bool) -> None:
+    policy = packet.get("context_policy")
+    if not isinstance(policy, dict) or policy.get("raw_history_replayed") is not False:
+        raise AssertionError(f"raw history replay prohibition drifted: {packet}")
+    if policy.get("exact_recovery_required") is not True:
+        raise AssertionError(f"exact recovery policy drifted: {packet}")
+    evidence = packet.get("active_evidence")
+    if not isinstance(evidence, list):
+        raise AssertionError(f"active evidence must be a list: {packet}")
+    tools = [item.get("tool") for item in evidence if isinstance(item, dict)]
+    if expect_search_evidence and "repo.search" not in tools:
+        raise AssertionError(f"search evidence missing from active context: {packet}")
+    if not expect_search_evidence and "repo.search" in tools:
+        raise AssertionError(f"future search evidence leaked into first request: {packet}")
 
 
 def certify(repo: Path) -> dict[str, Any]:
@@ -358,12 +391,7 @@ def certify(repo: Path) -> dict[str, Any]:
             separators=(",", ":"),
         )
         with MockEndpoint([search_action, patch_action]) as endpoint:
-            live_result = run_python(
-                repo,
-                live_project,
-                live_state,
-                _agent_run_args(endpoint.endpoint),
-            )
+            live_result = run_python(repo, live_project, live_state, _agent_run_args(endpoint.endpoint))
             requests = list(endpoint.requests)
 
         if live_result["exit"] != 0 or not isinstance(live_result["value"], dict):
@@ -375,6 +403,10 @@ def certify(repo: Path) -> dict[str, Any]:
             raise AssertionError(f"agent run did not return ok=true: {live}")
         if set(live) != EXPECTED_PRODUCT_KEYS:
             raise AssertionError(f"agent product schema drift: {sorted(live)}")
+        provider_observation = live.get("provider_observation")
+        if not isinstance(provider_observation, dict):
+            raise AssertionError(f"provider observation schema drift: {provider_observation!r}")
+
         run = live.get("run")
         if not isinstance(run, dict) or set(run) != EXPECTED_RUN_KEYS:
             raise AssertionError(f"agent run receipt schema drift: {run}")
@@ -386,6 +418,7 @@ def certify(repo: Path) -> dict[str, Any]:
         sequences = [item["sequence"] for item in events]
         if sequences != list(range(1, len(events) + 1)):
             raise AssertionError(f"agent event sequence drift: {sequences}")
+
         trace = live.get("tool_trace")
         if not isinstance(trace, list) or [item.get("action") for item in trace] != ["search", "patch"]:
             raise AssertionError(f"tool trace ordering drift: {trace}")
@@ -394,31 +427,30 @@ def certify(repo: Path) -> dict[str, Any]:
         request_bodies = [item.get("body") for item in requests]
         if any(not isinstance(item, dict) for item in request_bodies):
             raise AssertionError(f"non-object model request: {requests}")
-        first = request_bodies[0]
-        second = request_bodies[1]
+        first, second = request_bodies
         assert isinstance(first, dict) and isinstance(second, dict)
         if set(first) != EXPECTED_REQUEST_KEYS or set(second) != EXPECTED_REQUEST_KEYS:
             raise AssertionError(f"OpenAI-compatible request schema drift: {request_bodies}")
         if first.get("model") != "mock-model" or second.get("model") != "mock-model":
             raise AssertionError(f"model drift: {request_bodies}")
-        if first.get("stream") is not False or first.get("temperature") != 0.1 or first.get("max_tokens") != 8192:
-            raise AssertionError(f"generation request defaults drift: {first}")
+        if first.get("stream") is not False or second.get("stream") is not False:
+            raise AssertionError(f"streaming default drift: {request_bodies}")
         if "tools" in first or "tool_choice" in first or "tools" in second or "tool_choice" in second:
             raise AssertionError("Python agent unexpectedly changed from JSON-action protocol to API tool calling")
-        first_messages = first.get("messages")
-        second_messages = second.get("messages")
-        if not isinstance(first_messages, list) or not isinstance(second_messages, list):
-            raise AssertionError(f"messages schema drift: {request_bodies}")
-        first_roles = [item.get("role") for item in first_messages if isinstance(item, dict)]
-        second_roles = [item.get("role") for item in second_messages if isinstance(item, dict)]
-        if first_roles != ["system", "user"]:
-            raise AssertionError(f"first model role ordering drift: {first_roles}")
-        if second_roles != ["system", "user", "assistant", "user"]:
-            raise AssertionError(f"tool-result message ordering drift: {second_roles}")
-        assistant_action = json.loads(str(second_messages[2].get("content") or "{}"))
-        tool_result = json.loads(str(second_messages[3].get("content") or "{}"))
-        if assistant_action.get("action") != "search" or tool_result.get("tool") != "repo.search":
-            raise AssertionError(f"tool round-trip contract drift: {second_messages[2:4]}")
+
+        first_roles = _request_roles(first)
+        second_roles = _request_roles(second)
+        if first_roles != ["system", "user"] or second_roles != ["system", "user"]:
+            raise AssertionError(
+                "constant-context role contract drift: "
+                f"first={first_roles}, second={second_roles}"
+            )
+        first_packet = _user_packet(first)
+        second_packet = _user_packet(second)
+        _assert_constant_context(first_packet, expect_search_evidence=False)
+        _assert_constant_context(second_packet, expect_search_evidence=True)
+        first_messages = first["messages"]
+        second_messages = second["messages"]
         system_prompt = str(first_messages[0].get("content") or "")
         if system_prompt != str(second_messages[0].get("content") or ""):
             raise AssertionError("system prompt changed between tool rounds")
@@ -437,6 +469,7 @@ def certify(repo: Path) -> dict[str, Any]:
             "stderr_empty": True,
             "product_keys": sorted(live),
             "run_keys": sorted(run),
+            "provider_observation_keys": sorted(provider_observation),
             "event_keys": sorted(EXPECTED_EVENT_KEYS),
             "event_count": len(events),
             "event_types": [item["event_type"] for item in events],
@@ -445,6 +478,10 @@ def certify(repo: Path) -> dict[str, Any]:
             "request_keys": sorted(EXPECTED_REQUEST_KEYS),
             "first_message_roles": first_roles,
             "second_message_roles": second_roles,
+            "raw_history_replayed": False,
+            "second_active_evidence_tools": [
+                item.get("tool") for item in second_packet.get("active_evidence", []) if isinstance(item, dict)
+            ],
             "tools_present": False,
             "tool_choice_present": False,
             "system_prompt_sha256": hashlib.sha256(system_prompt.encode("utf-8")).hexdigest(),
@@ -489,13 +526,11 @@ def certify(repo: Path) -> dict[str, Any]:
             "keys": sorted(replay),
         }
 
-        missing = run_python(
-            repo,
-            replay_project,
-            root / "missing-state",
-            ["agent", "replay", "change VALUE to 2"],
+        missing = run_python(repo, replay_project, root / "missing-state", ["agent", "replay", "change VALUE to 2"])
+        cases["replay_missing_required_arguments"] = _assert_argparse_failure(
+            "replay missing required arguments",
+            missing,
         )
-        cases["replay_missing_required_arguments"] = _assert_argparse_failure("replay missing required arguments", missing)
 
         malformed_replay = run_python(
             repo,
@@ -525,14 +560,8 @@ def certify(repo: Path) -> dict[str, Any]:
             "model-malformed-arguments",
             MockEndpoint([json.dumps({"action": "inspect", "paths": "not-a-list"})]),
         )
-        cases["model_empty_chat_output"] = model_failure_case(
-            "model-empty-output",
-            MockEndpoint([""]),
-        )
-        cases["model_http_500"] = model_failure_case(
-            "model-http-500",
-            MockEndpoint(status=500),
-        )
+        cases["model_empty_chat_output"] = model_failure_case("model-empty-output", MockEndpoint([""]))
+        cases["model_http_500"] = model_failure_case("model-http-500", MockEndpoint(status=500))
         cases["model_invalid_http_json"] = model_failure_case(
             "model-invalid-http-json",
             MockEndpoint(raw_body=b"not-json"),
@@ -568,10 +597,11 @@ def certify(repo: Path) -> dict[str, Any]:
         "engine": "python",
         "routes": ["agent run", "agent replay"],
         "transport_protocol": "openai-compatible-chat-json-action",
+        "context_transport": "constant-active-evidence-v2",
         "api_tool_calling": {
             "tools_present": False,
             "tool_choice_present": False,
-            "tool_result_transport": "assistant-action-then-user-tool-result-message",
+            "tool_result_transport": "constant-active-evidence-user-packet",
         },
         "exit_policy": {
             "success": 0,
@@ -596,7 +626,7 @@ def main() -> int:
     repo = Path(args.repo).resolve(strict=True)
     try:
         result = certify(repo)
-    except Exception as exc:  # The artifact must explain a red gate, not merely disappear.
+    except Exception as exc:  # A red gate must emit evidence rather than disappear.
         result = {
             "ok": False,
             "schema_version": 1,

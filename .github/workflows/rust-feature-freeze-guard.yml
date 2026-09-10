@@ -39,7 +39,9 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run Rust freeze regression tests
-        run: python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+        run: |
+          python -m unittest tests.runtime.test_rust_feature_freeze_guard -v
+          python -m unittest tests.runtime.test_rust_feature_freeze_evidence_wrapper -v
 
       - name: Certify exact-head Rust freeze authority
         run: |

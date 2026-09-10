@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "family": "syntavra-provider-token-envelope",
+  "owner": "syntavra_runtime/provider_token_envelope.py",
+  "status": "runtime-gateway-enforced",
+  "default_policy": {
+    "target_total_tokens": 8000,
+    "target_input_tokens": 6000,
+    "target_output_tokens": 2000,
+    "input_target_fraction": 0.06,
+    "output_target_fraction": 0.2,
+    "minimum_avoidable_reduction": 0.8,
+    "minimum_input_budget_tokens": 256,
+    "minimum_output_budget_tokens": 64
+  },
+  "invariants": [
+    "selection-before-compression",
+    "no-expansion",
+    "avoidable-token-reduction-at-least-80-percent",
+    "3k-8k-is-a-target-zone-not-a-false-universal-guarantee",
+    "overflow-requires-explicit-necessity-leases",
+    "exact-user-security-and-verifier-evidence-never-silently-truncated",
+    "output-requirements-are-budgeted-separately-from-input-context",
+    "provider-receipts-required-for-public-token-savings-claims"
+  ],
+  "necessity_kinds": [
+    "system_instruction",
+    "user_instruction",
+    "security_policy",
+    "exact_source",
+    "current_failure",
+    "verifier_evidence",
+    "selected_tool_schema",
+    "dependency",
+    "recovery_handle",
+    "requested_output"
+  ],
+  "promotion_gates": {
+    "runtime_call_admission": "minimum_avoidable_reduction_satisfied && necessity_proof_complete",
+    "target_zone": "provider_total_budget_tokens <= 8000",
+    "overflow": "allowed only when every mandatory token segment is lease-backed",
+    "public_claim": "paired provider-observed baseline/candidate receipts + verifier non-inferiority"
+  },
+  "runtime_wiring": {
+    "context_governor": "canonical compile_provider_token_envelope entry point",
+    "model_gateway": "pre-dispatch input admission + pre-inference output clamp",
+    "strict_input_measurement": "prepared_input_tokens must come from tokenizer-observed prepared request",
+    "remaining": [
+      "adaptive_context_policy",
+      "agent_runtime",
+      "output_governor",
+      "deferred_tool_discovery",
+      "tool_externalization",
+      "provider_receipt_reconciliation"
+    ]
+  }
+}

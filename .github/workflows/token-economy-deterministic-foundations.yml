@@ -1,0 +1,130 @@
+name: Token Economy Deterministic Foundations
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/agent_context_runtime.py'
+      - 'tests/runtime/test_pre_model_ingestion_fold_gate.py'
+      - 'tests/runtime/test_active_context_supersession_graph.py'
+      - 'tests/runtime/test_causal_history_skeleton.py'
+      - 'docs/TE_P0_01_PRE_MODEL_INGESTION_FOLD_GATE.md'
+      - 'docs/TE_P0_02_ACTIVE_CONTEXT_SUPERSESSION_GRAPH.md'
+      - 'docs/TE_P0_03_NO_CHANGE_RESULT_ELISION.md'
+      - 'docs/TE_P0_04_CAUSAL_HISTORY_SKELETON.md'
+      - 'docs/SYNTAVRA_TOKEN_FLOOR_CURRENT_CHECKPOINT.md'
+      - '.github/workflows/token-economy-deterministic-foundations.yml'
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - 'syntavra_runtime/agent_context_runtime.py'
+      - 'tests/runtime/test_pre_model_ingestion_fold_gate.py'
+      - 'tests/runtime/test_active_context_supersession_graph.py'
+      - 'tests/runtime/test_causal_history_skeleton.py'
+      - 'docs/TE_P0_01_PRE_MODEL_INGESTION_FOLD_GATE.md'
+      - 'docs/TE_P0_02_ACTIVE_CONTEXT_SUPERSESSION_GRAPH.md'
+      - 'docs/TE_P0_03_NO_CHANGE_RESULT_ELISION.md'
+      - 'docs/TE_P0_04_CAUSAL_HISTORY_SKELETON.md'
+      - 'docs/SYNTAVRA_TOKEN_FLOOR_CURRENT_CHECKPOINT.md'
+      - '.github/workflows/token-economy-deterministic-foundations.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: token-economy-deterministic-foundations-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  PYTHONUTF8: '1'
+  SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  deterministic-foundations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Compile deterministic foundation surfaces
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            syntavra_runtime/agent_context_runtime.py \
+            tests/runtime/test_pre_model_ingestion_fold_gate.py \
+            tests/runtime/test_active_context_supersession_graph.py \
+            tests/runtime/test_causal_history_skeleton.py
+
+      - name: Prove deterministic context foundations
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_pre_model_ingestion_fold_gate -v
+          python -m unittest tests.runtime.test_active_context_supersession_graph -v
+          python -m unittest tests.runtime.test_causal_history_skeleton -v
+          python -m unittest tests.runtime.test_token_economy_rc1_runtime -v
+
+      - name: Record exact-head structural receipt
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          expected = os.environ['SYN_EXPECTED_HEAD']
+          receipt = {
+              'schema_version': 2,
+              'claim': 'TOKEN_ECONOMY_DETERMINISTIC_FOUNDATIONS_V2',
+              'exact_head': actual,
+              'expected_head': expected,
+              'head_match': actual == expected,
+              'te_p0_01': 'PRE_MODEL_INGESTION_FOLD_GATE_TESTED',
+              'te_p0_02': 'ACTIVE_CONTEXT_SUPERSESSION_GRAPH_TESTED',
+              'te_p0_03': 'NO_CHANGE_RESULT_ELISION_HARDENED',
+              'te_p0_04': 'CAUSAL_HISTORY_SKELETON_TESTED',
+              'provider_proof': False,
+              'claim_boundary': 'STRUCTURAL_RUNTIME_EVIDENCE_ONLY_NOT_PROVIDER_BILLED_PROOF',
+          }
+          Path('/tmp/token-economy-deterministic-foundations.json').write_text(
+              json.dumps(receipt, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          assert receipt['head_match'], receipt
+          PY
+
+      - name: Enforce clean exact head
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
+          test "$(git rev-parse HEAD)" = "$SYN_EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload deterministic foundation receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: token-economy-deterministic-foundations-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/token-economy-deterministic-foundations.json
+          if-no-files-found: error

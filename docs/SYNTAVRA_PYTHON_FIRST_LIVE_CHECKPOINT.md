@@ -1,127 +1,237 @@
-# Syntavra Python-First Live Checkpoint
+# Syntavra HyperEfficiency Live Checkpoint
 
 Updated: **2026-09-07**
 
-This file is the volatile continuation authority. Historical checkpoints remain in Git history; the capability registries, the append-only roadmap and the dedicated post-completion closure document remain the machine-readable/long-form authorities.
+This is the volatile continuation authority for the admitted post-280 HyperEfficiency track. It extends the frozen/certified Python-first closure and current release/operations state; it does not rewrite either.
 
-## Latest recorded repository baseline
-
-Latest completed admitted maintenance merge before this continuation refresh:
+## Preserved authority
 
 ```text
-945bde9d7d7664bab9133f508030fbfeca133402
-```
-
-This is a recorded baseline, not a self-updating assertion that this Markdown file can somehow know the SHA of the future commit that contains itself.
-
-Python post-completion capability-closure base remains:
-
-```text
-bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f
-```
-
-Later admitted changes through PR #199 are documentation/authority/CI hardening or evidence-driven Python runtime hardening. They do not add public routes, reopen the closed Python capability roadmap, reactivate Rust or change the 174/245 production-promotion baseline.
-
-## Admitted continuation chain
-
-- PR #184 `bf350bd7ba51d7aaf3986ce14c80beb9af2ded7f` — Python post-completion runtime closure through capability 280 except deliberately deferred Rust-transition capabilities 271-275.
-- PR #185 `6e58b1ce80f55a3aa0d122a69ed30cc25db13eee` — documentation-only continuation authority reconciliation.
-- PR #188 `b0c2863ea0605f16a6dcd70fc635200a12e47433` — Rust reactivation authority clarified; Python completion does not reactivate Rust.
-- PR #189 `ac393d94ed5627ffc0c68b27a9fefde4972f8d68` — authority/continuation manifest coverage hardened.
-- PR #190 `0526ae13bcf08e3fcbbd25b3d9f3dc42d0e5ae74` — volatile continuation surfaces refreshed.
-- PR #191 `a3f2283aff92922a2fe7dafb8a5e25816bb0d547` — host-install rollback reporting hardened.
-- PR #192 `2646ea8a9d0865f3b70df59ff522ec64f2146351` — encrypted evidence key-rotation recovery hardened.
-- PR #193 `792c4f5a870d46b002085877293cd2938c801bfd` — continuation authority refreshed after PR #192.
-- PR #194 `d86bfc93f1ee6af365353f973ebc5a2c992fc48f` — immutable setup-node pin refreshed to v7 and release trust-chain manifest coverage hardened.
-- PR #195 `3db646e98ab624af6030dd477eb02439f05d9bd5` — host installation rollback recovery hardened.
-- PR #196 `6adb6500568bc830b4115ce3c3044f779541a057` — immutable download-artifact pin refreshed to v8.0.1 with fail-closed digest mismatch behavior preserved.
-- PR #197 `9b6b1c89d3e438b2d12c594396e6e03d3461b596` — volatile continuation authority refreshed through PR #196; runtime/contracts/Rust/public-command semantics unchanged.
-- PR #198 `de1d1c25a479add31cd3a0d64049fc4d4b0d25a8` — superseded Release Main Merge Gate runs now cancel when a newer exact PR head replaces them; aggregate authority coverage remains mandatory.
-- PR #199 `945bde9d7d7664bab9133f508030fbfeca133402` — Post-Completion manifest verification made read-only and fail-closed; deterministic evidence is uploaded without CI mutating the PR branch.
-
-## Latest merge-push validation
-
-PR #199 merge SHA `945bde9d7d7664bab9133f508030fbfeca133402` produced 24 direct push workflows plus one dependent `workflow_run` receipt workflow. The completed 25-run wave has **failure=0, in_progress=0, queued=0**.
-
-Critical recorded runs:
-
-- Python Post-Completion 243-280 run `34095403185` — `SUCCESS`; deterministic manifest candidate, exact committed manifest, repository validation and clean-head enforcement passed without branch mutation.
-- Rust Feature Freeze Guard run `34095403353` — `SUCCESS`.
-- Release Package Provenance run `34095403310` — `SUCCESS`; Python/npm/TypeScript/VS Code packaging, Rust publication-graph proof, release identity and clean-repository enforcement passed without publishing.
-- Pre-Release Candidate Receipt Plan run `34095617900` — `SUCCESS`.
-- Python Completion Certificate run `34095403345` — `SUCCESS`; Linux/Windows smoke, exact-head receipt download, aggregate repository validation, machine-readable certificate, exact clean head and artifact upload passed.
-
-No equivalent workflow was manually rerun to obtain this evidence.
-
-## Canonical state
-
-```text
+main baseline before HyperEfficiency admission = e193e6766851a61d1d254db01664bb18ae85b811
 PYTHON_COMPLETE(v1) = true
-Python post-completion 240-270 = implemented/certified
-Python post-completion 276-280 = implemented/certified
-Active Python post-completion scope 243-270 + 276-280 = 33/33 certified
-Rust-transition capabilities 271-275 = deferred
+Python 236-270 + 276-280 = closed/certified
+271-275 = deferred Rust-transition work
 rust_resume_allowed = false
 rust_retired = true
 Rust production promotion = 174/245
 Remaining = 71
 ```
 
-No currently authorized internal Python roadmap gap remains in 236-280. Capabilities 271-275, Remaining-71 port work and any 174→245 promotion remain blocked until a separate explicit reviewed Rust-reactivation authority exists.
+## Current admitted roadmap
 
-## Current development interpretation
+```text
+Source IDs:     HE-0001 .. HE-1368
+Canonical IDs:  CAP-0281 .. CAP-1648
+Mapping:        CAP = HE + 280
+Default state:  ADMITTED_RECONCILIATION
+```
 
-- Do not manufacture internal implementation work merely to keep activity moving.
-- New Python work requires concrete correctness, security, compatibility, performance, recovery, observability or authority evidence, or a separately admitted new capability.
-- Reuse canonical owners instead of creating duplicate stores, routers, registries, databases or public command families.
-- External superiority, provider-billed savings, independent validation, live third-party certification, publication/adoption and maturity claims remain externally evidence-gated.
-- Keep exact-head CI discipline: inspect equivalent queued/in-progress work before dispatch/rerun and never rerun as polling.
+HE-1285..HE-1368 / CAP-1565..CAP-1648 are Token Elimination v10. Nine roadmap shards remain SHA-256-bound. Token-economy/frontier files are overlays, not new CAP IDs or roadmap shards.
 
-## Release / external-operations authority
+## Current continuation authority
 
-Release identity remains **Syntavra 0.0.1 pre-release**. Repository publication contracts still state `REGISTRY_PUBLICATION_NOT_PERFORMED` and all production targets remain unpublished.
+Read in this order:
 
-Observed on **2026-09-07**:
+1. `docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md`
+2. `docs/plans/SYNTAVRA_CONTEXT_EXECUTION_COMPILER_V1.md`
+3. `docs/plans/SYNTAVRA_TOKEN_ECONOMY_COMPETITIVE_GAP_V1.md`
+4. `docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V1.md`
+5. `docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V2.md`
+6. `docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V3.md`
+7. `docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V4.md`
+8. `docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V1.md`
+9. `docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V2.md`
+10. `docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V3.md`
+11. `contracts/python/token-economy-execution-backlog-v4.json`
+12. `contracts/python/ultra-low-token-frontier-v3.json`
+13. previous V1/V2/V3 backlog/frontier contracts as append-only lineage
+14. `contracts/python/hyperefficiency-roadmap-v1.json`
+15. `docs/UNIFIED_PLAN.md`
+16. prior frozen Python-first completion authorities
 
-- GitHub `main` branch reports `protected=false`.
-- Repository ruleset collection is empty.
-- `.github/workflows/publish-pre-release.yml` requires release-main protection readiness in `publish` mode before registry writes.
-- Therefore actual publication is currently blocked by release authority/settings even if package versions are otherwise available.
-- The connected GitHub surface used for this checkpoint exposes ruleset/protection reads but no administration write or workflow-dispatch action, so this blocker was not bypassed or weakened.
-- Environment reviewer and secret readiness are not asserted by this checkpoint because the connected surface cannot safely inspect secrets or the protected environment configuration.
+`ADMITTED_RECONCILIATION` does not mean missing implementation. Reuse owners and classify `EXISTS/HARDEN/UNIFY/NEW/CERTIFY/EXTERNAL/DEFERRED` before coding.
 
-Public package-name searches found no indexed exact Syntavra package pages, but that is **not** a publication authority. The workflow's own live registry preflight remains the required exact release gate.
+## Release authority preserved
 
-## Remaining legitimate work
+Release remains **Syntavra 0.0.1 pre-release** and publication remains unperformed. Issue #202 remains the release/admin/provider blocker. Do not weaken release gates to advance token-economy work.
 
-### External evidence / operations
+## Current implementation evidence
 
-- [ ] Provider-observed SignalBench / competitor benchmark evidence.
-- [ ] Independent validation outside repository self-certification.
-- [ ] Live third-party host/provider integration certification where required.
-- [ ] Configure/verify release-main protection authority required by publish mode.
-- [ ] Verify protected `pre-release` environment reviewer gate and publication credentials through authorized GitHub administration.
-- [ ] Run the guarded `Publish Syntavra 0.0.1 Pre-Release` workflow in `dry-run` mode on the exact current `main` SHA.
-- [ ] Run the same workflow in `publish` mode only after all independent gates pass and explicit publish authority is present.
-- [ ] Verify public registry visibility/receipts after publication.
-- [ ] Public adoption and long-term maturity evidence.
+```text
+TE-P0-05 Stable Tool Schema Canonicalization
+implementation commit: 8d78cfc0b66d01eea5f01b1aec0ad255ef5b692d
+provider-savings certification: OPEN
+```
 
-### Rust-transition work
+Equivalent effective tool sets have canonicalized provider-visible schema ordering/hashes. This is implementation evidence, not provider-billed savings proof.
 
-Do not begin while Rust is retired:
+## Current exact task A: M6-0 reconciliation
 
-- [ ] Capability 271 Python-to-Rust Contract Export.
-- [ ] Capability 272 Python-to-Rust Differential Snapshot.
-- [ ] Capability 273 Rust Resume Gate.
-- [ ] Capability 274 Atomic Rust Promotion Planner.
-- [ ] Capability 275 Post-Promotion Python Oracle.
-- [ ] Remaining-71 active differential/port program.
-- [ ] Any 174→245 production promotion.
+Continue canonical reconciliation of the 27 fixed system families. Every family needs owner, classification, existing evidence, dependency/invalidation edges and verifier before deriving new implementation work.
 
-## Current exact task
+## Current exact task B: TE-0 measurement
 
-1. Keep certified Python 236-280 internal scope closed absent new evidence.
-2. Do not start Rust-transition work while `rust_resume_allowed=false` and `rust_retired=true`.
-3. Finish external release authority first: protect `main`/configure rules, verify the protected `pre-release` environment, then run the guarded exact-head dry-run.
-4. Only after dry-run and all independent release gates pass may actual 0.0.1 pre-release publication proceed.
-5. Continue provider-observed and independent validation as real external evidence becomes available.
+Before aggressive promotion:
+
+- explain >=95% of provider-visible token mass by source;
+- attribute fresh/cached input, repo/context, schemas, active/stale tool output, reasoning, output, recalls, retries/fallbacks and provider cost;
+- record provider tokens per verified successful task and per new verified information;
+- preserve claim boundary until paired provider-observed receipts exist.
+
+## Current deterministic continuation first
+
+The following still outrank learned/exotic compression:
+
+1. `TE-P0-01` Pre-Model Ingestion Fold Gate.
+2. `TE-P0-02/03/04/09` supersession, no-change, causal-history/constant-context and delta path.
+3. `U-P0-01` Tool-Chain Fusion / Programmatic Tool Calling.
+4. `TE-P0-08` Tool Result Query Pushdown.
+5. `TE-P0-10 + U-P0-02` verifier-gated inference skip + zero-inference answer synthesis.
+6. `TE-P0-11 + U-P0-03` workflow macro compiler + verified micro-agent macro runtime.
+7. `TE-P0-06/07/14` cache diagnostics/economics/provider-cache modernization.
+8. `TE-P0-12/13` provider-native context editing/tool search when end-to-end superior.
+9. `U-P0-04` current-truth contradiction collapse.
+
+`TE-P0-05` remains implemented/hardened; provider receipt certification stays open.
+
+## Ultra-low frontier V1: TE-U0..U7
+
+- Tool-Chain Fusion / Programmatic Tool Calling.
+- Zero-Inference Answer Synthesis.
+- Verified Micro-Agent Macro Runtime.
+- Current-Truth Contradiction Collapse.
+- Action-Preserving Observation Compressor.
+- Multi-Rubric Residual Code Pruner.
+- Cross-Lingual Token Arbitrage.
+- Context Value Predictor.
+- Step-Level Reasoning Budgeter.
+- Provider/Tokenizer Arbitrage Router.
+- Learned Tool Result Visibility Policy.
+
+Research stretch:
+
+```text
+easy/warm:     0-500
+easy frontier: 500-2K
+normal coding: 2K-5K
+hard scoped:   4K-8K
+```
+
+## Ultra-low frontier V2: TE-U8..U14
+
+New active items:
+
+1. `U2-P0-01` AST-Native Action Space.
+2. `U2-P0-02` Adaptive Edit Format Router.
+3. `U2-P0-03` Adaptive Retrieval Budget Allocator.
+4. `U2-P0-04` Semantic Early-Stop Governor.
+5. `U2-P0-06` Retry Economics / Repair-Loop Governor.
+6. `U2-P0-05` Grammar-Constrained SWIR / Structured Output.
+7. `U2-P1-01` Subagent Shared-Context Object Graph.
+8. `U2-P1-02` Best-Round / Best-State Selection.
+9. `U2-P1-03` Counterfactual Context Drop Testing.
+
+Research stretch:
+
+```text
+easy/warm:     0-250
+easy frontier: 250-1K
+normal coding: 1K-3K
+hard scoped:   2.5K-6K
+```
+
+## Ultra-low frontier V3: TE-U15..U21
+
+The active lower-floor continuation is:
+
+1. `U3-P0-03` Verifier-Guided Failure Projection.
+2. `U3-P0-02` Local Draft -> Verifier -> Frontier Residual Correction.
+3. `U3-P0-01` Verified Token Floor Search / Budget Annealing.
+4. `U3-P0-04` Incremental State Handoff / Content-Addressed Delta where provider semantics make savings real.
+5. `U3-P1-01` Task-Family Local Distillation / Specialist Escalation.
+6. `U3-P1-02` Proof-Carrying Zero-Inference Result.
+7. `U3-P1-03` Pareto Workflow Selector.
+
+Research floor-search targets:
+
+```text
+verified repeated deterministic: 0
+easy/warm eligible:             0-100
+easy frontier-needed:           100-500
+normal scoped coding:           500-2,000
+hard scoped coding:             2,000-5,000 before necessity overflow
+```
+
+These are search targets, not measured Syntavra claims. A workload may have a higher safe floor.
+
+## Continuous-lowering rule
+
+The token program no longer terminates at a fixed percentage or token number.
+
+After a workload band is certified, offline/shadow evaluation may probe lower again. Stop lowering when the next reduction increases verified failure/security risk, breaks exact recovery, increases provider cost-per-success, or creates enough retry/recall/fallback burden to lose the end-to-end advantage.
+
+The governing floor is therefore empirical:
+
+`minimum verified provider work = irreducible information + irreducible uncertainty`
+
+## Promotion discipline
+
+Every implementation-bearing item requires:
+
+```text
+requirement/spec
+-> canonical owner
+-> minimal mutation
+-> verifier
+-> implementation
+-> targeted/regression/security verification
+-> provider token/cost receipt
+-> recovery/provenance
+-> state update
+```
+
+Additional ultra-low rules:
+
+- deterministic elimination precedes learned/lossy reduction;
+- AST edits require exact symbol/file identity and deterministic verification;
+- retrieval may be zero only when no additional evidence is required;
+- early stop cannot skip mandatory verification;
+- schema/grammar validity never replaces semantic verification;
+- equivalent retry requires new causal evidence or strategy change;
+- user/security/exact constraints survive translation/rewrite;
+- local draft review is bypassed when predicted cloud correction cost is worse than direct frontier generation;
+- provider state handles count as savings only when provider receipts show it;
+- local specialists escalate on uncertainty/incompatible state;
+- zero-inference answer requires complete proof receipt;
+- routing/floor search optimize **verified cost per success**, not raw token count.
+
+## Execution discipline
+
+- Do not reopen certified <=280 work.
+- Do not start retired Rust work.
+- Reuse canonical owners before creating infrastructure.
+- Raw exact evidence remains authority.
+- Count all retries, recovery calls, repair calls and fallbacks end-to-end.
+- Keep release blockers separate from internal token-economy claims.
+- Before Actions rerun/dispatch, inspect equivalent queued/in-progress run for same SHA/workflow/input. Never duplicate it.
+
+## End-of-session checkpoint format
+
+```text
+BASELINE:
+<exact main/head SHA>
+ROADMAP:
+CAP-0281..CAP-1648; reconciliation X/1368
+TOKEN ECONOMY:
+<V1/V2/V3/U/U2/U3 item -> state / owner / verifier / receipt>
+CERTIFIED TOKEN FLOORS:
+<workload family -> lowest passing provider-token/cost configuration>
+IMPLEMENTED:
+<evidence-backed changes>
+CERTIFIED:
+<actual certification only>
+CI:
+<run ids/states; no duplicates>
+NEXT:
+<next unresolved M6-0 + deterministic TE prerequisite + lowest unresolved U2/U3 item>
+```

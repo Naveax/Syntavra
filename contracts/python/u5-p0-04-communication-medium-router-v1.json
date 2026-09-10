@@ -1,0 +1,61 @@
+{
+  "schema_version": "syntavra.u5_p0_04.communication_medium_router.v1",
+  "family": "syntavra-communication-medium-router",
+  "mechanism_id": "U5-P0-04",
+  "wave": "TE-U32",
+  "status": "implementation_candidate_exact_head_admission_required",
+  "classification": "NEW_HARDEN",
+  "owners": [
+    "syntavra_runtime.subtask_router.CommunicationMediumRouter",
+    "syntavra_runtime.semantic_wire_ir.SemanticWireCompiler",
+    "syntavra_runtime.provider_gateway.ProviderGateway",
+    "syntavra_runtime.subtask_router.AutomaticSubtaskDelegator"
+  ],
+  "sources": [
+    "contracts/python/ultra-low-token-frontier-v5.json",
+    "docs/plans/SYNTAVRA_ULTRA_LOW_TOKEN_FRONTIER_V5.md",
+    "docs/plans/SYNTAVRA_TOKEN_ECONOMY_EXECUTION_BACKLOG_V6.md"
+  ],
+  "endpoint_capability_matrix": {
+    "serialized_media": ["handle", "receipt", "swir", "text"],
+    "latent_media": ["embedding", "hidden_state", "kv"],
+    "text_fallback_required": true,
+    "hosted_latent_allowed": false,
+    "local_or_owned_latent_requires_explicit_compatibility_id": true,
+    "latent_requires_same_security_domain": true,
+    "provider_alias_never_implies_local_ownership": true
+  },
+  "routing_policy": {
+    "silence_when_handoff_not_required": true,
+    "verified_end_to_end_cost_precedes_nominal_payload_size": true,
+    "required_fidelity_is_hard_gate": true,
+    "safe_unverified_fallback_order": ["handle", "receipt", "swir", "text"],
+    "latent_requires_verified_cost_and_fidelity": true,
+    "swir_delegates_to_existing_compiler": true,
+    "receipt_reference_is_opaque": true,
+    "router_transports_payload": false
+  },
+  "provider_accounting": {
+    "unpaired_measurements_count_as_avoided": false,
+    "paired_provider_observed_receipts_required_for_avoided_work": true,
+    "provider_savings_claim": false,
+    "compound_provider_savings_certification_deferred_to_te_u36": true
+  },
+  "public_surface": {
+    "new_runtime_module": false,
+    "python_module_count": 234,
+    "public_command_count": 245
+  },
+  "invariants": [
+    "TEXT_FALLBACK_ALWAYS_EXISTS",
+    "HOSTED_ENDPOINTS_NEVER_ROUTE_LATENT_HIDDEN_STATE_OR_KV",
+    "PROVIDER_ALIAS_NEVER_PROVES_LOCAL_OWNERSHIP",
+    "LATENT_MEDIA_NEVER_CROSS_SECURITY_DOMAIN",
+    "SWIR_NO_EXPANSION_AND_EXACT_RECOVERY_REMAIN_OWNED_BY_SWIR",
+    "DELEGATION_RECEIPT_HASH_IS_REUSED_NOT_REINTERPRETED",
+    "VERIFIED_END_TO_END_COST_OUTRANKS_PAYLOAD_SIZE",
+    "UNPAIRED_PROVIDER_WORK_NEVER_BECOMES_AVOIDED_WORK",
+    "ROUTER_OWNS_DECISION_RECEIPT_NOT_TRANSPORT_OR_PROVIDER_CAPABILITY_AUTHORITY"
+  ],
+  "claim_boundary": "Exact-head admission certifies deterministic medium selection, capability/security gates, SWIR delegation, text fallback and paired provider-visible accounting. It does not certify hosted-provider savings; provider_savings_claim remains false until compound equivalent-task certification."
+}

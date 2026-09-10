@@ -1,0 +1,242 @@
+name: Provider E5 Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'syntavra_runtime/provider_e5.py'
+      - 'benchmarks/token_economy_provider_replay.py'
+      - 'benchmarks/token_economy_frozen_corpus.py'
+      - 'contracts/python/token-economy-frozen-workloads-v1.json'
+      - 'contracts/python/release-readiness-v1.json'
+      - 'tests/runtime/test_provider_e5.py'
+      - 'tests/runtime/test_token_economy_provider_replay.py'
+      - 'tests/runtime/test_release_readiness.py'
+      - 'tools/certify_provider_e5.py'
+      - 'tools/certify_provider_multi_scope.py'
+      - 'tools/certify_release_readiness.py'
+      - '.github/workflows/provider-e5-proof.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'syntavra_runtime/provider_e5.py'
+      - 'benchmarks/token_economy_provider_replay.py'
+      - 'benchmarks/token_economy_frozen_corpus.py'
+      - 'contracts/python/token-economy-frozen-workloads-v1.json'
+      - 'contracts/python/release-readiness-v1.json'
+      - 'tests/runtime/test_provider_e5.py'
+      - 'tests/runtime/test_token_economy_provider_replay.py'
+      - 'tests/runtime/test_release_readiness.py'
+      - 'tools/certify_provider_e5.py'
+      - 'tools/certify_provider_multi_scope.py'
+      - 'tools/certify_release_readiness.py'
+      - '.github/workflows/provider-e5-proof.yml'
+  workflow_dispatch:
+    inputs:
+      arms_path:
+        description: 'Primary repository path to an exact two-arm provider-observed SignalBench configuration'
+        required: true
+        type: string
+      secondary_arms_path:
+        description: 'Optional independent provider/model two-arm configuration for 10/10 multi-scope superiority proof'
+        required: false
+        default: ''
+        type: string
+      repetitions:
+        description: 'Repetitions per frozen workload variant (minimum 3)'
+        required: true
+        default: '3'
+        type: string
+      require_superiority:
+        description: 'Fail unless the primary hardened comparator proves scoped paired superiority'
+        required: true
+        default: false
+        type: boolean
+      require_multi_scope:
+        description: 'Fail unless primary + secondary raw replays prove independent multi-scope superiority'
+        required: true
+        default: false
+        type: boolean
+      require_dogfood:
+        description: 'Fail unless primary B0-B9 candidate runs prove the live readiness receipt/overflow/rollback dogfood gate'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-e5-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: '1'
+
+jobs:
+  contract-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install runtime
+        run: python -m pip install -e .
+      - name: Prove E5, workload non-regression, multi-scope, and readiness claim semantics
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_provider_e5 -v
+          python -m unittest tests.runtime.test_token_economy_provider_replay -v
+          python -m unittest tests.runtime.test_release_readiness -v
+          python -m compileall -q \
+            syntavra_runtime/provider_e5.py \
+            tools/certify_provider_e5.py \
+            tools/certify_provider_multi_scope.py \
+            tools/certify_release_readiness.py \
+            benchmarks/token_economy_provider_replay.py
+      - name: Enforce clean exact head
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  live-e5:
+    if: github.event_name == 'workflow_dispatch'
+    needs: contract-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout dispatched exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install runtime
+        run: python -m pip install -e .
+      - name: Execute primary frozen B0-B9 paired provider replay
+        shell: bash
+        env:
+          E5_ARMS_PATH: ${{ inputs.arms_path }}
+          E5_REPETITIONS: ${{ inputs.repetitions }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+          test "$E5_REPETITIONS" -ge 3
+          test -f "$E5_ARMS_PATH"
+          python benchmarks/token_economy_provider_replay.py \
+            --corpus-root "${RUNNER_TEMP}/provider-e5-corpus-primary" \
+            --run-root "${RUNNER_TEMP}/provider-e5-runs-primary" \
+            --arms "$E5_ARMS_PATH" \
+            --repetitions "$E5_REPETITIONS" \
+            --seed 20260908 \
+            --execute \
+            --output "${RUNNER_TEMP}/provider-e5-replay-primary.json"
+      - name: Execute optional independent secondary provider/model scope
+        if: inputs.secondary_arms_path != ''
+        shell: bash
+        env:
+          E5_SECONDARY_ARMS_PATH: ${{ inputs.secondary_arms_path }}
+          E5_REPETITIONS: ${{ inputs.repetitions }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -f "$E5_SECONDARY_ARMS_PATH"
+          python benchmarks/token_economy_provider_replay.py \
+            --corpus-root "${RUNNER_TEMP}/provider-e5-corpus-secondary" \
+            --run-root "${RUNNER_TEMP}/provider-e5-runs-secondary" \
+            --arms "$E5_SECONDARY_ARMS_PATH" \
+            --repetitions "$E5_REPETITIONS" \
+            --seed 20260909 \
+            --execute \
+            --output "${RUNNER_TEMP}/provider-e5-replay-secondary.json"
+      - name: Certify primary E5 provider evidence
+        run: |
+          set -euo pipefail
+          python tools/certify_provider_e5.py \
+            "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
+            --require-e5 \
+            --output "${RUNNER_TEMP}/provider-e5-certificate-primary.json"
+      - name: Certify primary live B0-B9 dogfood readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${{ inputs.require_dogfood }}" = "true" ]; then extra+=(--require-dogfood); fi
+          python tools/certify_release_readiness.py \
+            --replay "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
+            --exact-head "${{ github.sha }}" \
+            --output "${RUNNER_TEMP}/provider-e5-dogfood-primary.json" \
+            "${extra[@]}"
+      - name: Certify optional secondary E5 provider evidence
+        if: inputs.secondary_arms_path != ''
+        run: |
+          set -euo pipefail
+          python tools/certify_provider_e5.py \
+            "${RUNNER_TEMP}/provider-e5-replay-secondary.json" \
+            --require-e5 \
+            --output "${RUNNER_TEMP}/provider-e5-certificate-secondary.json"
+      - name: Enforce optional primary scoped superiority gate
+        if: inputs.require_superiority
+        run: |
+          set -euo pipefail
+          python tools/certify_provider_e5.py \
+            "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
+            --require-e5 \
+            --require-superiority \
+            --output "${RUNNER_TEMP}/provider-e5-superiority-primary.json"
+      - name: Certify multi-scope 10/10 superiority gate
+        if: inputs.secondary_arms_path != ''
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${{ inputs.require_multi_scope }}" = "true" ]; then extra+=(--require-multi-scope); fi
+          python tools/certify_provider_multi_scope.py \
+            "${RUNNER_TEMP}/provider-e5-replay-primary.json" \
+            "${RUNNER_TEMP}/provider-e5-replay-secondary.json" \
+            --minimum-scopes 2 \
+            --output "${RUNNER_TEMP}/provider-e5-multi-scope.json" \
+            "${extra[@]}"
+      - name: Reject impossible required multi-scope request without a second scope
+        if: inputs.require_multi_scope && inputs.secondary_arms_path == ''
+        run: |
+          echo 'require_multi_scope=true requires secondary_arms_path' >&2
+          exit 7
+      - name: Upload E5 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: provider-e5-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/provider-e5-replay-primary.json
+            ${{ runner.temp }}/provider-e5-replay-secondary.json
+            ${{ runner.temp }}/provider-e5-certificate-primary.json
+            ${{ runner.temp }}/provider-e5-certificate-secondary.json
+            ${{ runner.temp }}/provider-e5-superiority-primary.json
+            ${{ runner.temp }}/provider-e5-multi-scope.json
+            ${{ runner.temp }}/provider-e5-dogfood-primary.json
+          if-no-files-found: warn

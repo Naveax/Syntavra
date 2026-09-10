@@ -1,0 +1,70 @@
+{
+  "schema_version": 2,
+  "family": "syntavra-ultra-low-token-frontier",
+  "status": "research_admitted_reconciliation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/ultra-low-token-frontier-v1.json",
+  "no_new_capability_namespace": true,
+  "objective": "minimize verified provider work through structural edits, uncertainty-gated retrieval, constrained output and early stopping",
+  "targets": {
+    "verified_repeated_provider_tokens": 0,
+    "easy_warm_stretch_max_tokens": 250,
+    "easy_frontier_stretch_max_tokens": 1000,
+    "normal_scoped_coding_stretch_max_tokens": 3000,
+    "hard_scoped_stretch_max_tokens": 6000,
+    "eligible_easy_avoidable_reduction_target": 0.99,
+    "eligible_easy_avoidable_reduction_stretch": 0.9975,
+    "normal_scoped_avoidable_reduction_target": 0.97,
+    "normal_scoped_avoidable_reduction_stretch": 0.99,
+    "quality_non_inferior": true,
+    "unexplained_overflow": 0
+  },
+  "mechanisms": [
+    {"id":"U2-P0-01","name":"AST-Native Action Space","classification":"UNIFY_HARDEN","owners":["repository_intelligence","edit_compiler","SWIR","programmatic_execution"],"priority":"P0"},
+    {"id":"U2-P0-02","name":"Adaptive Edit Format Router","classification":"HARDEN","owners":["edit_compiler","TokenPerSuccessOptimizer"],"priority":"P0"},
+    {"id":"U2-P0-03","name":"Adaptive Retrieval Budget Allocator","classification":"HARDEN","owners":["ContextValuePredictor","repository_retrieval","ContextAdmissionController"],"priority":"P0"},
+    {"id":"U2-P0-04","name":"Semantic Early-Stop Governor","classification":"NEW_HARDEN","owners":["agent_runtime","SemanticStateMachine","VerifierGraph"],"priority":"P0"},
+    {"id":"U2-P0-05","name":"Grammar-Constrained SWIR Structured Output","classification":"HARDEN_PROVIDER_GATED","owners":["SWIR","ProviderGateway","OutputGovernor"],"priority":"P0"},
+    {"id":"U2-P0-06","name":"Retry Economics Repair-Loop Governor","classification":"NEW_HARDEN","owners":["agent_runtime","FailureOntology","TokenPerSuccessOptimizer","VerifierGraph"],"priority":"P0"},
+    {"id":"U2-P1-01","name":"Subagent Shared-Context Object Graph","classification":"HARDEN","owners":["subagent_context_firewall","TypedContextObjectStore","EvidenceStore"],"priority":"P1"},
+    {"id":"U2-P1-02","name":"Best-Round Best-State Selection","classification":"HARDEN","owners":["SemanticStateMachine","VerifierGraph","agent_runtime"],"priority":"P1"},
+    {"id":"U2-P1-03","name":"Counterfactual Context Drop Testing","classification":"NEW_EXPERIMENTAL","owners":["ContextValuePredictor","offline_policy_evaluation"],"priority":"P1"}
+  ],
+  "waves": [
+    "TE-U8_ast_native_edit_and_adaptive_edit_routing",
+    "TE-U9_adaptive_retrieval_budget",
+    "TE-U10_semantic_early_stop_and_retry_economics",
+    "TE-U11_grammar_constrained_swir_output",
+    "TE-U12_subagent_shared_context_deduplication",
+    "TE-U13_best_state_and_counterfactual_context_learning",
+    "TE-U14_compound_ultra_low_certification"
+  ],
+  "measurement_additions": [
+    "unchanged_source_tokens_avoided",
+    "edit_format_candidate_tokens",
+    "edit_retry_rate_by_format",
+    "retrieval_budget_requested_and_used",
+    "zero_retrieval_successful_turns",
+    "mandatory_evidence_recall_rate",
+    "early_stop_rounds_avoided",
+    "repeated_failure_retries_prevented",
+    "malformed_output_repair_calls_prevented",
+    "subagent_duplicate_context_tokens_avoided",
+    "best_state_recovery_count",
+    "counterfactual_context_drop_divergence"
+  ],
+  "hard_invariants": [
+    "V1_ULTRA_LOW_WORK_REMAINS_ACTIVE",
+    "NO_NEW_CAP_NAMESPACE",
+    "STRUCTURAL_EDIT_REQUIRES_EXACT_FILE_OR_SYMBOL_IDENTITY",
+    "RETRIEVAL_ZERO_ONLY_WHEN_NO_ADDITIONAL_EVIDENCE_IS_REQUIRED",
+    "EARLY_STOP_CANNOT_SKIP_MANDATORY_VERIFICATION",
+    "SCHEMA_VALIDITY_DOES_NOT_REPLACE_SEMANTIC_VERIFICATION",
+    "EQUIVALENT_RETRY_REQUIRES_NEW_CAUSAL_EVIDENCE_OR_STRATEGY_CHANGE",
+    "SUBAGENT_SHARED_CONTEXT_PRESERVES_SECURITY_ISOLATION",
+    "COUNTERFACTUAL_POLICY_REMAINS_SHADOW_UNTIL_PROMOTED",
+    "TARGET_TOKENIZER_NO_EXPANSION_REQUIRED",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIMS"
+  ],
+  "claim_boundary": "v2 ultra-low bands are research stretch targets until frozen equivalent tasks and paired provider receipts certify them"
+}

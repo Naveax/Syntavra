@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "family": "verified-workflow-macro",
+  "phase": "token-economy-te-p0-11-core",
+  "claim": "TE_P0_11_VERIFIED_WORKFLOW_MACRO_CORE",
+  "strict": true,
+  "runtime": "syntavra_runtime/verified_workflow.py",
+  "canonical_owners": {
+    "planning": "syntavra_runtime/adapter_platform.py:CodingAgent.plan",
+    "execution": "syntavra_runtime/programmatic_execution.py:ProgrammaticExecutionPlane",
+    "experience_authority": "syntavra_runtime/session_memory.py:SessionMemory",
+    "compatibility_identity": "syntavra_runtime/inference_skip_cache.py:InferenceSkipIdentity",
+    "policy_identity": "syntavra_runtime/deterministic_policy_snapshot.py:DeterministicPolicySnapshot"
+  },
+  "promotion_policy": {
+    "minimum_independent_verified_experiences": 2,
+    "distinct_task_reference_hashes_required": true,
+    "distinct_verifier_receipt_hashes_required": true,
+    "duplicate_experiences_do_not_count": true,
+    "parameterization_is_explicit": true,
+    "ambiguous_parameter_values_fail_closed": true,
+    "ambiguous_compatible_macros_require_explicit_macro_id": true
+  },
+  "action_policy": {
+    "read_only_actions": ["search","search_reduce","search_inspect","inspect","diff","impact","verifiers","run_verifier"],
+    "mutating_actions_forbidden": ["edit","patch"],
+    "unknown_actions_fail_closed": true,
+    "unknown_action_fields_fail_closed": true
+  },
+  "identity_policy": {
+    "instruction_identity_excluded_for_parameterized_reuse": true,
+    "project_id_required": true,
+    "repository_fingerprint_required": true,
+    "verifier_hash_required": true,
+    "policy_hash_required": true,
+    "task_family_hash_required": true,
+    "dependency_hash_required": true,
+    "toolchain_hash_required": true,
+    "environment_hash_required": true,
+    "tool_schema_hash_required": true,
+    "security_hash_required": true,
+    "verifier_contract_hash_required": true,
+    "incompatible_identity_resolves_no_macro": true
+  },
+  "experience_policy": {
+    "session_memory_is_authority": true,
+    "parallel_database_forbidden": true,
+    "hash_chain_integrity_required": true,
+    "task_reference_must_be_reference_only": true,
+    "raw_task_or_evidence_payload_forbidden_in_task_reference": true
+  },
+  "execution_policy": {
+    "successful_macro_execution_requires_fresh_reverification": true,
+    "fresh_verifier_receipt_hash_required_on_success": true,
+    "provider_calls_avoided_recorded": true,
+    "executed_action_count_recorded": true,
+    "execution_receipt_content_addressed": true
+  },
+  "integration": {
+    "gateway_replay_in_this_core_milestone": false,
+    "provider_billed_savings_proven": false,
+    "next_step": "integrate promoted read-only workflows into GatewayPatchProvider without bypassing final verification"
+  },
+  "claim_boundary": "This contract certifies deterministic verified-workflow promotion, identity, binding, ambiguity handling and execution receipts. It does not claim provider-billed savings or gateway replay until the integration milestone and paired provider evidence exist."
+}

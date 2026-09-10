@@ -15,6 +15,16 @@ AUTHORITY_PATHS = (
     "docs/SYNTAVRA_PYTHON_FIRST_ROADMAP_APPENDIX.md",
     "docs/SYNTAVRA_PYTHON_POST_COMPLETION_280.md",
 )
+HYPEREFFICIENCY_AUTHORITY_PATHS = (
+    "contracts/python/hyperefficiency-roadmap-v1.json",
+    "contracts/python/hyperefficiency/**",
+    "docs/UNIFIED_PLAN.md",
+    "docs/plans/HYPEREFFICIENCY_MASTER_ROADMAP_V6.md",
+    "docs/plans/hyperefficiency/**",
+    "tests/runtime/test_hyperefficiency_roadmap.py",
+    "tools/validate_hyperefficiency_roadmap.py",
+    ".github/workflows/hyperefficiency-roadmap.yml",
+)
 RELEASE_TRUST_PATHS = (
     ".github/workflows/publish-pre-release.yml",
     ".github/workflows/post-r38-release-provenance-diagnostic.yml",
@@ -31,6 +41,10 @@ RUNTIME_HARDEN_PATHS = (
     "syntavra_runtime/host_installation.py",
     "tests/runtime/test_host_installation_v4.py",
 )
+EXACT_HEAD_INTEGRITY_PATHS = (
+    "tools/certify_release_integrity.py",
+    "tests/runtime/test_release_integrity.py",
+)
 
 
 class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
@@ -38,41 +52,45 @@ class PythonPostCompletionManifestSyncCoverageTests(unittest.TestCase):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         for relative in AUTHORITY_PATHS:
             token = f'- "{relative}"'
-            self.assertGreaterEqual(
-                workflow.count(token),
-                2,
-                f"post-completion manifest verification must watch {relative} on pull_request and push",
-            )
+            self.assertGreaterEqual(workflow.count(token), 2, f"post-completion verification must watch {relative}")
+
+    def test_hyperefficiency_authority_paths_trigger_pull_request_and_push_sync(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for relative in HYPEREFFICIENCY_AUTHORITY_PATHS:
+            token = f'- "{relative}"'
+            self.assertGreaterEqual(workflow.count(token), 2, f"post-completion verification must watch {relative}")
 
     def test_release_trust_paths_trigger_pull_request_and_push_sync(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         for relative in RELEASE_TRUST_PATHS:
             token = f'- "{relative}"'
-            self.assertGreaterEqual(
-                workflow.count(token),
-                2,
-                f"post-completion manifest verification must watch release trust path {relative}",
-            )
+            self.assertGreaterEqual(workflow.count(token), 2, f"post-completion verification must watch {relative}")
 
     def test_runtime_hardening_paths_trigger_pull_request_and_push_sync(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         for relative in RUNTIME_HARDEN_PATHS:
             token = f'- "{relative}"'
-            self.assertGreaterEqual(
-                workflow.count(token),
-                2,
-                f"post-completion manifest verification must watch runtime hardening path {relative}",
-            )
+            self.assertGreaterEqual(workflow.count(token), 2, f"post-completion verification must watch {relative}")
 
-    def test_manifest_enforcement_is_read_only_and_fail_closed(self):
+    def test_exact_head_release_integrity_paths_trigger_pull_request_and_push_sync(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for relative in EXACT_HEAD_INTEGRITY_PATHS:
+            token = f'- "{relative}"'
+            self.assertGreaterEqual(workflow.count(token), 2, f"exact-head release integrity must watch {relative}")
+
+    def test_manifest_enforcement_is_read_only_exact_head_and_reversible(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertGreaterEqual(workflow.count('- "MANIFEST.sha256"'), 2)
         self.assertIn("contents: read", workflow)
         self.assertNotIn("contents: write", workflow)
+        self.assertIn("python tools/certify_release_integrity.py", workflow)
+        self.assertIn("--expected-head", workflow)
+        self.assertIn("--manifest-output /tmp/post-completion-generated-manifest.sha256", workflow)
         self.assertIn("python tools/refresh_manifest.py", workflow)
-        self.assertIn("MANIFEST.sha256 is stale; commit the uploaded deterministic candidate.", workflow)
-        self.assertIn("cmp -s /tmp/MANIFEST.committed.sha256 MANIFEST.sha256", workflow)
+        self.assertIn("python tools/refresh_manifest.py --check", workflow)
+        self.assertIn("cp MANIFEST.sha256 /tmp/MANIFEST.committed.sha256", workflow)
         self.assertIn("cp /tmp/MANIFEST.committed.sha256 MANIFEST.sha256", workflow)
+        self.assertIn("python tools/validate.py", workflow)
         self.assertNotIn("git push", workflow)
         self.assertNotIn("git commit", workflow)
         self.assertNotIn("HEAD_REF", workflow)

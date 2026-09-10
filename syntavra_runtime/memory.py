@@ -14,6 +14,9 @@ from .state import StateDB
 from .util import sha256_bytes
 
 
+_EVIDENCE_HANDLE = re.compile(r"^sc://sha256/[0-9a-f]{64}$")
+
+
 @dataclass(frozen=True)
 class MemoryRecord:
     memory_id: str
@@ -98,15 +101,17 @@ class PersistentMemory:
         expires_at: float | None = None,
         tags: Iterable[str] = (),
     ) -> MemoryRecord:
-        clean = text.strip()
-        if not clean:
+        if not isinstance(text, str):
+            raise TypeError("memory text must be a string")
+        raw_text = text
+        if not raw_text.strip():
             raise ValueError("memory text cannot be empty")
         if not 0 <= confidence <= 1:
             raise ValueError("confidence out of range")
         normalized_tags = tuple(sorted({str(tag).strip() for tag in tags if str(tag).strip()}))
         digest = sha256_bytes(
             json.dumps(
-                {"class": memory_class, "text": clean, "tags": normalized_tags},
+                {"class": memory_class, "text": raw_text, "tags": normalized_tags},
                 ensure_ascii=False,
                 sort_keys=True,
             ).encode("utf-8")
@@ -131,7 +136,7 @@ class PersistentMemory:
                     self.project_id,
                     self.user_id,
                     memory_class,
-                    clean,
+                    raw_text,
                     confidence,
                     json.dumps(provenance or {}, ensure_ascii=False, sort_keys=True),
                     digest,
@@ -141,9 +146,37 @@ class PersistentMemory:
                 ),
             )
             if self.fts_available:
-                db.execute("INSERT INTO memories_fts(memory_id,text) VALUES(?,?)", (memory_id, clean))
+                db.execute("INSERT INTO memories_fts(memory_id,text) VALUES(?,?)", (memory_id, raw_text))
             row = db.execute("SELECT * FROM memories WHERE memory_id=?", (memory_id,)).fetchone()
         return self._record(row)
+
+    def attach_evidence(self, memory_id: str, handle: str) -> MemoryRecord:
+        if not _EVIDENCE_HANDLE.fullmatch(handle):
+            raise ValueError("invalid evidence handle")
+        with self.state.transaction(immediate=True) as db:
+            row = db.execute(
+                "SELECT * FROM memories WHERE memory_id=? AND project_id=? AND user_id=?",
+                (memory_id, self.project_id, self.user_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(memory_id)
+            provenance = json.loads(row["provenance_json"])
+            current = provenance.get("evidence_handles", ())
+            if not isinstance(current, (list, tuple)):
+                current = ()
+            handles = {
+                str(value)
+                for value in current
+                if isinstance(value, str) and _EVIDENCE_HANDLE.fullmatch(value)
+            }
+            handles.add(handle)
+            provenance["evidence_handles"] = sorted(handles)
+            db.execute(
+                "UPDATE memories SET provenance_json=? WHERE memory_id=?",
+                (json.dumps(provenance, ensure_ascii=False, sort_keys=True), memory_id),
+            )
+            updated = db.execute("SELECT * FROM memories WHERE memory_id=?", (memory_id,)).fetchone()
+        return self._record(updated)
 
     def supersede(self, old_id: str, new_id: str) -> None:
         with self.state.transaction(immediate=True) as db:
@@ -199,6 +232,84 @@ class PersistentMemory:
             {"relation": row["relation"], "weight": row["weight"], "memory": asdict(self._record(row))}
             for row in rows
         ]
+
+    def expired_records(self, *, now: float | None = None, limit: int = 1000) -> list[MemoryRecord]:
+        cutoff = time.time() if now is None else float(now)
+        with self.state.read() as db:
+            rows = db.execute(
+                """
+                SELECT * FROM memories
+                WHERE project_id=? AND user_id=? AND expires_at IS NOT NULL AND expires_at<=?
+                ORDER BY expires_at,memory_id LIMIT ?
+                """,
+                (self.project_id, self.user_id, cutoff, max(1, int(limit))),
+            ).fetchall()
+        return [self._record(row) for row in rows]
+
+    def purge_expired(self, *, now: float | None = None, limit: int = 1000) -> dict[str, Any]:
+        cutoff = time.time() if now is None else float(now)
+        reactivated = 0
+        with self.state.transaction(immediate=True) as db:
+            rows = db.execute(
+                """
+                SELECT memory_id FROM memories
+                WHERE project_id=? AND user_id=? AND expires_at IS NOT NULL AND expires_at<=?
+                ORDER BY expires_at,memory_id LIMIT ?
+                """,
+                (self.project_id, self.user_id, cutoff, max(1, int(limit))),
+            ).fetchall()
+            memory_ids = [str(row["memory_id"]) for row in rows]
+            if memory_ids:
+                placeholders = ",".join("?" for _ in memory_ids)
+                reactivated = db.execute(
+                    f"UPDATE memories SET superseded_by=NULL "
+                    f"WHERE superseded_by IN ({placeholders}) AND memory_id NOT IN ({placeholders})",
+                    [*memory_ids, *memory_ids],
+                ).rowcount
+                db.execute(
+                    f"DELETE FROM memory_relations WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",
+                    [*memory_ids, *memory_ids],
+                )
+                if self.fts_available:
+                    db.execute(
+                        f"DELETE FROM memories_fts WHERE memory_id IN ({placeholders})",
+                        memory_ids,
+                    )
+                db.execute(
+                    f"DELETE FROM memories WHERE memory_id IN ({placeholders})",
+                    memory_ids,
+                )
+        return {
+            "ok": True,
+            "deleted": len(memory_ids),
+            "memory_ids": memory_ids,
+            "reactivated_superseded": int(reactivated),
+            "provider_calls": 0,
+            "provider_tokens": 0,
+        }
+
+    def rebuild_index(self) -> dict[str, Any]:
+        with self.state.transaction(immediate=True) as db:
+            total = int(db.execute("SELECT COUNT(*) FROM memories").fetchone()[0])
+            if not self.fts_available:
+                return {
+                    "ok": True,
+                    "performed": False,
+                    "mode": "LIKE_AUTHORITATIVE",
+                    "indexed": total,
+                    "provider_calls": 0,
+                    "provider_tokens": 0,
+                }
+            db.execute("DELETE FROM memories_fts")
+            db.execute("INSERT INTO memories_fts(memory_id,text) SELECT memory_id,text FROM memories")
+        return {
+            "ok": True,
+            "performed": True,
+            "mode": "FTS5_REBUILT_LOCAL",
+            "indexed": total,
+            "provider_calls": 0,
+            "provider_tokens": 0,
+        }
 
     def search(
         self,

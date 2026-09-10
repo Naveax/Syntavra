@@ -20,9 +20,7 @@
     "rust_resume_allowed": false
   },
   "protected": {
-    "native_path_prefixes": [
-      "native/"
-    ],
+    "native_path_prefixes": ["native/"],
     "remaining71_path_prefixes": [
       ".github/workflows/remaining71-",
       "tools/validate_remaining71_"
@@ -35,6 +33,18 @@
       "tools/report_missing_native_public_routes.py",
       "tools/verify_dual_engine_public_surface.py"
     ]
+  },
+  "retired_engine_evidence_workflows": {
+    "policy": "exact-head-git-blob-only",
+    "purpose": "Permit only the exact reviewed evidence-wrapper workflow revisions that preserve raw Python/Rust differential evidence while Rust remains retired. This is not parity work and does not reactivate Rust.",
+    "allowed_head_blob_sha": {
+      ".github/workflows/remaining71-agent-differential.yml": "217bb35a857f2a8dc5e3af6e6e2dcdddcc71476b",
+      ".github/workflows/remaining71-headless-differential.yml": "c01889e5460d7ec6c62a9e5175e322f7e595bc41"
+    },
+    "rust_source_change_allowed": false,
+    "remaining71_validator_change_allowed": false,
+    "other_remaining71_workflow_change_allowed": false,
+    "rename_or_delete_allowed": false
   },
   "maintenance": {
     "allowed_exception_types": [

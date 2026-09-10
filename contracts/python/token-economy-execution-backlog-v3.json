@@ -1,0 +1,56 @@
+{
+  "schema_version": 3,
+  "family": "syntavra-token-economy-execution-backlog",
+  "status": "active_continuation",
+  "date": "2026-09-07",
+  "extends": "contracts/python/token-economy-execution-backlog-v2.json",
+  "ultra_low_overlay": "contracts/python/ultra-low-token-frontier-v2.json",
+  "no_new_capability_namespace": true,
+  "base_backlog_remains_authoritative": true,
+  "priority_order": [
+    "TE-P0-deterministic_ingestion_and_constant_context",
+    "U2-P0-01",
+    "U2-P0-02",
+    "U2-P0-03",
+    "U2-P0-04",
+    "U2-P0-06",
+    "U2-P0-05",
+    "U2-P1-01",
+    "U2-P1-02",
+    "U2-P1-03",
+    "TE-U14"
+  ],
+  "new_items": [
+    {"id":"U2-P0-01","name":"AST-Native Action Space","state":"TODO","class":"UNIFY_HARDEN"},
+    {"id":"U2-P0-02","name":"Adaptive Edit Format Router","state":"TODO","class":"HARDEN"},
+    {"id":"U2-P0-03","name":"Adaptive Retrieval Budget Allocator","state":"TODO","class":"HARDEN"},
+    {"id":"U2-P0-04","name":"Semantic Early-Stop Governor","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U2-P0-05","name":"Grammar-Constrained SWIR Structured Output","state":"TODO","class":"HARDEN_PROVIDER_GATED"},
+    {"id":"U2-P0-06","name":"Retry Economics Repair-Loop Governor","state":"TODO","class":"NEW_HARDEN"},
+    {"id":"U2-P1-01","name":"Subagent Shared-Context Object Graph","state":"TODO","class":"HARDEN"},
+    {"id":"U2-P1-02","name":"Best-Round Best-State Selection","state":"TODO","class":"HARDEN"},
+    {"id":"U2-P1-03","name":"Counterfactual Context Drop Testing","state":"TODO","class":"NEW_EXPERIMENTAL"}
+  ],
+  "waves": ["TE-U8","TE-U9","TE-U10","TE-U11","TE-U12","TE-U13","TE-U14"],
+  "research_stretch_targets": {
+    "verified_repeated_tokens": 0,
+    "easy_warm_max": 250,
+    "easy_frontier_max": 1000,
+    "normal_scoped_coding_max": 3000,
+    "hard_scoped_max": 6000,
+    "eligible_easy_avoidable_target": 0.99,
+    "eligible_easy_avoidable_stretch": 0.9975,
+    "normal_scoped_avoidable_target": 0.97,
+    "normal_scoped_avoidable_stretch": 0.99
+  },
+  "hard_invariants": [
+    "V1_AND_V2_OPEN_WORK_REMAINS_ACTIVE",
+    "NO_NEW_CAP_NAMESPACE",
+    "DETERMINISTIC_ELIMINATION_PRECEDES_LEARNED_OR_LOSSY_REDUCTION",
+    "QUALITY_VERIFIER_SECURITY_NON_INFERIOR",
+    "RECOVERY_RETRY_AND_REPAIR_TOKENS_COUNT_END_TO_END",
+    "EARLY_STOP_CANNOT_SKIP_REQUIRED_VERIFICATION",
+    "EDIT_ROUTER_OPTIMIZES_VERIFIED_COST_NOT_RAW_TOKEN_COUNT",
+    "PROVIDER_RECEIPT_REQUIRED_FOR_PROVIDER_SAVINGS_CLAIMS"
+  ]
+}

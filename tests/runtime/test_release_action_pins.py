@@ -13,6 +13,7 @@ TRUST_WORKFLOWS = (
     ".github/workflows/python-publication-registry-reference.yml",
     ".github/workflows/pre-release-publisher-prerequisites.yml",
     ".github/workflows/release-main-merge-gate.yml",
+    ".github/workflows/provider-e5-proof.yml",
     ".github/workflows/python-authority.yml",
     ".github/workflows/python-capability-completeness.yml",
     ".github/workflows/rust-feature-freeze-guard.yml",
@@ -88,6 +89,12 @@ class ReleaseActionPinContractTests(unittest.TestCase):
     def test_release_main_merge_gate_runs_pin_contract(self) -> None:
         text = (ROOT / ".github/workflows/release-main-merge-gate.yml").read_text(encoding="utf-8")
         self.assertIn("tests.runtime.test_release_action_pins", text)
+
+    def test_provider_e5_workflow_is_inside_release_trust_pin_policy(self) -> None:
+        text = (ROOT / ".github/workflows/provider-e5-proof.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", text)
+        self.assertIn("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}", text)
+        self.assertNotIn("env:\n  OPENAI_API_KEY", text)
 
     def test_publish_pr_contract_tracks_pin_policy_changes(self) -> None:
         text = (ROOT / ".github/workflows/publish-pre-release.yml").read_text(encoding="utf-8")

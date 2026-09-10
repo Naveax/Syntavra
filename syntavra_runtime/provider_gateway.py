@@ -9,6 +9,12 @@ from typing import Any, Mapping, Sequence
 
 from .competitive_fabric import CacheAligner
 from .evidence import EvidenceStore
+from .openai_prompt_cache import (
+    OpenAIPromptCacheProfile,
+    apply_openai_prompt_cache,
+    cache_write_tokens,
+    resolve_openai_prompt_cache_profile,
+)
 from .prompt_cache_optimizer import PromptCacheOptimizer
 from .security_scan import scan_text
 from .state import StateDB
@@ -332,13 +338,18 @@ class ProviderGateway:
         cache_key: str,
         ttl_seconds: int,
         explicit_cache_name: str,
+        openai_profile: OpenAIPromptCacheProfile | None = None,
     ) -> tuple[str, list[str]]:
         reasons: list[str] = []
         if capabilities.provider == "openai":
-            request.setdefault("prompt_cache_key", cache_key[:64])
-            if ttl_seconds >= 86400:
-                request.setdefault("prompt_cache_retention", "24h")
-            return "provider-explicit-key", ["openai-prompt-cache-key"]
+            if openai_profile is None:
+                raise ValueError("OpenAI prompt-cache profile is required")
+            return apply_openai_prompt_cache(
+                request,
+                cache_key=cache_key,
+                ttl_seconds=ttl_seconds,
+                profile=openai_profile,
+            )
         if capabilities.provider == "anthropic":
             if ProviderGateway._apply_anthropic_cache_control(request, ttl_seconds):
                 return "provider-explicit-breakpoint", ["anthropic-cache-control"]
@@ -387,6 +398,12 @@ class ProviderGateway:
         self._reject_credentials(request)
         prepared = copy.deepcopy(dict(request))
         resolved_model = str(model or prepared.get("model") or "unknown")
+        openai_profile = (
+            resolve_openai_prompt_cache_profile(provider, resolved_model, prepared)
+            if capabilities.provider == "openai"
+            else None
+        )
+        cache_profile = openai_profile.name if openai_profile is not None else "default"
         messages = self._message_sequence(prepared, capabilities.request_family)
         cache_plan = self.prompt_cache_optimizer.plan(
             messages,
@@ -394,6 +411,7 @@ class ProviderGateway:
             model=resolved_model,
             ttl_seconds=max(1, int(prompt_cache_ttl_seconds)),
             reorder=cache_policy != "off",
+            cache_profile=cache_profile,
         )
         ordered_messages = [
             *[row for row in messages if PromptCacheOptimizer._stable_message(row)],
@@ -412,13 +430,18 @@ class ProviderGateway:
         alignment = self.aligner.align(messages, keep_tail=1 if messages else 0)
         stable_request = self._stable_copy(prepared)
         request_hash = sha256_bytes(canonical_json(stable_request))
-        cache_key = sha256_bytes(canonical_json({
+        cache_identity: dict[str, Any] = {
             "schema": self.schema_version,
             "provider": capabilities.provider,
             "model": resolved_model,
             "request": stable_request,
-        }))
+        }
+        if cache_profile != "default":
+            cache_identity["cache_profile"] = cache_profile
+        cache_key = sha256_bytes(canonical_json(cache_identity))
         reasons: list[str] = []
+        if cache_profile != "default":
+            reasons.append(f"prompt-cache-profile:{cache_profile}")
         if cache_reordered:
             reasons.append("stable-prefix-layout-applied")
         elif cache_plan.reordered:
@@ -434,6 +457,7 @@ class ProviderGateway:
                 cache_key,
                 max(0, int(prompt_cache_ttl_seconds)),
                 explicit_cache_name,
+                openai_profile,
             )
             reasons.extend(prompt_reasons)
         has_tools = self._has_tools(prepared)
@@ -455,6 +479,7 @@ class ProviderGateway:
                 "model": resolved_model,
                 "request_hash": request_hash,
                 "cache_key": cache_key,
+                "prompt_cache_profile": cache_profile,
             },
         )
         replay_handle = self._lookup(cache_key) if replay_cacheable and cache_policy in {"auto", "read", "read-write"} else ""
@@ -480,7 +505,7 @@ class ProviderGateway:
             request_hash=request_hash,
             cache_key=cache_key,
             request_handle=request_handle,
-            stable_prefix_hash=alignment.prefix_hash,
+            stable_prefix_hash=cache_plan.stable_prefix_hash if cache_policy != "off" else alignment.prefix_hash,
             stable_message_count=alignment.stable_message_count,
             prompt_cache_mode=prompt_cache_mode,
             replay_cacheable=replay_cacheable,
@@ -607,6 +632,7 @@ class ProviderGateway:
         normalized_usage: dict[str, Any] = {}
         try:
             normalized_usage = asdict(normalize_provider_usage(plan.provider, response_data))
+            normalized_usage["cache_write_tokens"] = cache_write_tokens(response_data)
         except ValueError:
             pass
         receipt_sequence = 0

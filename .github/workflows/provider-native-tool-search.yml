@@ -1,0 +1,137 @@
+name: Provider Native Tool Search
+
+on:
+  pull_request:
+    paths:
+      - 'syntavra_runtime/provider_proxy.py'
+      - 'tests/runtime/test_provider_native_tool_search.py'
+      - 'contracts/python/provider-native-tool-search-v1.json'
+      - 'docs/TE_P0_13_PROVIDER_NATIVE_TOOL_SEARCH.md'
+      - '.github/workflows/provider-native-tool-search.yml'
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - 'syntavra_runtime/provider_proxy.py'
+      - 'tests/runtime/test_provider_native_tool_search.py'
+      - 'contracts/python/provider-native-tool-search-v1.json'
+      - 'docs/TE_P0_13_PROVIDER_NATIVE_TOOL_SEARCH.md'
+      - '.github/workflows/provider-native-tool-search.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-native-tool-search-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  PYTHONUTF8: '1'
+  SYN_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  provider-native-tool-search:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+
+      - name: Compile tool-search surfaces
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            syntavra_runtime/provider_proxy.py \
+            tests/runtime/test_provider_native_tool_search.py
+
+      - name: Validate tool-search contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(
+              Path('contracts/python/provider-native-tool-search-v1.json').read_text(encoding='utf-8')
+          )
+          assert value['schema_version'] == 1
+          assert value['claim'] == 'TE_P0_13_PROVIDER_NATIVE_TOOL_SEARCH_ADAPTER'
+          assert value['strict'] is True
+          assert value['capability_policy']['provider_and_model_specific_detection_required'] is True
+          assert value['capability_policy']['benchmark_admission_required'] is True
+          assert value['capability_policy']['portable_fallback_required'] is True
+          assert value['evidence_policy']['native_rewrite_occurs_before_provider_gateway_prepare'] is True
+          assert value['claim_boundary']['provider_billed_savings_proven'] is False
+          PY
+
+      - name: Prove native tool-search adapter and provider gateway regression
+        run: |
+          set -euo pipefail
+          python -m unittest tests.runtime.test_provider_native_tool_search -v
+          python -m unittest tests.runtime.test_provider_gateway_v4 -v
+          python -m unittest tests.runtime.test_deferred_tool_discovery -v
+
+      - name: Record exact-head tool-search receipt
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          expected = os.environ['SYN_EXPECTED_HEAD']
+          receipt = {
+              'schema_version': 1,
+              'claim': 'TE_P0_13_PROVIDER_NATIVE_TOOL_SEARCH_ADAPTER',
+              'exact_head': actual,
+              'expected_head': expected,
+              'head_match': actual == expected,
+              'provider_model_capability_gate': True,
+              'benchmark_admission_required': True,
+              'portable_fallback_preserved': True,
+              'native_rewrite_before_gateway_prepare': True,
+              'provider_billed_savings_proven': False,
+          }
+          Path('/tmp/provider-native-tool-search.json').write_text(
+              json.dumps(receipt, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          assert receipt['head_match'], receipt
+          PY
+
+      - name: Enforce clean exact head
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
+          test "$(git rev-parse HEAD)" = "$SYN_EXPECTED_HEAD"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload tool-search evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: provider-native-tool-search-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/provider-native-tool-search.json
+          if-no-files-found: error

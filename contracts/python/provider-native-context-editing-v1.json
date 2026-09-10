@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "family": "provider-native-context-editing",
+  "phase": "token-economy-te-p0-12",
+  "claim": "TE_P0_12_PROVIDER_NATIVE_CONTEXT_EDITING_ADAPTER",
+  "strict": true,
+  "runtime_owners": [
+    "syntavra_runtime/model_gateway.py",
+    "syntavra_runtime/provider_call_observation.py"
+  ],
+  "capability_policy": {
+    "capability_detect_before_native_use": true,
+    "portable_fallback_required": true,
+    "anthropic_selective_context_editing_directly_admissible": true,
+    "openai_responses_compaction_detected_but_not_automatically_admissible": true,
+    "generic_openai_compatible_endpoints_do_not_inherit_openai_native_capability": true
+  },
+  "promotion_policy": {
+    "native_editing_requires_explicit_enablement": true,
+    "native_editing_requires_end_to_end_benchmark_admission": true,
+    "unadmitted_native_editing_falls_back_without_provider_context_mutation": true
+  },
+  "anthropic_contract": {
+    "beta_header": "context-management-2025-06-27",
+    "thinking_edit_type": "clear_thinking_20251015",
+    "tool_edit_type": "clear_tool_uses_20250919",
+    "thinking_edit_precedes_tool_edit": true,
+    "cleared_input_tokens_reconciled_from_applied_edits": true
+  },
+  "receipt_policy": {
+    "provider_response_hash_binds_context_editing_diagnostic": true,
+    "cleared_input_tokens_stored_separately": true,
+    "cleared_input_tokens_excluded_from_provider_billed_total": true,
+    "legacy_observation_database_migrates_additively": true
+  },
+  "claim_boundary": {
+    "provider_billed_savings_proven": false,
+    "cleared_token_diagnostic_is_not_itself_billing_proof": true,
+    "paired_provider_observed_benchmark_required_for_savings_claim": true
+  }
+}

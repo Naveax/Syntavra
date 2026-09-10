@@ -1,0 +1,123 @@
+name: U5-P0-04 Communication Medium Router
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'syntavra_runtime/subtask_router.py'
+      - 'syntavra_runtime/semantic_wire_ir.py'
+      - 'syntavra_runtime/provider_gateway.py'
+      - 'tests/runtime/test_communication_medium_router.py'
+      - 'contracts/python/u5-p0-04-communication-medium-router-v1.json'
+      - 'contracts/engine/dual-engine-public-surface-v2.json'
+      - 'tools/validate_u5_p0_04_communication_medium_router.py'
+      - 'tools/verify_dual_engine_public_surface.py'
+      - 'docs/U5_P0_04_COMMUNICATION_MEDIUM_ROUTER.md'
+      - '.github/workflows/u5-p0-04-communication-medium-router.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'syntavra_runtime/subtask_router.py'
+      - 'syntavra_runtime/semantic_wire_ir.py'
+      - 'syntavra_runtime/provider_gateway.py'
+      - 'tests/runtime/test_communication_medium_router.py'
+      - 'contracts/python/u5-p0-04-communication-medium-router-v1.json'
+      - 'contracts/engine/dual-engine-public-surface-v2.json'
+      - 'tools/validate_u5_p0_04_communication_medium_router.py'
+      - 'tools/verify_dual_engine_public_surface.py'
+      - 'docs/U5_P0_04_COMMUNICATION_MEDIUM_ROUTER.md'
+      - '.github/workflows/u5-p0-04-communication-medium-router.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: u5-p0-04-communication-medium-router-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install Python runtime
+        run: python -m pip install -e .
+
+      - name: Run U5-P0-04 regressions
+        run: python -m unittest tests.runtime.test_communication_medium_router -v
+
+      - name: Verify synchronized Python public surface
+        run: python tools/verify_dual_engine_public_surface.py > /tmp/u5-p0-04-dual-engine-public-surface.json
+
+      - name: Generate exact-head U5-P0-04 certificate
+        run: |
+          python tools/validate_u5_p0_04_communication_medium_router.py --out /tmp/u5-p0-04-communication-medium-router.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/u5-p0-04-communication-medium-router.json').read_text(encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ok'] is True, report
+          assert report['claim'] == 'U5_P0_04_COMMUNICATION_MEDIUM_ROUTER'
+          assert report['mechanism_id'] == 'U5-P0-04'
+          assert report['wave'] == 'TE-U32'
+          assert report['exact_head'] == head
+          assert report['admission_ready'] is True
+          assert report['provider_savings_claim'] is False
+          assert report['public_surface']['module_count'] == 234
+          assert report['public_surface']['public_command_count'] == 245
+          runtime = report['runtime']
+          assert runtime['capability_matrix_defined'] is True
+          assert runtime['exact_handle_route'] is True
+          assert runtime['delegation_receipt_reused'] is True
+          assert runtime['swir_delegated_to_existing_compiler'] is True
+          assert runtime['swir_no_expansion_text_fallback'] is True
+          assert runtime['verified_cost_beats_nominal_payload_size'] is True
+          assert runtime['hosted_latent_rejected'] is True
+          assert runtime['compatible_local_kv_route'] is True
+          assert runtime['cross_domain_latent_rejected'] is True
+          assert runtime['paired_provider_tokens_avoided'] == 70
+          assert runtime['paired_provider_calls_avoided'] == 1
+          assert runtime['provider_savings_claim'] is False
+          PY
+
+      - name: Enforce clean exact-head repository
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf syntavra_runtime.egg-info .pytest_cache
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git diff --check
+          status="$(git status --porcelain --untracked-files=all)"
+          printf '%s\n' "$status"
+          test -z "$status"
+
+      - name: Upload U5-P0-04 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: u5-p0-04-communication-medium-router-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/u5-p0-04-communication-medium-router.json
+            /tmp/u5-p0-04-dual-engine-public-surface.json
+          if-no-files-found: error

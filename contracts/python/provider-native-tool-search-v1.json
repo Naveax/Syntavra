@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "family": "provider-native-tool-search",
+  "phase": "token-economy-te-p0-13",
+  "claim": "TE_P0_13_PROVIDER_NATIVE_TOOL_SEARCH_ADAPTER",
+  "strict": true,
+  "runtime_owner": "syntavra_runtime/provider_proxy.py",
+  "portable_owner": "syntavra_runtime/deferred_tool_discovery.py",
+  "capability_policy": {
+    "provider_and_model_specific_detection_required": true,
+    "benchmark_admission_required": true,
+    "portable_fallback_required": true,
+    "generic_openai_compatible_does_not_inherit_openai_native_search": true,
+    "request_family_must_support_native_search": true
+  },
+  "anthropic": {
+    "supported_modes": [
+      "tool_search_tool_bm25_20251119",
+      "tool_search_tool_regex_20251119"
+    ],
+    "auto_mode": "tool_search_tool_bm25_20251119",
+    "defer_plain_client_tools_only": true,
+    "search_tool_never_deferred": true,
+    "explicit_defer_loading_false_preserved": true,
+    "cache_control_conflict_preserved_upfront": true
+  },
+  "openai": {
+    "native_mode": "hosted-tool-search",
+    "responses_request_required": true,
+    "defer_top_level_function_tools_only": true,
+    "built_in_tools_not_rewritten": true,
+    "existing_tool_search_not_duplicated": true,
+    "known_supported_models": [
+      "gpt-5.4",
+      "gpt-5.4-pro",
+      "gpt-5.5",
+      "gpt-5.6",
+      "gpt-5.6-sol",
+      "gpt-6-astra"
+    ],
+    "known_unsupported_models": [
+      "gpt-5.4-nano",
+      "gpt-5.5-pro",
+      "chat-latest"
+    ]
+  },
+  "evidence_policy": {
+    "native_rewrite_occurs_before_provider_gateway_prepare": true,
+    "rewritten_request_is_provider_gateway_hash_input": true,
+    "rewritten_request_is_exact_request_evidence_input": true,
+    "tool_bearing_response_replay_policy_unchanged": true
+  },
+  "claim_boundary": {
+    "provider_billed_savings_proven": false,
+    "tool_search_support_does_not_imply_benchmark_win": true,
+    "native_search_is_used_only_after_end_to_end_benchmark_admission": true
+  }
+}

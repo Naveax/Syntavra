@@ -16,6 +16,11 @@ from .usage_receipt_ledger import UsageReceiptLedger
 from .util import stable_project_id
 
 
+_PROVIDER_PROXY_INTERNAL_CONFIG_FIELDS = frozenset(
+    {"native_tool_search", "native_tool_search_benchmark_admitted"}
+)
+
+
 def _jsonable(value: Any) -> Any:
     if is_dataclass(value):
         return {key: _jsonable(item) for key, item in asdict(value).items()}
@@ -228,7 +233,10 @@ def command_provider(args: argparse.Namespace) -> int:
         )
         config.validate()
         if args.dry_run:
-            result = {"ok": True, "config": asdict(config)}
+            config_view = asdict(config)
+            for field in _PROVIDER_PROXY_INTERNAL_CONFIG_FIELDS:
+                config_view.pop(field, None)
+            result = {"ok": True, "config": config_view}
         else:
             if args.output:
                 raise ValueError("--output is supported only with --dry-run for a long-running proxy")
